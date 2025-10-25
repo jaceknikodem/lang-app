@@ -486,7 +486,7 @@ export class AppRoot extends LitElement {
 
     switch (this.currentRoute.mode) {
       case 'topic-selection':
-        return html`<topic-selector language="Spanish"></topic-selector>`;
+        return html`<topic-selector></topic-selector>`;
 
       case 'word-selection':
         return html`

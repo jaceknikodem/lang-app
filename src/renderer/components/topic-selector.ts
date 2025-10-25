@@ -3,7 +3,7 @@
  */
 
 import { LitElement, html, css } from 'lit';
-import { customElement, state, property } from 'lit/decorators.js';
+import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
@@ -28,8 +28,17 @@ export class TopicSelector extends LitElement {
   @state()
   private isLoadingModels = false;
 
-  @property({ type: String })
-  language = 'Spanish'; // Default language, could be configurable
+  @state()
+  private language = 'Spanish'; // Make language a state property so it can be changed
+
+  @state()
+  private availableLanguages = [
+    'Polish',
+    'Portuguese',
+    'Spanish',
+    'Italian',
+    'Indonesian'
+  ];
 
   static styles = [
     sharedStyles,
@@ -157,6 +166,28 @@ export class TopicSelector extends LitElement {
         cursor: not-allowed;
       }
 
+      .language-dropdown {
+        width: 100%;
+        padding: var(--spacing-md);
+        border: 2px solid var(--border-color);
+        border-radius: var(--border-radius);
+        font-size: 16px;
+        background: white;
+        transition: border-color 0.2s ease;
+        box-sizing: border-box;
+      }
+
+      .language-dropdown:focus {
+        outline: none;
+        border-color: var(--primary-color);
+      }
+
+      .language-dropdown:disabled {
+        background: #f5f5f5;
+        color: var(--text-tertiary);
+        cursor: not-allowed;
+      }
+
       .error-message {
         color: var(--error-color);
         background: #ffebee;
@@ -201,10 +232,10 @@ export class TopicSelector extends LitElement {
         window.electronAPI.llm.getAvailableModels(),
         window.electronAPI.llm.getCurrentModel()
       ]);
-      
+
       this.availableModels = models;
       this.selectedModel = currentModel;
-      
+
       if (models.length === 0) {
         this.error = 'No models available. Please ensure Ollama is running and has models installed.';
       }
@@ -225,7 +256,7 @@ export class TopicSelector extends LitElement {
   private async handleModelChange(e: Event) {
     const select = e.target as HTMLSelectElement;
     const newModel = select.value;
-    
+
     if (newModel && newModel !== this.selectedModel) {
       try {
         await window.electronAPI.llm.setModel(newModel);
@@ -238,6 +269,12 @@ export class TopicSelector extends LitElement {
         select.value = this.selectedModel;
       }
     }
+  }
+
+  private handleLanguageChange(e: Event) {
+    const select = e.target as HTMLSelectElement;
+    this.language = select.value;
+    this.error = ''; // Clear any previous errors
   }
 
   private async handleGenerateWords() {
@@ -307,6 +344,28 @@ export class TopicSelector extends LitElement {
         </div>
 
         <div class="topic-input-section">
+          <div class="input-group">
+            <label class="input-label" for="language-select">
+              Language
+            </label>
+            <select
+              id="language-select"
+              class="language-dropdown"
+              .value=${this.language}
+              @change=${this.handleLanguageChange}
+              ?disabled=${this.isGenerating}
+            >
+              ${this.availableLanguages.map(lang => html`
+                <option value=${lang} ?selected=${lang === this.language}>
+                  ${lang}
+                </option>
+              `)}
+            </select>
+            <p class="help-text">
+              Select the language you want to learn.
+            </p>
+          </div>
+
           <div class="input-group">
             <label class="input-label" for="model-select">
               LLM Model
