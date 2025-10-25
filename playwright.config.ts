@@ -2,11 +2,12 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  fullyParallel: true,
+  fullyParallel: false, // Electron tests should run sequentially
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
+  workers: 1, // Single worker for Electron tests
+  reporter: 'line',
+  timeout: 60000, // Longer timeout for Electron app startup
   use: {
     trace: 'on-first-retry',
   },
@@ -14,13 +15,13 @@ export default defineConfig({
   projects: [
     {
       name: 'electron',
-      use: { ...devices['Desktop Chrome'] },
+      use: { 
+        ...devices['Desktop Chrome'],
+        // Electron-specific settings
+        headless: false, // Electron apps need to be visible
+      },
     },
   ],
 
-  webServer: {
-    command: 'npm run build && npm run electron',
-    port: 0, // Electron app doesn't use a port
-    reuseExistingServer: !process.env.CI,
-  },
+  // Remove webServer config as we launch Electron directly in tests
 });
