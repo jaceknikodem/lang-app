@@ -19,6 +19,15 @@ export class TopicSelector extends LitElement {
   @state()
   private error = '';
 
+  @state()
+  private availableModels: string[] = [];
+
+  @state()
+  private selectedModel = '';
+
+  @state()
+  private isLoadingModels = false;
+
   @property({ type: String })
   language = 'Spanish'; // Default language, could be configurable
 
@@ -120,6 +129,34 @@ export class TopicSelector extends LitElement {
         min-width: 160px;
       }
 
+      .model-selector {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+      }
+
+      .model-dropdown {
+        width: 100%;
+        padding: var(--spacing-md);
+        border: 2px solid var(--border-color);
+        border-radius: var(--border-radius);
+        font-size: 16px;
+        background: white;
+        transition: border-color 0.2s ease;
+        box-sizing: border-box;
+      }
+
+      .model-dropdown:focus {
+        outline: none;
+        border-color: var(--primary-color);
+      }
+
+      .model-dropdown:disabled {
+        background: #f5f5f5;
+        color: var(--text-tertiary);
+        cursor: not-allowed;
+      }
+
       .error-message {
         color: var(--error-color);
         background: #ffebee;
@@ -152,14 +189,65 @@ export class TopicSelector extends LitElement {
     `
   ];
 
+  async connectedCallback() {
+    super.connectedCallback();
+    await this.loadAvailableModels();
+  }
+
+  private async loadAvailableModels() {
+    this.isLoadingModels = true;
+    try {
+      const [models, currentModel] = await Promise.all([
+        window.electronAPI.llm.getAvailableModels(),
+        window.electronAPI.llm.getCurrentModel()
+      ]);
+      
+      this.availableModels = models;
+      this.selectedModel = currentModel;
+      
+      if (models.length === 0) {
+        this.error = 'No models available. Please ensure Ollama is running and has models installed.';
+      }
+    } catch (error) {
+      console.error('Failed to load available models:', error);
+      this.error = 'Failed to load available models. Please check that Ollama is running.';
+    } finally {
+      this.isLoadingModels = false;
+    }
+  }
+
   private handleTopicChange(e: Event) {
     const input = e.target as HTMLInputElement;
     this.topic = input.value;
     this.error = ''; // Clear error when user types
   }
 
+  private async handleModelChange(e: Event) {
+    const select = e.target as HTMLSelectElement;
+    const newModel = select.value;
+    
+    if (newModel && newModel !== this.selectedModel) {
+      try {
+        await window.electronAPI.llm.setModel(newModel);
+        this.selectedModel = newModel;
+        this.error = ''; // Clear any previous errors
+      } catch (error) {
+        console.error('Failed to set model:', error);
+        this.error = 'Failed to set model. Please try again.';
+        // Revert the selection
+        select.value = this.selectedModel;
+      }
+    }
+  }
+
   private async handleGenerateWords() {
     if (this.isGenerating) return;
+
+    // Check if a model is selected
+    if (!this.selectedModel) {
+      this.error = 'Please select an LLM model before generating words.';
+      return;
+    }
 
     this.isGenerating = true;
     this.error = '';
@@ -220,6 +308,32 @@ export class TopicSelector extends LitElement {
 
         <div class="topic-input-section">
           <div class="input-group">
+            <label class="input-label" for="model-select">
+              LLM Model
+            </label>
+            <select
+              id="model-select"
+              class="model-dropdown"
+              .value=${this.selectedModel}
+              @change=${this.handleModelChange}
+              ?disabled=${this.isGenerating || this.isLoadingModels || this.availableModels.length === 0}
+            >
+              ${this.isLoadingModels ? html`
+                <option value="">Loading models...</option>
+              ` : this.availableModels.length === 0 ? html`
+                <option value="">No models available</option>
+              ` : this.availableModels.map(model => html`
+                <option value=${model} ?selected=${model === this.selectedModel}>
+                  ${model}
+                </option>
+              `)}
+            </select>
+            <p class="help-text">
+              Select the LLM model to use for generating vocabulary words.
+            </p>
+          </div>
+
+          <div class="input-group">
             <label class="input-label" for="topic-input">
               Topic (Optional)
             </label>
@@ -256,7 +370,7 @@ export class TopicSelector extends LitElement {
               <button
                 class="btn btn-primary btn-large generate-btn"
                 @click=${this.handleGenerateWords}
-                ?disabled=${this.isGenerating}
+                ?disabled=${this.isGenerating || !this.selectedModel || this.isLoadingModels}
               >
                 ${this.topic.trim() ? 'Generate Topic Words' : 'Generate General Words'}
               </button>
@@ -265,7 +379,7 @@ export class TopicSelector extends LitElement {
                 <button
                   class="btn btn-secondary btn-large skip-btn"
                   @click=${this.handleSkipTopic}
-                  ?disabled=${this.isGenerating}
+                  ?disabled=${this.isGenerating || !this.selectedModel || this.isLoadingModels}
                 >
                   Skip Topic
                 </button>

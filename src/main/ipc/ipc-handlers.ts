@@ -242,6 +242,34 @@ function setupLLMHandlers(llmClient: OllamaClient): void {
       return false;
     }
   });
+
+  ipcMain.handle(IPC_CHANNELS.LLM.GET_AVAILABLE_MODELS, async (event) => {
+    try {
+      return await llmClient.getAvailableModels();
+    } catch (error) {
+      console.error('Error getting available models:', error);
+      return [];
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.LLM.SET_MODEL, async (event, model) => {
+    try {
+      const validatedModel = z.string().min(1).parse(model);
+      llmClient.setModel(validatedModel);
+    } catch (error) {
+      console.error('Error setting model:', error);
+      throw new Error(`Failed to set model: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.LLM.GET_CURRENT_MODEL, async (event) => {
+    try {
+      return llmClient.getCurrentModel();
+    } catch (error) {
+      console.error('Error getting current model:', error);
+      throw new Error(`Failed to get current model: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
 }
 
 /**

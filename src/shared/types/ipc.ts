@@ -27,6 +27,9 @@ export interface IPCBridge {
     generateWords: (topic: string | undefined, language: string) => Promise<GeneratedWord[]>;
     generateSentences: (word: string, language: string) => Promise<GeneratedSentence[]>;
     isAvailable: () => Promise<boolean>;
+    getAvailableModels: () => Promise<string[]>;
+    setModel: (model: string) => Promise<void>;
+    getCurrentModel: () => Promise<string>;
   };
   
   // Audio operations
@@ -71,7 +74,10 @@ export const IPC_CHANNELS = {
   LLM: {
     GENERATE_WORDS: 'llm:generateWords',
     GENERATE_SENTENCES: 'llm:generateSentences',
-    IS_AVAILABLE: 'llm:isAvailable'
+    IS_AVAILABLE: 'llm:isAvailable',
+    GET_AVAILABLE_MODELS: 'llm:getAvailableModels',
+    SET_MODEL: 'llm:setModel',
+    GET_CURRENT_MODEL: 'llm:getCurrentModel'
   },
   AUDIO: {
     GENERATE_AUDIO: 'audio:generateAudio',

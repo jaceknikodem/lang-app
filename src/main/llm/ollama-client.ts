@@ -57,6 +57,38 @@ export class OllamaClient implements LLMClient {
     }
   }
 
+  async getAvailableModels(): Promise<string[]> {
+    try {
+      const response = await fetch(`${this.config.baseUrl}/api/tags`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.models || !Array.isArray(data.models)) {
+        return [];
+      }
+      
+      return data.models.map((model: any) => model.name || '').filter(Boolean);
+    } catch (error) {
+      console.error('Error fetching available models:', error);
+      return [];
+    }
+  }
+
+  setModel(model: string): void {
+    this.config.model = model;
+  }
+
+  getCurrentModel(): string {
+    return this.config.model;
+  }
+
   async generateTopicWords(topic: string, language: string, count: number): Promise<GeneratedWord[]> {
     const prompt = this.createTopicWordsPrompt(topic, language, count);
     
