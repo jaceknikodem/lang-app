@@ -245,16 +245,11 @@ export class WordSelector extends LitElement {
   }
 
   private initializeWords() {
-    // Convert generated words to selectable format
+    // Convert generated words to selectable format and auto-select all words
     this.selectableWords = this.generatedWords.map(word => ({
       ...word,
-      selected: false
+      selected: true  // Auto-select all generated words by default
     }));
-
-    // Auto-select first 5 words by default
-    this.selectableWords.slice(0, 5).forEach(word => {
-      word.selected = true;
-    });
   }
 
   private toggleWordSelection(index: number) {
