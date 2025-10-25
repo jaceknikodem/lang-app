@@ -11,15 +11,21 @@ export interface DatabaseLayer {
   markWordKnown(wordId: number, known: boolean): Promise<void>;
   markWordIgnored(wordId: number, ignored: boolean): Promise<void>;
   getWordsToStudy(limit: number): Promise<Word[]>;
+  getWordsByStrength(minStrength: number, maxStrength: number, limit?: number): Promise<Word[]>;
+  getAllWords(includeKnown?: boolean, includeIgnored?: boolean): Promise<Word[]>;
   getWordById(wordId: number): Promise<Word | null>;
   
   // Sentence management
   insertSentence(wordId: number, sentence: string, translation: string, audioPath: string): Promise<number>;
   getSentencesByWord(wordId: number): Promise<Sentence[]>;
+  getSentenceById(sentenceId: number): Promise<Sentence | null>;
+  updateSentenceLastShown(sentenceId: number): Promise<void>;
   
   // Progress tracking
   updateLastStudied(wordId: number): Promise<void>;
   getStudyStats(): Promise<StudyStats>;
+  recordStudySession(wordsStudied: number): Promise<void>;
+  getRecentStudySessions(limit?: number): Promise<Array<{id: number, wordsStudied: number, whenStudied: Date}>>;
   
   // Database lifecycle
   initialize(): Promise<void>;

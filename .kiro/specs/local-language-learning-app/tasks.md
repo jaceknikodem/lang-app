@@ -7,14 +7,14 @@
   - Define core TypeScript interfaces for Word, Sentence, and StudySession models
   - _Requirements: 2.1, 2.2, 7.1_
 
-- [ ] 2. Implement database layer and schema
-  - [ ] 2.1 Create SQLite database connection and migration system
+- [x] 2. Implement database layer and schema
+  - [x] 2.1 Create SQLite database connection and migration system
     - Write database connection utilities with proper error handling
     - Implement schema migration system for future updates
     - Create initial database schema for words, sentences, and topics tables
     - _Requirements: 7.1, 7.3, 7.4_
   
-  - [ ] 2.2 Implement core database operations
+  - [x] 2.2 Implement core database operations
     - Write CRUD operations for Word entity (insert, update, select by strength)
     - Implement sentence storage and retrieval by word ID
     - Create progress tracking functions for word strength and study timestamps
