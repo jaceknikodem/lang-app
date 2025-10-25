@@ -64,14 +64,14 @@
     - Test audio playback coordination and error scenarios
     - _Requirements: 4.1, 4.4_
 
-- [ ] 5. Create Electron IPC bridge and main process
-  - [ ] 5.1 Set up Electron main process architecture
+- [x] 5. Create Electron IPC bridge and main process
+  - [x] 5.1 Set up Electron main process architecture
     - Configure Electron main process with security best practices
     - Create preload script for secure IPC communication
     - Implement main process initialization and lifecycle management
     - _Requirements: 2.1, 2.2_
   
-  - [ ] 5.2 Build IPC API surface
+  - [x] 5.2 Build IPC API surface
     - Expose database operations through secure IPC channels
     - Create LLM client APIs for renderer process access
     - Implement audio generation and playback IPC methods
