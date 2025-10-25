@@ -36,7 +36,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getStudyStats: () => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_STUDY_STATS),
     recordStudySession: (wordsStudied: number) => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.RECORD_STUDY_SESSION, wordsStudied)
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.RECORD_STUDY_SESSION, wordsStudied),
+    getSetting: (key: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_SETTING, key),
+    setSetting: (key: string, value: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.SET_SETTING, key, value),
+    getCurrentLanguage: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_CURRENT_LANGUAGE),
+    setCurrentLanguage: (language: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.SET_CURRENT_LANGUAGE, language)
   },
 
   // LLM operations
@@ -104,6 +112,10 @@ declare global {
         updateLastStudied: (wordId: number) => Promise<void>;
         getStudyStats: () => Promise<any>;
         recordStudySession: (wordsStudied: number) => Promise<void>;
+        getSetting: (key: string) => Promise<string | null>;
+        setSetting: (key: string, value: string) => Promise<void>;
+        getCurrentLanguage: () => Promise<string>;
+        setCurrentLanguage: (language: string) => Promise<void>;
       };
       llm: {
         generateWords: (topic: string | undefined, language: string) => Promise<any[]>;
@@ -114,7 +126,7 @@ declare global {
         getCurrentModel: () => Promise<string>;
       };
       audio: {
-        generateAudio: (text: string, language: string) => Promise<string>;
+        generateAudio: (text: string, language?: string) => Promise<string>;
         playAudio: (audioPath: string) => Promise<void>;
         audioExists: (audioPath: string) => Promise<boolean>;
       };

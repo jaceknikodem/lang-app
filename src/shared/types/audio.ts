@@ -3,7 +3,7 @@
  */
 
 export interface AudioGenerator {
-  generateAudio(text: string, language: string): Promise<string>;
+  generateAudio(text: string, language?: string): Promise<string>;
   playAudio(audioPath: string): Promise<void>;
   audioExists(audioPath: string): Promise<boolean>;
 }

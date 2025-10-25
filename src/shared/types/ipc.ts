@@ -20,6 +20,10 @@ export interface IPCBridge {
     updateLastStudied: (wordId: number) => Promise<void>;
     getStudyStats: () => Promise<StudyStats>;
     recordStudySession: (wordsStudied: number) => Promise<void>;
+    getSetting: (key: string) => Promise<string | null>;
+    setSetting: (key: string, value: string) => Promise<void>;
+    getCurrentLanguage: () => Promise<string>;
+    setCurrentLanguage: (language: string) => Promise<void>;
   };
   
   // LLM operations
@@ -34,7 +38,7 @@ export interface IPCBridge {
   
   // Audio operations
   audio: {
-    generateAudio: (text: string, language: string) => Promise<string>;
+    generateAudio: (text: string, language?: string) => Promise<string>;
     playAudio: (audioPath: string) => Promise<void>;
     audioExists: (audioPath: string) => Promise<boolean>;
   };
@@ -69,7 +73,11 @@ export const IPC_CHANNELS = {
     GET_SENTENCES_BY_WORD: 'database:getSentencesByWord',
     UPDATE_LAST_STUDIED: 'database:updateLastStudied',
     GET_STUDY_STATS: 'database:getStudyStats',
-    RECORD_STUDY_SESSION: 'database:recordStudySession'
+    RECORD_STUDY_SESSION: 'database:recordStudySession',
+    GET_SETTING: 'database:getSetting',
+    SET_SETTING: 'database:setSetting',
+    GET_CURRENT_LANGUAGE: 'database:getCurrentLanguage',
+    SET_CURRENT_LANGUAGE: 'database:setCurrentLanguage'
   },
   LLM: {
     GENERATE_WORDS: 'llm:generateWords',

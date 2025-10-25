@@ -81,6 +81,23 @@ export class MigrationManager {
           `CREATE INDEX IF NOT EXISTS idx_sentences_word_id ON sentences(word_id)`,
           `CREATE INDEX IF NOT EXISTS idx_progress_when_studied ON progress(when_studied)`
         ]
+      },
+      {
+        version: 2,
+        name: 'add_settings_table',
+        up: [
+          `CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )`,
+          
+          // Insert default language setting
+          `INSERT OR IGNORE INTO settings (key, value) VALUES ('current_language', 'spanish')`
+        ],
+        down: [
+          `DROP TABLE IF EXISTS settings`
+        ]
       }
     ];
   }

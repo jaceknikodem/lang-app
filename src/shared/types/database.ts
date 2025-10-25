@@ -31,6 +31,12 @@ export interface DatabaseLayer {
   getWeakestWords(limit: number): Promise<Word[]>;
   getRandomSentenceForWord(wordId: number): Promise<Sentence | null>;
   
+  // Settings management
+  getSetting(key: string): Promise<string | null>;
+  setSetting(key: string, value: string): Promise<void>;
+  getCurrentLanguage(): Promise<string>;
+  setCurrentLanguage(language: string): Promise<void>;
+  
   // Database lifecycle
   initialize(): Promise<void>;
   close(): Promise<void>;

@@ -1,5 +1,6 @@
 import { TTSAudioGenerator } from './audio-generator';
 import { AudioGenerator, AudioError } from '../../shared/types/audio';
+import { DatabaseLayer } from '../../shared/types/database';
 
 /**
  * Audio service that coordinates audio generation and playback
@@ -8,26 +9,25 @@ import { AudioGenerator, AudioError } from '../../shared/types/audio';
 export class AudioService {
   private audioGenerator: AudioGenerator;
 
-  constructor(audioGenerator?: AudioGenerator) {
-    this.audioGenerator = audioGenerator || new TTSAudioGenerator();
+  constructor(audioGenerator?: AudioGenerator, database?: DatabaseLayer) {
+    this.audioGenerator = audioGenerator || new TTSAudioGenerator(undefined, database);
   }
 
   /**
    * Generate audio for text with error handling and validation
    */
-  async generateAudio(text: string, language: string): Promise<string> {
+  async generateAudio(text: string, language?: string): Promise<string> {
     try {
       // Validate inputs
       if (!text || typeof text !== 'string' || text.trim().length === 0) {
         throw new Error('Text must be a non-empty string');
       }
 
-      if (!language || typeof language !== 'string') {
-        throw new Error('Language must be specified');
-      }
+      // Language is now optional - will be retrieved from database if not provided
+      const targetLanguage = language ? language.toLowerCase() : undefined;
 
       // Generate audio and return path
-      const audioPath = await this.audioGenerator.generateAudio(text.trim(), language.toLowerCase());
+      const audioPath = await this.audioGenerator.generateAudio(text.trim(), targetLanguage);
       
       // Verify the file was actually created
       if (!await this.audioExists(audioPath)) {
@@ -101,7 +101,7 @@ export class AudioService {
    * Generate audio for a word and return the path
    * Convenience method for word-specific audio generation
    */
-  async generateWordAudio(word: string, language: string): Promise<string> {
+  async generateWordAudio(word: string, language?: string): Promise<string> {
     return this.generateAudio(word, language);
   }
 
@@ -109,7 +109,7 @@ export class AudioService {
    * Generate audio for a sentence and return the path
    * Convenience method for sentence-specific audio generation
    */
-  async generateSentenceAudio(sentence: string, language: string): Promise<string> {
+  async generateSentenceAudio(sentence: string, language?: string): Promise<string> {
     return this.generateAudio(sentence, language);
   }
 
@@ -117,7 +117,7 @@ export class AudioService {
    * Batch generate audio for multiple texts
    * Returns array of paths in same order as input
    */
-  async generateBatchAudio(texts: string[], language: string): Promise<string[]> {
+  async generateBatchAudio(texts: string[], language?: string): Promise<string[]> {
     const results: string[] = [];
     
     for (const text of texts) {

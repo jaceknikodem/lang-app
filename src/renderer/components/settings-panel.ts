@@ -105,6 +105,19 @@ export class SettingsPanel extends LitElement {
         font-size: 0.9rem;
         color: #666;
       }
+
+      .language-select {
+        padding: 0.5rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        min-width: 200px;
+      }
+
+      .language-select:focus {
+        outline: none;
+        border-color: #007acc;
+      }
     `
   ];
 
@@ -123,9 +136,25 @@ export class SettingsPanel extends LitElement {
   @state()
   private isCheckingUpdates = false;
 
+  @state()
+  private currentLanguage = 'spanish';
+
+  @state()
+  private languageStatus = '';
+
   async connectedCallback() {
     super.connectedCallback();
     await this.loadAppVersion();
+    await this.loadCurrentLanguage();
+  }
+
+  private async loadCurrentLanguage() {
+    try {
+      this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+    } catch (error) {
+      console.error('Failed to get current language:', error);
+      this.currentLanguage = 'spanish';
+    }
   }
 
   private async loadAppVersion() {
@@ -171,6 +200,36 @@ export class SettingsPanel extends LitElement {
     }
   }
 
+  private async changeLanguage(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const newLanguage = select.value;
+    
+    this.languageStatus = '';
+
+    try {
+      await window.electronAPI.database.setCurrentLanguage(newLanguage);
+      this.currentLanguage = newLanguage;
+      this.languageStatus = `Language changed to ${this.getLanguageDisplayName(newLanguage)}`;
+    } catch (error) {
+      console.error('Failed to change language:', error);
+      this.languageStatus = `Failed to change language: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      // Reset select to current language
+      select.value = this.currentLanguage;
+    }
+  }
+
+  private getLanguageDisplayName(language: string): string {
+    const languageNames: Record<string, string> = {
+      'spanish': 'Spanish (Monica)',
+      'portuguese': 'Portuguese (Luciana)',
+      'italian': 'Italian (Alice)',
+      'indonesian': 'Indonesian (Damayanti)',
+      'polish': 'Polish (Zosia)',
+    };
+    
+    return languageNames[language] || language;
+  }
+
   render() {
     return html`
       <div class="settings-container">
@@ -185,6 +244,32 @@ export class SettingsPanel extends LitElement {
             </div>
             <div class="version-info">v${this.appVersion}</div>
           </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Language Settings</h3>
+          <div class="settings-row">
+            <div class="settings-description">
+              <strong>Current Language</strong>
+              <p>Select the language for TTS voice and learning content</p>
+            </div>
+            <select 
+              class="language-select" 
+              .value=${this.currentLanguage}
+              @change=${this.changeLanguage}
+            >
+              <option value="spanish">Spanish (Monica)</option>
+              <option value="portuguese">Portuguese (Luciana)</option>
+              <option value="italian">Italian (Alice)</option>
+              <option value="indonesian">Indonesian (Damayanti)</option>
+              <option value="polish">Polish (Zosia)</option>
+            </select>
+          </div>
+          ${this.languageStatus ? html`
+            <div class="status-message ${this.languageStatus.includes('Failed') ? 'status-error' : 'status-success'}">
+              ${this.languageStatus}
+            </div>
+          ` : ''}
         </div>
 
         <div class="settings-section">

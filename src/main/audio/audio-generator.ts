@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import { existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { AudioGenerator, AudioConfig, AudioError } from '../../shared/types/audio';
+import { DatabaseLayer } from '../../shared/types/database';
 
 const execFileAsync = promisify(execFile);
 
@@ -12,16 +13,19 @@ const execFileAsync = promisify(execFile);
  */
 export class TTSAudioGenerator implements AudioGenerator {
   private config: AudioConfig;
+  private database?: DatabaseLayer;
 
-  constructor(config?: Partial<AudioConfig>) {
+  constructor(config?: Partial<AudioConfig>, database?: DatabaseLayer) {
     this.config = {
       audioDirectory: join(process.cwd(), 'audio'),
       ttsCommand: 'say',
       fileExtension: '.aiff',
-      voice: 'Alex', // Default macOS voice
-      rate: 200, // Words per minute
+      voice: 'Monica', // Default macOS voice
+      rate: 160, // Words per minute
       ...config
     };
+
+    this.database = database;
 
     // Ensure audio directory exists
     this.ensureAudioDirectory();
@@ -31,10 +35,22 @@ export class TTSAudioGenerator implements AudioGenerator {
    * Generate audio file for given text using system TTS
    * Returns path to generated audio file
    */
-  async generateAudio(text: string, language: string): Promise<string> {
+  async generateAudio(text: string, language?: string): Promise<string> {
     if (!text || text.trim().length === 0) {
       throw this.createAudioError('GENERATION_FAILED', 'Text cannot be empty');
     }
+
+    // Get language from database if not provided
+    let targetLanguage = language;
+    if (!targetLanguage && this.database) {
+      try {
+        targetLanguage = await this.database.getCurrentLanguage();
+      } catch (error) {
+        console.warn('Failed to get current language from database, using default');
+        targetLanguage = 'spanish';
+      }
+    }
+    targetLanguage = targetLanguage || 'spanish';
 
     const audioPath = this.getAudioPath(text);
     
@@ -52,7 +68,7 @@ export class TTSAudioGenerator implements AudioGenerator {
 
       // Build TTS command arguments
       const args = [
-        '-v', this.getVoiceForLanguage(language),
+        '-v', this.getVoiceForLanguage(targetLanguage),
         '-r', this.config.rate!.toString(),
         '-o', audioPath,
         text
@@ -121,18 +137,21 @@ export class TTSAudioGenerator implements AudioGenerator {
    * Get appropriate voice for language
    */
   private getVoiceForLanguage(language: string): string {
-    // Map languages to macOS voices
+    // Map languages to macOS voices with proper locale-specific voices
     const voiceMap: Record<string, string> = {
-      'spanish': 'Monica',
-      'french': 'Thomas',
-      'german': 'Anna',
+      'indonesian': 'Damayanti',
+      'id': 'Damayanti',
+      'portuguese': 'Luciana',
+      'pt': 'Luciana',
       'italian': 'Alice',
-      'portuguese': 'Joana',
-      'dutch': 'Ellen',
-      'english': 'Alex'
+      'it': 'Alice',
+      'spanish': 'Monica',
+      'es': 'Monica',
+      'polish': 'Zosia',
+      'pl': 'Zosia',
     };
 
-    return voiceMap[language.toLowerCase()] || this.config.voice || 'Alex';
+    return voiceMap[language.toLowerCase()] || this.config.voice || 'Monica';
   }
 
   /**

@@ -472,6 +472,57 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
+  // Settings management operations
+
+  /**
+   * Get a setting value by key
+   */
+  async getSetting(key: string): Promise<string | null> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare('SELECT value FROM settings WHERE key = ?');
+      const row = stmt.get(key) as any;
+      
+      return row ? row.value : null;
+    } catch (error) {
+      throw new Error(`Failed to get setting: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Set a setting value
+   */
+  async setSetting(key: string, value: string): Promise<void> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare(`
+        INSERT OR REPLACE INTO settings (key, value, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+      `);
+      
+      stmt.run(key, value);
+    } catch (error) {
+      throw new Error(`Failed to set setting: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get current language setting
+   */
+  async getCurrentLanguage(): Promise<string> {
+    const language = await this.getSetting('current_language');
+    return language || 'spanish'; // Default fallback
+  }
+
+  /**
+   * Set current language setting
+   */
+  async setCurrentLanguage(language: string): Promise<void> {
+    await this.setSetting('current_language', language);
+  }
+
   // Helper methods for mapping database rows to objects
 
   private mapRowToWord(row: any): Word {

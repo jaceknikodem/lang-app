@@ -58,8 +58,8 @@ async function initializeServices(): Promise<void> {
     // Initialize content generator with LLM client
     contentGenerator = new ContentGenerator(llmClient);
 
-    // Initialize audio service
-    audioService = new AudioService();
+    // Initialize audio service with database reference
+    audioService = new AudioService(undefined, databaseLayer);
 
     // Initialize update manager
     await updateManager.initialize();

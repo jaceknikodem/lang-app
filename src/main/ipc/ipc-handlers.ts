@@ -204,6 +204,46 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       throw new Error(`Failed to get recent study sessions: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
+
+  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_SETTING, async (event, key) => {
+    try {
+      const validatedKey = z.string().min(1).max(100).parse(key);
+      return await databaseLayer.getSetting(validatedKey);
+    } catch (error) {
+      console.error('Error getting setting:', error);
+      throw new Error(`Failed to get setting: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DATABASE.SET_SETTING, async (event, key, value) => {
+    try {
+      const validatedKey = z.string().min(1).max(100).parse(key);
+      const validatedValue = z.string().max(1000).parse(value);
+      return await databaseLayer.setSetting(validatedKey, validatedValue);
+    } catch (error) {
+      console.error('Error setting setting:', error);
+      throw new Error(`Failed to set setting: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_CURRENT_LANGUAGE, async (event) => {
+    try {
+      return await databaseLayer.getCurrentLanguage();
+    } catch (error) {
+      console.error('Error getting current language:', error);
+      throw new Error(`Failed to get current language: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DATABASE.SET_CURRENT_LANGUAGE, async (event, language) => {
+    try {
+      const validatedLanguage = LanguageSchema.parse(language);
+      return await databaseLayer.setCurrentLanguage(validatedLanguage);
+    } catch (error) {
+      console.error('Error setting current language:', error);
+      throw new Error(`Failed to set current language: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
 }
 
 /**
@@ -289,7 +329,7 @@ function setupAudioHandlers(audioService: AudioService): void {
   ipcMain.handle(IPC_CHANNELS.AUDIO.GENERATE_AUDIO, async (event, text, language) => {
     try {
       const validatedText = TextSchema.parse(text);
-      const validatedLanguage = LanguageSchema.parse(language);
+      const validatedLanguage = language ? LanguageSchema.parse(language) : undefined;
       
       return await audioService.generateAudio(validatedText, validatedLanguage);
     } catch (error) {

@@ -24,7 +24,7 @@ export const AUDIO_CONFIG = {
   FILE_EXTENSION: '.aiff',
   TTS_COMMAND: 'say',
   DEFAULT_VOICE: 'system',
-  DEFAULT_RATE: 200
+  DEFAULT_RATE: 160
 } as const;
 
 export const UI_CONFIG = {
