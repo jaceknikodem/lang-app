@@ -83,11 +83,22 @@ export async function setupWordsForTesting(page: Page, topic: string = 'test', w
   const topicInput = page.locator('topic-selector input[type="text"]');
   await topicInput.fill(topic);
   
-  const generateButton = page.locator('topic-selector button:has-text("Generate Words")');
+  // Handle both "Generate General Words" and "Generate Topic Words" buttons
+  const generateButton = page.locator('topic-selector button:has-text("Generate General Words"), topic-selector button:has-text("Generate Topic Words")').first();
   await generateButton.click();
   
-  // Wait for word generation
-  await page.waitForSelector('word-selector', { timeout: 30000 });
+  // Wait for word generation or error
+  await Promise.race([
+    page.waitForSelector('word-selector', { timeout: 30000 }),
+    page.waitForSelector('.error-message, .error, [class*="error"]', { timeout: 30000 })
+  ]);
+
+  // Check if word generation was successful
+  const hasWordSelector = await page.locator('word-selector').isVisible();
+  if (!hasWordSelector) {
+    // If word generation failed, throw an error to indicate the test should be skipped
+    throw new Error('Word generation failed - LLM service may not be available');
+  }
   
   // Select specified number of words
   const checkboxes = page.locator('word-selector input[type="checkbox"]');

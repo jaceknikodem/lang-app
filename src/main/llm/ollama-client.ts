@@ -39,7 +39,7 @@ export class OllamaClient implements LLMClient {
   constructor(config: Partial<LLMConfig> = {}) {
     this.config = {
       baseUrl: config.baseUrl || 'http://localhost:11434',
-      model: config.model || 'llama2',
+      model: config.model || 'qwen3:8b',
       timeout: config.timeout || 30000,
       maxRetries: config.maxRetries || 3
     };
@@ -170,7 +170,17 @@ Example format:
 
         // Parse the JSON response
         try {
-          return JSON.parse(data.response);
+          const parsed = JSON.parse(data.response);
+          
+          // If the response is a single object but we expect an array, wrap it
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            // Check if it looks like a word/sentence object
+            if (parsed.word || parsed.sentence) {
+              return [parsed];
+            }
+          }
+          
+          return parsed;
         } catch (parseError) {
           throw new Error(`Invalid JSON response: ${data.response}`);
         }
