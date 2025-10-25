@@ -2,14 +2,15 @@
   "name": "local-language-learning-app",
   "version": "1.0.0",
   "description": "A privacy-first desktop language learning application",
-  "main": "dist/main/main.js",
+  "main": "dist/main/main/main.js",
   "scripts": {
     "dev": "concurrently \"npm run build:watch\" \"npm run electron:dev\"",
     "build": "npm run build:main && npm run build:renderer",
     "build:main": "tsc -p tsconfig.main.json",
-    "build:renderer": "tsc -p tsconfig.renderer.json && cp src/renderer/index.html dist/renderer/",
-    "build:watch": "concurrently \"npm run build:main -- --watch\" \"npm run build:renderer -- --watch\"",
-    "electron:dev": "wait-on dist/main/main.js && electron .",
+    "build:renderer": "node build-renderer.js",
+    "build:renderer:watch": "node build-renderer.js --watch",
+    "build:watch": "concurrently \"npm run build:main -- --watch\" \"npm run build:renderer:watch\"",
+    "electron:dev": "wait-on dist/main/main/main.js && electron .",
     "electron": "electron .",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
@@ -36,13 +37,14 @@
     "concurrently": "^8.2.0",
     "electron": "^27.0.0",
     "electron-builder": "^24.6.0",
+    "esbuild": "^0.25.11",
     "jest": "^29.7.0",
     "ts-jest": "^29.4.5",
     "typescript": "^5.2.0",
     "wait-on": "^7.2.0"
   },
   "dependencies": {
-    "better-sqlite3": "^9.0.0",
+    "better-sqlite3": "^12.4.1",
     "lit": "^3.0.0",
     "zod": "^3.22.0"
   },
@@ -67,12 +69,16 @@
       {
         "from": "audio",
         "to": "audio",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "data",
         "to": "data",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "mac": {
@@ -81,11 +87,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "hardenedRuntime": true,
@@ -101,11 +113,16 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64", "ia32"]
+          "arch": [
+            "x64",
+            "ia32"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "publisherName": "Local Language Learning",
@@ -116,11 +133,15 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "deb",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "category": "Education",

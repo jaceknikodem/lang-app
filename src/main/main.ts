@@ -11,20 +11,35 @@ import { AudioService } from './audio/audio-service.js';
 import { LifecycleManager, UpdateManager } from './lifecycle/index.js';
 
 let mainWindow: BrowserWindow;
-let databaseLayer: SQLiteDatabaseLayer;
-let llmClient: OllamaClient;
-let audioService: AudioService;
-let lifecycleManager: LifecycleManager;
-let updateManager: UpdateManager;
+let databaseLayer: SQLiteDatabaseLayer | undefined;
+let llmClient: OllamaClient | undefined;
+let audioService: AudioService | undefined;
+let lifecycleManager: LifecycleManager | undefined;
+let updateManager: UpdateManager | undefined;
 
 async function initializeServices(): Promise<void> {
   try {
-    // Initialize lifecycle manager first
+    // Initialize database layer first
+    databaseLayer = new SQLiteDatabaseLayer({
+      databasePath: path.join(app.getPath('userData'), 'language_learning.db'),
+      enableWAL: true,
+      timeout: 5000
+    });
+
+    // Initialize database
+    await databaseLayer.initialize();
+    console.log('Database initialized successfully');
+
+    // Initialize lifecycle manager with database reference
     lifecycleManager = new LifecycleManager({
-      databaseLayer: null as any, // Will be set after database initialization
+      databaseLayer: databaseLayer,
       userDataPath: app.getPath('userData'),
       backupRetentionDays: 30
     });
+
+    // Handle startup procedures
+    await lifecycleManager.handleStartup();
+    console.log('Lifecycle manager initialized successfully');
 
     // Initialize update manager
     updateManager = new UpdateManager({
@@ -32,22 +47,6 @@ async function initializeServices(): Promise<void> {
       checkIntervalHours: 24,
       autoDownload: false
     });
-
-    // Initialize database layer
-    databaseLayer = new SQLiteDatabaseLayer({
-      databasePath: path.join(app.getPath('userData'), 'language_learning.db'),
-      enableWAL: true,
-      timeout: 5000
-    });
-
-    // Update lifecycle manager with database reference
-    (lifecycleManager as any).config.databaseLayer = databaseLayer;
-
-    // Handle startup procedures
-    await lifecycleManager.handleStartup();
-
-    // Initialize database after lifecycle startup
-    await databaseLayer.initialize();
 
     // Initialize LLM client
     llmClient = new OllamaClient();
@@ -72,19 +71,19 @@ function setupSecurity(): void {
   // Block external requests except to localhost (for Ollama)
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
     const url = new URL(details.url);
-    
+
     // Allow localhost requests (for Ollama)
     if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
       callback({ cancel: false });
       return;
     }
-    
+
     // Allow file:// and data: protocols for local resources
     if (url.protocol === 'file:' || url.protocol === 'data:') {
       callback({ cancel: false });
       return;
     }
-    
+
     // Block all other external requests
     console.warn('Blocked external request:', details.url);
     callback({ cancel: true });
@@ -112,10 +111,10 @@ function createWindow(): void {
 
   // Load the app
   if (process.env.NODE_ENV === 'development') {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+    mainWindow.loadFile(path.join(__dirname, '../../renderer/index.html'));
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+    mainWindow.loadFile(path.join(__dirname, '../../renderer/index.html'));
   }
 
   // Show window when ready to prevent visual flash
@@ -139,7 +138,8 @@ app.whenReady().then(async () => {
     await initializeServices();
 
     // Set up IPC handlers with initialized services
-    setupIPCHandlers(databaseLayer, llmClient, audioService, lifecycleManager, updateManager);
+    setupIPCHandlers(databaseLayer!, llmClient!, audioService!, lifecycleManager!, updateManager!);
+    console.log('IPC handlers initialized successfully');
 
     // Create the main window
     createWindow();
@@ -163,7 +163,7 @@ app.on('window-all-closed', async () => {
   if (lifecycleManager) {
     await lifecycleManager.handleShutdown();
   }
-  
+
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -171,20 +171,20 @@ app.on('window-all-closed', async () => {
 
 // Handle app termination
 app.on('before-quit', async (event) => {
-  if (lifecycleManager && !lifecycleManager['isShuttingDown']) {
+  if (lifecycleManager && !(lifecycleManager as any)['isShuttingDown']) {
     event.preventDefault();
     try {
       // Clean up IPC handlers
       cleanupIPCHandlers();
-      
+
       // Clean up update manager
       if (updateManager) {
         updateManager.cleanup();
       }
-      
+
       // Handle graceful shutdown (includes database closure)
       await lifecycleManager.handleShutdown();
-      
+
       app.quit();
     } catch (error) {
       console.error('Error during cleanup:', error);
@@ -204,7 +204,7 @@ app.on('web-contents-created', (event, contents) => {
   // Prevent navigation to external URLs
   contents.on('will-navigate', (event, navigationUrl) => {
     const parsedUrl = new URL(navigationUrl);
-    
+
     // Only allow navigation within the app
     if (parsedUrl.origin !== 'file://') {
       console.warn('Blocked navigation to external URL:', navigationUrl);

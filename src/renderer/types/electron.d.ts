@@ -36,6 +36,12 @@ declare global {
         getWeakestWords: (limit: number) => Promise<Word[]>;
         getRandomSentenceForWord: (wordId: number) => Promise<Sentence | null>;
       };
+      lifecycle: {
+        createBackup: () => Promise<string>;
+        restoreFromBackup: (backupPath: string) => Promise<void>;
+        checkForUpdates: () => Promise<boolean>;
+        getAppVersion: () => Promise<string>;
+      };
     };
   }
 }

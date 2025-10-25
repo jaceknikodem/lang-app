@@ -227,17 +227,18 @@ export class AppRoot extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback();
-    
+    console.log('AppRoot connected!');
+
     // Subscribe to router changes
     this.routerUnsubscribe = router.subscribe((route) => {
       this.currentRoute = route;
       this.updateAppState();
       this.updateSessionFromRoute();
     });
-    
+
     // Initialize current route
     this.currentRoute = router.getCurrentRoute();
-    
+
     await this.initializeApp();
   }
 
@@ -250,13 +251,20 @@ export class AppRoot extends LitElement {
 
   private async initializeApp() {
     try {
-      // Check if LLM is available
-      const llmAvailable = await window.electronAPI.llm.isAvailable();
-      console.log('LLM Available:', llmAvailable);
-      
+      console.log('Initializing app...');
+
+      // Check if LLM is available (non-blocking)
+      try {
+        const llmAvailable = await window.electronAPI.llm.isAvailable();
+        console.log('LLM Available:', llmAvailable);
+      } catch (error) {
+        console.warn('LLM check failed (this is OK):', error);
+      }
+
       // Load saved session
       await this.loadSession();
-      
+
+      console.log('App initialization complete');
       this.isLoading = false;
     } catch (error) {
       console.error('Failed to initialize app:', error);
@@ -267,7 +275,7 @@ export class AppRoot extends LitElement {
   private async loadSession() {
     try {
       const savedSession = sessionManager.loadSession();
-      
+
       if (savedSession && sessionManager.hasActiveSession()) {
         this.sessionState = savedSession;
         this.showSessionRestore = true;
@@ -285,7 +293,7 @@ export class AppRoot extends LitElement {
   private updateAppState() {
     // Update legacy app state based on current route
     const routeData = router.getRouteData();
-    
+
     this.appState = {
       ...this.appState,
       currentMode: this.currentRoute.mode === 'quiz' ? 'quiz' : 'learning',
@@ -298,17 +306,17 @@ export class AppRoot extends LitElement {
   private updateSessionFromRoute() {
     // Update session manager with current route state
     const routeData = router.getRouteData();
-    
+
     sessionManager.updateCurrentMode(this.currentRoute.mode);
-    
+
     if (routeData?.selectedWords) {
       sessionManager.updateSelectedWords(routeData.selectedWords);
     }
-    
+
     if (routeData?.topic) {
       sessionManager.updateSelectedTopic(routeData.topic);
     }
-    
+
     if (routeData?.direction) {
       sessionManager.updateQuizDirection(routeData.direction);
     }
@@ -442,7 +450,7 @@ export class AppRoot extends LitElement {
     switch (this.currentRoute.mode) {
       case 'topic-selection':
         return html`<topic-selector language="Spanish"></topic-selector>`;
-      
+
       case 'word-selection':
         return html`
           <word-selector
@@ -451,14 +459,14 @@ export class AppRoot extends LitElement {
             .language=${routeData?.language || 'Spanish'}
           ></word-selector>
         `;
-      
+
       case 'learning':
         return html`
           <learning-mode
             .selectedWords=${routeData?.selectedWords || []}
           ></learning-mode>
         `;
-      
+
       case 'quiz':
         return html`
           <quiz-mode
@@ -466,10 +474,10 @@ export class AppRoot extends LitElement {
             .direction=${routeData?.direction || 'foreign-to-english'}
           ></quiz-mode>
         `;
-      
+
       case 'progress':
         return html`<progress-summary></progress-summary>`;
-      
+
       default:
         return html`
           <div class="placeholder">
