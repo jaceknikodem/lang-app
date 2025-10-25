@@ -6,11 +6,13 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { AppState } from '../../shared/types/core.js';
 import { router, RouteState, AppMode } from '../utils/router.js';
+import { sessionManager, SessionState } from '../utils/session-manager.js';
 import { sharedStyles } from '../styles/shared.js';
 import './topic-selector.js';
 import './word-selector.js';
 import './learning-mode.js';
 import './quiz-mode.js';
+import './progress-summary.js';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -25,6 +27,12 @@ export class AppRoot extends LitElement {
 
   @state()
   private isLoading = true;
+
+  @state()
+  private sessionState: SessionState | null = null;
+
+  @state()
+  private showSessionRestore = false;
 
   private routerUnsubscribe?: () => void;
 
@@ -139,6 +147,61 @@ export class AppRoot extends LitElement {
         justify-content: center;
       }
 
+      .session-restore {
+        background: var(--primary-light);
+        border: 2px solid var(--primary-color);
+        border-radius: var(--border-radius);
+        padding: var(--spacing-lg);
+        margin-bottom: var(--spacing-lg);
+        text-align: center;
+      }
+
+      .session-restore-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--primary-color);
+        margin: 0 0 var(--spacing-sm) 0;
+      }
+
+      .session-restore-description {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin: 0 0 var(--spacing-md) 0;
+      }
+
+      .session-restore-actions {
+        display: flex;
+        gap: var(--spacing-md);
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .session-restore-button {
+        padding: var(--spacing-sm) var(--spacing-lg);
+        border: 2px solid var(--primary-color);
+        background: var(--primary-color);
+        color: white;
+        border-radius: var(--border-radius);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .session-restore-button:hover {
+        background: var(--primary-dark);
+        border-color: var(--primary-dark);
+      }
+
+      .session-restore-button.secondary {
+        background: var(--background-primary);
+        color: var(--primary-color);
+      }
+
+      .session-restore-button.secondary:hover {
+        background: var(--primary-light);
+      }
+
       @media (max-width: 768px) {
         .app-container {
           padding: var(--spacing-md);
@@ -169,6 +232,7 @@ export class AppRoot extends LitElement {
     this.routerUnsubscribe = router.subscribe((route) => {
       this.currentRoute = route;
       this.updateAppState();
+      this.updateSessionFromRoute();
     });
     
     // Initialize current route
@@ -190,10 +254,31 @@ export class AppRoot extends LitElement {
       const llmAvailable = await window.electronAPI.llm.isAvailable();
       console.log('LLM Available:', llmAvailable);
       
+      // Load saved session
+      await this.loadSession();
+      
       this.isLoading = false;
     } catch (error) {
       console.error('Failed to initialize app:', error);
       this.isLoading = false;
+    }
+  }
+
+  private async loadSession() {
+    try {
+      const savedSession = sessionManager.loadSession();
+      
+      if (savedSession && sessionManager.hasActiveSession()) {
+        this.sessionState = savedSession;
+        this.showSessionRestore = true;
+        console.log('Found active session:', savedSession.currentMode);
+      } else {
+        // No active session, start fresh
+        this.sessionState = sessionManager.getCurrentSession();
+      }
+    } catch (error) {
+      console.error('Failed to load session:', error);
+      this.sessionState = sessionManager.getCurrentSession();
     }
   }
 
@@ -210,23 +295,45 @@ export class AppRoot extends LitElement {
     };
   }
 
+  private updateSessionFromRoute() {
+    // Update session manager with current route state
+    const routeData = router.getRouteData();
+    
+    sessionManager.updateCurrentMode(this.currentRoute.mode);
+    
+    if (routeData?.selectedWords) {
+      sessionManager.updateSelectedWords(routeData.selectedWords);
+    }
+    
+    if (routeData?.topic) {
+      sessionManager.updateSelectedTopic(routeData.topic);
+    }
+    
+    if (routeData?.direction) {
+      sessionManager.updateQuizDirection(routeData.direction);
+    }
+  }
+
   private handleNavigation(mode: AppMode) {
     switch (mode) {
       case 'topic-selection':
         router.goToTopicSelection();
         break;
       case 'learning':
-        // Only navigate if we have selected words
-        if (this.appState.selectedWords?.length) {
-          router.goToLearning(this.appState.selectedWords);
+        // Try to use session words first, then app state words
+        const learningWords = this.sessionState?.selectedWords || this.appState.selectedWords;
+        if (learningWords?.length) {
+          router.goToLearning(learningWords);
         } else {
           router.goToTopicSelection();
         }
         break;
       case 'quiz':
-        // Only navigate if we have selected words
-        if (this.appState.selectedWords?.length) {
-          router.goToQuiz(this.appState.selectedWords, this.appState.quizDirection);
+        // Try to use session words first, then app state words
+        const quizWords = this.sessionState?.selectedWords || this.appState.selectedWords;
+        const direction = this.sessionState?.quizDirection || this.appState.quizDirection;
+        if (quizWords?.length) {
+          router.goToQuiz(quizWords, direction);
         } else {
           router.goToTopicSelection();
         }
@@ -235,6 +342,40 @@ export class AppRoot extends LitElement {
         router.goToProgress();
         break;
     }
+  }
+
+  private handleRestoreSession() {
+    if (!this.sessionState) return;
+
+    this.showSessionRestore = false;
+
+    // Navigate to the saved session mode
+    switch (this.sessionState.currentMode) {
+      case 'learning':
+        if (this.sessionState.selectedWords.length > 0) {
+          router.goToLearning(this.sessionState.selectedWords);
+        } else {
+          router.goToTopicSelection();
+        }
+        break;
+      case 'quiz':
+        if (this.sessionState.selectedWords.length > 0) {
+          router.goToQuiz(this.sessionState.selectedWords, this.sessionState.quizDirection);
+        } else {
+          router.goToTopicSelection();
+        }
+        break;
+      default:
+        router.goToTopicSelection();
+        break;
+    }
+  }
+
+  private handleStartFresh() {
+    this.showSessionRestore = false;
+    sessionManager.clearSession();
+    this.sessionState = sessionManager.getCurrentSession();
+    router.goToTopicSelection();
   }
 
   render() {
@@ -286,6 +427,7 @@ export class AppRoot extends LitElement {
         </header>
 
         <main class="content-area">
+          ${this.showSessionRestore ? this.renderSessionRestore() : ''}
           <div class="route-content">
             ${this.renderCurrentRoute()}
           </div>
@@ -326,13 +468,7 @@ export class AppRoot extends LitElement {
         `;
       
       case 'progress':
-        return html`
-          <div class="placeholder">
-            <h3>Progress Summary</h3>
-            <p>View your learning statistics and word mastery progress.</p>
-            <p><em>Progress tracking will be implemented in task 8.</em></p>
-          </div>
-        `;
+        return html`<progress-summary></progress-summary>`;
       
       default:
         return html`
@@ -341,6 +477,59 @@ export class AppRoot extends LitElement {
             <p>Navigation error occurred.</p>
           </div>
         `;
+    }
+  }
+
+  private renderSessionRestore() {
+    if (!this.sessionState || !sessionManager.hasActiveSession()) {
+      return html``;
+    }
+
+    const sessionSummary = sessionManager.getSessionSummary();
+
+    return html`
+      <div class="session-restore">
+        <h3 class="session-restore-title">Continue Previous Session?</h3>
+        <p class="session-restore-description">
+          ${sessionSummary} • Last activity: ${this.formatLastActivity()}
+        </p>
+        <div class="session-restore-actions">
+          <button 
+            class="session-restore-button"
+            @click=${this.handleRestoreSession}
+          >
+            Continue Session
+          </button>
+          <button 
+            class="session-restore-button secondary"
+            @click=${this.handleStartFresh}
+          >
+            Start Fresh
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  private formatLastActivity(): string {
+    if (!this.sessionState?.lastActivity) {
+      return 'Unknown';
+    }
+
+    const lastActivity = new Date(this.sessionState.lastActivity);
+    const now = new Date();
+    const diffMs = now.getTime() - lastActivity.getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMinutes / 60);
+
+    if (diffMinutes < 1) {
+      return 'Just now';
+    } else if (diffMinutes < 60) {
+      return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+    } else if (diffHours < 24) {
+      return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+    } else {
+      return lastActivity.toLocaleDateString();
     }
   }
 }

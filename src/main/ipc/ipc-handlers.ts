@@ -174,6 +174,27 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       throw new Error(`Failed to record study session: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
+
+  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_ALL_WORDS, async (event, includeKnown, includeIgnored) => {
+    try {
+      const validatedIncludeKnown = includeKnown !== undefined ? BooleanSchema.parse(includeKnown) : true;
+      const validatedIncludeIgnored = includeIgnored !== undefined ? BooleanSchema.parse(includeIgnored) : false;
+      return await databaseLayer.getAllWords(validatedIncludeKnown, validatedIncludeIgnored);
+    } catch (error) {
+      console.error('Error getting all words:', error);
+      throw new Error(`Failed to get all words: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_RECENT_STUDY_SESSIONS, async (event, limit) => {
+    try {
+      const validatedLimit = limit !== undefined ? LimitSchema.parse(limit) : 10;
+      return await databaseLayer.getRecentStudySessions(validatedLimit);
+    } catch (error) {
+      console.error('Error getting recent study sessions:', error);
+      throw new Error(`Failed to get recent study sessions: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
 }
 
 /**

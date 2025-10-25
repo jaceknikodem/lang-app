@@ -6,6 +6,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
+import { sessionManager } from '../utils/session-manager.js';
 import { GeneratedWord } from '../../shared/types/core.js';
 
 interface SelectableWord extends GeneratedWord {
@@ -346,6 +347,12 @@ export class WordSelector extends LitElement {
         if (completeWord) {
           storedWords.push(completeWord);
         }
+      }
+
+      // Update session with selected words and topic
+      sessionManager.updateSelectedWords(storedWords);
+      if (this.topic) {
+        sessionManager.updateSelectedTopic(this.topic);
       }
 
       // Navigate to learning mode with selected words

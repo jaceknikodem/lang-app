@@ -6,8 +6,11 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
+import { sessionManager } from '../utils/session-manager.js';
 import { Word, Sentence } from '../../shared/types/core.js';
 import './sentence-viewer.js';
+import './session-complete.js';
+import type { SessionSummary } from './session-complete.js';
 
 interface WordWithSentences extends Word {
   sentences: Sentence[];
@@ -35,6 +38,14 @@ export class LearningMode extends LitElement {
 
   @state()
   private isProcessing = false;
+
+  @state()
+  private showCompletion = false;
+
+  @state()
+  private sessionSummary: SessionSummary | null = null;
+
+  private sessionStartTime = Date.now();
 
   static styles = [
     sharedStyles,
@@ -206,6 +217,7 @@ export class LearningMode extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.loadWordsAndSentences();
+    this.restoreSessionProgress();
   }
 
   private async loadWordsAndSentences() {
@@ -246,6 +258,27 @@ export class LearningMode extends LitElement {
       this.error = 'Failed to load learning content. Please try again.';
     } finally {
       this.isLoading = false;
+    }
+  }
+
+  private restoreSessionProgress() {
+    // Restore learning progress from session if available
+    const session = sessionManager.getCurrentSession();
+    if (session.learningProgress) {
+      this.currentWordIndex = Math.min(
+        session.learningProgress.currentWordIndex,
+        this.wordsWithSentences.length - 1
+      );
+      
+      const currentWord = this.getCurrentWord();
+      if (currentWord) {
+        this.currentSentenceIndex = Math.min(
+          session.learningProgress.currentSentenceIndex,
+          currentWord.sentences.length - 1
+        );
+      }
+      
+      console.log('Restored learning progress:', this.currentWordIndex, this.currentSentenceIndex);
     }
   }
 
@@ -329,6 +362,9 @@ export class LearningMode extends LitElement {
       const currentWord = this.getCurrentWord();
       this.currentSentenceIndex = currentWord ? currentWord.sentences.length - 1 : 0;
     }
+    
+    // Save progress to session
+    this.saveProgressToSession();
   }
 
   private goToNextSentence() {
@@ -341,6 +377,13 @@ export class LearningMode extends LitElement {
       this.currentWordIndex++;
       this.currentSentenceIndex = 0;
     }
+    
+    // Save progress to session
+    this.saveProgressToSession();
+  }
+
+  private saveProgressToSession() {
+    sessionManager.updateLearningProgress(this.currentWordIndex, this.currentSentenceIndex);
   }
 
   private isFirstSentence(): boolean {
@@ -355,9 +398,50 @@ export class LearningMode extends LitElement {
            this.currentSentenceIndex === currentWord.sentences.length - 1;
   }
 
-  private handleFinishLearning() {
-    // Navigate to quiz mode or back to topic selection
-    router.goToQuiz(this.selectedWords, 'foreign-to-english');
+  private async handleFinishLearning() {
+    // Record the learning session
+    await this.recordLearningSession();
+    
+    // Show completion screen
+    this.showSessionCompletion();
+  }
+
+  private async recordLearningSession() {
+    try {
+      // Record study session in database
+      await window.electronAPI.database.recordStudySession(this.selectedWords.length);
+      
+      // Clear session progress since we're completing
+      sessionManager.clearSession();
+      
+    } catch (error) {
+      console.error('Failed to record learning session:', error);
+    }
+  }
+
+  private showSessionCompletion() {
+    const timeSpent = Math.round((Date.now() - this.sessionStartTime) / (1000 * 60)); // minutes
+    
+    // Determine next recommendation based on word strengths
+    let nextRecommendation: SessionSummary['nextRecommendation'] = 'take-quiz';
+    
+    const averageStrength = this.wordsWithSentences.reduce((sum, w) => sum + w.strength, 0) / this.wordsWithSentences.length;
+    
+    if (averageStrength < 50) {
+      nextRecommendation = 'continue-learning';
+    } else if (averageStrength >= 70) {
+      nextRecommendation = 'new-topic';
+    }
+
+    this.sessionSummary = {
+      type: 'learning',
+      wordsStudied: this.selectedWords.length,
+      timeSpent,
+      completedWords: this.selectedWords,
+      nextRecommendation
+    };
+
+    this.showCompletion = true;
   }
 
   private handleBackToSelection() {
@@ -414,6 +498,14 @@ export class LearningMode extends LitElement {
     const progressPercent = (currentSentenceNumber / totalSentences) * 100;
 
     if (!currentWord || !currentSentence) {
+      if (this.showCompletion && this.sessionSummary) {
+        return html`
+          <div class="learning-container">
+            <session-complete .sessionSummary=${this.sessionSummary}></session-complete>
+          </div>
+        `;
+      }
+
       return html`
         <div class="learning-container">
           <div class="completion-state">
@@ -421,7 +513,7 @@ export class LearningMode extends LitElement {
             <p>You've reviewed all sentences for the selected words.</p>
             <div class="completion-actions">
               <button class="btn btn-primary btn-large" @click=${this.handleFinishLearning}>
-                Take Quiz
+                Finish Session
               </button>
               <button class="btn btn-secondary" @click=${this.handleBackToSelection}>
                 Select New Words

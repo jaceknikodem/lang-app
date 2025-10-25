@@ -14,6 +14,8 @@ declare global {
         markWordIgnored: (wordId: number, ignored: boolean) => Promise<void>;
         getWordsToStudy: (limit: number) => Promise<Word[]>;
         getWordById: (wordId: number) => Promise<Word | null>;
+        getAllWords: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
+        getRecentStudySessions: (limit?: number) => Promise<Array<{id: number, wordsStudied: number, whenStudied: Date}>>;
         insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string) => Promise<number>;
         getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
         updateLastStudied: (wordId: number) => Promise<void>;

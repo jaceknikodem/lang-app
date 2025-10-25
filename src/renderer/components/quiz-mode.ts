@@ -7,6 +7,9 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { Word, Sentence, QuizQuestion, QuizSession, QuizResult } from '../../shared/types/core.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
+import { sessionManager } from '../utils/session-manager.js';
+import './session-complete.js';
+import type { SessionSummary } from './session-complete.js';
 
 @customElement('quiz-mode')
 export class QuizMode extends LitElement {
@@ -33,6 +36,14 @@ export class QuizMode extends LitElement {
 
   @state()
   private lastResult: QuizResult | null = null;
+
+  @state()
+  private showCompletion = false;
+
+  @state()
+  private sessionSummary: SessionSummary | null = null;
+
+  private sessionStartTime = Date.now();
 
   static styles = [
     sharedStyles,
@@ -457,6 +468,9 @@ export class QuizMode extends LitElement {
       return;
     }
 
+    // Try to restore quiz session from session manager
+    this.restoreQuizSession();
+
     // If we don't have a quiz session, show setup
     if (!this.quizSession) {
       // Quiz setup will be shown in render
@@ -515,11 +529,34 @@ export class QuizMode extends LitElement {
 
       this.currentQuestion = shuffledQuestions[0];
       
+      // Save initial quiz state to session
+      this.saveQuizProgressToSession();
+      
     } catch (error) {
       console.error('Error starting quiz:', error);
       this.error = 'Failed to start quiz. Please try again.';
     } finally {
       this.isLoading = false;
+    }
+  }
+
+  private restoreQuizSession() {
+    const session = sessionManager.getCurrentSession();
+    if (session.quizProgress && session.selectedWords.length > 0) {
+      // We have a saved quiz session, but we need to rebuild the quiz questions
+      // For now, we'll just restore the direction preference
+      this.direction = session.quizDirection;
+      console.log('Restored quiz direction:', this.direction);
+    }
+  }
+
+  private saveQuizProgressToSession() {
+    if (this.quizSession) {
+      sessionManager.updateQuizProgress(
+        this.quizSession.currentQuestionIndex,
+        this.quizSession.score,
+        this.quizSession.totalQuestions
+      );
     }
   }
 
@@ -589,6 +626,9 @@ export class QuizMode extends LitElement {
       // Move to next question
       this.quizSession.currentQuestionIndex++;
       this.currentQuestion = this.quizSession.questions[this.quizSession.currentQuestionIndex];
+      
+      // Save progress to session
+      this.saveQuizProgressToSession();
     }
   }
 
@@ -598,10 +638,46 @@ export class QuizMode extends LitElement {
     try {
       // Record the study session in the database
       await window.electronAPI.database.recordStudySession(this.quizSession.totalQuestions);
+      
+      // Clear session progress since we're completing
+      sessionManager.clearSession();
+      
+      // Show completion screen
+      this.showQuizCompletion();
+      
     } catch (error) {
       console.error('Error recording quiz session:', error);
       // Don't block the UI for this error
+      this.showQuizCompletion();
     }
+  }
+
+  private showQuizCompletion() {
+    if (!this.quizSession) return;
+
+    const timeSpent = Math.round((Date.now() - this.sessionStartTime) / (1000 * 60)); // minutes
+    const percentage = Math.round((this.quizSession.score / this.quizSession.totalQuestions) * 100);
+    
+    // Determine next recommendation based on quiz performance
+    let nextRecommendation: SessionSummary['nextRecommendation'] = 'new-topic';
+    
+    if (percentage < 50) {
+      nextRecommendation = 'continue-learning';
+    } else if (percentage < 70) {
+      nextRecommendation = 'practice-weak';
+    }
+
+    this.sessionSummary = {
+      type: 'quiz',
+      wordsStudied: this.quizSession.totalQuestions,
+      timeSpent,
+      quizScore: this.quizSession.score,
+      quizTotal: this.quizSession.totalQuestions,
+      completedWords: this.selectedWords,
+      nextRecommendation
+    };
+
+    this.showCompletion = true;
   }
 
   private async playAudio() {
@@ -635,6 +711,7 @@ export class QuizMode extends LitElement {
 
   private handleDirectionChange(direction: 'foreign-to-english' | 'english-to-foreign') {
     this.direction = direction;
+    sessionManager.updateQuizDirection(direction);
   }
 
   render() {
@@ -671,6 +748,13 @@ export class QuizMode extends LitElement {
 
     // Show quiz complete screen
     if (this.quizSession.isComplete) {
+      if (this.showCompletion && this.sessionSummary) {
+        return html`
+          <div class="quiz-container">
+            <session-complete .sessionSummary=${this.sessionSummary}></session-complete>
+          </div>
+        `;
+      }
       return this.renderQuizComplete();
     }
 

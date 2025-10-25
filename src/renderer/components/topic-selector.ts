@@ -6,6 +6,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
+import { sessionManager } from '../utils/session-manager.js';
 
 @customElement('topic-selector')
 export class TopicSelector extends LitElement {
@@ -174,9 +175,15 @@ export class TopicSelector extends LitElement {
         throw new Error('No words were generated. Please try again.');
       }
 
+      // Update session with topic
+      const topicToSave = this.topic.trim() || undefined;
+      if (topicToSave) {
+        sessionManager.updateSelectedTopic(topicToSave);
+      }
+
       // Navigate to word selection with generated words
       router.navigateTo('word-selection', {
-        topic: this.topic.trim() || undefined,
+        topic: topicToSave,
         generatedWords: words,
         language: this.language
       });

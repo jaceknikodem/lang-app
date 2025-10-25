@@ -21,6 +21,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_TO_STUDY, limit),
     getWordById: (wordId: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORD_BY_ID, wordId),
+    getAllWords: (includeKnown?: boolean, includeIgnored?: boolean) => 
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_ALL_WORDS, includeKnown, includeIgnored),
+    getRecentStudySessions: (limit?: number) => 
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_RECENT_STUDY_SESSIONS, limit),
     insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.INSERT_SENTENCE, wordId, sentence, translation, audioPath),
     getSentencesByWord: (wordId: number) => 
@@ -73,6 +77,8 @@ declare global {
         markWordIgnored: (wordId: number, ignored: boolean) => Promise<void>;
         getWordsToStudy: (limit: number) => Promise<any[]>;
         getWordById: (wordId: number) => Promise<any | null>;
+        getAllWords: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<any[]>;
+        getRecentStudySessions: (limit?: number) => Promise<any[]>;
         insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string) => Promise<number>;
         getSentencesByWord: (wordId: number) => Promise<any[]>;
         updateLastStudied: (wordId: number) => Promise<void>;

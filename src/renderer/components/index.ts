@@ -8,3 +8,5 @@ export { WordSelector } from './word-selector.js';
 export { LearningMode } from './learning-mode.js';
 export { SentenceViewer } from './sentence-viewer.js';
 export { QuizMode } from './quiz-mode.js';
+export { ProgressSummary } from './progress-summary.js';
+export { SessionComplete } from './session-complete.js';
