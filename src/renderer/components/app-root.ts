@@ -256,8 +256,17 @@ export class AppRoot extends LitElement {
     try {
       console.log('Initializing app...');
 
+      // Check if electronAPI is available
+      if (!window.electronAPI) {
+        console.error('electronAPI not available - preload script may have failed');
+        this.isLoading = false;
+        return;
+      }
+      console.log('electronAPI is available');
+
       // Check if LLM is available (non-blocking)
       try {
+        console.log('Checking LLM availability...');
         const llmAvailable = await window.electronAPI.llm.isAvailable();
         console.log('LLM Available:', llmAvailable);
       } catch (error) {
@@ -265,10 +274,14 @@ export class AppRoot extends LitElement {
       }
 
       // Load saved session
+      console.log('Loading session...');
       await this.loadSession();
+      console.log('Session loaded');
 
       // Check for existing words in database
+      console.log('Checking existing words...');
       await this.checkExistingWords();
+      console.log('Existing words check complete');
 
       console.log('App initialization complete');
       this.isLoading = false;
@@ -298,7 +311,9 @@ export class AppRoot extends LitElement {
 
   private async checkExistingWords() {
     try {
+      console.log('Calling database.getAllWords...');
       const allWords = await window.electronAPI.database.getAllWords(true, false);
+      console.log('Database call successful, words found:', allWords.length);
       this.hasExistingWords = allWords.length > 0;
       console.log('Found existing words:', allWords.length);
     } catch (error) {

@@ -249,6 +249,22 @@ export const sharedStyles = css`
   .word-known { background-color: #c8e6c9; } /* Known - green */
   .word-ignored { background-color: #f5f5f5; color: #999; } /* Ignored - grey */
 
+  /* Window drag region for hidden title bar */
+  .drag-region {
+    -webkit-app-region: drag;
+    height: 30px;
+    width: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+    background: transparent;
+  }
+
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+
   /* Responsive utilities */
   @media (max-width: 768px) {
     .btn {

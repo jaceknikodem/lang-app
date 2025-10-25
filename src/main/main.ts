@@ -108,7 +108,7 @@ function createWindow(): void {
       allowRunningInsecureContent: false,
       experimentalFeatures: false
     },
-    titleBarStyle: 'hiddenInset',
+    // titleBarStyle: 'hiddenInset', // Commented out to allow window dragging
     show: process.env.NODE_ENV !== 'test', // Don't show window in test mode
     icon: path.join(__dirname, '../../build/icon.png') // Add app icon if available
   });
