@@ -41,6 +41,14 @@ export interface IPCBridge {
     getWeakestWords: (limit: number) => Promise<Word[]>;
     getRandomSentenceForWord: (wordId: number) => Promise<Sentence | null>;
   };
+
+  // Lifecycle operations
+  lifecycle: {
+    createBackup: () => Promise<string>;
+    restoreFromBackup: (backupPath: string) => Promise<void>;
+    checkForUpdates: () => Promise<boolean>;
+    getAppVersion: () => Promise<string>;
+  };
 }
 
 // IPC channel names
@@ -73,5 +81,11 @@ export const IPC_CHANNELS = {
   QUIZ: {
     GET_WEAKEST_WORDS: 'quiz:getWeakestWords',
     GET_RANDOM_SENTENCE_FOR_WORD: 'quiz:getRandomSentenceForWord'
+  },
+  LIFECYCLE: {
+    CREATE_BACKUP: 'lifecycle:createBackup',
+    RESTORE_FROM_BACKUP: 'lifecycle:restoreFromBackup',
+    CHECK_FOR_UPDATES: 'lifecycle:checkForUpdates',
+    GET_APP_VERSION: 'lifecycle:getAppVersion'
   }
 } as const;

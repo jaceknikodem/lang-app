@@ -63,6 +63,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.QUIZ.GET_WEAKEST_WORDS, limit),
     getRandomSentenceForWord: (wordId: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.QUIZ.GET_RANDOM_SENTENCE_FOR_WORD, wordId)
+  },
+
+  // Lifecycle operations
+  lifecycle: {
+    createBackup: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.CREATE_BACKUP),
+    restoreFromBackup: (backupPath: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.RESTORE_FROM_BACKUP, backupPath),
+    checkForUpdates: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.CHECK_FOR_UPDATES),
+    getAppVersion: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.GET_APP_VERSION)
   }
 });
 
@@ -98,6 +110,12 @@ declare global {
       quiz: {
         getWeakestWords: (limit: number) => Promise<any[]>;
         getRandomSentenceForWord: (wordId: number) => Promise<any | null>;
+      };
+      lifecycle: {
+        createBackup: () => Promise<string>;
+        restoreFromBackup: (backupPath: string) => Promise<void>;
+        checkForUpdates: () => Promise<boolean>;
+        getAppVersion: () => Promise<string>;
       };
     };
   }

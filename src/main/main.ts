@@ -8,20 +8,45 @@ import { setupIPCHandlers, cleanupIPCHandlers } from './ipc/index.js';
 import { SQLiteDatabaseLayer } from './database/database-layer.js';
 import { OllamaClient } from './llm/ollama-client.js';
 import { AudioService } from './audio/audio-service.js';
+import { LifecycleManager, UpdateManager } from './lifecycle/index.js';
 
 let mainWindow: BrowserWindow;
 let databaseLayer: SQLiteDatabaseLayer;
 let llmClient: OllamaClient;
 let audioService: AudioService;
+let lifecycleManager: LifecycleManager;
+let updateManager: UpdateManager;
 
 async function initializeServices(): Promise<void> {
   try {
+    // Initialize lifecycle manager first
+    lifecycleManager = new LifecycleManager({
+      databaseLayer: null as any, // Will be set after database initialization
+      userDataPath: app.getPath('userData'),
+      backupRetentionDays: 30
+    });
+
+    // Initialize update manager
+    updateManager = new UpdateManager({
+      checkOnStartup: true,
+      checkIntervalHours: 24,
+      autoDownload: false
+    });
+
     // Initialize database layer
     databaseLayer = new SQLiteDatabaseLayer({
       databasePath: path.join(app.getPath('userData'), 'language_learning.db'),
       enableWAL: true,
       timeout: 5000
     });
+
+    // Update lifecycle manager with database reference
+    (lifecycleManager as any).config.databaseLayer = databaseLayer;
+
+    // Handle startup procedures
+    await lifecycleManager.handleStartup();
+
+    // Initialize database after lifecycle startup
     await databaseLayer.initialize();
 
     // Initialize LLM client
@@ -29,6 +54,12 @@ async function initializeServices(): Promise<void> {
 
     // Initialize audio service
     audioService = new AudioService();
+
+    // Initialize update manager
+    await updateManager.initialize();
+
+    // Check for update reminders
+    await updateManager.checkUpdateReminders();
 
     console.log('All services initialized successfully');
   } catch (error) {
@@ -108,7 +139,7 @@ app.whenReady().then(async () => {
     await initializeServices();
 
     // Set up IPC handlers with initialized services
-    setupIPCHandlers(databaseLayer, llmClient, audioService);
+    setupIPCHandlers(databaseLayer, llmClient, audioService, lifecycleManager, updateManager);
 
     // Create the main window
     createWindow();
@@ -128,9 +159,9 @@ app.whenReady().then(async () => {
 
 // Quit when all windows are closed, except on macOS
 app.on('window-all-closed', async () => {
-  // Clean up services before quitting
-  if (databaseLayer) {
-    await databaseLayer.close();
+  // Handle graceful shutdown
+  if (lifecycleManager) {
+    await lifecycleManager.handleShutdown();
   }
   
   if (process.platform !== 'darwin') {
@@ -140,14 +171,20 @@ app.on('window-all-closed', async () => {
 
 // Handle app termination
 app.on('before-quit', async (event) => {
-  if (databaseLayer) {
+  if (lifecycleManager && !lifecycleManager['isShuttingDown']) {
     event.preventDefault();
     try {
       // Clean up IPC handlers
       cleanupIPCHandlers();
       
-      // Close database connection
-      await databaseLayer.close();
+      // Clean up update manager
+      if (updateManager) {
+        updateManager.cleanup();
+      }
+      
+      // Handle graceful shutdown (includes database closure)
+      await lifecycleManager.handleShutdown();
+      
       app.quit();
     } catch (error) {
       console.error('Error during cleanup:', error);

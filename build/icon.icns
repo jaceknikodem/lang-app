@@ -1,0 +1,3 @@
+# This is a placeholder for the macOS icon file
+# In a real implementation, this would be a binary .icns file
+# For development purposes, electron-builder will generate a default icon

@@ -2,12 +2,13 @@
  * IPC handlers for secure communication between main and renderer processes
  */
 
-import { ipcMain } from 'electron';
+import { ipcMain, app } from 'electron';
 import { z } from 'zod';
 import { IPC_CHANNELS } from '../../shared/types/ipc.js';
 import { SQLiteDatabaseLayer } from '../database/database-layer.js';
 import { OllamaClient } from '../llm/ollama-client.js';
 import { AudioService } from '../audio/audio-service.js';
+import { LifecycleManager, UpdateManager } from '../lifecycle/index.js';
 import { CreateWordRequest } from '../../shared/types/core.js';
 
 // Validation schemas for input sanitization
@@ -33,7 +34,9 @@ const AudioPathSchema = z.string().min(1).max(500);
 export function setupIPCHandlers(
   databaseLayer: SQLiteDatabaseLayer,
   llmClient: OllamaClient,
-  audioService: AudioService
+  audioService: AudioService,
+  lifecycleManager?: LifecycleManager,
+  updateManager?: UpdateManager
 ): void {
   // Database handlers
   setupDatabaseHandlers(databaseLayer);
@@ -46,6 +49,11 @@ export function setupIPCHandlers(
 
   // Quiz handlers
   setupQuizHandlers(databaseLayer);
+
+  // Lifecycle handlers
+  if (lifecycleManager && updateManager) {
+    setupLifecycleHandlers(lifecycleManager, updateManager);
+  }
 
   console.log('IPC handlers registered successfully');
 }
@@ -299,6 +307,49 @@ function setupQuizHandlers(databaseLayer: SQLiteDatabaseLayer): void {
 }
 
 /**
+ * Set up lifecycle-related IPC handlers
+ */
+function setupLifecycleHandlers(lifecycleManager: LifecycleManager, updateManager: UpdateManager): void {
+  ipcMain.handle(IPC_CHANNELS.LIFECYCLE.CREATE_BACKUP, async (event) => {
+    try {
+      return await lifecycleManager.createBackup();
+    } catch (error) {
+      console.error('Error creating backup:', error);
+      throw new Error(`Failed to create backup: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.LIFECYCLE.RESTORE_FROM_BACKUP, async (event, backupPath) => {
+    try {
+      const validatedBackupPath = z.string().min(1).parse(backupPath);
+      await lifecycleManager.restoreFromBackup(validatedBackupPath);
+    } catch (error) {
+      console.error('Error restoring from backup:', error);
+      throw new Error(`Failed to restore from backup: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.LIFECYCLE.CHECK_FOR_UPDATES, async (event) => {
+    try {
+      const updateInfo = await updateManager.checkForUpdates(true);
+      return updateInfo !== null;
+    } catch (error) {
+      console.error('Error checking for updates:', error);
+      return false;
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.LIFECYCLE.GET_APP_VERSION, async (event) => {
+    try {
+      return app.getVersion();
+    } catch (error) {
+      console.error('Error getting app version:', error);
+      throw new Error(`Failed to get app version: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+}
+
+/**
  * Clean up IPC handlers (call this on app shutdown)
  */
 export function cleanupIPCHandlers(): void {
@@ -316,6 +367,10 @@ export function cleanupIPCHandlers(): void {
   });
 
   Object.values(IPC_CHANNELS.QUIZ).forEach(channel => {
+    ipcMain.removeAllListeners(channel);
+  });
+
+  Object.values(IPC_CHANNELS.LIFECYCLE).forEach(channel => {
     ipcMain.removeAllListeners(channel);
   });
 
