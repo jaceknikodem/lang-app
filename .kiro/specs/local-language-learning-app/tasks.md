@@ -45,14 +45,14 @@
     - Verify error handling and retry mechanisms
     - _Requirements: 1.1, 2.3_
 
-- [ ] 4. Implement audio generation and caching system
-  - [ ] 4.1 Create TTS audio generator
+- [x] 4. Implement audio generation and caching system
+  - [x] 4.1 Create TTS audio generator
     - Write system TTS integration using macOS 'say' command
     - Implement audio file naming convention and storage management
     - Create audio caching logic to avoid regenerating existing files
     - _Requirements: 1.3, 4.1, 4.2, 4.4_
   
-  - [ ] 4.2 Build audio playback coordination
+  - [x] 4.2 Build audio playback coordination
     - Implement audio playback functionality for UI integration
     - Create audio file existence checking and validation
     - Add error handling for TTS generation failures
