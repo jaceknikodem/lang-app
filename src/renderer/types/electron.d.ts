@@ -18,6 +18,7 @@ declare global {
         getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
         updateLastStudied: (wordId: number) => Promise<void>;
         getStudyStats: () => Promise<StudyStats>;
+        recordStudySession: (wordsStudied: number) => Promise<void>;
       };
       llm: {
         generateWords: (topic: string | undefined, language: string) => Promise<GeneratedWord[]>;
@@ -28,6 +29,10 @@ declare global {
         generateAudio: (text: string, language: string) => Promise<string>;
         playAudio: (audioPath: string) => Promise<void>;
         audioExists: (audioPath: string) => Promise<boolean>;
+      };
+      quiz: {
+        getWeakestWords: (limit: number) => Promise<Word[]>;
+        getRandomSentenceForWord: (wordId: number) => Promise<Sentence | null>;
       };
     };
   }

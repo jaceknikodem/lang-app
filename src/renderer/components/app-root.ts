@@ -10,6 +10,7 @@ import { sharedStyles } from '../styles/shared.js';
 import './topic-selector.js';
 import './word-selector.js';
 import './learning-mode.js';
+import './quiz-mode.js';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -318,11 +319,10 @@ export class AppRoot extends LitElement {
       
       case 'quiz':
         return html`
-          <div class="placeholder">
-            <h3>Quiz Mode</h3>
-            <p>Test your vocabulary knowledge with adaptive quizzing.</p>
-            <p><em>Quiz components will be implemented in task 7.</em></p>
-          </div>
+          <quiz-mode
+            .selectedWords=${routeData?.selectedWords || []}
+            .direction=${routeData?.direction || 'foreign-to-english'}
+          ></quiz-mode>
         `;
       
       case 'progress':

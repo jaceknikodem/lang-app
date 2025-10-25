@@ -27,6 +27,10 @@ export interface DatabaseLayer {
   recordStudySession(wordsStudied: number): Promise<void>;
   getRecentStudySessions(limit?: number): Promise<Array<{id: number, wordsStudied: number, whenStudied: Date}>>;
   
+  // Quiz-specific operations
+  getWeakestWords(limit: number): Promise<Word[]>;
+  getRandomSentenceForWord(wordId: number): Promise<Sentence | null>;
+  
   // Database lifecycle
   initialize(): Promise<void>;
   close(): Promise<void>;

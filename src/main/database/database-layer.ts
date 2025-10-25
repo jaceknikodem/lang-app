@@ -426,6 +426,52 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
+  // Quiz-specific operations
+
+  /**
+   * Get weakest words for quiz generation, prioritizing lowest strength
+   */
+  async getWeakestWords(limit: number): Promise<Word[]> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare(`
+        SELECT * FROM words 
+        WHERE known = FALSE AND ignored = FALSE
+        ORDER BY strength ASC, last_studied ASC NULLS FIRST
+        LIMIT ?
+      `);
+      
+      const rows = stmt.all(limit) as any[];
+      
+      return rows.map(this.mapRowToWord);
+    } catch (error) {
+      throw new Error(`Failed to get weakest words: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get a random sentence for a specific word (for quiz questions)
+   */
+  async getRandomSentenceForWord(wordId: number): Promise<Sentence | null> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare(`
+        SELECT * FROM sentences 
+        WHERE word_id = ?
+        ORDER BY RANDOM()
+        LIMIT 1
+      `);
+      
+      const row = stmt.get(wordId) as any;
+      
+      return row ? this.mapRowToSentence(row) : null;
+    } catch (error) {
+      throw new Error(`Failed to get random sentence for word: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   // Helper methods for mapping database rows to objects
 
   private mapRowToWord(row: any): Word {

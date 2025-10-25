@@ -69,3 +69,18 @@ export interface AppState {
   selectedWords?: Word[];
   quizDirection: 'foreign-to-english' | 'english-to-foreign';
 }
+
+export interface QuizSession {
+  questions: QuizQuestion[];
+  currentQuestionIndex: number;
+  direction: 'foreign-to-english' | 'english-to-foreign';
+  score: number;
+  totalQuestions: number;
+  isComplete: boolean;
+}
+
+export interface QuizResult {
+  wordId: number;
+  correct: boolean;
+  responseTime?: number;
+}

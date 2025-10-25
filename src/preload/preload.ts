@@ -28,7 +28,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     updateLastStudied: (wordId: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.UPDATE_LAST_STUDIED, wordId),
     getStudyStats: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_STUDY_STATS)
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_STUDY_STATS),
+    recordStudySession: (wordsStudied: number) => 
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.RECORD_STUDY_SESSION, wordsStudied)
   },
 
   // LLM operations
@@ -49,6 +51,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.PLAY_AUDIO, audioPath),
     audioExists: (audioPath: string) => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.AUDIO_EXISTS, audioPath)
+  },
+
+  // Quiz operations
+  quiz: {
+    getWeakestWords: (limit: number) => 
+      ipcRenderer.invoke(IPC_CHANNELS.QUIZ.GET_WEAKEST_WORDS, limit),
+    getRandomSentenceForWord: (wordId: number) => 
+      ipcRenderer.invoke(IPC_CHANNELS.QUIZ.GET_RANDOM_SENTENCE_FOR_WORD, wordId)
   }
 });
 
@@ -67,6 +77,7 @@ declare global {
         getSentencesByWord: (wordId: number) => Promise<any[]>;
         updateLastStudied: (wordId: number) => Promise<void>;
         getStudyStats: () => Promise<any>;
+        recordStudySession: (wordsStudied: number) => Promise<void>;
       };
       llm: {
         generateWords: (topic: string | undefined, language: string) => Promise<any[]>;
@@ -77,6 +88,10 @@ declare global {
         generateAudio: (text: string, language: string) => Promise<string>;
         playAudio: (audioPath: string) => Promise<void>;
         audioExists: (audioPath: string) => Promise<boolean>;
+      };
+      quiz: {
+        getWeakestWords: (limit: number) => Promise<any[]>;
+        getRandomSentenceForWord: (wordId: number) => Promise<any | null>;
       };
     };
   }

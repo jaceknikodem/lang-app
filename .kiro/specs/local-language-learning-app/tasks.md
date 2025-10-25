@@ -108,14 +108,14 @@
     - Test accessibility and keyboard navigation
     - _Requirements: 1.4, 1.5, 6.1_
 
-- [ ] 7. Create quiz mode and assessment system
-  - [ ] 7.1 Implement quiz question generation
+- [x] 7. Create quiz mode and assessment system
+  - [x] 7.1 Implement quiz question generation
     - Build quiz question selection based on weakest words
     - Create question display for both quiz directions (foreign↔English)
     - Implement quiz session state management and progression
     - _Requirements: 3.2, 8.1, 8.2, 8.5_
   
-  - [ ] 7.2 Build quiz interaction and scoring
+  - [x] 7.2 Build quiz interaction and scoring
     - Create correct/incorrect answer buttons with click handling
     - Implement immediate word strength updates based on quiz responses
     - Add quiz completion and results summary display

@@ -17,6 +17,7 @@ export interface IPCBridge {
     getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
     updateLastStudied: (wordId: number) => Promise<void>;
     getStudyStats: () => Promise<StudyStats>;
+    recordStudySession: (wordsStudied: number) => Promise<void>;
   };
   
   // LLM operations
@@ -32,6 +33,12 @@ export interface IPCBridge {
     playAudio: (audioPath: string) => Promise<void>;
     audioExists: (audioPath: string) => Promise<boolean>;
   };
+
+  // Quiz operations
+  quiz: {
+    getWeakestWords: (limit: number) => Promise<Word[]>;
+    getRandomSentenceForWord: (wordId: number) => Promise<Sentence | null>;
+  };
 }
 
 // IPC channel names
@@ -46,7 +53,8 @@ export const IPC_CHANNELS = {
     INSERT_SENTENCE: 'database:insertSentence',
     GET_SENTENCES_BY_WORD: 'database:getSentencesByWord',
     UPDATE_LAST_STUDIED: 'database:updateLastStudied',
-    GET_STUDY_STATS: 'database:getStudyStats'
+    GET_STUDY_STATS: 'database:getStudyStats',
+    RECORD_STUDY_SESSION: 'database:recordStudySession'
   },
   LLM: {
     GENERATE_WORDS: 'llm:generateWords',
@@ -57,5 +65,9 @@ export const IPC_CHANNELS = {
     GENERATE_AUDIO: 'audio:generateAudio',
     PLAY_AUDIO: 'audio:playAudio',
     AUDIO_EXISTS: 'audio:audioExists'
+  },
+  QUIZ: {
+    GET_WEAKEST_WORDS: 'quiz:getWeakestWords',
+    GET_RANDOM_SENTENCE_FOR_WORD: 'quiz:getRandomSentenceForWord'
   }
 } as const;

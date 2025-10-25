@@ -44,6 +44,9 @@ export function setupIPCHandlers(
   // Audio handlers
   setupAudioHandlers(audioService);
 
+  // Quiz handlers
+  setupQuizHandlers(databaseLayer);
+
   console.log('IPC handlers registered successfully');
 }
 
@@ -161,6 +164,16 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       throw new Error(`Failed to get study stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
+
+  ipcMain.handle(IPC_CHANNELS.DATABASE.RECORD_STUDY_SESSION, async (event, wordsStudied) => {
+    try {
+      const validatedWordsStudied = z.number().int().min(0).parse(wordsStudied);
+      return await databaseLayer.recordStudySession(validatedWordsStudied);
+    } catch (error) {
+      console.error('Error recording study session:', error);
+      throw new Error(`Failed to record study session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
 }
 
 /**
@@ -240,6 +253,31 @@ function setupAudioHandlers(audioService: AudioService): void {
 }
 
 /**
+ * Set up quiz-related IPC handlers
+ */
+function setupQuizHandlers(databaseLayer: SQLiteDatabaseLayer): void {
+  ipcMain.handle(IPC_CHANNELS.QUIZ.GET_WEAKEST_WORDS, async (event, limit) => {
+    try {
+      const validatedLimit = LimitSchema.parse(limit);
+      return await databaseLayer.getWeakestWords(validatedLimit);
+    } catch (error) {
+      console.error('Error getting weakest words:', error);
+      throw new Error(`Failed to get weakest words: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUIZ.GET_RANDOM_SENTENCE_FOR_WORD, async (event, wordId) => {
+    try {
+      const validatedWordId = WordIdSchema.parse(wordId);
+      return await databaseLayer.getRandomSentenceForWord(validatedWordId);
+    } catch (error) {
+      console.error('Error getting random sentence for word:', error);
+      throw new Error(`Failed to get random sentence for word: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+}
+
+/**
  * Clean up IPC handlers (call this on app shutdown)
  */
 export function cleanupIPCHandlers(): void {
@@ -253,6 +291,10 @@ export function cleanupIPCHandlers(): void {
   });
   
   Object.values(IPC_CHANNELS.AUDIO).forEach(channel => {
+    ipcMain.removeAllListeners(channel);
+  });
+
+  Object.values(IPC_CHANNELS.QUIZ).forEach(channel => {
     ipcMain.removeAllListeners(channel);
   });
 
