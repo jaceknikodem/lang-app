@@ -236,7 +236,7 @@ export class LearningMode extends LitElement {
       for (const word of this.selectedWords) {
         // Get sentences for this word
         const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
-        
+
         if (sentences.length === 0) {
           console.warn(`No sentences found for word: ${word.word}`);
         }
@@ -248,7 +248,7 @@ export class LearningMode extends LitElement {
       }
 
       this.wordsWithSentences = wordsWithSentences.filter(w => w.sentences.length > 0);
-      
+
       if (this.wordsWithSentences.length === 0) {
         this.error = 'No sentences available for the selected words.';
       }
@@ -269,7 +269,7 @@ export class LearningMode extends LitElement {
         session.learningProgress.currentWordIndex,
         this.wordsWithSentences.length - 1
       );
-      
+
       const currentWord = this.getCurrentWord();
       if (currentWord) {
         this.currentSentenceIndex = Math.min(
@@ -277,7 +277,7 @@ export class LearningMode extends LitElement {
           currentWord.sentences.length - 1
         );
       }
-      
+
       console.log('Restored learning progress:', this.currentWordIndex, this.currentSentenceIndex);
     }
   }
@@ -362,7 +362,7 @@ export class LearningMode extends LitElement {
       const currentWord = this.getCurrentWord();
       this.currentSentenceIndex = currentWord ? currentWord.sentences.length - 1 : 0;
     }
-    
+
     // Save progress to session
     this.saveProgressToSession();
   }
@@ -377,7 +377,7 @@ export class LearningMode extends LitElement {
       this.currentWordIndex++;
       this.currentSentenceIndex = 0;
     }
-    
+
     // Save progress to session
     this.saveProgressToSession();
   }
@@ -393,27 +393,31 @@ export class LearningMode extends LitElement {
   private isLastSentence(): boolean {
     const currentWord = this.getCurrentWord();
     if (!currentWord) return true;
-    
+
     return this.currentWordIndex === this.wordsWithSentences.length - 1 &&
-           this.currentSentenceIndex === currentWord.sentences.length - 1;
+      this.currentSentenceIndex === currentWord.sentences.length - 1;
   }
 
   private async handleFinishLearning() {
+    console.log('handleFinishLearning called');
+
     // Record the learning session
     await this.recordLearningSession();
-    
+
     // Show completion screen
     this.showSessionCompletion();
+
+    console.log('showCompletion set to:', this.showCompletion);
   }
 
   private async recordLearningSession() {
     try {
       // Record study session in database
       await window.electronAPI.database.recordStudySession(this.selectedWords.length);
-      
+
       // Clear session progress since we're completing
       sessionManager.clearSession();
-      
+
     } catch (error) {
       console.error('Failed to record learning session:', error);
     }
@@ -421,12 +425,12 @@ export class LearningMode extends LitElement {
 
   private showSessionCompletion() {
     const timeSpent = Math.round((Date.now() - this.sessionStartTime) / (1000 * 60)); // minutes
-    
+
     // Determine next recommendation based on word strengths
     let nextRecommendation: SessionSummary['nextRecommendation'] = 'take-quiz';
-    
+
     const averageStrength = this.wordsWithSentences.reduce((sum, w) => sum + w.strength, 0) / this.wordsWithSentences.length;
-    
+
     if (averageStrength < 50) {
       nextRecommendation = 'continue-learning';
     } else if (averageStrength >= 70) {
@@ -491,6 +495,15 @@ export class LearningMode extends LitElement {
       `;
     }
 
+    // Check for completion first, regardless of current word/sentence state
+    if (this.showCompletion && this.sessionSummary) {
+      return html`
+        <div class="learning-container">
+          <session-complete .sessionSummary=${this.sessionSummary}></session-complete>
+        </div>
+      `;
+    }
+
     const currentWord = this.getCurrentWord();
     const currentSentence = this.getCurrentSentence();
     const totalSentences = this.getTotalSentences();
@@ -498,13 +511,6 @@ export class LearningMode extends LitElement {
     const progressPercent = (currentSentenceNumber / totalSentences) * 100;
 
     if (!currentWord || !currentSentence) {
-      if (this.showCompletion && this.sessionSummary) {
-        return html`
-          <div class="learning-container">
-            <session-complete .sessionSummary=${this.sessionSummary}></session-complete>
-          </div>
-        `;
-      }
 
       return html`
         <div class="learning-container">
@@ -576,10 +582,10 @@ export class LearningMode extends LitElement {
 
           <button
             class="btn btn-primary nav-button"
-            @click=${this.goToNextSentence}
-            ?disabled=${this.isLastSentence() || this.isProcessing}
+            @click=${this.isLastSentence() ? this.handleFinishLearning : this.goToNextSentence}
+            ?disabled=${this.isProcessing}
           >
-            Next →
+            ${this.isLastSentence() ? 'Finish' : 'Next →'}
           </button>
         </div>
       </div>
