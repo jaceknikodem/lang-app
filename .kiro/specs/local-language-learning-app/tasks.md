@@ -26,14 +26,14 @@
     - Verify transaction handling and rollback scenarios
     - _Requirements: 7.1, 7.5_
 
-- [ ] 3. Create LLM client for local content generation
-  - [ ] 3.1 Implement Ollama HTTP client
+- [x] 3. Create LLM client for local content generation
+  - [x] 3.1 Implement Ollama HTTP client
     - Write HTTP client for communicating with local Ollama instance
     - Create prompt templates for topic word generation and sentence creation
     - Implement response validation using Zod schemas
     - _Requirements: 1.1, 2.3, 5.2_
   
-  - [ ] 3.2 Build content generation workflows
+  - [x] 3.2 Build content generation workflows
     - Implement topic-based word generation with frequency classification
     - Create sentence generation for vocabulary words with translations
     - Add retry logic and error handling for LLM communication failures
