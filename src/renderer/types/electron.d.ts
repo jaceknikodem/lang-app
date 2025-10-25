@@ -1,0 +1,34 @@
+/**
+ * Type declarations for Electron API exposed to renderer process
+ */
+
+import { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest } from '../../shared/types/core.js';
+
+declare global {
+  interface Window {
+    electronAPI: {
+      database: {
+        insertWord: (word: CreateWordRequest) => Promise<number>;
+        updateWordStrength: (wordId: number, strength: number) => Promise<void>;
+        markWordKnown: (wordId: number, known: boolean) => Promise<void>;
+        markWordIgnored: (wordId: number, ignored: boolean) => Promise<void>;
+        getWordsToStudy: (limit: number) => Promise<Word[]>;
+        getWordById: (wordId: number) => Promise<Word | null>;
+        insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string) => Promise<number>;
+        getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
+        updateLastStudied: (wordId: number) => Promise<void>;
+        getStudyStats: () => Promise<StudyStats>;
+      };
+      llm: {
+        generateWords: (topic: string | undefined, language: string) => Promise<GeneratedWord[]>;
+        generateSentences: (word: string, language: string) => Promise<GeneratedSentence[]>;
+        isAvailable: () => Promise<boolean>;
+      };
+      audio: {
+        generateAudio: (text: string, language: string) => Promise<string>;
+        playAudio: (audioPath: string) => Promise<void>;
+        audioExists: (audioPath: string) => Promise<boolean>;
+      };
+    };
+  }
+}
