@@ -115,7 +115,10 @@ export class OllamaClient implements LLMClient {
 
   private createTopicWordsPrompt(topic: string, language: string, count: number): string {
     if (topic.trim()) {
-      return `Generate ${count} common spoken words about '${topic}' in ${language}. 
+      return `Generate exactly ${count} common spoken words about '${topic}' in ${language}.
+
+IMPORTANT: You must return a JSON array with exactly ${count} objects, even if generating only 1 word.
+
 Return a JSON array where each object has:
 - "word": the ${language} word
 - "translation": the English translation
@@ -123,13 +126,16 @@ Return a JSON array where each object has:
 
 Focus on practical vocabulary that would be useful for conversation. Ensure all words are relevant to the topic "${topic}".
 
-Example format:
+Example format (always return an array):
 [
   {"word": "example_word", "translation": "example translation", "frequency": "high"},
   {"word": "another_word", "translation": "another translation", "frequency": "medium"}
 ]`;
     } else {
-      return `Generate ${count} high-frequency common spoken words in ${language} that are essential for basic conversation.
+      return `Generate exactly ${count} high-frequency common spoken words in ${language} that are essential for basic conversation.
+
+IMPORTANT: You must return a JSON array with exactly ${count} objects, even if generating only 1 word.
+
 Return a JSON array where each object has:
 - "word": the ${language} word  
 - "translation": the English translation
@@ -137,7 +143,7 @@ Return a JSON array where each object has:
 
 Focus on the most practical and frequently used vocabulary for daily conversation.
 
-Example format:
+Example format (always return an array):
 [
   {"word": "example_word", "translation": "example translation", "frequency": "high"},
   {"word": "another_word", "translation": "another translation", "frequency": "medium"}
@@ -206,15 +212,38 @@ Example format:
           
           // If the response is a single object but we expect an array, wrap it
           if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-            // Check if it looks like a word/sentence object
-            if (parsed.word || parsed.sentence) {
+            // Check if it looks like a word object (has word and translation properties)
+            if (parsed.word && parsed.translation) {
+              console.log('Wrapping single word object in array:', parsed);
               return [parsed];
             }
+            // Check if it looks like a sentence object
+            if (parsed.sentence && parsed.translation) {
+              console.log('Wrapping single sentence object in array:', parsed);
+              return [parsed];
+            }
+            // If it's an object but doesn't match expected structure, log and throw error
+            console.error('Unexpected object structure from LLM:', parsed);
+            throw new Error(`Unexpected response structure: expected array or valid word/sentence object, got: ${JSON.stringify(parsed)}`);
           }
           
-          return parsed;
+          // If it's an array, validate it's not empty
+          if (Array.isArray(parsed)) {
+            if (parsed.length === 0) {
+              throw new Error('LLM returned empty array');
+            }
+            return parsed;
+          }
+          
+          // If it's neither an object nor an array, it's invalid
+          throw new Error(`Invalid response type: expected array or object, got ${typeof parsed}`);
+          
         } catch (parseError) {
-          throw new Error(`Invalid JSON response: ${data.response}`);
+          if (parseError instanceof SyntaxError) {
+            console.error('JSON parsing failed for response:', data.response);
+            throw new Error(`Invalid JSON response: ${data.response}`);
+          }
+          throw parseError;
         }
 
       } catch (error) {

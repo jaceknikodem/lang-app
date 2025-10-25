@@ -6,7 +6,7 @@ import { ipcMain, app } from 'electron';
 import { z } from 'zod';
 import { IPC_CHANNELS } from '../../shared/types/ipc.js';
 import { SQLiteDatabaseLayer } from '../database/database-layer.js';
-import { OllamaClient } from '../llm/ollama-client.js';
+import { OllamaClient, ContentGenerator } from '../llm/index.js';
 import { AudioService } from '../audio/audio-service.js';
 import { LifecycleManager, UpdateManager } from '../lifecycle/index.js';
 import { CreateWordRequest } from '../../shared/types/core.js';
@@ -34,6 +34,7 @@ const AudioPathSchema = z.string().min(1).max(500);
 export function setupIPCHandlers(
   databaseLayer: SQLiteDatabaseLayer,
   llmClient: OllamaClient,
+  contentGenerator: ContentGenerator,
   audioService: AudioService,
   lifecycleManager?: LifecycleManager,
   updateManager?: UpdateManager
@@ -42,7 +43,7 @@ export function setupIPCHandlers(
   setupDatabaseHandlers(databaseLayer);
   
   // LLM handlers
-  setupLLMHandlers(llmClient);
+  setupLLMHandlers(llmClient, contentGenerator);
   
   // Audio handlers
   setupAudioHandlers(audioService);
@@ -208,14 +209,22 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
 /**
  * Set up LLM-related IPC handlers
  */
-function setupLLMHandlers(llmClient: OllamaClient): void {
+function setupLLMHandlers(llmClient: OllamaClient, contentGenerator: ContentGenerator): void {
   ipcMain.handle(IPC_CHANNELS.LLM.GENERATE_WORDS, async (event, topic, language) => {
     try {
-      const topicToUse = topic || 'general vocabulary';
-      const validatedTopic = TopicSchema.parse(topicToUse);
       const validatedLanguage = LanguageSchema.parse(language);
       
-      return await llmClient.generateTopicWords(validatedTopic, validatedLanguage, 10);
+      // Validate topic if provided
+      if (topic && topic.trim()) {
+        TopicSchema.parse(topic.trim());
+      }
+      
+      // Use ContentGenerator for better error handling and validation
+      return await contentGenerator.generateTopicVocabulary(
+        topic && topic.trim() ? topic.trim() : undefined,
+        validatedLanguage,
+        10
+      );
     } catch (error) {
       console.error('Error generating words:', error);
       throw new Error(`Failed to generate words: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -227,7 +236,8 @@ function setupLLMHandlers(llmClient: OllamaClient): void {
       const validatedWord = TextSchema.parse(word);
       const validatedLanguage = LanguageSchema.parse(language);
       
-      return await llmClient.generateSentences(validatedWord, validatedLanguage, 3);
+      // Use ContentGenerator for better error handling and validation
+      return await contentGenerator.generateWordSentences(validatedWord, validatedLanguage, 3);
     } catch (error) {
       console.error('Error generating sentences:', error);
       throw new Error(`Failed to generate sentences: ${error instanceof Error ? error.message : 'Unknown error'}`);

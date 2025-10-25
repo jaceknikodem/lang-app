@@ -6,13 +6,14 @@ import { app, BrowserWindow, ipcMain, session } from 'electron';
 import * as path from 'path';
 import { setupIPCHandlers, cleanupIPCHandlers } from './ipc/index.js';
 import { SQLiteDatabaseLayer } from './database/database-layer.js';
-import { OllamaClient } from './llm/ollama-client.js';
+import { OllamaClient, ContentGenerator } from './llm/index.js';
 import { AudioService } from './audio/audio-service.js';
 import { LifecycleManager, UpdateManager } from './lifecycle/index.js';
 
 let mainWindow: BrowserWindow;
 let databaseLayer: SQLiteDatabaseLayer | undefined;
 let llmClient: OllamaClient | undefined;
+let contentGenerator: ContentGenerator | undefined;
 let audioService: AudioService | undefined;
 let lifecycleManager: LifecycleManager | undefined;
 let updateManager: UpdateManager | undefined;
@@ -50,6 +51,9 @@ async function initializeServices(): Promise<void> {
 
     // Initialize LLM client
     llmClient = new OllamaClient();
+    
+    // Initialize content generator with LLM client
+    contentGenerator = new ContentGenerator(llmClient);
 
     // Initialize audio service
     audioService = new AudioService();
@@ -144,7 +148,7 @@ app.whenReady().then(async () => {
     await initializeServices();
 
     // Set up IPC handlers with initialized services
-    setupIPCHandlers(databaseLayer!, llmClient!, audioService!, lifecycleManager!, updateManager!);
+    setupIPCHandlers(databaseLayer!, llmClient!, contentGenerator!, audioService!, lifecycleManager!, updateManager!);
     console.log('IPC handlers initialized successfully');
 
     // Create the main window

@@ -48,10 +48,14 @@ export class ContentGenerator {
         throw new Error('LLM service is not available. Please ensure Ollama is running.');
       }
 
+      console.log(`Generating vocabulary: topic="${topicText}", language="${targetLanguage}", count=${wordCount}`);
+      
       const words = await this.executeWithRetry(
         () => this.llmClient.generateTopicWords(topicText, targetLanguage, wordCount),
         `generate vocabulary for topic: ${topicText || 'general'}`
       );
+      
+      console.log(`LLM returned ${words?.length || 0} words:`, words);
 
       // Validate and filter results
       const validWords = this.validateGeneratedWords(words);

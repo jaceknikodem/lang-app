@@ -59,7 +59,7 @@ test.describe('Complete Learning Workflow', () => {
     const topicInput = page.locator('topic-selector input[type="text"]');
     await topicInput.fill('food and cooking');
     
-    const generateButton = page.locator('topic-selector button:has-text("Generate Words")');
+    const generateButton = page.locator('topic-selector button:has-text("Generate Topic Words")');
     await generateButton.click();
     
     // Wait for word generation (may take time with LLM)
@@ -190,7 +190,7 @@ test.describe('Complete Learning Workflow', () => {
     await startLearningButton.click();
     
     // Try generating words without topic
-    const generateButton = page.locator('topic-selector button:has-text("Generate Words")');
+    const generateButton = page.locator('topic-selector button:has-text("Generate General Words")');
     await generateButton.click();
     
     // Should still generate words (high-frequency words)
