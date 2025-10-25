@@ -5,6 +5,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
+import { APP_CONFIG } from '../../shared/constants/index.js';
 
 // Type is already declared in preload.ts, no need to redeclare
 
@@ -100,11 +101,7 @@ export class SettingsPanel extends LitElement {
         border: 1px solid #bee5eb;
       }
 
-      .version-info {
-        font-family: monospace;
-        font-size: 0.9rem;
-        color: #666;
-      }
+
 
       .language-select {
         padding: 0.5rem;
@@ -122,19 +119,10 @@ export class SettingsPanel extends LitElement {
   ];
 
   @state()
-  private appVersion = '';
-
-  @state()
   private backupStatus = '';
 
   @state()
-  private updateStatus = '';
-
-  @state()
   private isCreatingBackup = false;
-
-  @state()
-  private isCheckingUpdates = false;
 
   @state()
   private currentLanguage = 'spanish';
@@ -142,10 +130,17 @@ export class SettingsPanel extends LitElement {
   @state()
   private languageStatus = '';
 
+  @state()
+  private availableLanguages: string[] = [];
+
+  @state()
+  private languageStats: Array<{ language: string, totalWords: number, studiedWords: number }> = [];
+
   async connectedCallback() {
     super.connectedCallback();
-    await this.loadAppVersion();
     await this.loadCurrentLanguage();
+    await this.loadAvailableLanguages();
+    await this.loadLanguageStats();
   }
 
   private async loadCurrentLanguage() {
@@ -153,16 +148,25 @@ export class SettingsPanel extends LitElement {
       this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
     } catch (error) {
       console.error('Failed to get current language:', error);
-      this.currentLanguage = 'spanish';
+      this.currentLanguage = APP_CONFIG.DEFAULT_LANGUAGE;
     }
   }
 
-  private async loadAppVersion() {
+  private async loadAvailableLanguages() {
     try {
-      this.appVersion = await window.electronAPI.lifecycle.getAppVersion();
+      this.availableLanguages = await window.electronAPI.database.getAvailableLanguages();
     } catch (error) {
-      console.error('Failed to get app version:', error);
-      this.appVersion = 'Unknown';
+      console.error('Failed to get available languages:', error);
+      this.availableLanguages = [];
+    }
+  }
+
+  private async loadLanguageStats() {
+    try {
+      this.languageStats = await window.electronAPI.database.getLanguageStats();
+    } catch (error) {
+      console.error('Failed to get language stats:', error);
+      this.languageStats = [];
     }
   }
 
@@ -181,35 +185,21 @@ export class SettingsPanel extends LitElement {
     }
   }
 
-  private async checkForUpdates() {
-    this.isCheckingUpdates = true;
-    this.updateStatus = '';
 
-    try {
-      const hasUpdates = await window.electronAPI.lifecycle.checkForUpdates();
-      if (hasUpdates) {
-        this.updateStatus = 'Updates are available! Check the notification for details.';
-      } else {
-        this.updateStatus = 'You are running the latest version.';
-      }
-    } catch (error) {
-      console.error('Failed to check for updates:', error);
-      this.updateStatus = `Failed to check for updates: ${error instanceof Error ? error.message : 'Unknown error'}`;
-    } finally {
-      this.isCheckingUpdates = false;
-    }
-  }
 
   private async changeLanguage(event: Event) {
     const select = event.target as HTMLSelectElement;
     const newLanguage = select.value;
-    
+
     this.languageStatus = '';
 
     try {
       await window.electronAPI.database.setCurrentLanguage(newLanguage);
       this.currentLanguage = newLanguage;
       this.languageStatus = `Language changed to ${this.getLanguageDisplayName(newLanguage)}`;
+
+      // Refresh language stats after changing language
+      await this.loadLanguageStats();
     } catch (error) {
       console.error('Failed to change language:', error);
       this.languageStatus = `Failed to change language: ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -220,31 +210,48 @@ export class SettingsPanel extends LitElement {
 
   private getLanguageDisplayName(language: string): string {
     const languageNames: Record<string, string> = {
-      'spanish': 'Spanish (Monica)',
-      'portuguese': 'Portuguese (Luciana)',
-      'italian': 'Italian (Alice)',
-      'indonesian': 'Indonesian (Damayanti)',
-      'polish': 'Polish (Zosia)',
+      'spanish': 'Spanish',
+      'italian': 'Italian',
+      'portuguese': 'Portuguese',
+      'polish': 'Polish',
+      'indonesian': 'Indonesian'
     };
-    
-    return languageNames[language] || language;
+
+    return languageNames[language] || language.charAt(0).toUpperCase() + language.slice(1);
+  }
+
+  private renderLanguageOptions() {
+    // Show all supported languages, with available ones first
+    const supportedLanguages = [...APP_CONFIG.SUPPORTED_LANGUAGES];
+    const availableSet = new Set(this.availableLanguages);
+
+    // Sort: available languages first, then others
+    const sortedLanguages = supportedLanguages.sort((a: string, b: string) => {
+      const aAvailable = availableSet.has(a);
+      const bAvailable = availableSet.has(b);
+
+      if (aAvailable && !bAvailable) return -1;
+      if (!aAvailable && bAvailable) return 1;
+      return a.localeCompare(b);
+    });
+
+    return sortedLanguages.map((language: string) => {
+      const isAvailable = availableSet.has(language);
+      const displayName = this.getLanguageDisplayName(language);
+      const wordCount = this.languageStats.find(stat => stat.language === language)?.totalWords || 0;
+
+      return html`
+        <option value=${language} ?disabled=${!isAvailable && language !== this.currentLanguage}>
+          ${displayName}${isAvailable ? ` (${wordCount} words)` : ' (no words)'}
+        </option>
+      `;
+    });
   }
 
   render() {
     return html`
       <div class="settings-container">
-        <h2>Application Settings</h2>
-
-        <div class="settings-section">
-          <h3>Application Information</h3>
-          <div class="settings-row">
-            <div class="settings-description">
-              <strong>Version</strong>
-              <p>Current application version</p>
-            </div>
-            <div class="version-info">v${this.appVersion}</div>
-          </div>
-        </div>
+        <h2>Settings</h2>
 
         <div class="settings-section">
           <h3>Language Settings</h3>
@@ -258,11 +265,7 @@ export class SettingsPanel extends LitElement {
               .value=${this.currentLanguage}
               @change=${this.changeLanguage}
             >
-              <option value="spanish">Spanish (Monica)</option>
-              <option value="portuguese">Portuguese (Luciana)</option>
-              <option value="italian">Italian (Alice)</option>
-              <option value="indonesian">Indonesian (Damayanti)</option>
-              <option value="polish">Polish (Zosia)</option>
+              ${this.renderLanguageOptions()}
             </select>
           </div>
           ${this.languageStatus ? html`
@@ -292,46 +295,6 @@ export class SettingsPanel extends LitElement {
               ${this.backupStatus}
             </div>
           ` : ''}
-        </div>
-
-        <div class="settings-section">
-          <h3>Updates</h3>
-          <div class="settings-row">
-            <div class="settings-description">
-              <strong>Check for Updates</strong>
-              <p>Check if a newer version of the application is available</p>
-            </div>
-            <button 
-              class="action-button" 
-              @click=${this.checkForUpdates}
-              ?disabled=${this.isCheckingUpdates}
-            >
-              ${this.isCheckingUpdates ? 'Checking...' : 'Check Updates'}
-            </button>
-          </div>
-          ${this.updateStatus ? html`
-            <div class="status-message status-info">
-              ${this.updateStatus}
-            </div>
-          ` : ''}
-        </div>
-
-        <div class="settings-section">
-          <h3>Privacy & Security</h3>
-          <div class="settings-row">
-            <div class="settings-description">
-              <strong>Local-first Design</strong>
-              <p>All your data stays on your device. No external tracking or data collection.</p>
-            </div>
-            <div class="version-info">✓ Enabled</div>
-          </div>
-          <div class="settings-row">
-            <div class="settings-description">
-              <strong>Automatic Backups</strong>
-              <p>Backups are created automatically on app shutdown and retained for 30 days.</p>
-            </div>
-            <div class="version-info">✓ Enabled</div>
-          </div>
         </div>
       </div>
     `;

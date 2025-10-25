@@ -244,6 +244,24 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       throw new Error(`Failed to set current language: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
+
+  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_AVAILABLE_LANGUAGES, async (event) => {
+    try {
+      return await databaseLayer.getAvailableLanguages();
+    } catch (error) {
+      console.error('Error getting available languages:', error);
+      throw new Error(`Failed to get available languages: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_LANGUAGE_STATS, async (event) => {
+    try {
+      return await databaseLayer.getLanguageStats();
+    } catch (error) {
+      console.error('Error getting language stats:', error);
+      throw new Error(`Failed to get language stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
 }
 
 /**

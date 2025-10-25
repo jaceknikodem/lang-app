@@ -10,7 +10,14 @@ export const APP_CONFIG = {
   DEFAULT_SENTENCE_COUNT: 3,
   MAX_WORD_STRENGTH: 100,
   MIN_WORD_STRENGTH: 0,
-  QUIZ_WORD_LIMIT: 20
+  QUIZ_WORD_LIMIT: 20,
+  SUPPORTED_LANGUAGES: [
+    'spanish',
+    'italian',
+    'portuguese',
+    'polish',
+    'indonesian'
+  ]
 } as const;
 
 export const LLM_CONFIG = {

@@ -24,6 +24,8 @@ export interface IPCBridge {
     setSetting: (key: string, value: string) => Promise<void>;
     getCurrentLanguage: () => Promise<string>;
     setCurrentLanguage: (language: string) => Promise<void>;
+    getAvailableLanguages: () => Promise<string[]>;
+    getLanguageStats: () => Promise<Array<{language: string, totalWords: number, studiedWords: number}>>;
   };
   
   // LLM operations
@@ -77,7 +79,9 @@ export const IPC_CHANNELS = {
     GET_SETTING: 'database:getSetting',
     SET_SETTING: 'database:setSetting',
     GET_CURRENT_LANGUAGE: 'database:getCurrentLanguage',
-    SET_CURRENT_LANGUAGE: 'database:setCurrentLanguage'
+    SET_CURRENT_LANGUAGE: 'database:setCurrentLanguage',
+    GET_AVAILABLE_LANGUAGES: 'database:getAvailableLanguages',
+    GET_LANGUAGE_STATS: 'database:getLanguageStats'
   },
   LLM: {
     GENERATE_WORDS: 'llm:generateWords',

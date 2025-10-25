@@ -2,7 +2,7 @@
  * Simple routing utility for managing application navigation
  */
 
-export type AppMode = 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'progress';
+export type AppMode = 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'progress' | 'settings';
 
 export interface RouteState {
   mode: AppMode;
@@ -61,6 +61,10 @@ export class Router {
 
   goToProgress(): void {
     this.navigateTo('progress');
+  }
+
+  goToSettings(): void {
+    this.navigateTo('settings');
   }
 
   // Check current mode

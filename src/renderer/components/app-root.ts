@@ -13,6 +13,7 @@ import './word-selector.js';
 import './learning-mode.js';
 import './quiz-mode.js';
 import './progress-summary.js';
+import './settings-panel.js';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -392,6 +393,9 @@ export class AppRoot extends LitElement {
       case 'progress':
         router.goToProgress();
         break;
+      case 'settings':
+        router.goToSettings();
+        break;
     }
   }
 
@@ -468,6 +472,12 @@ export class AppRoot extends LitElement {
             >
               Progress
             </button>
+            <button 
+              class="nav-button ${router.isCurrentMode('settings') ? 'active' : ''}"
+              @click=${() => this.handleNavigation('settings')}
+            >
+              Settings
+            </button>
           </nav>
         </header>
 
@@ -509,6 +519,9 @@ export class AppRoot extends LitElement {
 
       case 'progress':
         return html`<progress-summary></progress-summary>`;
+
+      case 'settings':
+        return html`<settings-panel></settings-panel>`;
 
       default:
         return html`

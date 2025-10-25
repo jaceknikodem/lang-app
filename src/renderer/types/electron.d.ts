@@ -21,6 +21,10 @@ declare global {
         updateLastStudied: (wordId: number) => Promise<void>;
         getStudyStats: () => Promise<StudyStats>;
         recordStudySession: (wordsStudied: number) => Promise<void>;
+        getCurrentLanguage: () => Promise<string>;
+        setCurrentLanguage: (language: string) => Promise<void>;
+        getAvailableLanguages: () => Promise<string[]>;
+        getLanguageStats: () => Promise<Array<{language: string, totalWords: number, studiedWords: number}>>;
       };
       llm: {
         generateWords: (topic: string | undefined, language: string) => Promise<GeneratedWord[]>;

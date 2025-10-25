@@ -5,7 +5,7 @@
 
 
 export interface SessionState {
-  currentMode: 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'progress';
+  currentMode: 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'progress' | 'settings';
   selectedTopic?: string;
   quizDirection: 'foreign-to-english' | 'english-to-foreign';
   learningProgress?: {
