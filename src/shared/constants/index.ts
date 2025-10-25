@@ -30,7 +30,6 @@ export const LLM_CONFIG = {
 export const AUDIO_CONFIG = {
   FILE_EXTENSION: '.aiff',
   TTS_COMMAND: 'say',
-  DEFAULT_VOICE: 'system',
   DEFAULT_RATE: 160
 } as const;
 

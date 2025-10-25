@@ -5,7 +5,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
-import { APP_CONFIG } from '../../shared/constants/index.js';
 
 // Type is already declared in preload.ts, no need to redeclare
 
@@ -103,18 +102,7 @@ export class SettingsPanel extends LitElement {
 
 
 
-      .language-select {
-        padding: 0.5rem;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        font-size: 0.9rem;
-        min-width: 200px;
-      }
 
-      .language-select:focus {
-        outline: none;
-        border-color: #007acc;
-      }
     `
   ];
 
@@ -124,51 +112,13 @@ export class SettingsPanel extends LitElement {
   @state()
   private isCreatingBackup = false;
 
-  @state()
-  private currentLanguage = 'spanish';
 
-  @state()
-  private languageStatus = '';
-
-  @state()
-  private availableLanguages: string[] = [];
-
-  @state()
-  private languageStats: Array<{ language: string, totalWords: number, studiedWords: number }> = [];
 
   async connectedCallback() {
     super.connectedCallback();
-    await this.loadCurrentLanguage();
-    await this.loadAvailableLanguages();
-    await this.loadLanguageStats();
   }
 
-  private async loadCurrentLanguage() {
-    try {
-      this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
-    } catch (error) {
-      console.error('Failed to get current language:', error);
-      this.currentLanguage = APP_CONFIG.DEFAULT_LANGUAGE;
-    }
-  }
 
-  private async loadAvailableLanguages() {
-    try {
-      this.availableLanguages = await window.electronAPI.database.getAvailableLanguages();
-    } catch (error) {
-      console.error('Failed to get available languages:', error);
-      this.availableLanguages = [];
-    }
-  }
-
-  private async loadLanguageStats() {
-    try {
-      this.languageStats = await window.electronAPI.database.getLanguageStats();
-    } catch (error) {
-      console.error('Failed to get language stats:', error);
-      this.languageStats = [];
-    }
-  }
 
   private async createBackup() {
     this.isCreatingBackup = true;
@@ -187,93 +137,14 @@ export class SettingsPanel extends LitElement {
 
 
 
-  private async changeLanguage(event: Event) {
-    const select = event.target as HTMLSelectElement;
-    const newLanguage = select.value;
 
-    this.languageStatus = '';
-
-    try {
-      await window.electronAPI.database.setCurrentLanguage(newLanguage);
-      this.currentLanguage = newLanguage;
-      this.languageStatus = `Language changed to ${this.getLanguageDisplayName(newLanguage)}`;
-
-      // Refresh language stats after changing language
-      await this.loadLanguageStats();
-    } catch (error) {
-      console.error('Failed to change language:', error);
-      this.languageStatus = `Failed to change language: ${error instanceof Error ? error.message : 'Unknown error'}`;
-      // Reset select to current language
-      select.value = this.currentLanguage;
-    }
-  }
-
-  private getLanguageDisplayName(language: string): string {
-    const languageNames: Record<string, string> = {
-      'spanish': 'Spanish',
-      'italian': 'Italian',
-      'portuguese': 'Portuguese',
-      'polish': 'Polish',
-      'indonesian': 'Indonesian'
-    };
-
-    return languageNames[language] || language.charAt(0).toUpperCase() + language.slice(1);
-  }
-
-  private renderLanguageOptions() {
-    // Show all supported languages, with available ones first
-    const supportedLanguages = [...APP_CONFIG.SUPPORTED_LANGUAGES];
-    const availableSet = new Set(this.availableLanguages);
-
-    // Sort: available languages first, then others
-    const sortedLanguages = supportedLanguages.sort((a: string, b: string) => {
-      const aAvailable = availableSet.has(a);
-      const bAvailable = availableSet.has(b);
-
-      if (aAvailable && !bAvailable) return -1;
-      if (!aAvailable && bAvailable) return 1;
-      return a.localeCompare(b);
-    });
-
-    return sortedLanguages.map((language: string) => {
-      const isAvailable = availableSet.has(language);
-      const displayName = this.getLanguageDisplayName(language);
-      const wordCount = this.languageStats.find(stat => stat.language === language)?.totalWords || 0;
-
-      return html`
-        <option value=${language} ?disabled=${!isAvailable && language !== this.currentLanguage}>
-          ${displayName}${isAvailable ? ` (${wordCount} words)` : ' (no words)'}
-        </option>
-      `;
-    });
-  }
 
   render() {
     return html`
       <div class="settings-container">
         <h2>Settings</h2>
 
-        <div class="settings-section">
-          <h3>Language Settings</h3>
-          <div class="settings-row">
-            <div class="settings-description">
-              <strong>Current Language</strong>
-              <p>Select the language for TTS voice and learning content</p>
-            </div>
-            <select 
-              class="language-select" 
-              .value=${this.currentLanguage}
-              @change=${this.changeLanguage}
-            >
-              ${this.renderLanguageOptions()}
-            </select>
-          </div>
-          ${this.languageStatus ? html`
-            <div class="status-message ${this.languageStatus.includes('Failed') ? 'status-error' : 'status-success'}">
-              ${this.languageStatus}
-            </div>
-          ` : ''}
-        </div>
+
 
         <div class="settings-section">
           <h3>Data Management</h3>

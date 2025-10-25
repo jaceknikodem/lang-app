@@ -20,7 +20,6 @@ export class TTSAudioGenerator implements AudioGenerator {
       audioDirectory: join(process.cwd(), 'audio'),
       ttsCommand: 'say',
       fileExtension: '.aiff',
-      voice: 'Monica', // Default macOS voice
       rate: 160, // Words per minute
       ...config
     };
@@ -53,7 +52,7 @@ export class TTSAudioGenerator implements AudioGenerator {
     targetLanguage = targetLanguage || 'spanish';
 
     const audioPath = this.getAudioPath(text);
-    
+
     // Return existing file if it exists (caching)
     if (await this.audioExists(audioPath)) {
       return audioPath;
@@ -135,6 +134,7 @@ export class TTSAudioGenerator implements AudioGenerator {
 
   /**
    * Get appropriate voice for language
+   * Voice selection is purely based on the target language, no global configuration
    */
   private getVoiceForLanguage(language: string): string {
     // Map languages to macOS voices with proper locale-specific voices
@@ -151,7 +151,9 @@ export class TTSAudioGenerator implements AudioGenerator {
       'pl': 'Zosia',
     };
 
-    return voiceMap[language.toLowerCase()] || this.config.voice || 'Monica';
+    // Always return a non-English voice, defaulting to Monica (Spanish) if no match found
+    // This ensures we never accidentally use the system default English voice
+    return voiceMap[language.toLowerCase()] || 'Monica';
   }
 
   /**

@@ -12,7 +12,6 @@ export interface AudioConfig {
   audioDirectory: string;
   ttsCommand: string;
   fileExtension: string;
-  voice?: string;
   rate?: number;
 }
 
