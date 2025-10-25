@@ -91,21 +91,25 @@ function setupSecurity(): void {
 }
 
 function createWindow(): void {
+  const preloadPath = path.join(__dirname, '../preload/preload.js');
+  console.log('Preload script path:', preloadPath);
+  console.log('Preload script exists:', require('fs').existsSync(preloadPath));
+  
   // Create the browser window with enhanced security
   mainWindow = new BrowserWindow({
     height: 800,
     width: 1200,
     webPreferences: {
-      preload: path.join(__dirname, '../preload/preload.js'),
+      preload: preloadPath,
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true,
+      sandbox: false,
       webSecurity: true,
       allowRunningInsecureContent: false,
       experimentalFeatures: false
     },
     titleBarStyle: 'hiddenInset',
-    show: false,
+    show: process.env.NODE_ENV !== 'test', // Don't show window in test mode
     icon: path.join(__dirname, '../../build/icon.png') // Add app icon if available
   });
 
@@ -117,9 +121,11 @@ function createWindow(): void {
     mainWindow.loadFile(path.join(__dirname, '../../renderer/index.html'));
   }
 
-  // Show window when ready to prevent visual flash
+  // Show window when ready to prevent visual flash (unless in test mode)
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+    if (process.env.NODE_ENV !== 'test') {
+      mainWindow.show();
+    }
   });
 
   // Handle window closed
