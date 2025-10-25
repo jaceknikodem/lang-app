@@ -1,13 +1,21 @@
 /**
- * Main application root component
+ * Main application root component with routing
  */
 
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { AppState } from '../../shared/types/core.js';
+import { router, RouteState, AppMode } from '../utils/router.js';
+import { sharedStyles } from '../styles/shared.js';
+import './topic-selector.js';
+import './word-selector.js';
+import './learning-mode.js';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
+  @state()
+  private currentRoute: RouteState = { mode: 'topic-selection' };
+
   @state()
   private appState: AppState = {
     currentMode: 'learning',
@@ -17,68 +25,162 @@ export class AppRoot extends LitElement {
   @state()
   private isLoading = true;
 
-  static styles = css`
-    :host {
-      display: block;
-      width: 100%;
-    }
+  private routerUnsubscribe?: () => void;
 
-    .app-container {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
+  static styles = [
+    sharedStyles,
+    css`
+      :host {
+        display: block;
+        width: 100%;
+        height: 100vh;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
 
-    .mode-selector {
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-      margin-bottom: 20px;
-    }
+      .app-container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: var(--spacing-lg);
+        box-sizing: border-box;
+      }
 
-    .mode-button {
-      padding: 10px 20px;
-      border: 2px solid #007AFF;
-      background: white;
-      color: #007AFF;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 16px;
-      transition: all 0.2s;
-    }
+      .app-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--spacing-xl);
+        padding-bottom: var(--spacing-md);
+        border-bottom: 2px solid var(--border-color);
+      }
 
-    .mode-button:hover {
-      background: #f0f8ff;
-    }
+      .app-title {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin: 0;
+      }
 
-    .mode-button.active {
-      background: #007AFF;
-      color: white;
-    }
+      .navigation {
+        display: flex;
+        gap: var(--spacing-sm);
+      }
 
-    .content-area {
-      min-height: 400px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
+      .nav-button {
+        padding: var(--spacing-xs) var(--spacing-md);
+        border: 2px solid var(--primary-color);
+        background: var(--background-primary);
+        color: var(--primary-color);
+        border-radius: var(--border-radius-small);
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+      }
 
-    .placeholder {
-      text-align: center;
-      color: #666;
-      font-size: 18px;
-    }
+      .nav-button:hover {
+        background: var(--primary-light);
+      }
 
-    .loading {
-      text-align: center;
-      color: #666;
-      font-style: italic;
-    }
-  `;
+      .nav-button.active {
+        background: var(--primary-color);
+        color: white;
+      }
+
+      .nav-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .content-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .route-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: auto;
+      }
+
+      .placeholder {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        color: var(--text-secondary);
+        gap: var(--spacing-md);
+      }
+
+      .placeholder h3 {
+        font-size: 24px;
+        color: var(--text-primary);
+        margin: 0;
+      }
+
+      .placeholder p {
+        font-size: 16px;
+        margin: 0;
+        max-width: 400px;
+      }
+
+      .loading-container {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      @media (max-width: 768px) {
+        .app-container {
+          padding: var(--spacing-md);
+        }
+        
+        .app-header {
+          flex-direction: column;
+          gap: var(--spacing-md);
+          align-items: stretch;
+        }
+        
+        .navigation {
+          justify-content: center;
+        }
+        
+        .nav-button {
+          flex: 1;
+          text-align: center;
+        }
+      }
+    `
+  ];
 
   async connectedCallback() {
     super.connectedCallback();
+    
+    // Subscribe to router changes
+    this.routerUnsubscribe = router.subscribe((route) => {
+      this.currentRoute = route;
+      this.updateAppState();
+    });
+    
+    // Initialize current route
+    this.currentRoute = router.getCurrentRoute();
+    
     await this.initializeApp();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this.routerUnsubscribe) {
+      this.routerUnsubscribe();
+    }
   }
 
   private async initializeApp() {
@@ -94,60 +196,151 @@ export class AppRoot extends LitElement {
     }
   }
 
-  private handleModeChange(mode: 'learning' | 'quiz') {
+  private updateAppState() {
+    // Update legacy app state based on current route
+    const routeData = router.getRouteData();
+    
     this.appState = {
       ...this.appState,
-      currentMode: mode
+      currentMode: this.currentRoute.mode === 'quiz' ? 'quiz' : 'learning',
+      selectedTopic: routeData?.topic,
+      selectedWords: routeData?.selectedWords,
+      quizDirection: routeData?.direction || this.appState.quizDirection
     };
+  }
+
+  private handleNavigation(mode: AppMode) {
+    switch (mode) {
+      case 'topic-selection':
+        router.goToTopicSelection();
+        break;
+      case 'learning':
+        // Only navigate if we have selected words
+        if (this.appState.selectedWords?.length) {
+          router.goToLearning(this.appState.selectedWords);
+        } else {
+          router.goToTopicSelection();
+        }
+        break;
+      case 'quiz':
+        // Only navigate if we have selected words
+        if (this.appState.selectedWords?.length) {
+          router.goToQuiz(this.appState.selectedWords, this.appState.quizDirection);
+        } else {
+          router.goToTopicSelection();
+        }
+        break;
+      case 'progress':
+        router.goToProgress();
+        break;
+    }
   }
 
   render() {
     if (this.isLoading) {
-      return html`<div class="loading">Initializing application...</div>`;
+      return html`
+        <div class="app-container">
+          <div class="loading-container">
+            <div class="loading">
+              <div class="spinner"></div>
+              Initializing application...
+            </div>
+          </div>
+        </div>
+      `;
     }
 
     return html`
       <div class="app-container">
-        <div class="mode-selector">
-          <button 
-            class="mode-button ${this.appState.currentMode === 'learning' ? 'active' : ''}"
-            @click=${() => this.handleModeChange('learning')}
-          >
-            Learning Mode
-          </button>
-          <button 
-            class="mode-button ${this.appState.currentMode === 'quiz' ? 'active' : ''}"
-            @click=${() => this.handleModeChange('quiz')}
-          >
-            Quiz Mode
-          </button>
-        </div>
+        <header class="app-header">
+          <h1 class="app-title">Local Language Learning</h1>
+          <nav class="navigation">
+            <button 
+              class="nav-button ${router.isCurrentMode('topic-selection') || router.isCurrentMode('word-selection') ? 'active' : ''}"
+              @click=${() => this.handleNavigation('topic-selection')}
+            >
+              Start Learning
+            </button>
+            <button 
+              class="nav-button ${router.isCurrentMode('learning') ? 'active' : ''}"
+              @click=${() => this.handleNavigation('learning')}
+              ?disabled=${!this.appState.selectedWords?.length}
+            >
+              Review
+            </button>
+            <button 
+              class="nav-button ${router.isCurrentMode('quiz') ? 'active' : ''}"
+              @click=${() => this.handleNavigation('quiz')}
+              ?disabled=${!this.appState.selectedWords?.length}
+            >
+              Quiz
+            </button>
+            <button 
+              class="nav-button ${router.isCurrentMode('progress') ? 'active' : ''}"
+              @click=${() => this.handleNavigation('progress')}
+            >
+              Progress
+            </button>
+          </nav>
+        </header>
 
-        <div class="content-area">
-          ${this.renderCurrentMode()}
-        </div>
+        <main class="content-area">
+          <div class="route-content">
+            ${this.renderCurrentRoute()}
+          </div>
+        </main>
       </div>
     `;
   }
 
-  private renderCurrentMode() {
-    switch (this.appState.currentMode) {
+  private renderCurrentRoute() {
+    const routeData = router.getRouteData();
+
+    switch (this.currentRoute.mode) {
+      case 'topic-selection':
+        return html`<topic-selector language="Spanish"></topic-selector>`;
+      
+      case 'word-selection':
+        return html`
+          <word-selector
+            .generatedWords=${routeData?.generatedWords || []}
+            .topic=${routeData?.topic}
+            .language=${routeData?.language || 'Spanish'}
+          ></word-selector>
+        `;
+      
       case 'learning':
         return html`
-          <div class="placeholder">
-            <h3>Learning Mode</h3>
-            <p>Topic selection and sentence review will be implemented here.</p>
-          </div>
+          <learning-mode
+            .selectedWords=${routeData?.selectedWords || []}
+          ></learning-mode>
         `;
+      
       case 'quiz':
         return html`
           <div class="placeholder">
             <h3>Quiz Mode</h3>
-            <p>Vocabulary assessment will be implemented here.</p>
+            <p>Test your vocabulary knowledge with adaptive quizzing.</p>
+            <p><em>Quiz components will be implemented in task 7.</em></p>
           </div>
         `;
+      
+      case 'progress':
+        return html`
+          <div class="placeholder">
+            <h3>Progress Summary</h3>
+            <p>View your learning statistics and word mastery progress.</p>
+            <p><em>Progress tracking will be implemented in task 8.</em></p>
+          </div>
+        `;
+      
       default:
-        return html`<div class="placeholder">Unknown mode</div>`;
+        return html`
+          <div class="placeholder">
+            <h3>Unknown Route</h3>
+            <p>Navigation error occurred.</p>
+          </div>
+        `;
     }
   }
 }

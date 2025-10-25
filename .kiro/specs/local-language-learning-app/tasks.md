@@ -83,20 +83,20 @@
     - Validate input sanitization and security boundaries
     - _Requirements: 2.1, 2.2_
 
-- [ ] 6. Implement core UI components with Lit
-  - [ ] 6.1 Create application shell and routing
+- [x] 6. Implement core UI components with Lit
+  - [x] 6.1 Create application shell and routing
     - Build main app component with mode-based routing
     - Implement navigation between topic selection, learning, and quiz modes
     - Create shared UI utilities and styling system
     - _Requirements: 6.1, 6.2, 6.3_
   
-  - [ ] 6.2 Build topic and word selection components
+  - [x] 6.2 Build topic and word selection components
     - Create topic input component with optional text entry
     - Implement word list display with manual selection checkboxes
     - Add word selection validation and session initialization
     - _Requirements: 5.1, 5.3, 5.4, 6.3_
   
-  - [ ] 6.3 Implement sentence review (learning mode) components
+  - [x] 6.3 Implement sentence review (learning mode) components
     - Create sentence display component with color-coded word highlighting
     - Build word interaction system for marking known/unknown status
     - Implement audio playback button integration
