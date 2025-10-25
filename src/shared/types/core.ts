@@ -25,12 +25,7 @@ export interface Sentence {
   lastShown?: Date;
 }
 
-export interface StudySession {
-  selectedWords: Word[];
-  currentIndex: number;
-  mode: 'learning' | 'quiz';
-  quizDirection?: 'foreign-to-english' | 'english-to-foreign';
-}
+
 
 export interface QuizQuestion {
   word: Word;
@@ -66,7 +61,6 @@ export interface CreateWordRequest {
 export interface AppState {
   currentMode: 'learning' | 'quiz';
   selectedTopic?: string;
-  selectedWords?: Word[];
   quizDirection: 'foreign-to-english' | 'english-to-foreign';
 }
 

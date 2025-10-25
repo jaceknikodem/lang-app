@@ -18,11 +18,12 @@ interface WordWithSentences extends Word {
 
 @customElement('learning-mode')
 export class LearningMode extends LitElement {
-  @property({ type: Array })
-  selectedWords: Word[] = [];
 
   @state()
   private wordsWithSentences: WordWithSentences[] = [];
+
+  @state()
+  private selectedWords: Word[] = [];
 
   @state()
   private currentWordIndex = 0;
@@ -214,15 +215,32 @@ export class LearningMode extends LitElement {
     `
   ];
 
-  connectedCallback() {
+  async connectedCallback() {
     super.connectedCallback();
-    this.loadWordsAndSentences();
+    
+    // Load words from database first
+    await this.loadSelectedWords();
+    
+    // Try to restore learning session from session manager
     this.restoreSessionProgress();
+    
+    await this.loadWordsAndSentences();
+  }
+
+  private async loadSelectedWords() {
+    try {
+      // Get all words from database for learning
+      this.selectedWords = await window.electronAPI.database.getAllWords(true, false);
+      console.log('Loaded words for learning:', this.selectedWords.length);
+    } catch (error) {
+      console.error('Failed to load words:', error);
+      this.error = 'Failed to load words from database.';
+    }
   }
 
   private async loadWordsAndSentences() {
     if (!this.selectedWords.length) {
-      this.error = 'No words selected for learning.';
+      this.error = 'No words available for learning. Please start a new learning session.';
       this.isLoading = false;
       return;
     }

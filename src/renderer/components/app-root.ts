@@ -34,6 +34,9 @@ export class AppRoot extends LitElement {
   @state()
   private showSessionRestore = false;
 
+  @state()
+  private hasExistingWords = false;
+
   private routerUnsubscribe?: () => void;
 
   static styles = [
@@ -264,6 +267,9 @@ export class AppRoot extends LitElement {
       // Load saved session
       await this.loadSession();
 
+      // Check for existing words in database
+      await this.checkExistingWords();
+
       console.log('App initialization complete');
       this.isLoading = false;
     } catch (error) {
@@ -290,6 +296,17 @@ export class AppRoot extends LitElement {
     }
   }
 
+  private async checkExistingWords() {
+    try {
+      const allWords = await window.electronAPI.database.getAllWords(true, false);
+      this.hasExistingWords = allWords.length > 0;
+      console.log('Found existing words:', allWords.length);
+    } catch (error) {
+      console.error('Failed to check existing words:', error);
+      this.hasExistingWords = false;
+    }
+  }
+
   private updateAppState() {
     // Update legacy app state based on current route
     const routeData = router.getRouteData();
@@ -298,7 +315,6 @@ export class AppRoot extends LitElement {
       ...this.appState,
       currentMode: this.currentRoute.mode === 'quiz' ? 'quiz' : 'learning',
       selectedTopic: routeData?.topic,
-      selectedWords: routeData?.selectedWords,
       quizDirection: routeData?.direction || this.appState.quizDirection
     };
   }
@@ -309,10 +325,6 @@ export class AppRoot extends LitElement {
 
     sessionManager.updateCurrentMode(this.currentRoute.mode);
 
-    if (routeData?.selectedWords) {
-      sessionManager.updateSelectedWords(routeData.selectedWords);
-    }
-
     if (routeData?.topic) {
       sessionManager.updateSelectedTopic(routeData.topic);
     }
@@ -322,27 +334,43 @@ export class AppRoot extends LitElement {
     }
   }
 
-  private handleNavigation(mode: AppMode) {
+  private async handleNavigation(mode: AppMode) {
     switch (mode) {
       case 'topic-selection':
         router.goToTopicSelection();
         break;
       case 'learning':
-        // Try to use session words first, then app state words
-        const learningWords = this.sessionState?.selectedWords || this.appState.selectedWords;
-        if (learningWords?.length) {
-          router.goToLearning(learningWords);
-        } else {
+        // Get all words from database for review
+        try {
+          const allWords = await window.electronAPI.database.getAllWords(true, false);
+          if (allWords.length > 0) {
+            router.goToLearning();
+          } else {
+            router.goToTopicSelection();
+          }
+        } catch (error) {
+          console.error('Failed to load words for learning:', error);
           router.goToTopicSelection();
         }
         break;
       case 'quiz':
-        // Try to use session words first, then app state words
-        const quizWords = this.sessionState?.selectedWords || this.appState.selectedWords;
+        // Get weak words from database for quiz
         const direction = this.sessionState?.quizDirection || this.appState.quizDirection;
-        if (quizWords?.length) {
-          router.goToQuiz(quizWords, direction);
-        } else {
+        try {
+          const weakWords = await window.electronAPI.quiz.getWeakestWords(20);
+          if (weakWords.length > 0) {
+            router.goToQuiz(direction);
+          } else {
+            // If no weak words, get all words
+            const allWords = await window.electronAPI.database.getAllWords(true, false);
+            if (allWords.length > 0) {
+              router.goToQuiz(direction);
+            } else {
+              router.goToTopicSelection();
+            }
+          }
+        } catch (error) {
+          console.error('Failed to load words for quiz:', error);
           router.goToTopicSelection();
         }
         break;
@@ -360,18 +388,12 @@ export class AppRoot extends LitElement {
     // Navigate to the saved session mode
     switch (this.sessionState.currentMode) {
       case 'learning':
-        if (this.sessionState.selectedWords.length > 0) {
-          router.goToLearning(this.sessionState.selectedWords);
-        } else {
-          router.goToTopicSelection();
-        }
+        // Use the navigation handler which will fetch words from database
+        this.handleNavigation('learning');
         break;
       case 'quiz':
-        if (this.sessionState.selectedWords.length > 0) {
-          router.goToQuiz(this.sessionState.selectedWords, this.sessionState.quizDirection);
-        } else {
-          router.goToTopicSelection();
-        }
+        // Use the navigation handler which will fetch words from database
+        this.handleNavigation('quiz');
         break;
       default:
         router.goToTopicSelection();
@@ -414,14 +436,14 @@ export class AppRoot extends LitElement {
             <button 
               class="nav-button ${router.isCurrentMode('learning') ? 'active' : ''}"
               @click=${() => this.handleNavigation('learning')}
-              ?disabled=${!this.appState.selectedWords?.length}
+              ?disabled=${!this.hasExistingWords}
             >
               Review
             </button>
             <button 
               class="nav-button ${router.isCurrentMode('quiz') ? 'active' : ''}"
               @click=${() => this.handleNavigation('quiz')}
-              ?disabled=${!this.appState.selectedWords?.length}
+              ?disabled=${!this.hasExistingWords}
             >
               Quiz
             </button>
@@ -461,16 +483,11 @@ export class AppRoot extends LitElement {
         `;
 
       case 'learning':
-        return html`
-          <learning-mode
-            .selectedWords=${routeData?.selectedWords || []}
-          ></learning-mode>
-        `;
+        return html`<learning-mode></learning-mode>`;
 
       case 'quiz':
         return html`
           <quiz-mode
-            .selectedWords=${routeData?.selectedWords || []}
             .direction=${routeData?.direction || 'foreign-to-english'}
           ></quiz-mode>
         `;

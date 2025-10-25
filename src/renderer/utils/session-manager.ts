@@ -2,10 +2,9 @@
  * Session manager for persisting and restoring application state
  */
 
-import { Word } from '../../shared/types/core.js';
+
 
 export interface SessionState {
-  selectedWords: Word[];
   currentMode: 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'progress';
   selectedTopic?: string;
   quizDirection: 'foreign-to-english' | 'english-to-foreign';
@@ -117,12 +116,7 @@ export class SessionManager {
     }
   }
 
-  /**
-   * Update selected words in session
-   */
-  updateSelectedWords(words: Word[]): void {
-    this.saveSession({ selectedWords: words });
-  }
+
 
   /**
    * Update current mode in session
@@ -175,8 +169,7 @@ export class SessionManager {
    */
   hasActiveSession(): boolean {
     const session = this.getCurrentSession();
-    return session.selectedWords.length > 0 && 
-           (session.currentMode === 'learning' || session.currentMode === 'quiz');
+    return session.currentMode === 'learning' || session.currentMode === 'quiz';
   }
 
   /**
@@ -188,10 +181,9 @@ export class SessionManager {
     }
 
     const session = this.getCurrentSession();
-    const wordCount = session.selectedWords.length;
     const mode = session.currentMode === 'learning' ? 'Learning' : 'Quiz';
     
-    return `${mode} session with ${wordCount} words`;
+    return `${mode} session in progress`;
   }
 
   /**
@@ -199,7 +191,6 @@ export class SessionManager {
    */
   private createDefaultSession(): SessionState {
     return {
-      selectedWords: [],
       currentMode: 'topic-selection',
       quizDirection: 'foreign-to-english',
       lastActivity: new Date()

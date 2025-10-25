@@ -13,8 +13,6 @@ import type { SessionSummary } from './session-complete.js';
 
 @customElement('quiz-mode')
 export class QuizMode extends LitElement {
-  @property({ type: Array })
-  selectedWords: Word[] = [];
 
   @property({ type: String })
   direction: 'foreign-to-english' | 'english-to-foreign' = 'foreign-to-english';
@@ -42,6 +40,9 @@ export class QuizMode extends LitElement {
 
   @state()
   private sessionSummary: SessionSummary | null = null;
+
+  @state()
+  private selectedWords: Word[] = [];
 
   private sessionStartTime = Date.now();
 
@@ -463,8 +464,11 @@ export class QuizMode extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
     
+    // Load words from database first
+    await this.loadSelectedWords();
+    
     if (this.selectedWords.length === 0) {
-      this.error = 'No words selected for quiz. Please select words first.';
+      this.error = 'No words available for quiz. Please start a new learning session first.';
       return;
     }
 
@@ -540,9 +544,24 @@ export class QuizMode extends LitElement {
     }
   }
 
+  private async loadSelectedWords() {
+    try {
+      // Get weak words first for targeted practice, fallback to all words
+      let words = await window.electronAPI.quiz.getWeakestWords(20);
+      if (words.length === 0) {
+        words = await window.electronAPI.database.getAllWords(true, false);
+      }
+      this.selectedWords = words;
+      console.log('Loaded words for quiz:', this.selectedWords.length);
+    } catch (error) {
+      console.error('Failed to load words:', error);
+      this.error = 'Failed to load words from database.';
+    }
+  }
+
   private restoreQuizSession() {
     const session = sessionManager.getCurrentSession();
-    if (session.quizProgress && session.selectedWords.length > 0) {
+    if (session.quizProgress) {
       // We have a saved quiz session, but we need to rebuild the quiz questions
       // For now, we'll just restore the direction preference
       this.direction = session.quizDirection;
@@ -702,7 +721,7 @@ export class QuizMode extends LitElement {
   }
 
   private goToLearning() {
-    router.goToLearning(this.selectedWords);
+    router.goToLearning();
   }
 
   private goToTopicSelection() {
@@ -808,9 +827,10 @@ export class QuizMode extends LitElement {
       ? question.sentence.sentence 
       : question.sentence.translation;
     
-    const expectedAnswer = this.direction === 'foreign-to-english'
-      ? `"${question.word.translation}"`
-      : `"${question.word.word}"`;
+    // The word we're asking about (not the answer!)
+    const questionWord = this.direction === 'foreign-to-english'
+      ? `"${question.word.word}"`
+      : `"${question.word.translation}"`;
 
     return html`
       <div class="quiz-container">
@@ -838,7 +858,7 @@ export class QuizMode extends LitElement {
             </button>
 
             <div class="question-translation">
-              Do you know what ${expectedAnswer} means in this context?
+              Do you know what ${questionWord} means in this context?
             </div>
 
             ${this.showResult ? this.renderResult() : this.renderAnswerButtons()}

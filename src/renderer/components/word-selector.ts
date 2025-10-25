@@ -349,14 +349,13 @@ export class WordSelector extends LitElement {
         }
       }
 
-      // Update session with selected words and topic
-      sessionManager.updateSelectedWords(storedWords);
+      // Update session with topic
       if (this.topic) {
         sessionManager.updateSelectedTopic(this.topic);
       }
 
-      // Navigate to learning mode with selected words
-      router.goToLearning(storedWords);
+      // Navigate to learning mode (words will be loaded from database)
+      router.goToLearning();
 
     } catch (error) {
       console.error('Failed to process selected words:', error);

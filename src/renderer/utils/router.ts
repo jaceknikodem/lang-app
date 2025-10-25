@@ -51,12 +51,12 @@ export class Router {
     this.navigateTo('word-selection', { topic });
   }
 
-  goToLearning(selectedWords: any[]): void {
-    this.navigateTo('learning', { selectedWords });
+  goToLearning(): void {
+    this.navigateTo('learning');
   }
 
-  goToQuiz(selectedWords: any[], direction: 'foreign-to-english' | 'english-to-foreign'): void {
-    this.navigateTo('quiz', { selectedWords, direction });
+  goToQuiz(direction: 'foreign-to-english' | 'english-to-foreign'): void {
+    this.navigateTo('quiz', { direction });
   }
 
   goToProgress(): void {

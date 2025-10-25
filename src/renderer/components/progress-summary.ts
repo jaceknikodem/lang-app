@@ -24,7 +24,7 @@ export class ProgressSummary extends LitElement {
   private recentWords: WordProgress[] = [];
 
   @state()
-  private recentSessions: Array<{id: number, wordsStudied: number, whenStudied: Date}> = [];
+  private recentSessions: Array<{ id: number, wordsStudied: number, whenStudied: Date }> = [];
 
   @state()
   private isLoading = true;
@@ -47,6 +47,20 @@ export class ProgressSummary extends LitElement {
         gap: var(--spacing-xl);
       }
 
+      .progress-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto auto;
+        gap: var(--spacing-xl);
+        margin-top: var(--spacing-xl);
+      }
+
+      .progress-section {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-md);
+      }
+
       .progress-header {
         text-align: center;
       }
@@ -66,8 +80,8 @@ export class ProgressSummary extends LitElement {
 
       .stats-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: var(--spacing-lg);
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--spacing-md);
       }
 
       .stat-card {
@@ -115,8 +129,10 @@ export class ProgressSummary extends LitElement {
 
       .words-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: var(--spacing-md);
+        grid-template-columns: 1fr;
+        gap: var(--spacing-sm);
+        max-height: 400px;
+        overflow-y: auto;
       }
 
       .word-progress-card {
@@ -231,6 +247,8 @@ export class ProgressSummary extends LitElement {
         display: flex;
         flex-direction: column;
         gap: var(--spacing-sm);
+        max-height: 400px;
+        overflow-y: auto;
       }
 
       .session-item {
@@ -282,10 +300,9 @@ export class ProgressSummary extends LitElement {
 
       .action-buttons {
         display: flex;
-        justify-content: center;
+        flex-direction: column;
         gap: var(--spacing-md);
-        margin-top: var(--spacing-lg);
-        flex-wrap: wrap;
+        align-items: stretch;
       }
 
       .error-message {
@@ -297,12 +314,29 @@ export class ProgressSummary extends LitElement {
         text-align: center;
       }
 
-      @media (max-width: 768px) {
-        .stats-grid {
+      @media (max-width: 1024px) {
+        .progress-grid {
           grid-template-columns: 1fr;
+          grid-template-rows: auto;
+        }
+
+        .stats-grid {
+          grid-template-columns: repeat(2, 1fr);
         }
 
         .words-grid {
+          max-height: none;
+          overflow-y: visible;
+        }
+
+        .sessions-list {
+          max-height: none;
+          overflow-y: visible;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .stats-grid {
           grid-template-columns: 1fr;
         }
 
@@ -310,10 +344,6 @@ export class ProgressSummary extends LitElement {
           flex-direction: column;
           align-items: stretch;
           gap: var(--spacing-sm);
-        }
-
-        .action-buttons {
-          flex-direction: column;
         }
       }
     `
@@ -406,7 +436,7 @@ export class ProgressSummary extends LitElement {
     try {
       const weakWords = await window.electronAPI.quiz.getWeakestWords(10);
       if (weakWords.length > 0) {
-        router.goToLearning(weakWords);
+        router.goToLearning();
       } else {
         this.error = 'No words need practice right now. Start a new learning session!';
       }
@@ -470,97 +500,135 @@ export class ProgressSummary extends LitElement {
           </p>
         </div>
 
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-value">${this.studyStats.totalWords}</div>
-            <div class="stat-label">Total Words</div>
-            <div class="stat-description">Words you've studied</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-value">${this.studyStats.wordsStudied}</div>
-            <div class="stat-label">Words Practiced</div>
-            <div class="stat-description">In recent sessions</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-value">${Math.round(this.studyStats.averageStrength)}%</div>
-            <div class="stat-label">Average Strength</div>
-            <div class="stat-description">Overall mastery level</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-value">
-              ${this.studyStats.lastStudyDate ? this.formatDate(new Date(this.studyStats.lastStudyDate)) : 'Never'}
-            </div>
-            <div class="stat-label">Last Study</div>
-            <div class="stat-description">Most recent session</div>
-          </div>
-        </div>
-
-        ${this.recentWords.length > 0 ? html`
-          <div>
-            <h3 class="section-title">
-              <span class="section-icon">📚</span>
-              Recent Words
-            </h3>
-            <div class="words-grid">
-              ${this.recentWords.map(wordProgress => html`
-                <div class="word-progress-card">
-                  <div class="word-header">
-                    <div class="word-info">
-                      <h4 class="word-foreign">${wordProgress.word.word}</h4>
-                      <p class="word-translation">${wordProgress.word.translation}</p>
-                    </div>
-                    <span class="word-status status-${wordProgress.statusClass}">
-                      ${wordProgress.statusLabel}
-                    </span>
-                  </div>
-                  <div class="progress-bar-container">
-                    <div class="progress-bar-label">
-                      <span>Strength</span>
-                      <span>${wordProgress.progressPercent}%</span>
-                    </div>
-                    <div class="progress-bar">
-                      <div 
-                        class="progress-fill ${wordProgress.statusClass}"
-                        style="width: ${wordProgress.progressPercent}%"
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-              `)}
-            </div>
-          </div>
-        ` : ''}
-
-        ${this.recentSessions.length > 0 ? html`
-          <div>
+        <div class="progress-grid">
+          <!-- Top Left: Study Statistics -->
+          <div class="progress-section">
             <h3 class="section-title">
               <span class="section-icon">📊</span>
-              Recent Sessions
+              Study Statistics
             </h3>
-            <div class="sessions-list">
-              ${this.recentSessions.map(session => html`
-                <div class="session-item">
-                  <div class="session-info">
-                    <div class="session-words">${session.wordsStudied} words practiced</div>
-                    <div class="session-date">${this.formatDate(new Date(session.whenStudied))}</div>
-                  </div>
-                  <div class="session-badge">Session</div>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-value">${this.studyStats.totalWords}</div>
+                <div class="stat-label">Total Words</div>
+                <div class="stat-description">Words you've studied</div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-value">${this.studyStats.wordsStudied}</div>
+                <div class="stat-label">Words Practiced</div>
+                <div class="stat-description">In recent sessions</div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-value">${Math.round(this.studyStats.averageStrength)}%</div>
+                <div class="stat-label">Average Strength</div>
+                <div class="stat-description">Overall mastery level</div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-value">
+                  ${this.studyStats.lastStudyDate ? this.formatDate(new Date(this.studyStats.lastStudyDate)) : 'Never'}
                 </div>
-              `)}
+                <div class="stat-label">Last Study</div>
+                <div class="stat-description">Most recent session</div>
+              </div>
             </div>
           </div>
-        ` : ''}
 
-        <div class="action-buttons">
-          <button class="btn btn-primary btn-large" @click=${this.handleStartLearning}>
-            New Learning Session
-          </button>
-          <button class="btn btn-secondary" @click=${this.handleContinueWeakWords}>
-            Practice Weak Words
-          </button>
+          <!-- Top Right: Recent Words -->
+          ${this.recentWords.length > 0 ? html`
+            <div class="progress-section">
+              <h3 class="section-title">
+                <span class="section-icon">📚</span>
+                Recent Words
+              </h3>
+              <div class="words-grid">
+                ${this.recentWords.slice(0, 6).map(wordProgress => html`
+                  <div class="word-progress-card">
+                    <div class="word-header">
+                      <div class="word-info">
+                        <h4 class="word-foreign">${wordProgress.word.word}</h4>
+                        <p class="word-translation">${wordProgress.word.translation}</p>
+                      </div>
+                      <span class="word-status status-${wordProgress.statusClass}">
+                        ${wordProgress.statusLabel}
+                      </span>
+                    </div>
+                    <div class="progress-bar-container">
+                      <div class="progress-bar-label">
+                        <span>Strength</span>
+                        <span>${wordProgress.progressPercent}%</span>
+                      </div>
+                      <div class="progress-bar">
+                        <div 
+                          class="progress-fill ${wordProgress.statusClass}"
+                          style="width: ${wordProgress.progressPercent}%"
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                `)}
+              </div>
+            </div>
+          ` : html`
+            <div class="progress-section">
+              <h3 class="section-title">
+                <span class="section-icon">📚</span>
+                Recent Words
+              </h3>
+              <div class="empty-state">
+                <p>No words studied yet</p>
+              </div>
+            </div>
+          `}
+
+          <!-- Bottom Left: Recent Sessions -->
+          ${this.recentSessions.length > 0 ? html`
+            <div class="progress-section">
+              <h3 class="section-title">
+                <span class="section-icon">🕒</span>
+                Recent Sessions
+              </h3>
+              <div class="sessions-list">
+                ${this.recentSessions.map(session => html`
+                  <div class="session-item">
+                    <div class="session-info">
+                      <div class="session-words">${session.wordsStudied} words practiced</div>
+                      <div class="session-date">${this.formatDate(new Date(session.whenStudied))}</div>
+                    </div>
+                    <div class="session-badge">Session</div>
+                  </div>
+                `)}
+              </div>
+            </div>
+          ` : html`
+            <div class="progress-section">
+              <h3 class="section-title">
+                <span class="section-icon">🕒</span>
+                Recent Sessions
+              </h3>
+              <div class="empty-state">
+                <p>No study sessions yet</p>
+              </div>
+            </div>
+          `}
+
+          <!-- Bottom Right: Actions -->
+          <div class="progress-section">
+            <h3 class="section-title">
+              <span class="section-icon">🚀</span>
+              Quick Actions
+            </h3>
+            <div class="action-buttons">
+              <button class="btn btn-primary btn-large" @click=${this.handleStartLearning}>
+                New Learning Session
+              </button>
+              <button class="btn btn-secondary" @click=${this.handleContinueWeakWords}>
+                Practice Weak Words
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     `;
