@@ -11,6 +11,7 @@ export interface LLMClient {
   getAvailableModels(): Promise<string[]>;
   setModel(model: string): void;
   getCurrentModel(): string;
+  setDatabaseLayer(databaseLayer: any): void;
 }
 
 export interface LLMConfig {

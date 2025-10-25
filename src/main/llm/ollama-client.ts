@@ -109,6 +109,7 @@ interface OllamaResponse {
 
 export class OllamaClient implements LLMClient {
   private config: LLMConfig;
+  private databaseLayer?: any; // Will be injected to check for duplicates
 
   constructor(config: Partial<LLMConfig> = {}) {
     this.config = {
@@ -117,6 +118,13 @@ export class OllamaClient implements LLMClient {
       timeout: config.timeout || 10000,
       maxRetries: config.maxRetries || 3
     };
+  }
+
+  /**
+   * Set database layer for duplicate checking
+   */
+  setDatabaseLayer(databaseLayer: any): void {
+    this.databaseLayer = databaseLayer;
   }
 
   async isAvailable(): Promise<boolean> {
@@ -164,7 +172,11 @@ export class OllamaClient implements LLMClient {
   }
 
   async generateTopicWords(topic: string, language: string, count: number): Promise<GeneratedWord[]> {
-    const prompt = this.createTopicWordsPrompt(topic, language, count);
+    // Get existing words to check for duplicates
+    const existingWords = await this.getExistingWords(language);
+    const existingWordsSet = new Set(existingWords.map(w => w.toLowerCase()));
+
+    const prompt = this.createTopicWordsPrompt(topic, language, count, existingWords);
 
     try {
       const response = await this.makeRequest(prompt);
@@ -203,19 +215,24 @@ export class OllamaClient implements LLMClient {
 
       const words = parseResult.data;
 
-      // Remove duplicates based on word text (case-insensitive)
+      // Remove duplicates within generated words (case-insensitive)
       const uniqueWords = words.filter((word, index, arr) =>
         arr.findIndex(w => w.word.toLowerCase() === word.word.toLowerCase()) === index
       );
 
-      console.log(`Generated ${uniqueWords.length} unique words out of ${count} requested`);
+      // Filter out words that already exist in database (learning, known, or ignored)
+      const newWords = uniqueWords.filter(word =>
+        !existingWordsSet.has(word.word.toLowerCase())
+      );
 
-      // If we got significantly fewer words than requested, throw an error to trigger retry
-      if (uniqueWords.length < Math.max(1, Math.floor(count * 0.7))) {
-        throw new Error(`Insufficient words generated: got ${uniqueWords.length}, expected at least ${Math.floor(count * 0.7)}`);
+      console.log(`Generated ${uniqueWords.length} unique words, ${newWords.length} are new (${uniqueWords.length - newWords.length} duplicates filtered)`);
+
+      // If we got significantly fewer new words than requested, throw an error to trigger retry
+      if (newWords.length < Math.max(1, Math.floor(count * 0.7))) {
+        throw new Error(`Insufficient new words generated: got ${newWords.length}, expected at least ${Math.floor(count * 0.7)}`);
       }
 
-      return uniqueWords;
+      return newWords;
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw this.createLLMError(error, 'Response validation failed', 'INVALID_RESPONSE', false);
@@ -269,7 +286,28 @@ export class OllamaClient implements LLMClient {
 
 
 
-  private createTopicWordsPrompt(topic: string, language: string, count: number): string {
+  /**
+   * Get existing words from database to avoid duplicates
+   */
+  private async getExistingWords(language: string): Promise<string[]> {
+    if (!this.databaseLayer) {
+      console.warn('Database layer not set, cannot check for duplicates');
+      return [];
+    }
+
+    try {
+      // Get all words (learning, known, and ignored) for the language
+      const allWords = await this.databaseLayer.getAllWords(true, true);
+      return allWords
+        .filter((word: any) => word.language === language)
+        .map((word: any) => word.word);
+    } catch (error) {
+      console.error('Failed to get existing words for duplicate checking:', error);
+      return [];
+    }
+  }
+
+  private createTopicWordsPrompt(topic: string, language: string, count: number, existingWords: string[] = []): string {
     const examples = Array.from({ length: count }, (_, i) =>
       `  {"word": "${language.toLowerCase()}_word${i + 1}", "translation": "english_translation${i + 1}", "frequency": "${i % 3 === 0 ? 'high' : i % 3 === 1 ? 'medium' : 'low'}"}`
     ).join(',\n');
@@ -277,10 +315,15 @@ export class OllamaClient implements LLMClient {
     const baseInstructions = `CRITICAL: You must return exactly ${count} words in a JSON array. No more, no less.
 CRITICAL: Return ONLY the JSON array, no explanations or extra text.`;
 
+    // Create exclusion list for prompt
+    const exclusionText = existingWords.length > 0
+      ? `\nIMPORTANT: Do NOT include any of these existing words: ${existingWords.slice(0, 50).join(', ')}${existingWords.length > 50 ? '...' : ''}`
+      : '';
+
     if (topic.trim()) {
       return `${baseInstructions}
 
-Task: Generate exactly ${count} different ${language} words related to "${topic}".
+Task: Generate exactly ${count} different ${language} words related to "${topic}".${exclusionText}
 
 Expected output format (${count} items):
 [
@@ -293,11 +336,12 @@ Rules:
 3. All words should relate to "${topic}"
 4. Include nouns, verbs, and adjectives
 5. Use frequency values: "high", "medium", or "low"
-6. Return ONLY the JSON array, nothing else`;
+6. Do NOT use any words from the exclusion list above
+7. Return ONLY the JSON array, nothing else`;
     } else {
       return `${baseInstructions}
 
-Task: Generate exactly ${count} different ${language} words for basic conversation.
+Task: Generate exactly ${count} different ${language} words for basic conversation.${exclusionText}
 
 Expected output format (${count} items):
 [
@@ -310,7 +354,8 @@ Rules:
 3. Focus on essential everyday vocabulary
 4. Include nouns, verbs, and adjectives
 5. Use frequency values: "high", "medium", or "low"
-6. Return ONLY the JSON array, nothing else`;
+6. Do NOT use any words from the exclusion list above
+7. Return ONLY the JSON array, nothing else`;
     }
   }
 

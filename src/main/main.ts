@@ -52,6 +52,9 @@ async function initializeServices(): Promise<void> {
     // Initialize LLM client
     llmClient = new OllamaClient();
     
+    // Inject database layer into LLM client for duplicate checking
+    llmClient.setDatabaseLayer(databaseLayer);
+    
     // Initialize content generator with LLM client
     contentGenerator = new ContentGenerator(llmClient);
 
