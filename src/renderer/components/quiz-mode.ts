@@ -463,10 +463,10 @@ export class QuizMode extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback();
-    
+
     // Load words from database first
     await this.loadSelectedWords();
-    
+
     if (this.selectedWords.length === 0) {
       this.error = 'No words available for quiz. Please start a new learning session first.';
       return;
@@ -500,11 +500,11 @@ export class QuizMode extends LitElement {
 
       // Generate quiz questions from words
       const questions: QuizQuestion[] = [];
-      
+
       for (const word of wordsToQuiz) {
         // Get a random sentence for this word
         const sentence = await window.electronAPI.quiz.getRandomSentenceForWord(word.id);
-        
+
         if (sentence) {
           questions.push({
             word,
@@ -532,10 +532,10 @@ export class QuizMode extends LitElement {
       };
 
       this.currentQuestion = shuffledQuestions[0];
-      
+
       // Save initial quiz state to session
       this.saveQuizProgressToSession();
-      
+
     } catch (error) {
       console.error('Error starting quiz:', error);
       this.error = 'Failed to start quiz. Please try again.';
@@ -546,10 +546,11 @@ export class QuizMode extends LitElement {
 
   private async loadSelectedWords() {
     try {
-      // Get weak words first for targeted practice, fallback to all words
-      let words = await window.electronAPI.quiz.getWeakestWords(20);
+      // Get weak words first for targeted practice, fallback to all words (limited to 10)
+      let words = await window.electronAPI.quiz.getWeakestWords(10);
       if (words.length === 0) {
-        words = await window.electronAPI.database.getAllWords(true, false);
+        const allWords = await window.electronAPI.database.getAllWords(true, false);
+        words = allWords.slice(0, 10); // Limit to 10 words maximum
       }
       this.selectedWords = words;
       console.log('Loaded words for quiz:', this.selectedWords.length);
@@ -609,22 +610,22 @@ export class QuizMode extends LitElement {
 
       if (correct) {
         // Adaptive increase: lower strength words get bigger boosts
-        const strengthBoost = currentStrength < 30 ? 20 : 
-                             currentStrength < 60 ? 15 : 10;
+        const strengthBoost = currentStrength < 30 ? 20 :
+          currentStrength < 60 ? 15 : 10;
         newStrength = Math.min(100, currentStrength + strengthBoost);
       } else {
         // Adaptive decrease: higher strength words lose more points
         const strengthPenalty = currentStrength > 70 ? 15 :
-                               currentStrength > 40 ? 10 : 5;
+          currentStrength > 40 ? 10 : 5;
         newStrength = Math.max(0, currentStrength - strengthPenalty);
       }
 
       await window.electronAPI.database.updateWordStrength(this.currentQuestion.word.id, newStrength);
       await window.electronAPI.database.updateLastStudied(this.currentQuestion.word.id);
-      
+
       // Update the word in our local data
       this.currentQuestion.word.strength = newStrength;
-      
+
     } catch (error) {
       console.error('Error updating word strength:', error);
     }
@@ -645,7 +646,7 @@ export class QuizMode extends LitElement {
       // Move to next question
       this.quizSession.currentQuestionIndex++;
       this.currentQuestion = this.quizSession.questions[this.quizSession.currentQuestionIndex];
-      
+
       // Save progress to session
       this.saveQuizProgressToSession();
     }
@@ -657,13 +658,13 @@ export class QuizMode extends LitElement {
     try {
       // Record the study session in the database
       await window.electronAPI.database.recordStudySession(this.quizSession.totalQuestions);
-      
+
       // Clear session progress since we're completing
       sessionManager.clearSession();
-      
+
       // Show completion screen
       this.showQuizCompletion();
-      
+
     } catch (error) {
       console.error('Error recording quiz session:', error);
       // Don't block the UI for this error
@@ -676,10 +677,10 @@ export class QuizMode extends LitElement {
 
     const timeSpent = Math.round((Date.now() - this.sessionStartTime) / (1000 * 60)); // minutes
     const percentage = Math.round((this.quizSession.score / this.quizSession.totalQuestions) * 100);
-    
+
     // Determine next recommendation based on quiz performance
     let nextRecommendation: SessionSummary['nextRecommendation'] = 'new-topic';
-    
+
     if (percentage < 50) {
       nextRecommendation = 'continue-learning';
     } else if (percentage < 70) {
@@ -787,7 +788,7 @@ export class QuizMode extends LitElement {
         <div class="setup-container">
           <h2 class="setup-title">Quiz Setup</h2>
           
-          <p>You have ${this.selectedWords.length} words selected for the quiz.</p>
+          <p>Quiz will include ${this.selectedWords.length} words (max 10 per session).</p>
           
           <div class="direction-selector">
             <button 
@@ -821,12 +822,12 @@ export class QuizMode extends LitElement {
 
     const progress = ((this.quizSession.currentQuestionIndex + 1) / this.quizSession.totalQuestions) * 100;
     const question = this.currentQuestion;
-    
+
     // Determine what to show based on quiz direction
-    const displayText = this.direction === 'foreign-to-english' 
-      ? question.sentence.sentence 
+    const displayText = this.direction === 'foreign-to-english'
+      ? question.sentence.sentence
       : question.sentence.translation;
-    
+
     // The word we're asking about (not the answer!)
     const questionWord = this.direction === 'foreign-to-english'
       ? `"${question.word.word}"`
@@ -918,7 +919,7 @@ export class QuizMode extends LitElement {
     // Calculate performance message
     let performanceMessage = '';
     let performanceClass = '';
-    
+
     if (percentage >= 90) {
       performanceMessage = 'Excellent work! You have mastered these words.';
       performanceClass = 'excellent';
