@@ -112,6 +112,7 @@ declare global {
         getWordsToStudy: (limit: number) => Promise<any[]>;
         getWordById: (wordId: number) => Promise<any | null>;
         getAllWords: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<any[]>;
+        getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<any[]>;
         getRecentStudySessions: (limit?: number) => Promise<any[]>;
         insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string) => Promise<number>;
         getSentencesByWord: (wordId: number) => Promise<any[]>;

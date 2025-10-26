@@ -299,10 +299,6 @@ export class SentenceViewer extends LitElement {
       return `Target word: ${this.targetWord.translation}`;
     }
 
-    if (!wordInfo.wordData) {
-      return 'Click to mark as known/ignored';
-    }
-
     const word = wordInfo.wordData;
     
     if (word.ignored) {

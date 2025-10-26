@@ -113,7 +113,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         WHERE id = ?
       `);
       
-      const result = stmt.run(known, wordId);
+      const result = stmt.run(known ? 1 : 0, wordId);
       
       if (result.changes === 0) {
         throw new Error(`Word with ID ${wordId} not found`);
@@ -136,7 +136,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         WHERE id = ?
       `);
       
-      const result = stmt.run(ignored, wordId);
+      const result = stmt.run(ignored ? 1 : 0, wordId);
       
       if (result.changes === 0) {
         throw new Error(`Word with ID ${wordId} not found`);
