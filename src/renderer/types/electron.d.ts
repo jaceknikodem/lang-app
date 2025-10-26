@@ -46,6 +46,8 @@ declare global {
         restoreFromBackup: (backupPath: string) => Promise<void>;
         checkForUpdates: () => Promise<boolean>;
         getAppVersion: () => Promise<string>;
+        restartAll: () => Promise<void>;
+        openBackupDialog: () => Promise<string | null>;
       };
     };
   }

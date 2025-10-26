@@ -75,6 +75,15 @@ export class SettingsPanel extends LitElement {
         cursor: not-allowed;
       }
 
+      .action-button.danger {
+        background: #dc3545;
+        color: white;
+      }
+
+      .action-button.danger:hover:not(:disabled) {
+        background: #c82333;
+      }
+
       .status-message {
         margin-top: 0.5rem;
         padding: 0.5rem;
@@ -100,6 +109,48 @@ export class SettingsPanel extends LitElement {
         border: 1px solid #bee5eb;
       }
 
+      .warning-section {
+        border-color: #ffc107;
+        background: #fff3cd;
+      }
+
+      .warning-section h3 {
+        color: #856404;
+      }
+
+      .confirmation-dialog {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+
+      .confirmation-content {
+        background: white;
+        padding: 2rem;
+        border-radius: 8px;
+        max-width: 400px;
+        text-align: center;
+      }
+
+      .confirmation-content h3 {
+        color: #dc3545;
+        margin-top: 0;
+      }
+
+      .confirmation-actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        margin-top: 1.5rem;
+      }
+
 
 
 
@@ -111,6 +162,21 @@ export class SettingsPanel extends LitElement {
 
   @state()
   private isCreatingBackup = false;
+
+  @state()
+  private restartStatus = '';
+
+  @state()
+  private isRestarting = false;
+
+  @state()
+  private showConfirmation = false;
+
+  @state()
+  private restoreStatus = '';
+
+  @state()
+  private isRestoring = false;
 
 
 
@@ -132,6 +198,67 @@ export class SettingsPanel extends LitElement {
       this.backupStatus = `Failed to create backup: ${error instanceof Error ? error.message : 'Unknown error'}`;
     } finally {
       this.isCreatingBackup = false;
+    }
+  }
+
+  private showRestartConfirmation() {
+    this.showConfirmation = true;
+  }
+
+  private hideRestartConfirmation() {
+    this.showConfirmation = false;
+  }
+
+  private async confirmRestartAll() {
+    this.showConfirmation = false;
+    this.isRestarting = true;
+    this.restartStatus = '';
+
+    try {
+      await window.electronAPI.lifecycle.restartAll();
+      this.restartStatus = 'All data has been cleared successfully. The application will restart with a fresh database.';
+      
+      // Clear any local state/cache if needed
+      // The app will automatically reinitialize with empty database
+      
+      // Optionally reload the page to reset the UI state
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to restart all:', error);
+      this.restartStatus = `Failed to clear all data: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    } finally {
+      this.isRestarting = false;
+    }
+  }
+
+  private async restoreFromBackup() {
+    this.isRestoring = true;
+    this.restoreStatus = '';
+
+    try {
+      // Open file dialog to select backup directory
+      const backupPath = await window.electronAPI.lifecycle.openBackupDialog();
+      
+      if (!backupPath) {
+        this.restoreStatus = 'Restore cancelled by user.';
+        return;
+      }
+
+      // Restore from the selected backup
+      await window.electronAPI.lifecycle.restoreFromBackup(backupPath);
+      this.restoreStatus = 'Backup restored successfully! The application will reload to reflect the changes.';
+      
+      // Reload the page to reflect the restored data
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to restore from backup:', error);
+      this.restoreStatus = `Failed to restore from backup: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    } finally {
+      this.isRestoring = false;
     }
   }
 
@@ -166,7 +293,79 @@ export class SettingsPanel extends LitElement {
               ${this.backupStatus}
             </div>
           ` : ''}
+          
+          <div class="settings-row">
+            <div class="settings-description">
+              <strong>Restore from Backup</strong>
+              <p>Restore your learning data and audio files from a previous backup</p>
+            </div>
+            <button 
+              class="action-button" 
+              @click=${this.restoreFromBackup}
+              ?disabled=${this.isRestoring}
+            >
+              ${this.isRestoring ? 'Restoring...' : 'Restore Backup'}
+            </button>
+          </div>
+          ${this.restoreStatus ? html`
+            <div class="status-message ${this.restoreStatus.includes('Failed') || this.restoreStatus.includes('cancelled') ? 'status-error' : 'status-success'}">
+              ${this.restoreStatus}
+            </div>
+          ` : ''}
         </div>
+
+        <div class="settings-section warning-section">
+          <h3>⚠️ Danger Zone</h3>
+          <div class="settings-row">
+            <div class="settings-description">
+              <strong>Restart All</strong>
+              <p>Permanently delete all words, sentences, progress, and audio files. Backups will be preserved. This cannot be undone!</p>
+            </div>
+            <button 
+              class="action-button danger" 
+              @click=${this.showRestartConfirmation}
+              ?disabled=${this.isRestarting}
+            >
+              ${this.isRestarting ? 'Clearing...' : 'Restart All'}
+            </button>
+          </div>
+          ${this.restartStatus ? html`
+            <div class="status-message ${this.restartStatus.includes('Failed') ? 'status-error' : 'status-success'}">
+              ${this.restartStatus}
+            </div>
+          ` : ''}
+        </div>
+
+        ${this.showConfirmation ? html`
+          <div class="confirmation-dialog">
+            <div class="confirmation-content">
+              <h3>⚠️ Confirm Restart All</h3>
+              <p>This will permanently delete:</p>
+              <ul style="text-align: left; margin: 1rem 0;">
+                <li>All words and translations</li>
+                <li>All sentences and examples</li>
+                <li>All progress and statistics</li>
+                <li>All audio files</li>
+              </ul>
+              <p style="color: #28a745; font-size: 0.9rem;"><strong>Note:</strong> Backup files will be preserved.</p>
+              <p><strong>This action cannot be undone!</strong></p>
+              <div class="confirmation-actions">
+                <button 
+                  class="action-button danger" 
+                  @click=${this.confirmRestartAll}
+                >
+                  Yes, Delete Everything
+                </button>
+                <button 
+                  class="action-button" 
+                  @click=${this.hideRestartConfirmation}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        ` : ''}
       </div>
     `;
   }

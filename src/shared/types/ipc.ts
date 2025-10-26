@@ -58,6 +58,8 @@ export interface IPCBridge {
     restoreFromBackup: (backupPath: string) => Promise<void>;
     checkForUpdates: () => Promise<boolean>;
     getAppVersion: () => Promise<string>;
+    restartAll: () => Promise<void>;
+    openBackupDialog: () => Promise<string | null>;
   };
 }
 
@@ -106,6 +108,8 @@ export const IPC_CHANNELS = {
     CREATE_BACKUP: 'lifecycle:createBackup',
     RESTORE_FROM_BACKUP: 'lifecycle:restoreFromBackup',
     CHECK_FOR_UPDATES: 'lifecycle:checkForUpdates',
-    GET_APP_VERSION: 'lifecycle:getAppVersion'
+    GET_APP_VERSION: 'lifecycle:getAppVersion',
+    RESTART_ALL: 'lifecycle:restartAll',
+    OPEN_BACKUP_DIALOG: 'lifecycle:openBackupDialog'
   }
 } as const;

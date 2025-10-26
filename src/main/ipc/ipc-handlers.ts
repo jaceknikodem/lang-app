@@ -2,7 +2,7 @@
  * IPC handlers for secure communication between main and renderer processes
  */
 
-import { ipcMain, app } from 'electron';
+import { ipcMain, app, dialog, BrowserWindow } from 'electron';
 import { z } from 'zod';
 import { IPC_CHANNELS } from '../../shared/types/ipc.js';
 import { SQLiteDatabaseLayer } from '../database/database-layer.js';
@@ -41,10 +41,10 @@ export function setupIPCHandlers(
 ): void {
   // Database handlers
   setupDatabaseHandlers(databaseLayer);
-  
+
   // LLM handlers
   setupLLMHandlers(llmClient, contentGenerator);
-  
+
   // Audio handlers
   setupAudioHandlers(audioService);
 
@@ -132,7 +132,7 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       const validatedSentence = TextSchema.parse(sentence);
       const validatedTranslation = TextSchema.parse(translation);
       const validatedAudioPath = z.string().parse(audioPath);
-      
+
       return await databaseLayer.insertSentence(
         validatedWordId,
         validatedSentence,
@@ -282,12 +282,12 @@ function setupLLMHandlers(llmClient: OllamaClient, contentGenerator: ContentGene
   ipcMain.handle(IPC_CHANNELS.LLM.GENERATE_WORDS, async (event, topic, language) => {
     try {
       const validatedLanguage = LanguageSchema.parse(language);
-      
+
       // Validate topic if provided
       if (topic && topic.trim()) {
         TopicSchema.parse(topic.trim());
       }
-      
+
       // Use ContentGenerator for better error handling and validation
       return await contentGenerator.generateTopicVocabulary(
         topic && topic.trim() ? topic.trim() : undefined,
@@ -304,7 +304,7 @@ function setupLLMHandlers(llmClient: OllamaClient, contentGenerator: ContentGene
     try {
       const validatedWord = TextSchema.parse(word);
       const validatedLanguage = LanguageSchema.parse(language);
-      
+
       // Use ContentGenerator for better error handling and validation
       return await contentGenerator.generateWordSentences(validatedWord, validatedLanguage, 3);
     } catch (error) {
@@ -359,7 +359,7 @@ function setupAudioHandlers(audioService: AudioService): void {
     try {
       const validatedText = TextSchema.parse(text);
       const validatedLanguage = language ? LanguageSchema.parse(language) : undefined;
-      
+
       return await audioService.generateAudio(validatedText, validatedLanguage);
     } catch (error) {
       console.error('Error generating audio:', error);
@@ -454,6 +454,34 @@ function setupLifecycleHandlers(lifecycleManager: LifecycleManager, updateManage
       throw new Error(`Failed to get app version: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
+
+  ipcMain.handle(IPC_CHANNELS.LIFECYCLE.RESTART_ALL, async (event) => {
+    try {
+      await lifecycleManager.restartAll();
+    } catch (error) {
+      console.error('Error restarting all:', error);
+      throw new Error(`Failed to restart all: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.LIFECYCLE.OPEN_BACKUP_DIALOG, async (event) => {
+    try {
+      const result = await dialog.showOpenDialog({
+        title: 'Select Backup Directory',
+        properties: ['openDirectory'],
+        message: 'Select a backup directory to restore from'
+      });
+      
+      if (result.canceled || result.filePaths.length === 0) {
+        return null;
+      }
+      
+      return result.filePaths[0];
+    } catch (error) {
+      console.error('Error opening backup dialog:', error);
+      throw new Error(`Failed to open backup dialog: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
 }
 
 /**
@@ -464,11 +492,11 @@ export function cleanupIPCHandlers(): void {
   Object.values(IPC_CHANNELS.DATABASE).forEach(channel => {
     ipcMain.removeAllListeners(channel);
   });
-  
+
   Object.values(IPC_CHANNELS.LLM).forEach(channel => {
     ipcMain.removeAllListeners(channel);
   });
-  
+
   Object.values(IPC_CHANNELS.AUDIO).forEach(channel => {
     ipcMain.removeAllListeners(channel);
   });

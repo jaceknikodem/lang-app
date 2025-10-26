@@ -287,6 +287,51 @@ export class LifecycleManager {
   }
 
   /**
+   * Restart all - clear all data and audio files
+   */
+  async restartAll(): Promise<void> {
+    try {
+      console.log('Starting complete data reset...');
+      
+      // Close database connection first
+      if (this.config.databaseLayer) {
+        await this.config.databaseLayer.close();
+      }
+      
+      // Remove database file
+      const dbPath = path.join(this.config.userDataPath, 'language_learning.db');
+      try {
+        await fs.unlink(dbPath);
+        console.log('Database file removed');
+      } catch (error) {
+        console.log('No database file to remove (this is normal)');
+      }
+      
+      // Remove all audio files
+      const audioDir = path.join(process.cwd(), 'audio');
+      try {
+        const audioFiles = await fs.readdir(audioDir);
+        for (const file of audioFiles) {
+          if (file !== '.gitkeep') { // Keep the .gitkeep file
+            await fs.unlink(path.join(audioDir, file));
+          }
+        }
+        console.log('Audio files removed');
+      } catch (error) {
+        console.log('No audio files to remove');
+      }
+      
+      // Reinitialize database
+      await this.config.databaseLayer.initialize();
+      
+      console.log('Complete data reset completed successfully');
+    } catch (error) {
+      console.error('Failed to restart all:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Copy directory recursively
    */
   private async copyDirectory(src: string, dest: string): Promise<void> {
