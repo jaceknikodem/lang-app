@@ -1,0 +1,21 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🚀 Running pre-push checks..."
+
+# Full build
+echo "🔨 Full build..."
+npm run build
+
+# All tests
+echo "🧪 Running all tests..."
+npm run test:all
+
+# Check for any uncommitted changes after build
+if [ -n "$(git status --porcelain)" ]; then
+  echo "❌ There are uncommitted changes after build. Please commit them first."
+  git status --short
+  exit 1
+fi
+
+echo "✅ All pre-push checks passed! Ready to push."

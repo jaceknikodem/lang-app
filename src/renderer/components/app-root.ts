@@ -372,7 +372,7 @@ export class AppRoot extends LitElement {
       case 'quiz':
         // Always navigate to quiz - the quiz component will handle empty state
         const direction = this.sessionState?.quizDirection || this.appState.quizDirection;
-        router.goToQuiz(direction);
+        router.goToQuiz(undefined, direction);
         break;
       case 'progress':
         router.goToProgress();
