@@ -17,10 +17,5 @@ npm run build || {
   exit 1
 }
 
-# Skip unit tests for now if they're failing
-# TODO: Fix unit tests and re-enable
-echo "⏭️  Skipping unit tests (TODO: fix failing tests)"
-echo "💡 To run tests manually: npm run test:unit"
-
 echo "✅ Pre-commit checks passed!"
-echo "💡 Remember to run 'npm run test:e2e' before pushing!"
+echo "💡 Run 'npm run test:e2e' to test functionality before pushing"
