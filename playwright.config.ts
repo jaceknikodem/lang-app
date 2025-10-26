@@ -5,7 +5,7 @@ export default defineConfig({
   fullyParallel: false, // Electron tests should run sequentially
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: 1, // Single worker for Electron tests
+  workers: 8, // Single worker for Electron tests
   reporter: 'line',
   timeout: 60000, // Longer timeout for Electron app startup
   use: {
