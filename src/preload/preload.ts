@@ -100,7 +100,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     restartAll: () => 
       ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.RESTART_ALL),
     openBackupDialog: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.OPEN_BACKUP_DIALOG)
+      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.OPEN_BACKUP_DIALOG),
+    openBackupDirectory: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.OPEN_BACKUP_DIRECTORY)
   }
 });
 
@@ -154,6 +156,7 @@ declare global {
         getAppVersion: () => Promise<string>;
         restartAll: () => Promise<void>;
         openBackupDialog: () => Promise<string | null>;
+        openBackupDirectory: () => Promise<void>;
       };
     };
   }

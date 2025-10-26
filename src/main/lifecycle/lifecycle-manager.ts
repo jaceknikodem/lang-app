@@ -332,6 +332,27 @@ export class LifecycleManager {
   }
 
   /**
+   * Open the backup directory in the system file manager
+   */
+  async openBackupDirectory(): Promise<void> {
+    try {
+      const { shell } = await import('electron');
+      const backupDir = path.join(this.config.userDataPath, 'backups');
+      
+      // Ensure backup directory exists
+      await fs.mkdir(backupDir, { recursive: true });
+      
+      // Open the directory in the system file manager
+      await shell.openPath(backupDir);
+      
+      console.log(`Opened backup directory: ${backupDir}`);
+    } catch (error) {
+      console.error('Failed to open backup directory:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Copy directory recursively
    */
   private async copyDirectory(src: string, dest: string): Promise<void> {

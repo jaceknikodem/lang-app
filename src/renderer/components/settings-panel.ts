@@ -172,11 +172,7 @@ export class SettingsPanel extends LitElement {
   @state()
   private showConfirmation = false;
 
-  @state()
-  private restoreStatus = '';
 
-  @state()
-  private isRestoring = false;
 
 
 
@@ -233,32 +229,15 @@ export class SettingsPanel extends LitElement {
     }
   }
 
-  private async restoreFromBackup() {
-    this.isRestoring = true;
-    this.restoreStatus = '';
 
+
+  private async openBackupDirectory() {
     try {
-      // Open file dialog to select backup directory
-      const backupPath = await window.electronAPI.lifecycle.openBackupDialog();
-      
-      if (!backupPath) {
-        this.restoreStatus = 'Restore cancelled by user.';
-        return;
-      }
-
-      // Restore from the selected backup
-      await window.electronAPI.lifecycle.restoreFromBackup(backupPath);
-      this.restoreStatus = 'Backup restored successfully! The application will reload to reflect the changes.';
-      
-      // Reload the page to reflect the restored data
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
+      await window.electronAPI.lifecycle.openBackupDirectory();
     } catch (error) {
-      console.error('Failed to restore from backup:', error);
-      this.restoreStatus = `Failed to restore from backup: ${error instanceof Error ? error.message : 'Unknown error'}`;
-    } finally {
-      this.isRestoring = false;
+      console.error('Failed to open backup directory:', error);
+      // Could add a status message here if needed, but for this simple action
+      // it's probably better to just log the error
     }
   }
 
@@ -296,22 +275,16 @@ export class SettingsPanel extends LitElement {
           
           <div class="settings-row">
             <div class="settings-description">
-              <strong>Restore from Backup</strong>
-              <p>Restore your learning data and audio files from a previous backup</p>
+              <strong>Restore Backup</strong>
+              <p>Open the backup directory to browse and restore from your backups</p>
             </div>
             <button 
               class="action-button" 
-              @click=${this.restoreFromBackup}
-              ?disabled=${this.isRestoring}
+              @click=${this.openBackupDirectory}
             >
-              ${this.isRestoring ? 'Restoring...' : 'Restore Backup'}
+              Restore Backup
             </button>
           </div>
-          ${this.restoreStatus ? html`
-            <div class="status-message ${this.restoreStatus.includes('Failed') || this.restoreStatus.includes('cancelled') ? 'status-error' : 'status-success'}">
-              ${this.restoreStatus}
-            </div>
-          ` : ''}
         </div>
 
         <div class="settings-section warning-section">

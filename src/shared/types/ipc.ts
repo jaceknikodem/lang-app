@@ -60,6 +60,7 @@ export interface IPCBridge {
     getAppVersion: () => Promise<string>;
     restartAll: () => Promise<void>;
     openBackupDialog: () => Promise<string | null>;
+    openBackupDirectory: () => Promise<void>;
   };
 }
 
@@ -110,6 +111,7 @@ export const IPC_CHANNELS = {
     CHECK_FOR_UPDATES: 'lifecycle:checkForUpdates',
     GET_APP_VERSION: 'lifecycle:getAppVersion',
     RESTART_ALL: 'lifecycle:restartAll',
-    OPEN_BACKUP_DIALOG: 'lifecycle:openBackupDialog'
+    OPEN_BACKUP_DIALOG: 'lifecycle:openBackupDialog',
+    OPEN_BACKUP_DIRECTORY: 'lifecycle:openBackupDirectory'
   }
 } as const;

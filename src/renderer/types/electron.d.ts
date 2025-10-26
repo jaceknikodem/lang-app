@@ -48,6 +48,7 @@ declare global {
         getAppVersion: () => Promise<string>;
         restartAll: () => Promise<void>;
         openBackupDialog: () => Promise<string | null>;
+        openBackupDirectory: () => Promise<void>;
       };
     };
   }

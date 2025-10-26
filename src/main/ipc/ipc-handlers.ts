@@ -482,6 +482,15 @@ function setupLifecycleHandlers(lifecycleManager: LifecycleManager, updateManage
       throw new Error(`Failed to open backup dialog: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
+
+  ipcMain.handle(IPC_CHANNELS.LIFECYCLE.OPEN_BACKUP_DIRECTORY, async (event) => {
+    try {
+      await lifecycleManager.openBackupDirectory();
+    } catch (error) {
+      console.error('Error opening backup directory:', error);
+      throw new Error(`Failed to open backup directory: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
 }
 
 /**
