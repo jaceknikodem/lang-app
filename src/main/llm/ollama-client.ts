@@ -344,7 +344,8 @@ export class OllamaClient implements LLMClient {
     ).join(',\n');
 
     const baseInstructions = `CRITICAL: You must return exactly ${count} words in a JSON array. No more, no less.
-CRITICAL: Return ONLY the JSON array, no explanations or extra text.`;
+CRITICAL: Return ONLY the JSON array, no explanations or extra text.
+CRITICAL: All words must be in their canonical dictionary form (infinitive for verbs, singular for nouns, base form for adjectives).`;
 
     // Create exclusion list for prompt
     const exclusionText = existingWords.length > 0
@@ -367,8 +368,12 @@ Rules:
 3. All words should relate to "${topic}"
 4. Include nouns, verbs, and adjectives
 5. Use frequency values: "high", "medium", or "low"
-6. Do NOT use any words from the exclusion list above
-7. Return ONLY the JSON array, nothing else`;
+6. CRITICAL: Use only canonical dictionary forms:
+   - Verbs: infinitive form (e.g., "robić" not "robimy", "do" not "does")
+   - Nouns: singular form (e.g., "cat" not "cats", "dom" not "domy")
+   - Adjectives: base form (e.g., "good" not "better", "dobry" not "dobrzy")
+7. Do NOT use any words from the exclusion list above
+8. Return ONLY the JSON array, nothing else`;
     } else {
       return `${baseInstructions}
 
@@ -385,8 +390,12 @@ Rules:
 3. Focus on essential everyday vocabulary
 4. Include nouns, verbs, and adjectives
 5. Use frequency values: "high", "medium", or "low"
-6. Do NOT use any words from the exclusion list above
-7. Return ONLY the JSON array, nothing else`;
+6. CRITICAL: Use only canonical dictionary forms:
+   - Verbs: infinitive form (e.g., "robić" not "robimy", "do" not "does")
+   - Nouns: singular form (e.g., "cat" not "cats", "dom" not "domy")
+   - Adjectives: base form (e.g., "good" not "better", "dobry" not "dobrzy")
+7. Do NOT use any words from the exclusion list above
+8. Return ONLY the JSON array, nothing else`;
     }
   }
 
@@ -403,7 +412,7 @@ Rules:
     return `CRITICAL: You must return exactly ${count} sentences in a JSON array. No more, no less.
 CRITICAL: Return ONLY the JSON array, no explanations or extra text.
 
-Task: Generate exactly ${count} natural, conversational sentences in ${language} using the word '${word}'.${knownWordsText}
+Task: Generate exactly ${count} natural, conversational sentences in ${language} using the word '${word}' (note: this word is in its canonical dictionary form).${knownWordsText}
 
 Expected output format (${count} items):
 [
@@ -412,13 +421,14 @@ ${examples}
 
 Rules:
 1. Must be exactly ${count} sentences
-2. Each sentence must contain the word '${word}'
-3. Keep sentences short (5-15 words)
-4. Make them conversational and natural
-5. Each sentence must be different
-6. When natural and appropriate, include some known words from the provided list
-7. Don't force known words if they don't fit naturally
-8. Return ONLY the JSON array, nothing else`;
+2. Each sentence must contain the word '${word}' or its appropriate conjugated/inflected form
+3. The word '${word}' is provided in its canonical dictionary form - use the appropriate conjugated/inflected form that fits naturally in each sentence
+4. Keep sentences short (5-15 words)
+5. Make them conversational and natural
+6. Each sentence must be different
+7. When natural and appropriate, include some known words from the provided list
+8. Don't force known words if they don't fit naturally
+9. Return ONLY the JSON array, nothing else`;
   }
 
   private async makeRequest(prompt: string): Promise<any> {
