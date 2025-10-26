@@ -447,7 +447,7 @@ export class ProgressSummary extends LitElement {
     words.forEach(word => {
       if (!word.lastStudied) {
         stats.new++;
-      } else if (word.strength > ProgressSummary.STRONG_THRESHOLD) {
+      } else if (word.known) {
         stats.known++;
       } else if (word.strength >= ProgressSummary.WEAK_THRESHOLD) {
         stats.learningStrong++;
@@ -463,24 +463,29 @@ export class ProgressSummary extends LitElement {
     const strength = word.strength;
     let statusLabel: string;
     let statusClass: string;
+    let progressPercent: number;
 
     if (word.known) {
       statusLabel = 'Known';
       statusClass = 'known';
+      progressPercent = 100; // Known words always show 100% but don't display strength number
     } else if (strength >= ProgressSummary.STRONG_THRESHOLD) {
       statusLabel = 'Strong';
       statusClass = 'strong';
+      progressPercent = strength;
     } else if (strength >= ProgressSummary.WEAK_THRESHOLD) {
       statusLabel = 'Learning';
       statusClass = 'learning';
+      progressPercent = strength;
     } else {
       statusLabel = 'Weak';
       statusClass = 'weak';
+      progressPercent = strength;
     }
 
     return {
       word,
-      progressPercent: strength,
+      progressPercent,
       statusLabel,
       statusClass
     };
@@ -629,18 +634,20 @@ export class ProgressSummary extends LitElement {
                         ${wordProgress.statusLabel}
                       </span>
                     </div>
-                    <div class="progress-bar-container">
-                      <div class="progress-bar-label">
-                        <span>Strength</span>
-                        <span>${wordProgress.progressPercent}%</span>
+                    ${wordProgress.word.known ? html`` : html`
+                      <div class="progress-bar-container">
+                        <div class="progress-bar-label">
+                          <span>Strength</span>
+                          <span>${wordProgress.progressPercent}%</span>
+                        </div>
+                        <div class="progress-bar">
+                          <div 
+                            class="progress-fill ${wordProgress.statusClass}"
+                            style="width: ${wordProgress.progressPercent}%"
+                          ></div>
+                        </div>
                       </div>
-                      <div class="progress-bar">
-                        <div 
-                          class="progress-fill ${wordProgress.statusClass}"
-                          style="width: ${wordProgress.progressPercent}%"
-                        ></div>
-                      </div>
-                    </div>
+                    `}
                   </div>
                 `)}
               </div>
