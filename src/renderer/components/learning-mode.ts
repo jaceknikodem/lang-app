@@ -26,6 +26,9 @@ export class LearningMode extends LitElement {
   private selectedWords: Word[] = [];
 
   @state()
+  private allWords: Word[] = [];
+
+  @state()
   private currentWordIndex = 0;
 
   @state()
@@ -218,6 +221,9 @@ export class LearningMode extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
     
+    // Load all words for highlighting purposes
+    await this.loadAllWords();
+    
     // Load words from database first
     await this.loadSelectedWords();
     
@@ -226,6 +232,17 @@ export class LearningMode extends LitElement {
     
     // Try to restore learning session from session manager (after words are loaded)
     this.restoreSessionProgress();
+  }
+
+  private async loadAllWords() {
+    try {
+      // Load all words (including known ones) for highlighting purposes
+      this.allWords = await window.electronAPI.database.getAllWords(true, false);
+      console.log('Loaded all words for highlighting:', this.allWords.length);
+    } catch (error) {
+      console.error('Failed to load all words:', error);
+      // Don't set error state here as this is not critical for basic functionality
+    }
   }
 
   private async loadSelectedWords() {
@@ -356,7 +373,7 @@ export class LearningMode extends LitElement {
       // Update last studied timestamp
       await window.electronAPI.database.updateLastStudied(word.id);
 
-      // Update local state
+      // Update local state in wordsWithSentences
       const wordIndex = this.wordsWithSentences.findIndex(w => w.id === word.id);
       if (wordIndex !== -1) {
         this.wordsWithSentences[wordIndex] = {
@@ -365,8 +382,20 @@ export class LearningMode extends LitElement {
           ignored: !known,
           strength: known ? 100 : this.wordsWithSentences[wordIndex].strength
         };
-        this.requestUpdate();
       }
+
+      // Also update the allWords array for highlighting
+      const allWordsIndex = this.allWords.findIndex(w => w.id === word.id);
+      if (allWordsIndex !== -1) {
+        this.allWords[allWordsIndex] = {
+          ...this.allWords[allWordsIndex],
+          known,
+          ignored: !known,
+          strength: known ? 100 : this.allWords[allWordsIndex].strength
+        };
+      }
+
+      this.requestUpdate();
 
     } catch (error) {
       console.error('Failed to update word status:', error);
@@ -606,7 +635,7 @@ export class LearningMode extends LitElement {
         <sentence-viewer
           .sentence=${currentSentence}
           .targetWord=${currentWord}
-          .allWords=${this.wordsWithSentences}
+          .allWords=${this.allWords}
           @word-clicked=${this.handleWordClicked}
           @mark-word-known=${this.handleMarkWordKnown}
           @mark-word-ignored=${this.handleMarkWordIgnored}
