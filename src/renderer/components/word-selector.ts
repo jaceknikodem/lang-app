@@ -382,8 +382,8 @@ export class WordSelector extends LitElement {
       // Small delay to ensure database operations are fully committed
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Navigate to learning mode (words will be loaded from database)
-      router.goToLearning();
+      // Navigate to learning mode with the specific words that were just processed
+      router.goToLearning(storedWords);
 
     } catch (error) {
       console.error('Failed to process selected words:', error);

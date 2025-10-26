@@ -230,17 +230,18 @@ export class LearningMode extends LitElement {
 
   private async loadSelectedWords() {
     try {
-      // Check if specific words were passed via router
+      // Check if specific words were passed via router (from word selection)
       const routeData = router.getRouteData();
-      if (routeData?.specificWords) {
+      if (routeData?.specificWords && routeData.specificWords.length > 0) {
         this.selectedWords = routeData.specificWords;
-        console.log('Using specific words from router:', this.selectedWords.length);
+        console.log('Using specific words from current session:', this.selectedWords.length);
         return;
       }
 
-      // Get only words that have sentences available for learning
+      // Fallback: Get words that have sentences available for learning
+      // This handles cases like "Continue Learning" or "Practice Weak Words"
       this.selectedWords = await window.electronAPI.database.getWordsWithSentences(true, false);
-      console.log('Loaded words with sentences for learning:', this.selectedWords.length);
+      console.log('Loaded all words with sentences for learning:', this.selectedWords.length);
     } catch (error) {
       console.error('Failed to load words:', error);
       this.error = 'Failed to load words from database.';
