@@ -198,6 +198,9 @@ export class SettingsPanel extends LitElement {
   @state()
   private contextSentencesEnabled = false;
 
+  @state()
+  private autoplayAudioEnabled = false;
+
 
 
 
@@ -211,6 +214,9 @@ export class SettingsPanel extends LitElement {
     try {
       const contextSetting = await window.electronAPI.database.getSetting('context_sentences');
       this.contextSentencesEnabled = contextSetting === 'true';
+      
+      const autoplaySetting = await window.electronAPI.database.getSetting('autoplay_audio');
+      this.autoplayAudioEnabled = autoplaySetting === 'true';
     } catch (error) {
       console.error('Failed to load settings:', error);
     }
@@ -291,6 +297,20 @@ export class SettingsPanel extends LitElement {
     }
   }
 
+  private async toggleAutoplayAudio(event: Event) {
+    const checkbox = event.target as HTMLInputElement;
+    this.autoplayAudioEnabled = checkbox.checked;
+    
+    try {
+      await window.electronAPI.database.setSetting('autoplay_audio', checkbox.checked ? 'true' : 'false');
+    } catch (error) {
+      console.error('Failed to save autoplay audio setting:', error);
+      // Revert the checkbox state if saving failed
+      this.autoplayAudioEnabled = !checkbox.checked;
+      checkbox.checked = !checkbox.checked;
+    }
+  }
+
 
 
 
@@ -315,6 +335,21 @@ export class SettingsPanel extends LitElement {
               <strong>Context Sentences</strong>
               <div class="checkbox-description">
                 When generating sentences, include additional sentences before and after for better context understanding
+              </div>
+            </label>
+          </div>
+          
+          <div class="checkbox-row">
+            <input 
+              type="checkbox" 
+              id="autoplay-audio"
+              .checked=${this.autoplayAudioEnabled}
+              @change=${this.toggleAutoplayAudio}
+            />
+            <label for="autoplay-audio">
+              <strong>Autoplay Audio</strong>
+              <div class="checkbox-description">
+                Automatically play sentence audio when reviewing sentences in learning mode
               </div>
             </label>
           </div>

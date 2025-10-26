@@ -30,6 +30,9 @@ export class SentenceViewer extends LitElement {
   @state()
   private parsedWords: WordInSentence[] = [];
 
+  @state()
+  private autoplayEnabled = false;
+
   static styles = [
     sharedStyles,
     css`
@@ -257,14 +260,33 @@ export class SentenceViewer extends LitElement {
     `
   ];
 
-  connectedCallback() {
+  async connectedCallback() {
     super.connectedCallback();
     this.parseSentence();
+    await this.loadAutoplaySettings();
   }
 
   updated(changedProperties: Map<string, any>) {
     if (changedProperties.has('sentence') || changedProperties.has('allWords')) {
       this.parseSentence();
+    }
+    
+    // Auto-play audio when sentence changes (if enabled)
+    if (changedProperties.has('sentence') && this.autoplayEnabled && this.sentence?.audioPath) {
+      // Small delay to ensure the component is fully rendered
+      setTimeout(() => {
+        this.handlePlayAudio();
+      }, 100);
+    }
+  }
+
+  private async loadAutoplaySettings() {
+    try {
+      const autoplaySetting = await window.electronAPI.database.getSetting('autoplay_audio');
+      this.autoplayEnabled = autoplaySetting === 'true';
+    } catch (error) {
+      console.error('Failed to load autoplay setting:', error);
+      this.autoplayEnabled = false;
     }
   }
 
