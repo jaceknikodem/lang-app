@@ -355,12 +355,13 @@ function setupLLMHandlers(llmClient: OllamaClient, contentGenerator: ContentGene
  * Set up audio-related IPC handlers
  */
 function setupAudioHandlers(audioService: AudioService): void {
-  ipcMain.handle(IPC_CHANNELS.AUDIO.GENERATE_AUDIO, async (event, text, language) => {
+  ipcMain.handle(IPC_CHANNELS.AUDIO.GENERATE_AUDIO, async (event, text, language, word) => {
     try {
       const validatedText = TextSchema.parse(text);
       const validatedLanguage = language ? LanguageSchema.parse(language) : undefined;
+      const validatedWord = word ? TextSchema.parse(word) : undefined;
 
-      return await audioService.generateAudio(validatedText, validatedLanguage);
+      return await audioService.generateAudio(validatedText, validatedLanguage, validatedWord);
     } catch (error) {
       console.error('Error generating audio:', error);
       throw new Error(`Failed to generate audio: ${error instanceof Error ? error.message : 'Unknown error'}`);

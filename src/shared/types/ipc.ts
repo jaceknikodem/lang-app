@@ -41,7 +41,7 @@ export interface IPCBridge {
   
   // Audio operations
   audio: {
-    generateAudio: (text: string, language?: string) => Promise<string>;
+    generateAudio: (text: string, language?: string, word?: string) => Promise<string>;
     playAudio: (audioPath: string) => Promise<void>;
     audioExists: (audioPath: string) => Promise<boolean>;
   };

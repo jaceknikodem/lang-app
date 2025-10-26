@@ -453,7 +453,8 @@ export class WordSelector extends LitElement {
             // Generate audio for the sentence
             const audioPath = await window.electronAPI.audio.generateAudio(
               sentence.sentence,
-              this.language
+              this.language,
+              word.word
             );
 
             await window.electronAPI.database.insertSentence(

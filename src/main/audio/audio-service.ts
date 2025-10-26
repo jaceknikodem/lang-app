@@ -16,7 +16,7 @@ export class AudioService {
   /**
    * Generate audio for text with error handling and validation
    */
-  async generateAudio(text: string, language?: string): Promise<string> {
+  async generateAudio(text: string, language?: string, word?: string): Promise<string> {
     try {
       // Validate inputs
       if (!text || typeof text !== 'string' || text.trim().length === 0) {
@@ -27,7 +27,7 @@ export class AudioService {
       const targetLanguage = language ? language.toLowerCase() : undefined;
 
       // Generate audio and return path
-      const audioPath = await this.audioGenerator.generateAudio(text.trim(), targetLanguage);
+      const audioPath = await this.audioGenerator.generateAudio(text.trim(), targetLanguage, word);
       
       // Verify the file was actually created
       if (!await this.audioExists(audioPath)) {
@@ -109,20 +109,20 @@ export class AudioService {
    * Generate audio for a sentence and return the path
    * Convenience method for sentence-specific audio generation
    */
-  async generateSentenceAudio(sentence: string, language?: string): Promise<string> {
-    return this.generateAudio(sentence, language);
+  async generateSentenceAudio(sentence: string, language?: string, word?: string): Promise<string> {
+    return this.generateAudio(sentence, language, word);
   }
 
   /**
    * Batch generate audio for multiple texts
    * Returns array of paths in same order as input
    */
-  async generateBatchAudio(texts: string[], language?: string): Promise<string[]> {
+  async generateBatchAudio(texts: string[], language?: string, word?: string): Promise<string[]> {
     const results: string[] = [];
     
     for (const text of texts) {
       try {
-        const audioPath = await this.generateAudio(text, language);
+        const audioPath = await this.generateAudio(text, language, word);
         results.push(audioPath);
       } catch (error) {
         // Log error but continue with other texts

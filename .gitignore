@@ -145,8 +145,7 @@ release/
 # Application data
 data/*.db
 data/*.db-*
-audio/*.aiff
-audio/*.wav
+audio/*
 
 # IDE
 .vscode/

@@ -34,7 +34,7 @@ export class TTSAudioGenerator implements AudioGenerator {
    * Generate audio file for given text using system TTS
    * Returns path to generated audio file
    */
-  async generateAudio(text: string, language?: string): Promise<string> {
+  async generateAudio(text: string, language?: string, word?: string): Promise<string> {
     if (!text || text.trim().length === 0) {
       throw this.createAudioError('GENERATION_FAILED', 'Text cannot be empty');
     }
@@ -51,7 +51,7 @@ export class TTSAudioGenerator implements AudioGenerator {
     }
     targetLanguage = targetLanguage || 'spanish';
 
-    const audioPath = this.getAudioPath(text);
+    const audioPath = this.getAudioPath(text, targetLanguage, word);
 
     // Return existing file if it exists (caching)
     if (await this.audioExists(audioPath)) {
@@ -114,11 +114,20 @@ export class TTSAudioGenerator implements AudioGenerator {
 
   /**
    * Generate standardized audio file path based on text content
+   * Structure: /audio/<lang>/<word>/<sentence>.<extension>
    */
-  private getAudioPath(text: string): string {
+  private getAudioPath(text: string, language: string, word?: string): string {
     // Create safe filename from text
     const safeFilename = this.sanitizeFilename(text);
-    return join(this.config.audioDirectory, `${safeFilename}${this.config.fileExtension}`);
+
+    // If word is provided, use the new nested structure
+    if (word) {
+      const safeWord = this.sanitizeFilename(word);
+      return join(this.config.audioDirectory, language, safeWord, `${safeFilename}${this.config.fileExtension}`);
+    }
+
+    // For standalone words (no parent word context), place directly in language folder
+    return join(this.config.audioDirectory, language, `${safeFilename}${this.config.fileExtension}`);
   }
 
   /**

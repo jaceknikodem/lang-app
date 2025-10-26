@@ -71,8 +71,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Audio operations
   audio: {
-    generateAudio: (text: string, language: string) => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GENERATE_AUDIO, text, language),
+    generateAudio: (text: string, language: string, word?: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GENERATE_AUDIO, text, language, word),
     playAudio: (audioPath: string) => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.PLAY_AUDIO, audioPath),
     audioExists: (audioPath: string) => 
@@ -141,7 +141,7 @@ declare global {
         getCurrentModel: () => Promise<string>;
       };
       audio: {
-        generateAudio: (text: string, language?: string) => Promise<string>;
+        generateAudio: (text: string, language?: string, word?: string) => Promise<string>;
         playAudio: (audioPath: string) => Promise<void>;
         audioExists: (audioPath: string) => Promise<boolean>;
       };

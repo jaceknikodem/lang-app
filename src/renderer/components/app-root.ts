@@ -432,7 +432,7 @@ export class AppRoot extends LitElement {
               class="nav-button ${router.isCurrentMode('topic-selection') || router.isCurrentMode('word-selection') ? 'active' : ''}"
               @click=${() => this.handleNavigation('topic-selection')}
             >
-              Start Learning
+              Learn
             </button>
             <button 
               class="nav-button ${router.isCurrentMode('learning') ? 'active' : ''}"

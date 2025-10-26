@@ -3,6 +3,8 @@
  */
 
 import Database from 'better-sqlite3';
+import { existsSync, mkdirSync, renameSync, readdirSync, statSync } from 'fs';
+import { join, dirname, basename, extname } from 'path';
 
 export interface Migration {
   version: number;
@@ -98,6 +100,17 @@ export class MigrationManager {
         down: [
           `DROP TABLE IF EXISTS settings`
         ]
+      },
+      {
+        version: 3,
+        name: 'restructure_audio_paths',
+        up: [
+          // This migration will be handled by a special method that includes file system operations
+          // The actual SQL updates will be done programmatically after moving files
+        ],
+        down: [
+          // Rollback is not supported for this migration due to file system complexity
+        ]
       }
     ];
   }
@@ -135,32 +148,138 @@ export class MigrationManager {
 
     console.log(`Migrating database from version ${currentVersion} to ${latestVersion}`);
 
-    // Run migrations in transaction
-    const transaction = this.db.transaction(() => {
-      for (const migration of this.migrations) {
-        if (migration.version > currentVersion) {
-          console.log(`Applying migration ${migration.version}: ${migration.name}`);
+    // Handle migrations one by one to allow for special handling
+    for (const migration of this.migrations) {
+      if (migration.version > currentVersion) {
+        console.log(`Applying migration ${migration.version}: ${migration.name}`);
+        
+        // Special handling for audio path restructuring migration
+        if (migration.version === 3 && migration.name === 'restructure_audio_paths') {
+          await this.migrateAudioPaths();
+        } else {
+          // Regular SQL migration
+          const transaction = this.db.transaction(() => {
+            for (const statement of migration.up) {
+              if (statement.trim()) { // Skip empty statements
+                this.db.exec(statement);
+              }
+            }
+          });
           
-          // Execute all migration statements
-          for (const statement of migration.up) {
-            this.db.exec(statement);
+          try {
+            transaction();
+          } catch (error) {
+            throw new Error(`Migration ${migration.version} failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
+        }
+        
+        // Record migration as applied
+        this.db.prepare(`
+          INSERT INTO migrations (version, name) 
+          VALUES (?, ?)
+        `).run(migration.version, migration.name);
+      }
+    }
+
+    console.log(`Database migration completed successfully`);
+  }
+
+  /**
+   * Special migration to restructure audio file paths
+   * Moves files from flat structure to /audio/<lang>/<word>/<sentence>.<ext>
+   */
+  private async migrateAudioPaths(): Promise<void> {
+    console.log('Starting audio path restructuring migration...');
+    
+    const audioDir = join(process.cwd(), 'audio');
+    
+    if (!existsSync(audioDir)) {
+      console.log('No audio directory found, skipping audio migration');
+      return;
+    }
+
+    // Get all words and sentences from database
+    const words = this.db.prepare('SELECT * FROM words WHERE audio_path IS NOT NULL').all() as any[];
+    const sentences = this.db.prepare('SELECT * FROM sentences WHERE audio_path IS NOT NULL').all() as any[];
+    
+    console.log(`Found ${words.length} words and ${sentences.length} sentences with audio paths`);
+
+    // Migrate word audio files
+    for (const word of words) {
+      try {
+        const oldPath = join(process.cwd(), word.audio_path);
+        if (existsSync(oldPath)) {
+          const newPath = join(audioDir, word.language, `${this.sanitizeFilename(word.word)}.aiff`);
+          
+          // Ensure directory exists
+          const newDir = dirname(newPath);
+          if (!existsSync(newDir)) {
+            mkdirSync(newDir, { recursive: true });
           }
           
-          // Record migration as applied
-          this.db.prepare(`
-            INSERT INTO migrations (version, name) 
-            VALUES (?, ?)
-          `).run(migration.version, migration.name);
+          // Move file if it doesn't already exist at new location
+          if (!existsSync(newPath)) {
+            renameSync(oldPath, newPath);
+          }
+          
+          // Update database with new path
+          const relativePath = join('audio', word.language, `${this.sanitizeFilename(word.word)}.aiff`);
+          this.db.prepare('UPDATE words SET audio_path = ? WHERE id = ?').run(relativePath, word.id);
+          
+          console.log(`Migrated word audio: ${word.word} -> ${relativePath}`);
         }
+      } catch (error) {
+        console.warn(`Failed to migrate word audio for "${word.word}":`, error);
       }
-    });
-
-    try {
-      transaction();
-      console.log(`Database migration completed successfully`);
-    } catch (error) {
-      throw new Error(`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+
+    // Migrate sentence audio files
+    for (const sentence of sentences) {
+      try {
+        // Get the word for this sentence
+        const word = this.db.prepare('SELECT * FROM words WHERE id = ?').get(sentence.word_id) as any;
+        if (!word) continue;
+
+        const oldPath = join(process.cwd(), sentence.audio_path);
+        if (existsSync(oldPath)) {
+          const wordDir = this.sanitizeFilename(word.word);
+          const sentenceFile = `${this.sanitizeFilename(sentence.sentence)}.aiff`;
+          const newPath = join(audioDir, word.language, wordDir, sentenceFile);
+          
+          // Ensure directory exists
+          const newDir = dirname(newPath);
+          if (!existsSync(newDir)) {
+            mkdirSync(newDir, { recursive: true });
+          }
+          
+          // Move file if it doesn't already exist at new location
+          if (!existsSync(newPath)) {
+            renameSync(oldPath, newPath);
+          }
+          
+          // Update database with new path
+          const relativePath = join('audio', word.language, wordDir, sentenceFile);
+          this.db.prepare('UPDATE sentences SET audio_path = ? WHERE id = ?').run(relativePath, sentence.id);
+          
+          console.log(`Migrated sentence audio: ${sentence.sentence} -> ${relativePath}`);
+        }
+      } catch (error) {
+        console.warn(`Failed to migrate sentence audio for sentence ID ${sentence.id}:`, error);
+      }
+    }
+
+    console.log('Audio path restructuring migration completed');
+  }
+
+  /**
+   * Convert text to safe filename (same logic as in audio generator)
+   */
+  private sanitizeFilename(text: string): string {
+    return text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '') // Remove special characters
+      .replace(/\s+/g, '_') // Replace spaces with underscores
+      .substring(0, 100); // Limit length to avoid filesystem issues
   }
 
   /**
