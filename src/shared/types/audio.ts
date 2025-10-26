@@ -36,3 +36,40 @@ export interface RecordingSession {
   startTime: number;
   duration?: number;
 }
+
+export interface TranscriptionOptions {
+  language?: string;
+  model?: 'tiny' | 'base' | 'small' | 'medium' | 'large';
+  temperature?: number;
+  best_of?: number;
+  beam_size?: number;
+  patience?: number;
+  length_penalty?: number;
+  suppress_tokens?: string;
+  initial_prompt?: string;
+  condition_on_previous_text?: boolean;
+  fp16?: boolean;
+  compression_ratio_threshold?: number;
+  logprob_threshold?: number;
+  no_speech_threshold?: number;
+}
+
+export interface TranscriptionResult {
+  text: string;
+  confidence?: number;
+  language?: string;
+  segments?: Array<{
+    start: number;
+    end: number;
+    text: string;
+  }>;
+}
+
+export interface TranscriptionComparison {
+  similarity: number;
+  normalizedTranscribed: string;
+  normalizedExpected: string;
+  matchingWords: string[];
+  missingWords: string[];
+  extraWords: string[];
+}

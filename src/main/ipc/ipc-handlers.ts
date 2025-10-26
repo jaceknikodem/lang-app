@@ -502,6 +502,92 @@ function setupAudioHandlers(audioService: AudioService): void {
       return null;
     }
   });
+
+  // Speech recognition handlers
+  ipcMain.handle(IPC_CHANNELS.AUDIO.INITIALIZE_SPEECH_RECOGNITION, async (event) => {
+    try {
+      await audioService.initializeSpeechRecognition();
+    } catch (error) {
+      console.error('Error initializing speech recognition:', error);
+      throw new Error(`Failed to initialize speech recognition: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.TRANSCRIBE_AUDIO, async (event, filePath, options) => {
+    try {
+      const validatedFilePath = AudioPathSchema.parse(filePath);
+      const validatedOptions = options ? z.object({
+        language: z.string().optional(),
+        model: z.enum(['tiny', 'base', 'small', 'medium', 'large']).optional(),
+        temperature: z.number().optional(),
+        best_of: z.number().optional(),
+        beam_size: z.number().optional(),
+        patience: z.number().optional(),
+        length_penalty: z.number().optional(),
+        suppress_tokens: z.string().optional(),
+        initial_prompt: z.string().optional(),
+        condition_on_previous_text: z.boolean().optional(),
+        fp16: z.boolean().optional(),
+        compression_ratio_threshold: z.number().optional(),
+        logprob_threshold: z.number().optional(),
+        no_speech_threshold: z.number().optional()
+      }).parse(options) : undefined;
+      
+      return await audioService.transcribeAudio(validatedFilePath, validatedOptions);
+    } catch (error) {
+      console.error('Error transcribing audio:', error);
+      throw new Error(`Failed to transcribe audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.COMPARE_TRANSCRIPTION, async (event, transcribed, expected) => {
+    try {
+      const validatedTranscribed = TextSchema.parse(transcribed);
+      const validatedExpected = TextSchema.parse(expected);
+      
+      return audioService.compareTranscription(validatedTranscribed, validatedExpected);
+    } catch (error) {
+      console.error('Error comparing transcription:', error);
+      throw new Error(`Failed to compare transcription: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.GET_AVAILABLE_SPEECH_MODELS, async (event) => {
+    try {
+      return audioService.getAvailableSpeechModels();
+    } catch (error) {
+      console.error('Error getting available speech models:', error);
+      return ['base'];
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.SET_SPEECH_MODEL, async (event, model) => {
+    try {
+      const validatedModel = z.enum(['tiny', 'base', 'small', 'medium', 'large']).parse(model);
+      await audioService.setSpeechModel(validatedModel);
+    } catch (error) {
+      console.error('Error setting speech model:', error);
+      throw new Error(`Failed to set speech model: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.GET_CURRENT_SPEECH_MODEL, async (event) => {
+    try {
+      return audioService.getCurrentSpeechModel();
+    } catch (error) {
+      console.error('Error getting current speech model:', error);
+      return 'base';
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.IS_SPEECH_RECOGNITION_READY, async (event) => {
+    try {
+      return audioService.isSpeechRecognitionReady();
+    } catch (error) {
+      console.error('Error checking speech recognition status:', error);
+      return false;
+    }
+  });
 }
 
 /**

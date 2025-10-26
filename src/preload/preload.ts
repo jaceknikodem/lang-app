@@ -92,7 +92,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteRecording: (filePath: string) => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.DELETE_RECORDING, filePath),
     getRecordingInfo: (filePath: string) => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GET_RECORDING_INFO, filePath)
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GET_RECORDING_INFO, filePath),
+    initializeSpeechRecognition: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.INITIALIZE_SPEECH_RECOGNITION),
+    transcribeAudio: (filePath: string, options?: any) => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.TRANSCRIBE_AUDIO, filePath, options),
+    compareTranscription: (transcribed: string, expected: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.COMPARE_TRANSCRIPTION, transcribed, expected),
+    getAvailableSpeechModels: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GET_AVAILABLE_SPEECH_MODELS),
+    setSpeechModel: (model: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.SET_SPEECH_MODEL, model),
+    getCurrentSpeechModel: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GET_CURRENT_SPEECH_MODEL),
+    isSpeechRecognitionReady: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.IS_SPEECH_RECOGNITION_READY)
   },
 
   // Quiz operations
@@ -176,6 +190,13 @@ declare global {
         getAvailableRecordingDevices: () => Promise<string[]>;
         deleteRecording: (filePath: string) => Promise<void>;
         getRecordingInfo: (filePath: string) => Promise<{ size: number; duration?: number } | null>;
+        initializeSpeechRecognition: () => Promise<void>;
+        transcribeAudio: (filePath: string, options?: any) => Promise<any>;
+        compareTranscription: (transcribed: string, expected: string) => Promise<any>;
+        getAvailableSpeechModels: () => Promise<string[]>;
+        setSpeechModel: (model: string) => Promise<void>;
+        getCurrentSpeechModel: () => Promise<string>;
+        isSpeechRecognitionReady: () => Promise<boolean>;
       };
       quiz: {
         getWeakestWords: (limit: number) => Promise<any[]>;

@@ -3,7 +3,7 @@
  */
 
 import { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest } from './core.js';
-import { RecordingOptions, RecordingSession } from './audio.js';
+import { RecordingOptions, RecordingSession, TranscriptionOptions, TranscriptionResult, TranscriptionComparison } from './audio.js';
 
 export interface IPCBridge {
   // Database operations
@@ -64,6 +64,13 @@ export interface IPCBridge {
     getAvailableRecordingDevices: () => Promise<string[]>;
     deleteRecording: (filePath: string) => Promise<void>;
     getRecordingInfo: (filePath: string) => Promise<{ size: number; duration?: number } | null>;
+    initializeSpeechRecognition: () => Promise<void>;
+    transcribeAudio: (filePath: string, options?: TranscriptionOptions) => Promise<TranscriptionResult>;
+    compareTranscription: (transcribed: string, expected: string) => Promise<TranscriptionComparison>;
+    getAvailableSpeechModels: () => Promise<string[]>;
+    setSpeechModel: (model: string) => Promise<void>;
+    getCurrentSpeechModel: () => Promise<string>;
+    isSpeechRecognitionReady: () => Promise<boolean>;
   };
 
   // Quiz operations
@@ -127,7 +134,14 @@ export const IPC_CHANNELS = {
     IS_RECORDING: 'audio:isRecording',
     GET_AVAILABLE_RECORDING_DEVICES: 'audio:getAvailableRecordingDevices',
     DELETE_RECORDING: 'audio:deleteRecording',
-    GET_RECORDING_INFO: 'audio:getRecordingInfo'
+    GET_RECORDING_INFO: 'audio:getRecordingInfo',
+    INITIALIZE_SPEECH_RECOGNITION: 'audio:initializeSpeechRecognition',
+    TRANSCRIBE_AUDIO: 'audio:transcribeAudio',
+    COMPARE_TRANSCRIPTION: 'audio:compareTranscription',
+    GET_AVAILABLE_SPEECH_MODELS: 'audio:getAvailableSpeechModels',
+    SET_SPEECH_MODEL: 'audio:setSpeechModel',
+    GET_CURRENT_SPEECH_MODEL: 'audio:getCurrentSpeechModel',
+    IS_SPEECH_RECOGNITION_READY: 'audio:isSpeechRecognitionReady'
   },
   QUIZ: {
     GET_WEAKEST_WORDS: 'quiz:getWeakestWords',

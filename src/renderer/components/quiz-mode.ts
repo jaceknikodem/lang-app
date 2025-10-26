@@ -52,6 +52,23 @@ export class QuizMode extends LitElement {
   @state()
   private currentRecording: RecordingResult | null = null;
 
+  @state()
+  private transcriptionResult: {
+    text: string;
+    similarity: number;
+    normalizedTranscribed: string;
+    normalizedExpected: string;
+    matchingWords: string[];
+    missingWords: string[];
+    extraWords: string[];
+  } | null = null;
+
+  @state()
+  private isTranscribing = false;
+
+  @state()
+  private speechRecognitionReady = false;
+
   private sessionStartTime = Date.now();
 
   static styles = [
@@ -481,6 +498,185 @@ export class QuizMode extends LitElement {
         background: var(--text-primary);
       }
 
+      .transcription-results {
+        margin-top: var(--spacing-lg);
+        padding: var(--spacing-lg);
+        background: var(--background-secondary);
+        border-radius: var(--border-radius);
+        border: 2px solid var(--border-color);
+      }
+
+      .transcription-header {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        margin-bottom: var(--spacing-md);
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .transcription-loading {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        color: var(--text-secondary);
+        font-style: italic;
+      }
+
+      .transcription-text {
+        background: var(--background-primary);
+        padding: var(--spacing-md);
+        border-radius: var(--border-radius);
+        margin-bottom: var(--spacing-md);
+        border-left: 4px solid var(--primary-color);
+      }
+
+      .transcription-text .label {
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+        margin-bottom: var(--spacing-xs);
+      }
+
+      .transcription-text .text {
+        font-size: 16px;
+        color: var(--text-primary);
+        line-height: 1.4;
+      }
+
+      .similarity-score {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-md);
+        margin-bottom: var(--spacing-md);
+      }
+
+      .similarity-bar {
+        flex: 1;
+        height: 8px;
+        background: var(--background-primary);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      .similarity-fill {
+        height: 100%;
+        transition: width 0.3s ease;
+        border-radius: 4px;
+      }
+
+      .similarity-fill.excellent {
+        background: var(--success-color);
+      }
+
+      .similarity-fill.good {
+        background: var(--primary-color);
+      }
+
+      .similarity-fill.fair {
+        background: var(--warning-color);
+      }
+
+      .similarity-fill.poor {
+        background: var(--error-color);
+      }
+
+      .similarity-percentage {
+        font-weight: 600;
+        min-width: 50px;
+        text-align: right;
+      }
+
+      .word-analysis {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: var(--spacing-md);
+        margin-top: var(--spacing-md);
+      }
+
+      .word-group {
+        background: var(--background-primary);
+        padding: var(--spacing-sm);
+        border-radius: var(--border-radius);
+        text-align: center;
+      }
+
+      .word-group.matching {
+        border-left: 4px solid var(--success-color);
+      }
+
+      .word-group.missing {
+        border-left: 4px solid var(--error-color);
+      }
+
+      .word-group.extra {
+        border-left: 4px solid var(--warning-color);
+      }
+
+      .word-group .label {
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        margin-bottom: var(--spacing-xs);
+      }
+
+      .word-group.matching .label {
+        color: var(--success-color);
+      }
+
+      .word-group.missing .label {
+        color: var(--error-color);
+      }
+
+      .word-group.extra .label {
+        color: var(--warning-color);
+      }
+
+      .word-group .count {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: var(--spacing-xs);
+      }
+
+      .word-group .words {
+        font-size: 12px;
+        color: var(--text-secondary);
+        line-height: 1.3;
+      }
+
+      .pronunciation-feedback {
+        margin-top: var(--spacing-md);
+        padding: var(--spacing-md);
+        border-radius: var(--border-radius);
+        text-align: center;
+        font-weight: 500;
+      }
+
+      .pronunciation-feedback.excellent {
+        background: var(--success-light);
+        color: var(--success-dark);
+        border: 1px solid var(--success-color);
+      }
+
+      .pronunciation-feedback.good {
+        background: var(--primary-light);
+        color: var(--primary-dark);
+        border: 1px solid var(--primary-color);
+      }
+
+      .pronunciation-feedback.fair {
+        background: var(--warning-light);
+        color: var(--warning-dark);
+        border: 1px solid var(--warning-color);
+      }
+
+      .pronunciation-feedback.poor {
+        background: var(--error-light);
+        color: var(--error-dark);
+        border: 1px solid var(--error-color);
+      }
+
       @media (max-width: 768px) {
         .quiz-container {
           padding: var(--spacing-md);
@@ -536,6 +732,9 @@ export class QuizMode extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback();
+
+    // Initialize speech recognition
+    await this.initializeSpeechRecognition();
 
     // Load words from database first
     await this.loadSelectedWords();
@@ -803,9 +1002,11 @@ export class QuizMode extends LitElement {
   private toggleRecorder() {
     this.showRecorder = !this.showRecorder;
     this.currentRecording = null;
+    this.transcriptionResult = null;
+    this.isTranscribing = false;
   }
 
-  private handleRecordingCompleted(event: CustomEvent<{ recording: RecordingResult; autoStopped?: boolean }>) {
+  private async handleRecordingCompleted(event: CustomEvent<{ recording: RecordingResult; autoStopped?: boolean }>) {
     this.currentRecording = event.detail.recording;
     const autoStopped = event.detail.autoStopped || false;
 
@@ -821,16 +1022,93 @@ export class QuizMode extends LitElement {
       console.log('Recording stopped automatically due to silence detection');
     }
 
-    // You could add additional logic here, such as:
-    // - Automatic speech recognition
-    // - Pronunciation scoring against the target sentence
-    // - Saving the recording with sentence context for later review
-    // - Comparing pronunciation with the original TTS audio
+    // Perform speech recognition on the recorded audio
+    await this.performSpeechRecognition();
   }
 
   private handleRecordingCancelled() {
     this.currentRecording = null;
+    this.transcriptionResult = null;
     console.log('Recording cancelled');
+  }
+
+  private async initializeSpeechRecognition() {
+    try {
+      await window.electronAPI.audio.initializeSpeechRecognition();
+      this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
+      console.log('Speech recognition initialized:', this.speechRecognitionReady);
+    } catch (error) {
+      console.error('Failed to initialize speech recognition:', error);
+      this.speechRecognitionReady = false;
+    }
+  }
+
+  private async performSpeechRecognition() {
+    if (!this.currentRecording || !this.currentQuestion || !this.speechRecognitionReady) {
+      return;
+    }
+
+    this.isTranscribing = true;
+    this.transcriptionResult = null;
+
+    try {
+      // Get the expected sentence based on quiz direction
+      const expectedSentence = this.direction === 'foreign-to-english'
+        ? this.currentQuestion.sentence.sentence
+        : this.currentQuestion.sentence.translation;
+
+      // Get the current language for transcription
+      const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+      
+      // Determine transcription language based on quiz direction
+      const transcriptionLanguage = this.direction === 'foreign-to-english' 
+        ? currentLanguage 
+        : 'en'; // English for english-to-foreign direction
+
+      console.log('Transcribing audio:', {
+        filePath: this.currentRecording.filePath,
+        expectedSentence,
+        transcriptionLanguage
+      });
+
+      // Transcribe the recorded audio
+      const transcriptionResult = await window.electronAPI.audio.transcribeAudio(
+        this.currentRecording.filePath,
+        {
+          language: transcriptionLanguage,
+          model: 'base' // Use base model for good balance of speed and accuracy
+        }
+      );
+
+      console.log('Transcription result:', transcriptionResult);
+
+      // Compare transcription with expected sentence
+      const comparison = await window.electronAPI.audio.compareTranscription(
+        transcriptionResult.text,
+        expectedSentence
+      );
+
+      console.log('Transcription comparison:', comparison);
+
+      this.transcriptionResult = {
+        text: transcriptionResult.text,
+        ...comparison
+      };
+
+    } catch (error) {
+      console.error('Speech recognition failed:', error);
+      this.transcriptionResult = {
+        text: 'Speech recognition failed. Please try again.',
+        similarity: 0,
+        normalizedTranscribed: '',
+        normalizedExpected: '',
+        matchingWords: [],
+        missingWords: [],
+        extraWords: []
+      };
+    } finally {
+      this.isTranscribing = false;
+    }
   }
 
   render() {
@@ -1022,9 +1300,102 @@ export class QuizMode extends LitElement {
           @recording-cancelled=${this.handleRecordingCancelled}
         ></audio-recorder>
         
+        ${this.renderTranscriptionResults()}
+        
         <button class="close-recorder-button" @click=${this.toggleRecorder}>
           Close Recorder
         </button>
+      </div>
+    `;
+  }
+
+  private renderTranscriptionResults() {
+    if (this.isTranscribing) {
+      return html`
+        <div class="transcription-results">
+          <div class="transcription-loading">
+            <div class="spinner"></div>
+            Analyzing your pronunciation...
+          </div>
+        </div>
+      `;
+    }
+
+    if (!this.transcriptionResult) {
+      return '';
+    }
+
+    const similarity = this.transcriptionResult.similarity;
+    const similarityPercentage = Math.round(similarity * 100);
+    
+    // Determine similarity level and feedback
+    let similarityClass = 'poor';
+    let feedbackClass = 'poor';
+    let feedbackMessage = '';
+
+    if (similarity >= 0.9) {
+      similarityClass = 'excellent';
+      feedbackClass = 'excellent';
+      feedbackMessage = 'Excellent pronunciation! 🎉';
+    } else if (similarity >= 0.7) {
+      similarityClass = 'good';
+      feedbackClass = 'good';
+      feedbackMessage = 'Good pronunciation! Keep it up! 👍';
+    } else if (similarity >= 0.5) {
+      similarityClass = 'fair';
+      feedbackClass = 'fair';
+      feedbackMessage = 'Not bad! Try to match the original more closely. 🤔';
+    } else {
+      similarityClass = 'poor';
+      feedbackClass = 'poor';
+      feedbackMessage = 'Keep practicing! Listen to the audio again and try to match it. 💪';
+    }
+
+    return html`
+      <div class="transcription-results">
+        <div class="transcription-header">
+          🎤 Speech Recognition Results
+        </div>
+
+        <div class="transcription-text">
+          <div class="label">Expected:</div>
+          <div class="text">"${this.transcriptionResult.normalizedExpected}"</div>
+        </div>
+
+        <div class="transcription-text">
+          <div class="label">You said:</div>
+          <div class="text">"${this.transcriptionResult.text}"</div>
+        </div>
+
+        <div class="similarity-score">
+          <span>Similarity:</span>
+          <div class="similarity-bar">
+            <div class="similarity-fill ${similarityClass}" style="width: ${similarityPercentage}%"></div>
+          </div>
+          <span class="similarity-percentage">${similarityPercentage}%</span>
+        </div>
+
+        <div class="word-analysis">
+          <div class="word-group matching">
+            <div class="label">Correct</div>
+            <div class="count">${this.transcriptionResult.matchingWords.length}</div>
+            <div class="words">${this.transcriptionResult.matchingWords.join(', ') || 'None'}</div>
+          </div>
+          <div class="word-group missing">
+            <div class="label">Missing</div>
+            <div class="count">${this.transcriptionResult.missingWords.length}</div>
+            <div class="words">${this.transcriptionResult.missingWords.join(', ') || 'None'}</div>
+          </div>
+          <div class="word-group extra">
+            <div class="label">Extra</div>
+            <div class="count">${this.transcriptionResult.extraWords.length}</div>
+            <div class="words">${this.transcriptionResult.extraWords.join(', ') || 'None'}</div>
+          </div>
+        </div>
+
+        <div class="pronunciation-feedback ${feedbackClass}">
+          ${feedbackMessage}
+        </div>
       </div>
     `;
   }

@@ -1,7 +1,18 @@
 /**
- * Audio generation and playback module
+ * Audio generation, playback, and speech recognition module
  */
 
 export { TTSAudioGenerator } from './audio-generator';
 export { AudioService } from './audio-service';
-export type { AudioGenerator, AudioConfig, AudioError } from '../../shared/types/audio';
+export { AudioRecorder } from './audio-recorder';
+export { SpeechRecognitionService } from './speech-recognition';
+export type { 
+  AudioGenerator, 
+  AudioConfig, 
+  AudioError, 
+  RecordingOptions, 
+  RecordingSession,
+  TranscriptionOptions,
+  TranscriptionResult,
+  TranscriptionComparison
+} from '../../shared/types/audio';

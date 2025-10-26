@@ -2,6 +2,7 @@ import { TTSAudioGenerator } from './audio-generator';
 import { AudioGenerator, AudioError } from '../../shared/types/audio';
 import { DatabaseLayer } from '../../shared/types/database';
 import { AudioRecorder, RecordingSession, RecordingOptions } from './audio-recorder';
+import { SpeechRecognitionService, TranscriptionOptions, TranscriptionResult } from './speech-recognition';
 
 /**
  * Audio service that coordinates audio generation and playback
@@ -10,10 +11,12 @@ import { AudioRecorder, RecordingSession, RecordingOptions } from './audio-recor
 export class AudioService {
   private audioGenerator: AudioGenerator;
   private audioRecorder: AudioRecorder;
+  private speechRecognition: SpeechRecognitionService;
 
   constructor(audioGenerator?: AudioGenerator, database?: DatabaseLayer) {
     this.audioGenerator = audioGenerator || new TTSAudioGenerator(undefined, database);
     this.audioRecorder = new AudioRecorder();
+    this.speechRecognition = new SpeechRecognitionService();
   }
 
   /**
@@ -236,6 +239,81 @@ export class AudioService {
       console.error('Error getting recording info:', error);
       return null;
     }
+  }
+
+  /**
+   * Initialize speech recognition service
+   */
+  async initializeSpeechRecognition(): Promise<void> {
+    try {
+      await this.speechRecognition.initialize();
+    } catch (error) {
+      const audioError = new Error(`Failed to initialize speech recognition: ${error instanceof Error ? error.message : 'Unknown error'}`) as AudioError;
+      audioError.code = 'RECORDING_FAILED';
+      throw audioError;
+    }
+  }
+
+  /**
+   * Transcribe recorded audio to text
+   */
+  async transcribeAudio(filePath: string, options?: TranscriptionOptions): Promise<TranscriptionResult> {
+    try {
+      return await this.speechRecognition.transcribeAudio(filePath, options);
+    } catch (error) {
+      const audioError = new Error(`Failed to transcribe audio: ${error instanceof Error ? error.message : 'Unknown error'}`) as AudioError;
+      audioError.code = 'RECORDING_FAILED';
+      throw audioError;
+    }
+  }
+
+  /**
+   * Compare transcribed text with expected sentence
+   * Returns similarity analysis for pronunciation feedback
+   */
+  compareTranscription(transcribed: string, expected: string): {
+    similarity: number;
+    normalizedTranscribed: string;
+    normalizedExpected: string;
+    matchingWords: string[];
+    missingWords: string[];
+    extraWords: string[];
+  } {
+    return this.speechRecognition.compareTranscription(transcribed, expected);
+  }
+
+  /**
+   * Get available speech recognition models
+   */
+  getAvailableSpeechModels(): string[] {
+    return this.speechRecognition.getAvailableModels();
+  }
+
+  /**
+   * Set default speech recognition model
+   */
+  async setSpeechModel(model: string): Promise<void> {
+    try {
+      await this.speechRecognition.setDefaultModel(model);
+    } catch (error) {
+      const audioError = new Error(`Failed to set speech model: ${error instanceof Error ? error.message : 'Unknown error'}`) as AudioError;
+      audioError.code = 'RECORDING_FAILED';
+      throw audioError;
+    }
+  }
+
+  /**
+   * Get current speech recognition model
+   */
+  getCurrentSpeechModel(): string {
+    return this.speechRecognition.getDefaultModel();
+  }
+
+  /**
+   * Check if speech recognition is initialized
+   */
+  isSpeechRecognitionReady(): boolean {
+    return this.speechRecognition.isServiceInitialized();
   }
 
   /**
