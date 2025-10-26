@@ -109,6 +109,7 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     height: 800,
     width: 1200,
+    title: 'KotobaAI',
     webPreferences: {
       preload: preloadPath,
       nodeIntegration: false,
@@ -142,6 +143,15 @@ function createWindow(): void {
   mainWindow.on('closed', () => {
     mainWindow = null as any;
   });
+}
+
+// Set app name and dock icon
+app.setName('KotobaAI');
+if (process.platform === 'darwin') {
+  const iconPath = path.join(__dirname, '../../../build/icon.png');
+  if (require('fs').existsSync(iconPath)) {
+    app.dock?.setIcon(iconPath);
+  }
 }
 
 // This method will be called when Electron has finished initialization
