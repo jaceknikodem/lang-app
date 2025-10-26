@@ -1,0 +1,821 @@
+come; how  
+che; that / what  
+lui; he / him  
+essere; to be  
+per; for / to  
+con; with  
+esso; it  
+uno; one / a  
+avere; to have  
+questo; this  
+caldo; hot / warm  
+parola; word  
+cosa; thing / what  
+alcuno; some / any  
+voi; you (plural)  
+noi; we / us  
+lattino; can / tin  
+fuori; outside / out  
+altro; other / another  
+fare; to do / to make  
+loro; they / them  
+tempo; time / weather  
+volontà; will / desire  
+suddetto; said / aforementioned  
+ogni; every / each  
+dire; to say / to tell  
+set; set  
+tre; three  
+desiderare; to want / desire  
+aria; air  
+bene; good / well  
+anche; also / too  
+giocare; to play  
+piccolo; small / little  
+fine; end / finish  
+mettere; to put / to place
+casa; house / home  
+leggere; to read  
+mano; hand  
+porto; port / harbor  
+grande; big / large  
+compitare; to spell  
+aggiungere; to add  
+terra; earth / land / ground  
+qui; here  
+mosto; must (grape juice before fermentation)  
+alto; high / tall  
+tale; such / that kind of  
+seguire; to follow  
+atto; act / deed  
+perché; why / because  
+chiedere; to ask / to request  
+maschio; male  
+cambiamento; change  
+luce; light  
+tipo; kind / type  
+spento; off / extinguished  
+bisogno; need / necessity  
+immagine; image / picture  
+provare; to try / to test  
+animale; animal  
+punto; point / dot  
+madre; mother  
+mondo; world  
+vicino; near / close  
+costruire; to build  
+padre; father  
+qualsiasi; any / whichever  
+nuovo; new  
+lavoro; work / job  
+parte; part / portion  
+prendere; to take  
+ottenere; to get / obtain  
+posto; place / position  
+vivere; to live  
+dove; where  
+dopo; after / later  
+indietro; back / backward  
+poco; little / few  
+solo; alone / only  
+turno; turn / shift  
+uomo; man  
+anno; year  
+spettacolo; show / performance  
+bere; to drink (probably “buere” typo)  
+dare; to give  
+sotto; under / below  
+nome; name  
+molto; much / a lot / very  
+attraverso; through / across  
+forma; form / shape  
+frase; sentence / phrase  
+pensare; to think  
+aiutare; to help  
+basso; low / short  
+linea; line  
+differire; to differ / to delay  
+causa; cause / reason  
+prima; before / first  
+muovere; to move
+diritto; right / law / straight  
+ragazzo; boy  
+vecchio; old  
+troppo; too / too much / too many  
+stesso; same  
+lei; she / her  
+tutto; all / everything  
+quando; when  
+uso; use  
+modo; way / manner  
+circa; about / around  
+allora; then / so  
+scrivere; to write  
+così; so / thus  
+lungo; long  
+rendere; to make / to render / to give back  
+vedere; to see  
+due; two  
+guardare; to look / to watch  
+giorno; day  
+potere; can / to be able to  
+andare; to go  
+venire; to come  
+numero; number  
+seguire; to follow  
+più; more / most  
+persona; person  
+oltre; beyond / besides  
+sapere; to know (a fact)  
+acqua; water  
+chiamare; to call / to name  
+primo; first  
+giù; down  
+lato; side  
+ora; now / hour  
+trovare; to find  
+testa; head  
+stare; to stay / to be  
+proprio; own / proper / exactly  
+pagina; page  
+dovere; must / duty / to have to  
+paese; country / village  
+fondare; to found / to establish  
+risposta; answer / reply  
+scuola; school  
+crescere; to grow  
+studio; study  
+ancora; still / yet / again  
+imparare; to learn  
+rimpiangere; to regret (probably “impiangere” typo)  
+coprire; to cover (likely “coperturare” typo)  
+cibo; food  
+sole; sun  
+quattro; four  
+fra; between / among  
+mantenere; to maintain / to keep  
+occhio; eye  
+mai; never / ever  
+ultimo; last / final  
+lasciare; to leave / to let  
+pensiero; thought  
+città; city / town  
+albero; tree  
+attraversare; to cross  
+fattoria; farm  
+difficile; difficult / hard  
+inizio; beginning / start  
+forza; force / strength  
+storia; story / history  
+segare; to saw / to cut  
+lontano; far / distant  
+mare; sea  
+disegnare; to draw / to design  
+sinistra; left  
+tardi; late  
+correre; to run (probably “run” placeholder)  
+non; not / no  
+mentre; while  
+stampa; print / press  
+chiudere; to close (probably “closo” typo)  
+notte; night  
+reale; real / royal  
+vita; life  
+nord; north  
+libro; book  
+portare; to bring / to carry / to wear  
+scienza; science  
+mangiare; to eat  
+camera; room / chamber  
+amico; friend  
+idea; idea  
+pesce; fish  
+montagna; mountain  
+fermare; to stop (likely “stop” placeholder)  
+base; base / foundation  
+sentire; to hear / to feel
+cavallo; horse  
+taglio; cut  
+sicuro; sure / safe  
+orologio; watch / clock  
+colore; color  
+volgere; to turn / to face  
+legno; wood  
+principale; main / principal  
+aprire; to open  
+sembrare; to seem / to appear  
+insieme; together / group  
+prossimo; next  
+bianco; white  
+bambino; child / kid  
+camminare; to walk  
+esempio; example  
+alleviare; to ease / to relieve  
+carta; paper / card  
+gruppo; group  
+sempre; always  
+musica; music  
+quello; that  
+entrambi; both  
+marchio; mark / brand  
+spesso; often / thick  
+lettera; letter  
+fino; until / fine / thin  
+miglio; mile  
+fiume; river  
+auto; car  
+piede; foot  
+cura; care / treatment  
+secondo; second / according to  
+abbastanza; enough / quite  
+pianura; plain / flatland  
+ragazza; girl (likely “ragazzare” typo)  
+salire; to climb / to go up (likely “solire” typo)  
+giovane; young  
+pronto; ready  
+sopra; above / over  
+rosso; red  
+elenco; list  
+discussione; discussion (likely “discussioni” plural)  
+uccello; bird  
+presto; early / soon  
+corpo; body  
+cane; dog (likely “cana” typo)  
+famiglia; family  
+dirigere; to direct / to lead  
+posto; place / seat (likely “poso” typo)  
+canzone; song  
+misurare; to measure  
+produrre; to produce  
+nero; black  
+breve; short / brief  
+numerale; numeral / number  
+classe; class  
+vento; wind  
+domanda; question  
+accadere; to happen  
+intero; whole / entire (likely “integrale” here)  
+nave; ship  
+area; area / region  
+metà; half  
+roccia; rock  
+ordine; order  
+fuoco; fire  
+sud; south  
+problema; problem  
+pezzo; piece / part  
+passare; to pass  
+cima; top / summit  
+strada; road / street  
+pollice; thumb / inch  
+moltiplicare; to multiply  
+niente; nothing  
+corso; course  
+soggiornare; to stay  
+ruota; wheel  
+completo; complete / full  
+vigore; vigor / strength  
+blu; blue  
+oggetto; object / thing  
+decidere; to decide  
+superficie; surface  
+profondità; depth  
+luna; moon  
+isola; island  
+sistema; system  
+occupare; to occupy / to take up  
+test; test / exam  
+record; record / register  
+barca; boat  
+comune; common / town  
+oro; gold  
+possibile; possible  
+piano; plan / flat / floor / piano  
+invece; instead (likely “vece” typo)  
+asciutto; dry  
+meraviglia; wonder / marvel  
+ridere; to laugh  
+migliaio; thousand  
+controllare; to check / to control  
+gioco; game / play  
+uguagliare; to equal / to match  
+perdere; to lose  
+calore; heat / warmth  
+neve; snow  
+pneumatico; tire  
+riempire; to fill  
+est; east  
+dipingere; to paint  
+lingua; language / tongue  
+tra; between / among  
+unità; unit  
+potenza; power / strength  
+certo; certain / sure  
+volare; to fly  
+cadere; to fall  
+gridare; to shout / to scream (likely “gridere” typo)  
+scuro; dark  
+macchina; machine / car  
+noto; known / famous  
+aspettare; to wait / to expect  
+figurare; to figure / to appear  
+stella; star  
+scatola; box (likely “scatolo” typo)  
+sostantivo; noun  
+campo; field  
+resto; rest / remainder  
+correggere; to correct / to fix  
+libbra; pound (unit of weight)  
+fatto; done / fact (likely “done” typo for participle)  
+bellezza; beauty  
+sorgere; to rise / to arise  
+contenere; to contain / to hold  
+frontale; front  
+insegnare; to teach  
+settimana; week  
+finale; final / ending  
+verde; green  
+veloce; fast / quick  
+sviluppare; to develop  
+oceano; ocean (likely “oceare” typo)  
+gratuito; free  
+miniera; mine (likely “minere” typo)  
+forte; strong  
+speciale; special  
+menta; mint / mind (context unclear)  
+dietro; behind / back  
+chiaro; clear / light  
+codare; to queue (rare; “tail” verb)
+spazio; space  
+migliore; better / best  
+meglio; better (adverb)  
+vero; true / real  
+durante; during  
+cento; hundred  
+cinque; five  
+ricordare; to remember  
+passo; step  
+tenere; to hold / to keep  
+ovest; west  
+interesse; interest  
+raggiungere; to reach / to achieve  
+verbere; to beat / to strike (archaic / likely “percuotere” intended)  
+cantare; to sing  
+ascoltare; to listen  
+tavolo; table  
+viaggio; trip / travel  
+meno; less / fewer  
+mattina; morning  
+dieci; ten  
+semplice; simple / easy  
+vocale; vowel  
+verso; toward / verse  
+guerra; war  
+porre; to put / to place / to pose  
+contro; against  
+modello; model / pattern  
+lento; slow  
+centro; center  
+amore; love  
+soldi; money (likely “soldo” typo)  
+servire; to serve  
+apparire; to appear  
+mappa; map  
+pioggia; rain  
+regolare; regular / to regulate  
+governare; to govern / to rule  
+tirare; to pull / to throw  
+freddo; cold  
+avviso; notice / warning  
+voce; voice  
+energia; energy  
+caccia; hunt / hunting  
+probabile; probable / likely  
+fratello; brother  
+uovo; egg  
+giro; turn / lap / tour  
+cellulare; cell / mobile phone (likely “cellare” typo)  
+credere; to believe  
+forse; maybe / perhaps  
+scegliere; to choose / to select  
+improvviso; sudden / unexpected  
+contare; to count  
+piazza; square (city)  
+motivo; reason / motive / pattern  
+lunghezza; length  
+rappresentare; to represent  
+arte; art  
+soggetto; subject / topic  
+regione; region / area  
+dimensione; size / dimension  
+variare; to vary / to change  
+risolvere; to solve / to resolve  
+parlare; to speak / to talk  
+peso; weight  
+generale; general  
+ghiaccio; ice  
+materia; matter / subject  
+cerchio; circle  
+coppia; pair / couple (likely “coppiare” typo)  
+includere; to include  
+dividere; to divide / to split  
+sillaba; syllable  
+sentire; to feel / to hear (likely “feltro” typo confusion)  
+palla; ball (likely “pallare” typo)  
+onda; wave  
+cuore; heart  
+presente; present / gift / current  
+pesante; heavy  
+danza; dance  
+motore; motor / engine  
+posizione; position / location  
+braccio; arm  
+ampio; wide / broad  
+vela; sail  
+materiale; material  
+frazione; fraction  
+foresta; forest / woods  
+gara; race / contest  
+finestra; window (likely “finestrare” typo)  
+negozio; store / shop  
+estate; summer  
+treno; train  
+sonno; sleep  
+dimostrare; to demonstrate / to show  
+solitario; lonely / solitary  
+gamba; leg  
+esercizio; exercise / practice  
+muro; wall  
+monte; mountain  
+desiderio; desire / wish  
+cielo; sky / heaven  
+pensione; pension / boarding house / retirement  
+gioia; joy  
+inverno; winter  
+seduto; seated / sat (likely “sat” placeholder)  
+selvaggio; wild  
+strumento; instrument / tool  
+vetro; glass  
+erba; grass / herb (likely “erbo” typo)  
+mucca; cow  
+bordo; edge / border  
+segno; sign / mark  
+visita; visit  
+passato; past  
+morbido; soft (likely “morbidere” typo)  
+divertimento; fun / amusement  
+luminoso; bright  
+gas; gas  
+mese; month  
+milione; million
+sopportare; to endure / to bear / to tolerate  
+finire; to finish / to end (likely “finitura” typo for noun “finish”)  
+felice; happy  
+speranza; hope  
+fiore; flower  
+vestire; to dress / to wear  
+strano; strange / odd  
+andato; gone (likely “gone” placeholder)  
+commercio; trade / commerce  
+melodia; melody / tune  
+ufficio; office  
+ricevere; to receive  
+fila; row / line  
+bocca; mouth  
+esatto; exact / precise  
+simbolo; symbol  
+morire; to die  
+difficoltà; difficulty  
+gridare; to shout (probably “shout” placeholder duplicate)  
+eccetto; except  
+seme; seed (likely “semo” typo)  
+tono; tone  
+aderire; to adhere / to stick  
+suggerire; to suggest  
+pulire; to clean  
+pausa; pause / break  
+signore; gentleman / sir / lord  
+cantiere; yard / construction site  
+salire; to rise / to go up  
+male; bad / evil / wrong  
+colpo; hit / blow / shot  
+olio; oil  
+sangue; blood  
+toccare; to touch  
+cent; cent / penny  
+mescolare; to mix  
+squadra; team  
+filo; thread / wire  
+costo; cost  
+perduto; lost (likely “perso” intended)  
+marrone; brown  
+indossare; to wear  
+giardino; garden  
+pari; equal / even  
+inviare; to send  
+flusso; flow / stream  
+fiera; fair (event) / proud  
+banca; bank  
+raccogliere; to collect / to gather  
+salvare; to save / to rescue  
+controllo; control / check  
+decimale; decimal  
+orecchio; ear  
+rompere; to break  
+caso; case / occasion  
+mezzo; half / means / middle  
+uccidere; to kill  
+figlio; son / child  
+lago; lake  
+momento; moment / time  
+scala; scale / ladder / stairs  
+primavera; spring (season)  
+osservare; to observe / to watch  
+dritto; straight / right  
+consonante; consonant  
+nazione; nation / country  
+dizionario; dictionary  
+latta; tin / can (likely “latta” for “lattaio”)  
+velocità; speed  
+metodo; method  
+organo; organ / body part  
+pagare; to pay  
+età; age  
+sezione; section  
+nube; cloud  
+sorprendere; to surprise  
+tranquillo; quiet / calm  
+pietra; stone / rock  
+salita; climb / ascent  
+fresco; fresh / cool  
+disegno; design / drawing  
+povero; poor  
+lotto; lot / batch / parcel  
+esperimento; experiment  
+fondo; bottom / fund / background  
+chiave; key  
+ferro; iron  
+singolo; single  
+bastone; stick / rod  
+appartamento; apartment / flat  
+pelle; skin / leather  
+sorridere; to smile  
+piegare; to bend / to fold  
+foro; hole  
+salto; jump  
+otto; eight  
+villaggio; village  
+radice; root  
+acquistare; to buy / to purchase  
+aumentare; to increase / to raise  
+metallo; metal  
+spingere; to push  
+sette; seven  
+paragrafo; paragraph  
+terzo; third  
+capello; hair  
+descrivere; to describe  
+cuoco; cook / chef  
+risultato; result / outcome  
+bruciare; to burn  
+collina; hill  
+gatto; cat  
+secolo; century  
+considerare; to consider  
+legge; law  
+bit; bit / small piece  
+costare; to cost  
+copia; copy  
+silenzioso; quiet / silent  
+sabbia; sand  
+suolo; soil / ground  
+rotolo; roll / scroll  
+temperatura; temperature  
+industria; industry  
+valore; value  
+lotta; fight / struggle  
+bugia; lie / falsehood (likely “bugiare” typo)  
+battere; to beat / to hit  
+eccitare; to excite / to arouse  
+naturale; natural  
+senso; sense / meaning  
+capitale; capital (city or money)  
+sedia; chair  
+pericolo; danger  
+frutta; fruit  
+ricco; rich  
+soldato; soldier  
+processo; process / trial  
+operare; to operate / to work  
+pratico; practical  
+separare; to separate  
+medico; doctor  
+proteggere; to protect  
+mezzogiorno; noon / midday  
+moderno; modern  
+elemento; element / component  
+colpire; to hit / to strike  
+studente; student  
+angolo; corner / angle  
+partito; party / faction  
+fornitura; supply / provision  
+individuare; to locate / to identify  
+anello; ring  
+carattere; character / personality  
+insieme; together (likely “insempere” typo)  
+catturare; to capture  
+periodo; period  
+indicare; to indicate / to show  
+radio; radio  
+raggio; ray / beam / radius  
+atomo; atom  
+umano; human  
+effetto; effect  
+elettrico; electric  
+osso; bone  
+ferrovia; railway  
+immaginare; to imagine  
+fornire; to provide  
+concordare; to agree  
+dolce; sweet  
+donna; woman  
+capitare; to happen  
+indovinare; to guess  
+necessario; necessary / needed  
+tagliente; sharp / cutting  
+ala; wing  
+creare; to create  
+lavare; to wash (likely “lavaggio” typo)  
+pipistrello; bat (animal)  
+piuttosto; rather / quite  
+folla; crowd (likely “follare” typo)  
+mais; corn  
+confrontare; to compare  
+poesia; poetry  
+suonare; to ring / to sound (likely “strirre” typo)  
+campana; bell  
+dipendere; to depend  
+carne; meat  
+strofinare; to rub / to scrub  
+tubo; tube / pipe  
+famoso; famous  
+dollaro; dollar  
+ruscello; stream / brook  
+paura; fear  
+sottile; thin / subtle  
+triangolo; triangle  
+pianeta; planet  
+fretta; hurry / rush  
+capo; head / boss  
+colonia; colony  
+miniera; mine  
+bramare; to crave (likely “cravingare” typo)  
+inserire; to insert / to input  
+maggiore; greater / major  
+ricerca; research / search  
+giallo; yellow  
+pistola; gun / pistol  
+consentire; to allow / to permit  
+punto; spot / point (likely “spot” placeholder)  
+deserto; desert  
+terra; earth / land (likely “tere” typo)  
+corrente; current / flow  
+ascensore; elevator / lift  
+rosa; pink / rose  
+arrivare; to arrive  
+maestro; master / teacher  
+pista; track / trail  
+genitore; parent  
+riva; shore / bank  
+divisione; division  
+foglio; sheet / leaf / paper  
+sostanza; substance  
+favorire; to favor / to promote  
+collegare; to connect / to link  
+messaggio; message  
+spendere; to spend  
+accordo; agreement / chord  
+grasso; fat / thick  
+originale; original  
+quota; share / portion  
+stazione; station  
+papà; dad / father  
+pane; bread  
+carico; load / cargo  
+bar; bar  
+offrire; to offer  
+segmento; segment  
+schiarire; to lighten / to clear up (likely “schiare” typo)  
+anatra; duck (likely “anatrare” typo)  
+immediato; immediate (likely “immediare” typo)  
+mercato; market  
+grado; degree / rank / grade  
+popolare; popular  
+pulcino; chick  
+caro; dear / expensive  
+nemico; enemy  
+rispondere; to answer  
+bere; to drink (likely “bevandare” typo)  
+supporto; support / backing  
+discorso; speech / talk  
+natura; nature  
+gamma; range / spectrum (likely “gammare” typo)  
+vapore; steam  
+moto; motion / motorbike  
+sentiero; path / trail  
+liquido; liquid  
+tronco; log / trunk (likely “log” placeholder)  
+significare; to mean / to signify  
+quoziente; quotient  
+dente; tooth  
+guscio; shell  
+collo; neck  
+ossigeno; oxygen  
+zucchero; sugar  
+morto; dead  
+abilità; skill / ability  
+stagione; season  
+soluzione; solution  
+magnete; magnet  
+argento; silver (likely “argentare” verb form)  
+grazie; thanks / thank you  
+ramo; branch  
+partire; to leave / to depart  
+suffisso; suffix  
+particolarmente; particularly  
+fico; fig / cool  
+spaventare; to frighten / to scare (likely “impaurire”)  
+enorme; huge / enormous  
+sorella; sister  
+acciaio; steel  
+discutere; to discuss  
+avanti; forward / ahead  
+simile; similar  
+guidare; to drive / to lead  
+esperienza; experience  
+punteggio; score / grade  
+mela; apple  
+comprare; to buy  
+pece; pitch / tar  
+cappotto; coat  
+massa; mass / bulk  
+scheda; card / sheet (likely “schedere” typo)  
+banda; band / strip  
+corda; rope / string (likely “cordo” typo)  
+scivolare; to slip / to slide (likely “slittamento” typo)  
+vittoria; victory  
+sognare; to dream  
+sera; evening  
+condizione; condition  
+alimentazione; food / supply / power  
+totale; total  
+odore; smell / odor  
+valle; valley  
+doppio; double  
+sedile; seat  
+continuare; to continue  
+blocco; block  
+grafico; chart / graph  
+cappello; hat  
+vendere; to sell  
+successo; success  
+azienda; company / firm  
+sottrarre; to subtract / to take away  
+evento; event  
+particolare; particular / detail  
+affare; deal / business  
+nuoto; swimming  
+termine; term / end / word  
+opposto; opposite  
+moglie; wife  
+scarpa; shoe (likely “scarpare” typo)  
+spalla; shoulder  
+diffondere; to spread (likely “spread” placeholder)  
+organizzare; to organize  
+inventare; to invent  
+cotone; cotton
+nascita; birth  
+determinare; to determine  
+quarto; fourth / quarter  
+nove; nine  
+camion; truck / lorry  
+rumore; noise / sound  
+livello; level  
+possibilità; possibility / chance  
+trarre; to draw / to pull / to derive  
+gettare; to throw / to cast  
+cinese; shino (likely typo; meaning unclear — “cinese” = Chinese)  
+proprietà; property / ownership  
+colonna; column / pillar  
+molecola; molecule  
+selezionare; to select  
+sbagliare; to make a mistake / to be wrong  
+grigio; gray / grey  
+ripetizione; repetition  
+richiedere; to require / to request  
+preparare; to prepare  
+naso; nose  
+plurale; plural  
+rabbia; anger / rage  
+richiesta; request / demand  
+continente; continent

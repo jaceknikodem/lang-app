@@ -103,6 +103,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.OPEN_BACKUP_DIALOG),
     openBackupDirectory: () => 
       ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.OPEN_BACKUP_DIRECTORY)
+  },
+
+  // Frequency word management
+  frequency: {
+    getProgress: (language: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.FREQUENCY.GET_PROGRESS, language),
+    getAvailableLanguages: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.FREQUENCY.GET_AVAILABLE_LANGUAGES)
   }
 });
 
@@ -157,6 +165,15 @@ declare global {
         restartAll: () => Promise<void>;
         openBackupDialog: () => Promise<string | null>;
         openBackupDirectory: () => Promise<void>;
+      };
+      frequency: {
+        getProgress: (language: string) => Promise<{
+          totalWords: number;
+          processedWords: number;
+          currentPosition: number;
+          percentComplete: number;
+        }>;
+        getAvailableLanguages: () => Promise<string[]>;
       };
     };
   }

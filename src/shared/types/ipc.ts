@@ -38,6 +38,17 @@ export interface IPCBridge {
     setModel: (model: string) => Promise<void>;
     getCurrentModel: () => Promise<string>;
   };
+
+  // Frequency word management
+  frequency: {
+    getProgress: (language: string) => Promise<{
+      totalWords: number;
+      processedWords: number;
+      currentPosition: number;
+      percentComplete: number;
+    }>;
+    getAvailableLanguages: () => Promise<string[]>;
+  };
   
   // Audio operations
   audio: {
@@ -113,5 +124,9 @@ export const IPC_CHANNELS = {
     RESTART_ALL: 'lifecycle:restartAll',
     OPEN_BACKUP_DIALOG: 'lifecycle:openBackupDialog',
     OPEN_BACKUP_DIRECTORY: 'lifecycle:openBackupDirectory'
+  },
+  FREQUENCY: {
+    GET_PROGRESS: 'frequency:getProgress',
+    GET_AVAILABLE_LANGUAGES: 'frequency:getAvailableLanguages'
   }
 } as const;

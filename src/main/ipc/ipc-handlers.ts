@@ -43,7 +43,7 @@ export function setupIPCHandlers(
   setupDatabaseHandlers(databaseLayer);
 
   // LLM handlers
-  setupLLMHandlers(llmClient, contentGenerator);
+  setupLLMHandlers(llmClient, contentGenerator, databaseLayer);
 
   // Audio handlers
   setupAudioHandlers(audioService);
@@ -278,7 +278,7 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
 /**
  * Set up LLM-related IPC handlers
  */
-function setupLLMHandlers(llmClient: OllamaClient, contentGenerator: ContentGenerator): void {
+function setupLLMHandlers(llmClient: OllamaClient, contentGenerator: ContentGenerator, databaseLayer?: SQLiteDatabaseLayer): void {
   ipcMain.handle(IPC_CHANNELS.LLM.GENERATE_WORDS, async (event, topic, language) => {
     try {
       const validatedLanguage = LanguageSchema.parse(language);
@@ -292,7 +292,8 @@ function setupLLMHandlers(llmClient: OllamaClient, contentGenerator: ContentGene
       return await contentGenerator.generateTopicVocabulary(
         topic && topic.trim() ? topic.trim() : undefined,
         validatedLanguage,
-        10
+        10,
+        databaseLayer
       );
     } catch (error) {
       console.error('Error generating words:', error);
@@ -347,6 +348,29 @@ function setupLLMHandlers(llmClient: OllamaClient, contentGenerator: ContentGene
     } catch (error) {
       console.error('Error getting current model:', error);
       throw new Error(`Failed to get current model: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  // Frequency word management handlers
+  ipcMain.handle(IPC_CHANNELS.FREQUENCY.GET_PROGRESS, async (event, language) => {
+    try {
+      const validatedLanguage = LanguageSchema.parse(language);
+      if (!databaseLayer) {
+        throw new Error('Database layer not available');
+      }
+      return await contentGenerator.getFrequencyProgress(validatedLanguage, databaseLayer);
+    } catch (error) {
+      console.error('Error getting frequency progress:', error);
+      throw new Error(`Failed to get frequency progress: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.FREQUENCY.GET_AVAILABLE_LANGUAGES, async (event) => {
+    try {
+      return contentGenerator.getAvailableFrequencyLanguages();
+    } catch (error) {
+      console.error('Error getting available frequency languages:', error);
+      throw new Error(`Failed to get available frequency languages: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
 }
@@ -516,6 +540,10 @@ export function cleanupIPCHandlers(): void {
   });
 
   Object.values(IPC_CHANNELS.LIFECYCLE).forEach(channel => {
+    ipcMain.removeAllListeners(channel);
+  });
+
+  Object.values(IPC_CHANNELS.FREQUENCY).forEach(channel => {
     ipcMain.removeAllListeners(channel);
   });
 

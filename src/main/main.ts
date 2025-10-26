@@ -57,6 +57,9 @@ async function initializeServices(): Promise<void> {
     
     // Initialize content generator with LLM client
     contentGenerator = new ContentGenerator(llmClient);
+    
+    // Initialize the content generator (including frequency word manager)
+    await contentGenerator.initialize();
 
     // Initialize audio service with database reference
     audioService = new AudioService(undefined, databaseLayer);

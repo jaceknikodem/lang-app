@@ -4,7 +4,9 @@
 
 import { GeneratedWord, GeneratedSentence } from '../../shared/types/core.js';
 import { LLMClient, LLMError } from '../../shared/types/llm.js';
+import { DatabaseLayer } from '../../shared/types/database.js';
 import { OllamaClient } from './ollama-client.js';
+import { FrequencyWordManager } from './frequency-word-manager.js';
 
 export interface ContentGeneratorConfig {
   defaultLanguage: string;
@@ -17,6 +19,7 @@ export interface ContentGeneratorConfig {
 export class ContentGenerator {
   private llmClient: LLMClient;
   private config: ContentGeneratorConfig;
+  private frequencyWordManager: FrequencyWordManager;
 
   constructor(llmClient?: LLMClient, config?: Partial<ContentGeneratorConfig>) {
     this.llmClient = llmClient || new OllamaClient();
@@ -27,48 +30,150 @@ export class ContentGenerator {
       retryAttempts: config?.retryAttempts || 2,
       retryDelay: config?.retryDelay || 1000
     };
+    this.frequencyWordManager = new FrequencyWordManager();
+  }
+
+  /**
+   * Initialize the content generator and frequency word manager
+   */
+  async initialize(): Promise<void> {
+    await this.frequencyWordManager.initialize();
   }
 
   /**
    * Generate vocabulary words for a given topic with frequency classification
+   * If no topic is provided, uses frequency-ordered word lists
    */
   async generateTopicVocabulary(
     topic?: string,
     language?: string,
-    count?: number
+    count?: number,
+    database?: DatabaseLayer
   ): Promise<GeneratedWord[]> {
     const targetLanguage = language || this.config.defaultLanguage;
     const wordCount = count || this.config.defaultWordCount;
     const topicText = topic?.trim() || '';
 
     try {
-      // Validate LLM availability before attempting generation
-      const isAvailable = await this.llmClient.isAvailable();
-      if (!isAvailable) {
-        throw new Error('LLM service is not available. Please ensure Ollama is running.');
+      // If no topic is provided and we have a database, use frequency-based selection
+      if (!topicText && database) {
+        return await this.generateFrequencyBasedVocabulary(targetLanguage.toLowerCase(), wordCount, database);
       }
 
-      console.log(`Generating vocabulary: topic="${topicText}", language="${targetLanguage}", count=${wordCount}`);
-
-      const words = await this.executeWithRetry(
-        () => this.llmClient.generateTopicWords(topicText, targetLanguage, wordCount),
-        `generate vocabulary for topic: ${topicText || 'general'}`
-      );
-
-      console.log(`LLM returned ${words?.length || 0} words:`, words);
-
-      // Validate and filter results
-      const validWords = this.validateGeneratedWords(words);
-
-      if (validWords.length === 0) {
-        throw new Error('No valid words were generated. Please try again.');
-      }
-
-      // Shuffle the words to ensure variety in presentation order
-      return this.shuffleArray(validWords);
+      // Otherwise, use LLM-based topic generation
+      return await this.generateLLMTopicVocabulary(topicText, targetLanguage, wordCount);
 
     } catch (error) {
       throw this.handleContentGenerationError(error, 'vocabulary generation');
+    }
+  }
+
+  /**
+   * Generate vocabulary using frequency-ordered word lists
+   */
+  private async generateFrequencyBasedVocabulary(
+    language: string,
+    count: number,
+    database: DatabaseLayer
+  ): Promise<GeneratedWord[]> {
+    console.log(`Generating frequency-based vocabulary for ${language}, count: ${count}`);
+
+    // Check if there are more words to process
+    const hasMore = await this.frequencyWordManager.hasMoreWords(language, database);
+    if (!hasMore) {
+      throw new Error(`All words from the frequency list have been processed for ${language}. Consider using a topic instead.`);
+    }
+
+    // Get the next words from the frequency list
+    const nextWordEntries = await this.frequencyWordManager.getNextWordsToProcess(language, database, count);
+    
+    if (nextWordEntries.length === 0) {
+      throw new Error(`No new words available from frequency list for ${language}`);
+    }
+
+    console.log(`Selected ${nextWordEntries.length} words from frequency list:`, nextWordEntries.map(e => e.word));
+
+    // Process word entries - use existing translations or generate them
+    const generatedWords: GeneratedWord[] = [];
+    
+    for (const wordEntry of nextWordEntries) {
+      try {
+        let translation = wordEntry.translation;
+        
+        // If no translation is available, use LLM to generate it
+        if (!translation) {
+          translation = await this.getWordTranslation(wordEntry.word, language);
+        }
+        
+        generatedWords.push({
+          word: wordEntry.word,
+          translation: translation,
+          frequency: 'high' // Words from frequency lists are considered high frequency
+        });
+      } catch (error) {
+        console.warn(`Failed to get translation for word "${wordEntry.word}":`, error);
+        // Continue with other words even if one fails
+      }
+    }
+
+    if (generatedWords.length === 0) {
+      throw new Error('Failed to generate translations for frequency-based words');
+    }
+
+    return generatedWords;
+  }
+
+  /**
+   * Generate vocabulary using LLM for a specific topic
+   */
+  private async generateLLMTopicVocabulary(
+    topicText: string,
+    targetLanguage: string,
+    wordCount: number
+  ): Promise<GeneratedWord[]> {
+    // Validate LLM availability before attempting generation
+    const isAvailable = await this.llmClient.isAvailable();
+    if (!isAvailable) {
+      throw new Error('LLM service is not available. Please ensure Ollama is running.');
+    }
+
+    console.log(`Generating LLM vocabulary: topic="${topicText}", language="${targetLanguage}", count=${wordCount}`);
+
+    const words = await this.executeWithRetry(
+      () => this.llmClient.generateTopicWords(topicText, targetLanguage, wordCount),
+      `generate vocabulary for topic: ${topicText || 'general'}`
+    );
+
+    console.log(`LLM returned ${words?.length || 0} words:`, words);
+
+    // Validate and filter results
+    const validWords = this.validateGeneratedWords(words);
+
+    if (validWords.length === 0) {
+      throw new Error('No valid words were generated. Please try again.');
+    }
+
+    // Shuffle the words to ensure variety in presentation order
+    return this.shuffleArray(validWords);
+  }
+
+  /**
+   * Get translation for a specific word using LLM
+   */
+  private async getWordTranslation(word: string, language: string): Promise<string> {
+    const isAvailable = await this.llmClient.isAvailable();
+    if (!isAvailable) {
+      throw new Error('LLM service is not available for translation');
+    }
+
+    // Use a simple prompt to get just the translation
+    const prompt = `Translate the ${language} word "${word}" to English. Respond with only the English translation, no additional text.`;
+    
+    try {
+      const response = await this.llmClient.generateResponse(prompt);
+      return response.trim();
+    } catch (error) {
+      throw new Error(`Failed to translate word "${word}": ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -123,6 +228,25 @@ export class ContentGenerator {
     } catch (error) {
       return false;
     }
+  }
+
+  /**
+   * Get frequency-based progress for a language
+   */
+  async getFrequencyProgress(language: string, database: DatabaseLayer): Promise<{
+    totalWords: number;
+    processedWords: number;
+    currentPosition: number;
+    percentComplete: number;
+  }> {
+    return await this.frequencyWordManager.getLanguageProgress(language, database);
+  }
+
+  /**
+   * Get available languages from frequency word lists
+   */
+  getAvailableFrequencyLanguages(): string[] {
+    return this.frequencyWordManager.getAvailableLanguages();
   }
 
   /**

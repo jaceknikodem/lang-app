@@ -286,6 +286,47 @@ export class OllamaClient implements LLMClient {
     }
   }
 
+  async generateResponse(prompt: string): Promise<string> {
+    try {
+      const requestBody: OllamaRequest = {
+        model: this.config.model,
+        prompt,
+        stream: false
+      };
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+
+      const response = await fetch(`${this.config.baseUrl}/api/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data: OllamaResponse = await response.json();
+
+      if (!data.response) {
+        throw new Error('Empty response from Ollama');
+      }
+
+      return data.response.trim();
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw this.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
+      }
+      throw this.createLLMError(error instanceof Error ? error : new Error(String(error)), 'Failed to generate response');
+    }
+  }
+
 
 
   /**

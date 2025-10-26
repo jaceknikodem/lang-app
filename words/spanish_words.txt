@@ -1,0 +1,813 @@
+como; how
+que; that
+ser; to be
+para; for
+con; with
+uno; one
+tener; to have
+este; this
+desde; from
+por; by
+caliente; hot
+palabra; word
+pero; but
+qué; what
+alguno; some
+usted; you
+lata; can
+otro; other
+hacer; to do
+tiempo; time
+cómo; how
+dicho; said
+cada; each
+decir; to say
+conjunto; set
+tres; three
+querer; to want
+aire; air
+así; so
+también; also
+jugar; to play
+pequeño; small
+fin; end
+poner; to put
+casa; house
+leer; to read
+mano; hand
+puerto; port
+grande; big
+deletrear; to spell
+añadir; to add
+incluso; even
+tierra; earth
+aquí; here
+deber; must
+alto; high
+tal; such
+seguir; to follow
+acto; act
+preguntar; to ask
+hombre; man
+cambio; change
+luz; light
+tipo; kind
+necesitar; to need
+imagen; picture
+tratar; to try
+animal; animal
+punto; point
+madre; mother
+mundo; world
+cerca; near
+construir; to build
+auto; car
+padre; father
+cualquiera; any
+nuevo; new
+trabajo; work
+parte; part
+tomar; to take
+conseguir; to get
+lugar; place
+hecho; fact
+vivir; to live
+donde; where
+después; after
+espalda; back
+poco; little
+sólo; only
+ronda; round
+año; year
+venir; to come
+show; show
+buen; good
+dar; to give
+nuestro; our
+bajo; under
+nombre; name
+mucho; much
+forma; form
+frase; sentence
+gran; great
+pensar; to think
+ayudar; to help
+línea; line
+causa; cause
+significar; to mean
+antes; before
+movimiento; movement
+derecho; right
+niño; child
+viejo; old
+demasiado; too much
+mismo; same
+todo; all
+haber; to have (auxiliary)
+cuando; when
+hasta; until
+uso; use
+camino; way
+acerca; about
+entonces; then
+escribir; to write
+largo; long
+cosa; thing
+ver; to see
+dos; two
+buscar; to look for
+más; more
+día; day
+poder; can / to be able to
+número; number
+sonar; to sound
+persona; person
+sobre; on / about
+saber; to know
+agua; water
+llamado; called
+primero; first
+abajo; down
+lado; side
+estadir; state (likely misspelling of estar or estado)
+ahora; now
+encontrar; to find
+cabeza; head
+propio; own
+página; page
+país; country
+encontrado; found
+respuesta; answer
+escuela; school
+crecer; to grow
+estudio; study
+todavía; still
+aprender; to learn
+planta; plant
+cubierto; covered
+alimento; food
+sol; sun
+cuatro; four
+entre; between
+mantener; to keep
+ojo; eye
+nunca; never
+último; last
+dejar; to leave
+pensado; thought
+ciudad; city
+árbol; tree
+cruzar; to cross
+granja; farm
+duro; hard
+inicio; start
+historia; story
+sierra; saw / mountain range
+mar; sea
+dibujar; to draw
+izquierdo; left
+tarde; late / afternoon
+ejecutar; to run / execute
+mientras; while
+prensa; press
+cerrar; to close
+noche; night
+real; real
+vida; life
+norte; north
+libro; book
+llevar; to carry
+ciencia; science
+comer; to eat
+habitación; room
+amigo; friend
+comenzar; to begin
+gustar; to like
+pez; fish
+montaña; mountain
+deténgase; stop
+base; base
+escuchar; to listen
+caballo; horse
+cortado; cut
+seguro; sure / safe
+color; color
+cara; face
+madera; wood
+principal; main
+abierto; open
+parecer; to seem
+junto; together
+próximo; next
+blanco; white
+conseguido; obtained
+caminar; to walk
+ejemplo; example
+aliviar; to ease
+papel; paper
+grupo; group
+siempre; always
+música; music
+ambos; both
+marca; mark
+menudo; often
+carta; letter
+milla; mile
+río; river
+coche; car
+pie; foot
+cuidado; care
+segundo; second
+suficiente; enough
+llano; plain
+chico; boy
+habitual; usual
+joven; young
+listo; ready
+rojo; red
+aunque; although
+sentir; to feel
+pájaro; bird
+pronto; soon
+cuerpo; body
+perro; dog
+familia; family
+directo; direct
+plantear; to raise
+canción; song
+medir; to measure
+puerta; door
+producto; product
+negro; black
+corto; short
+numeral; numeral
+clase; class
+viento; wind
+suceder; to happen
+completo; complete
+buque; ship
+zona; area / zone
+medio; half / middle
+rocar; to touch (archaic / misspelled tocar)
+orden; order
+fuego; fire
+sur; south
+problema; problem
+pieza; piece
+pasar; to pass
+cima; top
+rey; king
+calle; street
+pulgada; inch
+multiplicar; to multiply
+nada; nothing
+curso; course
+rodar; to roll
+fuerza; force
+azul; blue
+objeto; object
+decidir; to decide
+superficie; surface
+profundo; deep
+luna; moon
+islar; to isolate (archaic)
+sistema; system
+ocupado; busy
+prueba; test
+registro; record
+barco; boat
+común; common
+oro; gold
+posible; possible
+plano; flat / plan
+seco; dry
+maravilla; wonder
+risa; laugh / laughter
+mil; thousand
+correr; to run
+comprobar; to check
+juego; game
+equiparar; to match
+señoritar; young lady (misspelled señorita)
+traer; to bring
+calor; heat
+nieve; snow
+neumático; tire
+distante; distant
+llenar; to fill
+pintar; to paint
+idioma; language
+unidad; unit
+potencia; power
+fino; fine / thin
+cierto; certain
+volar; to fly
+caer; to fall
+conducir; to drive
+grito; shout / scream
+oscuro; dark
+máquina; machine
+nota; note
+esperar; to wait / to hope
+plan; plan
+figurar; to figure / appear
+estrella; star
+cajar; box (likely misspelling of caja)
+sustantivo; noun
+campo; field
+resto; rest
+correcto; correct
+capaz; able / capable
+librar; to free
+belleza; beauty
+destacado; outstanding / prominent
+contener; to contain
+delante; in front
+enseñar; to teach
+semana; week
+verde; green
+rápido; fast
+desarrollar; to develop
+océano; ocean
+libre; free
+minuto; minute
+fuerte; strong
+especial; special
+mente; mind
+detrás; behind
+claro; clear / light
+cola; tail / line
+producir; to produce
+espacio; space
+oído; ear / hearing
+mejor; better / best
+hora; hour
+verdadero; true
+durante; during
+cien; hundred
+cinco; five
+recordar; to remember
+paso; step
+temprano; early
+oeste; west
+suelo; ground / floor
+interés; interest
+llegar; to arrive
+verbo; verb
+cantar; to sing
+seis; six
+mesa; table
+viaje; trip / journey
+menos; less
+mañana; morning / tomorrow
+diez; ten
+sencillo; simple
+varios; several
+vocal; vowel
+hacia; toward
+guerra; war
+sentar; to sit
+contra; against
+patrón; pattern
+lento; slow
+centro; center
+amar; to love
+dinero; money
+servir; to serve
+aparecer; to appear
+carretera; road / highway
+mapo; map (misspelling of mapa)
+lluvia; rain
+regla; rule / ruler
+gobernar; to govern
+halar; to pull
+frío; cold
+aviso; notice / warning
+voz; voice
+energía; energy
+cazar; to hunt
+probable; likely / probable
+cama; bed
+hermano; brother
+huevo; egg
+pasear; to walk / stroll
+celular; cellphone
+creer; to believe
+quizás; perhaps
+recoger; to pick up
+repentinar; sudden (misspelling of repentino)
+contar; to count / tell
+plaza; square
+razón; reason
+longitud; length
+representar; to represent
+arte; art
+sujeto; subject
+región; region
+tamaño; size
+variar; to vary
+resolver; to solve
+hablar; to speak
+peso; weight
+general; general
+hielo; ice
+materia; matter / subject
+círculo; circle
+par; pair
+incluir; to include
+brecha; gap
+sílar; syllable (misspelling of sílaba)
+sentido; sense / meaning
+bola; ball
+aún; still / yet
+ola; wave
+corazón; heart
+presente; present
+pesado; heavy
+danza; dance
+motor; engine / motor
+posición; position
+brazo; arm
+amplio; wide
+velar; to watch over
+material; material
+fracción; fraction
+bosque; forest
+carrera; race / career
+ventana; window
+tienda; shop / tent
+verano; summer
+tren; train
+sueño; dream
+demostrar; to demonstrate
+solitario; lonely
+pierna; leg
+ejercicio; exercise
+pared; wall
+captura; capture
+monte; mountain / mount
+desear; to wish
+cielo; sky / heaven
+bordo; edge / board
+alegría; joy
+invierno; winter
+satélite; satellite
+escrito; written
+salvaje; wild
+instrumento; instrument
+guardar; to keep / save
+vidrio; glass
+hierba; grass / herb
+vacar; to be vacant
+borde; edge
+signo; sign
+visita; visit
+pasado; past
+suave; soft
+diversión; fun
+brillante; bright
+gas; gas
+mes; month
+millón; million
+soportar; to endure / support
+acabar; to finish
+feliz; happy
+esperanza; hope
+flor; flower
+vestir; to dress
+extraño; strange
+comercio; trade / commerce
+melodía; melody
+oficina; office
+recibir; to receive
+fila; row / line
+boca; mouth
+exacto; exact
+símbolo; symbol
+morir; to die
+excepto; except
+semillo; seed (misspelling of semilla)
+tono; tone
+sugerir; to suggest
+limpio; clean
+rotura; break
+dama; lady
+patio; yard / courtyard
+aumentar; to increase
+mal; bad
+golpe; hit / blow
+aceite; oil
+sangre; blood
+tocar; to touch / to play (music)
+ciento; hundred
+mezclar; to mix
+equipo; team
+alambre; wire
+costo; cost
+perdido; lost
+marrón; brown
+desgaste; wear
+jardín; garden
+igual; equal / same
+enviar; to send
+elegir; to choose
+encajar; to fit
+fluir; to flow
+justo; fair / just
+banco; bank / bench
+decimal; decimal
+demá; rest / remainder (likely typo for demás)
+bastante; enough / quite
+romper; to break
+caso; case
+matar; to kill
+hijo; son
+lago; lake
+momento; moment
+escala; scale
+primavera; spring
+observar; to observe
+recta; straight line
+consonante; consonant
+nación; nation
+diccionario; dictionary
+leche; milk
+velocidad; speed
+método; method
+órgano; organ
+pagar; to pay
+edad; age
+sección; section
+vestido; dress
+nube; cloud
+sorpresa; surprise
+tranquilo; quiet / calm
+piedra; stone
+ascenso; rise / climb
+fresco; fresh / cool
+diseño; design
+pobre; poor
+experimento; experiment
+inferior; lower / inferior
+clave; key
+hierro; iron
+solo; alone / only
+palillo; stick / chopstick
+veinte; twenty
+piel; skin
+sonrisa; smile
+plieguir; fold (misspelling of plegar)
+agujero; hole
+saltar; to jump
+bebé; baby
+ocho; eight
+pueblo; town / people
+raíz; root
+comprar; to buy
+empujar; to push
+siete; seven
+párrafo; paragraph
+tercero; third
+pelo; hair
+describir; to describe
+cocinero; cook / chef
+piso; floor / flat
+resultado; result
+quemar; to burn
+colín; tail (archaic, likely typo)
+gato; cat
+siglo; century
+considerar; to consider
+ley; law
+bit; bit
+costa; coast
+copia; copy
+silencio; silence
+arena; sand
+rollo; roll
+temperatura; temperature
+dedo; finger
+industrio; industry (typo for industria)
+valor; value
+lucha; fight / struggle
+mentira; lie
+batir; to beat / whisk
+excitar; to excite / stir up
+natural; natural
+visto; seen
+silla; chair
+peligro; danger
+fruta; fruit
+rico; rich
+soldado; soldier
+proceso; process
+operar; to operate
+práctico; practical
+separar; to separate
+difícil; difficult
+médico; doctor / medical
+proteger; to protect
+mediodía; noon
+moderno; modern
+elemento; element
+golpear; to hit
+estudiante; student
+esquina; corner
+partido; match / game / party
+suministro; supply
+cuyo; whose
+localizar; to locate
+anillo; ring
+carácter; character
+insecto; insect
+capturado; captured
+período; period
+indicar; to indicate
+radio; radio
+átomo; atom
+humano; human
+efecto; effect
+eléctrico; electric
+hueso; bone
+ferrocarril; railway
+imaginar; to imagine
+proporcionar; to provide
+acuerdo; agreement
+mujer; woman
+capitán; captain
+adivinar; to guess
+necesario; necessary
+agudo; sharp
+ala; wing
+crear; to create
+vecino; neighbor
+lavado; washing
+multitud; crowd
+maíz; corn
+comparar; to compare
+poema; poem
+cadena; chain
+campán; bell (misspelling of campana)
+depender; to depend
+carne; meat
+frotar; to rub
+tubo; tube
+famoso; famous
+dólar; dollar
+corriente; current / stream
+miedo; fear
+delgado; thin
+triángulo; triangle
+planeta; planet
+prisa; hurry
+jefe; boss / chief
+colonia; colony
+reloj; clock / watch
+mina; mine
+empate; tie / draw
+entrar; to enter
+importante; important
+búsqueda; search
+amarillo; yellow
+pistola; gun
+permitir; to allow
+print; print
+muerto; dead
+desierto; desert
+traje; suit
+actual; current / actual
+ascensor; elevator / lift
+rosa; pink / rose
+master; master
+pista; track / clue
+orilla; shore / edge
+división; division
+hoja; leaf / sheet
+sustancia; substance
+favorecer; to favor
+conectar; to connect
+mensaje; message
+acorde; chord / agreement
+grasa; fat / grease
+contento; glad / content
+original; original
+cuota; share / fee
+estación; station / season
+papá; dad / father
+pan; bread
+cobrar; to charge / collect
+adecuado; suitable
+barra; bar / rod
+oferta; offer
+segmento; segment
+esclavo; slave
+pato; duck
+instantáneo; instant
+mercado; market
+grado; degree
+poblar; to populate
+polluelo; chick
+querido; dear / beloved
+enemigo; enemy
+responder; to answer / respond
+bebido; drink / drunk (past participle of beber)
+apoyo; support
+discurso; speech
+naturaleza; nature
+alcance; reach / range
+vapor; steam
+líquido; liquid
+log; log / record
+significado; meaning
+cociente; quotient
+diente; tooth
+concha; shell
+cuello; neck
+oxígeno; oxygen
+azúcar; sugar
+muerte; death
+habilidad; ability / skill
+temporada; season
+solución; solution
+imán; magnet
+plata; silver
+gracias; thanks / thank you
+ramar; to branch (rare / likely typo of ramificar)
+sufijo; suffix
+especialmente; especially
+higo; fig
+enorme; huge
+hermana; sister
+acero; steel
+discutir; to discuss
+adelante; forward
+similar; similar
+guiar; to guide
+experiencia; experience
+puntuación; punctuation / score
+manzán; apple (misspelling of manzana)
+comprado; bought
+pitch; pitch / throw / field
+abrigo; coat
+masa; mass
+tarjeta; card
+banda; band
+cuerdo; rope / cord (cuerda)
+deslizamiento; slide / slip
+ganar; to win
+soñar; to dream
+condición; condition
+herramientar; to tool (likely typo for herramienta = tool)
+total; total
+básico; basic
+olor; smell
+valle; valley
+doble; double
+asiento; seat
+continuar; to continue
+bloque; block
+tabla; table / board
+sombrero; hat
+vender; to sell
+éxito; success
+empresa; company
+restar; to subtract / remain
+evento; event
+particular; particular / specific
+nadar; to swim
+plazo; term / deadline
+opuesta; opposite
+esposa; wife
+zapato; shoe
+hombro; shoulder
+propagación; spread
+organizar; to organize
+campamento; camp
+inventar; to invent
+algodón; cotton
+nacido; born
+determinar; to determine
+cuarto; room / fourth
+nueve; nine
+camión; truck
+ruido; noise
+nivel; level
+oportunidad; opportunity
+reunir; to gather
+tramo; section / stretch
+lanzar; to throw / launch
+brillo; brightness / shine
+propiedad; property
+columna; column
+molécula; molecule
+seleccionar; to select
+gris; gray
+repito; I repeat
+exigir; to demand / require
+preparar; to prepare
+sal; salt
+nariz; nose
+plural; plural
+cólerar; anger (likely typo of cólera)
+reclamación; claim / complaint
+continente; continent
