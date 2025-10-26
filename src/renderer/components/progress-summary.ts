@@ -15,10 +15,24 @@ interface WordProgress {
   statusClass: string;
 }
 
+interface WordCategoryStats {
+  known: number;           // strength > STRONG_THRESHOLD
+  learningStrong: number;  // strength WEAK_THRESHOLD to STRONG_THRESHOLD
+  learningWeak: number;    // strength < WEAK_THRESHOLD
+  new: number;             // never studied (lastStudied is null)
+}
+
 @customElement('progress-summary')
 export class ProgressSummary extends LitElement {
+  // Strength thresholds for word categorization
+  private static readonly WEAK_THRESHOLD = 30;
+  private static readonly STRONG_THRESHOLD = 80;
+
   @state()
   private studyStats: StudyStats | null = null;
+
+  @state()
+  private wordCategoryStats: WordCategoryStats | null = null;
 
   @state()
   private recentWords: WordProgress[] = [];
@@ -90,6 +104,40 @@ export class ProgressSummary extends LitElement {
         border-radius: var(--border-radius);
         padding: var(--spacing-lg);
         text-align: center;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .stat-card.known {
+        border-color: var(--success-color);
+      }
+
+      .stat-card.known .stat-value {
+        color: var(--success-color);
+      }
+
+      .stat-card.learning-strong {
+        border-color: var(--primary-color);
+      }
+
+      .stat-card.learning-strong .stat-value {
+        color: var(--primary-color);
+      }
+
+      .stat-card.learning-weak {
+        border-color: var(--warning-color);
+      }
+
+      .stat-card.learning-weak .stat-value {
+        color: var(--warning-color);
+      }
+
+      .stat-card.new {
+        border-color: var(--text-tertiary);
+      }
+
+      .stat-card.new .stat-value {
+        color: var(--text-secondary);
       }
 
       .stat-value {
@@ -362,8 +410,11 @@ export class ProgressSummary extends LitElement {
       // Load study statistics
       this.studyStats = await window.electronAPI.database.getStudyStats();
 
-      // Load recent words with progress
+      // Load all words to calculate category statistics
       const allWords = await window.electronAPI.database.getAllWords(true, false);
+      this.wordCategoryStats = this.calculateWordCategoryStats(allWords);
+
+      // Load recent words with progress
       this.recentWords = allWords
         .filter(word => word.lastStudied) // Only words that have been studied
         .sort((a, b) => {
@@ -385,6 +436,29 @@ export class ProgressSummary extends LitElement {
     }
   }
 
+  private calculateWordCategoryStats(words: Word[]): WordCategoryStats {
+    const stats: WordCategoryStats = {
+      known: 0,
+      learningStrong: 0,
+      learningWeak: 0,
+      new: 0
+    };
+
+    words.forEach(word => {
+      if (!word.lastStudied) {
+        stats.new++;
+      } else if (word.strength > ProgressSummary.STRONG_THRESHOLD) {
+        stats.known++;
+      } else if (word.strength >= ProgressSummary.WEAK_THRESHOLD) {
+        stats.learningStrong++;
+      } else {
+        stats.learningWeak++;
+      }
+    });
+
+    return stats;
+  }
+
   private createWordProgress(word: Word): WordProgress {
     const strength = word.strength;
     let statusLabel: string;
@@ -393,10 +467,10 @@ export class ProgressSummary extends LitElement {
     if (word.known) {
       statusLabel = 'Known';
       statusClass = 'known';
-    } else if (strength >= 70) {
+    } else if (strength >= ProgressSummary.STRONG_THRESHOLD) {
       statusLabel = 'Strong';
       statusClass = 'strong';
-    } else if (strength >= 30) {
+    } else if (strength >= ProgressSummary.WEAK_THRESHOLD) {
       statusLabel = 'Learning';
       statusClass = 'learning';
     } else {
@@ -475,7 +549,9 @@ export class ProgressSummary extends LitElement {
       `;
     }
 
-    if (!this.studyStats || this.studyStats.totalWords === 0) {
+    if (!this.wordCategoryStats ||
+      (this.wordCategoryStats.known + this.wordCategoryStats.learningStrong +
+        this.wordCategoryStats.learningWeak + this.wordCategoryStats.new) === 0) {
       return html`
         <div class="progress-container">
           <div class="empty-state">
@@ -501,37 +577,35 @@ export class ProgressSummary extends LitElement {
         </div>
 
         <div class="progress-grid">
-          <!-- Top Left: Study Statistics -->
+          <!-- Top Left: Word Categories -->
           <div class="progress-section">
             <h3 class="section-title">
               <span class="section-icon">📊</span>
               Study Statistics
             </h3>
             <div class="stats-grid">
-              <div class="stat-card">
-                <div class="stat-value">${this.studyStats.totalWords}</div>
-                <div class="stat-label">Total Words</div>
-                <div class="stat-description">Words you've studied</div>
+              <div class="stat-card known">
+                <div class="stat-value">${this.wordCategoryStats?.known || 0}</div>
+                <div class="stat-label">Known</div>
+                <div class="stat-description">Strength > ${ProgressSummary.STRONG_THRESHOLD}</div>
               </div>
 
-              <div class="stat-card">
-                <div class="stat-value">${this.studyStats.wordsStudied}</div>
-                <div class="stat-label">Words Practiced</div>
-                <div class="stat-description">In recent sessions</div>
+              <div class="stat-card learning-strong">
+                <div class="stat-value">${this.wordCategoryStats?.learningStrong || 0}</div>
+                <div class="stat-label">Learning - Strong</div>
+                <div class="stat-description">Strength ${ProgressSummary.WEAK_THRESHOLD}-${ProgressSummary.STRONG_THRESHOLD}</div>
               </div>
 
-              <div class="stat-card">
-                <div class="stat-value">${Math.round(this.studyStats.averageStrength)}%</div>
-                <div class="stat-label">Average Strength</div>
-                <div class="stat-description">Overall mastery level</div>
+              <div class="stat-card learning-weak">
+                <div class="stat-value">${this.wordCategoryStats?.learningWeak || 0}</div>
+                <div class="stat-label">Learning - Weak</div>
+                <div class="stat-description">Strength < ${ProgressSummary.WEAK_THRESHOLD}</div>
               </div>
 
-              <div class="stat-card">
-                <div class="stat-value">
-                  ${this.studyStats.lastStudyDate ? this.formatDate(new Date(this.studyStats.lastStudyDate)) : 'Never'}
-                </div>
-                <div class="stat-label">Last Study</div>
-                <div class="stat-description">Most recent session</div>
+              <div class="stat-card new">
+                <div class="stat-value">${this.wordCategoryStats?.new || 0}</div>
+                <div class="stat-label">New</div>
+                <div class="stat-description">Never studied</div>
               </div>
             </div>
           </div>
