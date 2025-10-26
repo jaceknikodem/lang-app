@@ -240,6 +240,17 @@ export class WordSelector extends LitElement {
         color: #d32f2f;
       }
 
+      .frequency-tier {
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 10px;
+        background: #f5f5f5;
+        color: #666;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
       .action-section {
         display: flex;
         justify-content: center;
@@ -619,6 +630,9 @@ export class WordSelector extends LitElement {
               <div class="word-content">
                 <h4 class="word-foreign">${word.word}</h4>
                 <p class="word-translation">${word.translation}</p>
+                ${word.frequencyTier ? html`
+                  <span class="frequency-tier">${word.frequencyTier}</span>
+                ` : ''}
               </div>
             </div>
           `)}

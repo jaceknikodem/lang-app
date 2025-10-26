@@ -105,10 +105,16 @@ export class ContentGenerator {
           translation = await this.getWordTranslation(wordEntry.word, language);
         }
         
+        // Get frequency position and tier information
+        const frequencyPosition = wordEntry.position;
+        const frequencyTier = frequencyPosition ? this.frequencyWordManager.getFrequencyTier(frequencyPosition) : undefined;
+        
         generatedWords.push({
           word: wordEntry.word,
           translation: translation,
-          frequency: 'high' // Words from frequency lists are considered high frequency
+          frequency: 'high', // Words from frequency lists are considered high frequency
+          frequencyPosition,
+          frequencyTier
         });
       } catch (error) {
         console.warn(`Failed to get translation for word "${wordEntry.word}":`, error);
@@ -153,8 +159,20 @@ export class ContentGenerator {
       throw new Error('No valid words were generated. Please try again.');
     }
 
+    // Add frequency position information for words that exist in frequency lists
+    const wordsWithFrequencyInfo = validWords.map(word => {
+      const frequencyPosition = this.frequencyWordManager.getWordFrequencyPosition(word.word, targetLanguage.toLowerCase());
+      const frequencyTier = frequencyPosition ? this.frequencyWordManager.getFrequencyTier(frequencyPosition) : undefined;
+      
+      return {
+        ...word,
+        frequencyPosition,
+        frequencyTier
+      };
+    });
+
     // Shuffle the words to ensure variety in presentation order
-    return this.shuffleArray(validWords);
+    return this.shuffleArray(wordsWithFrequencyInfo);
   }
 
   /**

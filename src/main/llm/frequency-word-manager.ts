@@ -14,6 +14,7 @@ export interface FrequencyWordManagerConfig {
 export interface WordEntry {
     word: string;
     translation: string | null;
+    position?: number; // 1-based position in frequency list
 }
 
 export class FrequencyWordManager {
@@ -87,13 +88,13 @@ export class FrequencyWordManager {
                 .filter(line => line.length > 0);
 
             // Parse lines - support both formats: "word" and "word;translation"
-            const wordEntries: WordEntry[] = lines.map(line => {
+            const wordEntries: WordEntry[] = lines.map((line, index) => {
                 if (line.includes(';')) {
                     const [word, translation] = line.split(';').map(part => part.trim());
-                    return { word, translation };
+                    return { word, translation, position: index + 1 };
                 } else {
                     // Legacy format - word only (translation will need to be generated)
-                    return { word: line, translation: null };
+                    return { word: line, translation: null, position: index + 1 };
                 }
             });
 
@@ -247,5 +248,36 @@ export class FrequencyWordManager {
      */
     getWordList(language: string): WordEntry[] {
         return this.wordLists.get(language) || [];
+    }
+
+    /**
+     * Get the frequency position of a specific word
+     * Returns the 1-based position in the frequency list, or undefined if not found
+     */
+    getWordFrequencyPosition(word: string, language: string): number | undefined {
+        const wordList = this.wordLists.get(language);
+        if (!wordList) {
+            return undefined;
+        }
+
+        const normalizedWord = word.toLowerCase().trim();
+        const entry = wordList.find(entry => entry.word.toLowerCase().trim() === normalizedWord);
+        return entry?.position;
+    }
+
+    /**
+     * Get frequency tier description based on position
+     */
+    getFrequencyTier(position: number): string | undefined {
+        if (position <= 100) {
+            return 'top 100';
+        } else if (position <= 200) {
+            return 'top 200';
+        } else if (position <= 500) {
+            return 'top 500';
+        } else if (position <= 1000) {
+            return 'top 1000';
+        }
+        return undefined; // Don't show anything for words beyond top 1000
     }
 }

@@ -44,6 +44,8 @@ export interface GeneratedWord {
   word: string;        // Foreign language word
   translation: string; // English translation
   frequency: 'high' | 'medium' | 'low';
+  frequencyPosition?: number; // 1-based position in frequency list
+  frequencyTier?: string; // Human-readable tier like "top 100", "top 500"
 }
 
 export interface GeneratedSentence {
