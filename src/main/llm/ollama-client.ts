@@ -242,7 +242,9 @@ export class OllamaClient implements LLMClient {
   }
 
   async generateSentences(word: string, language: string, count: number): Promise<GeneratedSentence[]> {
-    const prompt = this.createSentencesPrompt(word, language, count);
+    // Get known words to include in sentences when possible
+    const knownWords = await this.getKnownWords(language);
+    const prompt = this.createSentencesPrompt(word, language, count, knownWords);
 
     try {
       const response = await this.makeRequest(prompt);
@@ -307,6 +309,35 @@ export class OllamaClient implements LLMClient {
     }
   }
 
+  /**
+   * Get known words from database to include in sentence generation
+   */
+  private async getKnownWords(language: string): Promise<string[]> {
+    if (!this.databaseLayer) {
+      console.warn('Database layer not set, cannot get known words');
+      return [];
+    }
+
+    try {
+      // Get only known words for the language
+      const allWords = await this.databaseLayer.getAllWords(true, false);
+      const knownWords = allWords
+        .filter((word: any) => word.language === language && word.known === true)
+        .map((word: any) => word.word);
+      
+      // Limit to 50 words and randomize selection if more than 50
+      if (knownWords.length > 50) {
+        const shuffled = [...knownWords].sort(() => Math.random() - 0.5);
+        return shuffled.slice(0, 50);
+      }
+      
+      return knownWords;
+    } catch (error) {
+      console.error('Failed to get known words for sentence generation:', error);
+      return [];
+    }
+  }
+
   private createTopicWordsPrompt(topic: string, language: string, count: number, existingWords: string[] = []): string {
     const examples = Array.from({ length: count }, (_, i) =>
       `  {"word": "${language.toLowerCase()}_word${i + 1}", "translation": "english_translation${i + 1}", "frequency": "${i % 3 === 0 ? 'high' : i % 3 === 1 ? 'medium' : 'low'}"}`
@@ -359,15 +390,20 @@ Rules:
     }
   }
 
-  private createSentencesPrompt(word: string, language: string, count: number): string {
+  private createSentencesPrompt(word: string, language: string, count: number, knownWords: string[] = []): string {
     const examples = Array.from({ length: count }, (_, i) =>
       `  {"sentence": "${language.toLowerCase()}_sentence${i + 1}_with_${word}", "translation": "english_translation${i + 1}"}`
     ).join(',\n');
 
+    // Create known words guidance
+    const knownWordsText = knownWords.length > 0
+      ? `\nWhen possible, try to include some of these known words in your sentences (when it makes sense naturally): ${knownWords.join(', ')}`
+      : '';
+
     return `CRITICAL: You must return exactly ${count} sentences in a JSON array. No more, no less.
 CRITICAL: Return ONLY the JSON array, no explanations or extra text.
 
-Task: Generate exactly ${count} natural, conversational sentences in ${language} using the word '${word}'.
+Task: Generate exactly ${count} natural, conversational sentences in ${language} using the word '${word}'.${knownWordsText}
 
 Expected output format (${count} items):
 [
@@ -380,7 +416,9 @@ Rules:
 3. Keep sentences short (5-15 words)
 4. Make them conversational and natural
 5. Each sentence must be different
-6. Return ONLY the JSON array, nothing else`;
+6. When natural and appropriate, include some known words from the provided list
+7. Don't force known words if they don't fit naturally
+8. Return ONLY the JSON array, nothing else`;
   }
 
   private async makeRequest(prompt: string): Promise<any> {
