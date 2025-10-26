@@ -227,23 +227,36 @@ export class TopicSelector extends LitElement {
 
   private async loadAvailableModels() {
     this.isLoadingModels = true;
+    this.error = '';
+    
     try {
+      console.log('Loading available models...');
+      
       const [models, currentModel] = await Promise.all([
         window.electronAPI.llm.getAvailableModels(),
         window.electronAPI.llm.getCurrentModel()
       ]);
 
+      console.log('Models loaded:', models);
+      console.log('Current model:', currentModel);
+
       this.availableModels = models;
-      this.selectedModel = currentModel;
+      this.selectedModel = currentModel || '';
 
       if (models.length === 0) {
         this.error = 'No models available. Please ensure Ollama is running and has models installed.';
+      } else if (!currentModel) {
+        this.error = 'No model selected. Please select a model to continue.';
       }
+      
+      console.log('Model loading complete. Selected model:', this.selectedModel);
     } catch (error) {
       console.error('Failed to load available models:', error);
       this.error = 'Failed to load available models. Please check that Ollama is running.';
+      this.selectedModel = '';
     } finally {
       this.isLoadingModels = false;
+      console.log('Model loading finished. isLoadingModels:', this.isLoadingModels, 'selectedModel:', this.selectedModel);
     }
   }
 
@@ -286,15 +299,20 @@ export class TopicSelector extends LitElement {
       return;
     }
 
+    console.log('Starting word generation...', { topic: this.topic, language: this.language, selectedModel: this.selectedModel });
+
     this.isGenerating = true;
     this.error = '';
 
     try {
       // Generate words based on topic (or general vocabulary if no topic)
+      console.log('Calling generateWords API...');
       const words = await window.electronAPI.llm.generateWords(
         this.topic.trim() || undefined,
         this.language
       );
+
+      console.log('Generated words result:', words);
 
       if (!words || words.length === 0) {
         throw new Error('No words were generated. Please try again.');
@@ -305,6 +323,8 @@ export class TopicSelector extends LitElement {
       if (topicToSave) {
         sessionManager.updateSelectedTopic(topicToSave);
       }
+
+      console.log('Navigating to word selection with', words.length, 'words');
 
       // Navigate to word selection with generated words
       router.navigateTo('word-selection', {

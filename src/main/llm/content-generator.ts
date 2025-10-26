@@ -33,8 +33,8 @@ export class ContentGenerator {
    * Generate vocabulary words for a given topic with frequency classification
    */
   async generateTopicVocabulary(
-    topic?: string, 
-    language?: string, 
+    topic?: string,
+    language?: string,
     count?: number
   ): Promise<GeneratedWord[]> {
     const targetLanguage = language || this.config.defaultLanguage;
@@ -49,17 +49,17 @@ export class ContentGenerator {
       }
 
       console.log(`Generating vocabulary: topic="${topicText}", language="${targetLanguage}", count=${wordCount}`);
-      
+
       const words = await this.executeWithRetry(
         () => this.llmClient.generateTopicWords(topicText, targetLanguage, wordCount),
         `generate vocabulary for topic: ${topicText || 'general'}`
       );
-      
+
       console.log(`LLM returned ${words?.length || 0} words:`, words);
 
       // Validate and filter results
       const validWords = this.validateGeneratedWords(words);
-      
+
       if (validWords.length === 0) {
         throw new Error('No valid words were generated. Please try again.');
       }
@@ -75,8 +75,8 @@ export class ContentGenerator {
    * Generate contextual sentences for a vocabulary word with translations
    */
   async generateWordSentences(
-    word: string, 
-    language?: string, 
+    word: string,
+    language?: string,
     count?: number
   ): Promise<GeneratedSentence[]> {
     const targetLanguage = language || this.config.defaultLanguage;
@@ -100,7 +100,7 @@ export class ContentGenerator {
 
       // Validate and filter results
       const validSentences = this.validateGeneratedSentences(sentences, word);
-      
+
       if (validSentences.length === 0) {
         throw new Error(`No valid sentences were generated for word: ${word}. Please try again.`);
       }
@@ -137,7 +137,7 @@ export class ContentGenerator {
         return await operation();
       } catch (error) {
         lastError = error as Error;
-        
+
         // Check if error is retryable
         if (error instanceof Error && 'retryable' in error) {
           const llmError = error as LLMError;
@@ -152,7 +152,7 @@ export class ContentGenerator {
         }
 
         console.warn(`Attempt ${attempt} failed for ${operationName}: ${error}. Retrying...`);
-        
+
         // Wait before retry
         await this.delay(this.config.retryDelay * attempt);
       }
@@ -225,13 +225,8 @@ export class ContentGenerator {
         return false;
       }
 
-      // Verify the target word appears in the sentence (case-insensitive)
-      const sentenceLower = sentence.sentence.toLowerCase();
-      const wordLower = targetWord.toLowerCase();
-      if (!sentenceLower.includes(wordLower)) {
-        console.warn(`Skipping sentence that doesn't contain target word "${targetWord}":`, sentence.sentence);
-        return false;
-      }
+      // Note: Removed rigid word inclusion check as it was too restrictive
+      // LLM may use word variations, conjugations, or related forms
 
       return true;
     });
@@ -246,11 +241,11 @@ export class ContentGenerator {
       if ('code' in error) {
         return error;
       }
-      
+
       // Wrap other errors with context
       return new Error(`${operation} failed: ${error.message}`);
     }
-    
+
     return new Error(`${operation} failed: Unknown error occurred`);
   }
 

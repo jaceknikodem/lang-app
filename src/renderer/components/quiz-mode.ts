@@ -492,11 +492,8 @@ export class QuizMode extends LitElement {
     this.error = null;
 
     try {
-      // If no words provided, get weakest words from database
-      let wordsToQuiz = this.selectedWords;
-      if (wordsToQuiz.length === 0) {
-        wordsToQuiz = await window.electronAPI.quiz.getWeakestWords(10);
-      }
+      // Use the weakest words loaded from database
+      const wordsToQuiz = this.selectedWords;
 
       // Generate quiz questions from words
       const questions: QuizQuestion[] = [];
@@ -546,14 +543,10 @@ export class QuizMode extends LitElement {
 
   private async loadSelectedWords() {
     try {
-      // Get weak words first for targeted practice, fallback to all words (limited to 10)
-      let words = await window.electronAPI.quiz.getWeakestWords(10);
-      if (words.length === 0) {
-        const allWords = await window.electronAPI.database.getAllWords(true, false);
-        words = allWords.slice(0, 10); // Limit to 10 words maximum
-      }
+      // Always load the weakest words from database for targeted practice
+      const words = await window.electronAPI.quiz.getWeakestWords(10);
       this.selectedWords = words;
-      console.log('Loaded words for quiz:', this.selectedWords.length);
+      console.log('Loaded weakest words for quiz:', this.selectedWords.length);
     } catch (error) {
       console.error('Failed to load words:', error);
       this.error = 'Failed to load words from database.';

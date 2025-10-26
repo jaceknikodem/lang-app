@@ -370,25 +370,9 @@ export class AppRoot extends LitElement {
         }
         break;
       case 'quiz':
-        // Get weak words from database for quiz
+        // Always navigate to quiz - the quiz component will handle empty state
         const direction = this.sessionState?.quizDirection || this.appState.quizDirection;
-        try {
-          const weakWords = await window.electronAPI.quiz.getWeakestWords(20);
-          if (weakWords.length > 0) {
-            router.goToQuiz(direction);
-          } else {
-            // If no weak words, get all words
-            const allWords = await window.electronAPI.database.getAllWords(true, false);
-            if (allWords.length > 0) {
-              router.goToQuiz(direction);
-            } else {
-              router.goToTopicSelection();
-            }
-          }
-        } catch (error) {
-          console.error('Failed to load words for quiz:', error);
-          router.goToTopicSelection();
-        }
+        router.goToQuiz(direction);
         break;
       case 'progress':
         router.goToProgress();
@@ -462,7 +446,6 @@ export class AppRoot extends LitElement {
             <button 
               class="nav-button ${router.isCurrentMode('quiz') ? 'active' : ''}"
               @click=${() => this.handleNavigation('quiz')}
-              ?disabled=${!this.hasExistingWords}
             >
               Quiz
             </button>

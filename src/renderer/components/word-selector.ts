@@ -282,7 +282,7 @@ export class WordSelector extends LitElement {
 
   private async handleStartLearning() {
     const selectedWords = this.getSelectedWords();
-    
+
     if (selectedWords.length === 0) {
       this.error = 'Please select at least one word to study.';
       return;
@@ -297,57 +297,90 @@ export class WordSelector extends LitElement {
     this.error = '';
 
     try {
+      console.log('Processing', selectedWords.length, 'selected words...');
+
+      // Set the current language in database to match the words being inserted
+      await window.electronAPI.database.setCurrentLanguage(this.language);
+      console.log('Set current language to:', this.language);
+
       // Store selected words in database and generate sentences
       const storedWords = [];
-      
-      for (const word of selectedWords) {
-        // Generate audio for the word
-        const wordAudioPath = await window.electronAPI.audio.generateAudio(
-          word.word,
-          this.language
-        );
 
-        // Insert word into database
-        const wordId = await window.electronAPI.database.insertWord({
-          word: word.word,
-          language: this.language,
-          translation: word.translation,
-          audioPath: wordAudioPath
-        });
+      for (let i = 0; i < selectedWords.length; i++) {
+        const word = selectedWords[i];
+        console.log(`Processing word ${i + 1}/${selectedWords.length}: ${word.word}`);
 
-        // Generate sentences for the word
-        const sentences = await window.electronAPI.llm.generateSentences(
-          word.word,
-          this.language
-        );
-
-        // Store sentences in database with audio generation
-        for (const sentence of sentences) {
-          // Generate audio for the sentence
-          const audioPath = await window.electronAPI.audio.generateAudio(
-            sentence.sentence,
+        try {
+          // Generate audio for the word
+          console.log('Generating audio for word:', word.word);
+          const wordAudioPath = await window.electronAPI.audio.generateAudio(
+            word.word,
             this.language
           );
-          
-          await window.electronAPI.database.insertSentence(
-            wordId,
-            sentence.sentence,
-            sentence.translation,
-            audioPath
-          );
-        }
+          console.log('Word audio generated:', wordAudioPath);
 
-        // Get the complete word data
-        const completeWord = await window.electronAPI.database.getWordById(wordId);
-        if (completeWord) {
-          storedWords.push(completeWord);
+          // Insert word into database
+          console.log('Inserting word into database:', word.word);
+          const wordId = await window.electronAPI.database.insertWord({
+            word: word.word,
+            language: this.language,
+            translation: word.translation,
+            audioPath: wordAudioPath
+          });
+          console.log('Word inserted with ID:', wordId);
+
+          // Generate sentences for the word
+          console.log('Generating sentences for word:', word.word);
+          const sentences = await window.electronAPI.llm.generateSentences(
+            word.word,
+            this.language
+          );
+          console.log('Generated', sentences.length, 'sentences for', word.word);
+
+          // Store sentences in database with audio generation
+          for (let j = 0; j < sentences.length; j++) {
+            const sentence = sentences[j];
+            console.log(`Processing sentence ${j + 1}/${sentences.length} for ${word.word}`);
+
+            // Generate audio for the sentence
+            const audioPath = await window.electronAPI.audio.generateAudio(
+              sentence.sentence,
+              this.language
+            );
+
+            await window.electronAPI.database.insertSentence(
+              wordId,
+              sentence.sentence,
+              sentence.translation,
+              audioPath
+            );
+          }
+
+          // Get the complete word data
+          const completeWord = await window.electronAPI.database.getWordById(wordId);
+          if (completeWord) {
+            storedWords.push(completeWord);
+            console.log('Word processing complete:', word.word);
+          } else {
+            console.warn('Failed to retrieve complete word data for:', word.word);
+          }
+        } catch (wordError) {
+          console.error(`Failed to process word ${word.word}:`, wordError);
+          throw wordError; // Re-throw to stop processing
         }
       }
+
+      console.log('All words processed successfully. Stored', storedWords.length, 'words.');
 
       // Update session with topic
       if (this.topic) {
         sessionManager.updateSelectedTopic(this.topic);
       }
+
+      console.log('Navigating to learning mode...');
+
+      // Small delay to ensure database operations are fully committed
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Navigate to learning mode (words will be loaded from database)
       router.goToLearning();
@@ -453,7 +486,7 @@ export class WordSelector extends LitElement {
               @click=${this.handleStartLearning}
               ?disabled=${selectedCount === 0}
             >
-              Start Learning (${selectedCount} words)
+              Learn (${selectedCount} words)
             </button>
             <button
               class="btn btn-secondary back-btn"
