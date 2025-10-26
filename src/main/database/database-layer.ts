@@ -147,7 +147,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
-   * Get words to study, prioritizing by lowest strength
+   * Get words to study, prioritizing by lowest strength with randomization
    */
   async getWordsToStudy(limit: number, language?: string): Promise<Word[]> {
     const db = this.getDb();
@@ -155,16 +155,22 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     try {
       const currentLanguage = language || await this.getCurrentLanguage();
       
+      // Get more words than needed to allow for shuffling within strength tiers
+      const expandedLimit = Math.min(limit * 3, 100);
+      
       const stmt = db.prepare(`
         SELECT * FROM words 
         WHERE known = FALSE AND ignored = FALSE AND language = ?
-        ORDER BY strength ASC, last_studied ASC NULLS FIRST
+        ORDER BY strength ASC, RANDOM()
         LIMIT ?
       `);
       
-      const rows = stmt.all(currentLanguage, limit) as any[];
+      const rows = stmt.all(currentLanguage, expandedLimit) as any[];
+      const words = rows.map(this.mapRowToWord);
       
-      return rows.map(this.mapRowToWord);
+      // Shuffle and return the requested limit
+      const shuffled = this.shuffleArray(words);
+      return shuffled.slice(0, limit);
     } catch (error) {
       throw new Error(`Failed to get words to study: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -201,7 +207,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
-   * Get all words with optional filtering
+   * Get all words with optional filtering and shuffling for learning
    */
   async getAllWords(includeKnown: boolean = true, includeIgnored: boolean = false, language?: string): Promise<Word[]> {
     const db = this.getDb();
@@ -220,15 +226,26 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
       
+      // If we're getting words for learning (not including known/ignored), shuffle them
+      const orderClause = (!includeKnown && !includeIgnored) 
+        ? 'ORDER BY strength ASC, RANDOM()'
+        : 'ORDER BY created_at DESC';
+      
       const stmt = db.prepare(`
         SELECT * FROM words 
         ${whereClause}
-        ORDER BY created_at DESC
+        ${orderClause}
       `);
       
       const rows = stmt.all(currentLanguage) as any[];
+      const words = rows.map(this.mapRowToWord);
       
-      return rows.map(this.mapRowToWord);
+      // Additional shuffling for learning words to ensure variety
+      if (!includeKnown && !includeIgnored) {
+        return this.shuffleArray(words);
+      }
+      
+      return words;
     } catch (error) {
       throw new Error(`Failed to get all words: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -273,7 +290,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
-   * Get all sentences for a specific word
+   * Get all sentences for a specific word in randomized order
    */
   async getSentencesByWord(wordId: number): Promise<Sentence[]> {
     const db = this.getDb();
@@ -282,7 +299,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const stmt = db.prepare(`
         SELECT * FROM sentences 
         WHERE word_id = ?
-        ORDER BY created_at ASC
+        ORDER BY RANDOM()
       `);
       
       const rows = stmt.all(wordId) as any[];
@@ -436,7 +453,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   // Quiz-specific operations
 
   /**
-   * Get weakest words for quiz generation, prioritizing lowest strength
+   * Get weakest words for quiz generation, prioritizing lowest strength with randomization
    */
   async getWeakestWords(limit: number, language?: string): Promise<Word[]> {
     const db = this.getDb();
@@ -444,16 +461,22 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     try {
       const currentLanguage = language || await this.getCurrentLanguage();
       
+      // Get more words than needed to allow for shuffling within strength tiers
+      const expandedLimit = Math.min(limit * 2, 50);
+      
       const stmt = db.prepare(`
         SELECT * FROM words 
         WHERE known = FALSE AND ignored = FALSE AND language = ?
-        ORDER BY strength ASC, last_studied ASC NULLS FIRST
+        ORDER BY strength ASC, RANDOM()
         LIMIT ?
       `);
       
-      const rows = stmt.all(currentLanguage, limit) as any[];
+      const rows = stmt.all(currentLanguage, expandedLimit) as any[];
+      const words = rows.map(this.mapRowToWord);
       
-      return rows.map(this.mapRowToWord);
+      // Shuffle and return the requested limit
+      const shuffled = this.shuffleArray(words);
+      return shuffled.slice(0, limit);
     } catch (error) {
       throw new Error(`Failed to get weakest words: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -583,7 +606,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
-  // Helper methods for mapping database rows to objects
+  // Helper methods for mapping database rows to objects and utilities
+
+  private shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
 
   private mapRowToWord(row: any): Word {
     return {

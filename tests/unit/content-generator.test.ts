@@ -58,9 +58,17 @@ describe('ContentGenerator', () => {
             );
 
             expect(words).toHaveLength(10);
-            expect(words[0].word).toBe('general_word_1');
-            expect(words[0].translation).toBe('general word 1');
-            expect(words[0].frequency).toBe('high');
+            
+            // Check that all expected words are present (order may vary due to shuffling)
+            const wordTexts = words.map(w => w.word);
+            for (let i = 1; i <= 10; i++) {
+                expect(wordTexts).toContain(`general_word_${i}`);
+            }
+            
+            // Check that first word has expected structure (regardless of which one it is)
+            expect(words[0].word).toMatch(/^general_word_\d+$/);
+            expect(words[0].translation).toMatch(/^general word \d+$/);
+            expect(['high', 'medium', 'low']).toContain(words[0].frequency);
         });
 
         test('should generate multiple words for specific topic', async () => {
@@ -71,9 +79,17 @@ describe('ContentGenerator', () => {
             );
 
             expect(words).toHaveLength(5);
-            expect(words[0].word).toBe('food_word_1');
-            expect(words[0].translation).toBe('food word 1');
-            expect(words[0].frequency).toBe('high');
+            
+            // Check that all expected words are present (order may vary due to shuffling)
+            const wordTexts = words.map(w => w.word);
+            for (let i = 1; i <= 5; i++) {
+                expect(wordTexts).toContain(`food_word_${i}`);
+            }
+            
+            // Check that first word has expected structure (regardless of which one it is)
+            expect(words[0].word).toMatch(/^food_word_\d+$/);
+            expect(words[0].translation).toMatch(/^food word \d+$/);
+            expect(['high', 'medium', 'low']).toContain(words[0].frequency);
         });
 
         test('should handle empty topic string as general vocabulary', async () => {
@@ -84,7 +100,12 @@ describe('ContentGenerator', () => {
             );
 
             expect(words).toHaveLength(3);
-            expect(words[0].word).toBe('general_word_1');
+            
+            // Check that all expected words are present (order may vary due to shuffling)
+            const wordTexts = words.map(w => w.word);
+            for (let i = 1; i <= 3; i++) {
+                expect(wordTexts).toContain(`general_word_${i}`);
+            }
         });
 
         test('should handle whitespace-only topic as general vocabulary', async () => {
@@ -95,7 +116,35 @@ describe('ContentGenerator', () => {
             );
 
             expect(words).toHaveLength(3);
-            expect(words[0].word).toBe('general_word_1');
+            
+            // Check that all expected words are present (order may vary due to shuffling)
+            const wordTexts = words.map(w => w.word);
+            for (let i = 1; i <= 3; i++) {
+                expect(wordTexts).toContain(`general_word_${i}`);
+            }
+        });
+
+        test('should shuffle words to provide variety in order', async () => {
+            // Generate words multiple times and check that order varies
+            const results = [];
+            for (let i = 0; i < 5; i++) {
+                const words = await contentGenerator.generateTopicVocabulary(
+                    'test',
+                    'Spanish',
+                    5
+                );
+                results.push(words.map(w => w.word));
+            }
+
+            // Check that not all results are identical (shuffling should provide variety)
+            const firstResult = results[0];
+            const allIdentical = results.every(result => 
+                result.every((word, index) => word === firstResult[index])
+            );
+            
+            // With shuffling, it's extremely unlikely all 5 results would be identical
+            // (probability is 1/5! = 1/120 for each comparison, much lower for all)
+            expect(allIdentical).toBe(false);
         });
     });
 });

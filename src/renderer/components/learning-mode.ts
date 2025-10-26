@@ -259,13 +259,18 @@ export class LearningMode extends LitElement {
           console.warn(`No sentences found for word: ${word.word}`);
         }
 
+        // Shuffle sentences for each word to avoid predictable order
+        const shuffledSentences = this.shuffleArray(sentences);
+
         wordsWithSentences.push({
           ...word,
-          sentences
+          sentences: shuffledSentences
         });
       }
 
-      this.wordsWithSentences = wordsWithSentences.filter(w => w.sentences.length > 0);
+      // Shuffle the words themselves for varied learning experience
+      const shuffledWordsWithSentences = this.shuffleArray(wordsWithSentences.filter(w => w.sentences.length > 0));
+      this.wordsWithSentences = shuffledWordsWithSentences;
 
       if (this.wordsWithSentences.length === 0) {
         this.error = 'No sentences available for the selected words.';
@@ -402,6 +407,15 @@ export class LearningMode extends LitElement {
 
   private saveProgressToSession() {
     sessionManager.updateLearningProgress(this.currentWordIndex, this.currentSentenceIndex);
+  }
+
+  private shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
   }
 
   private isFirstSentence(): boolean {

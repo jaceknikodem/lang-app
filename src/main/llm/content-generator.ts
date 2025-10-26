@@ -64,7 +64,8 @@ export class ContentGenerator {
         throw new Error('No valid words were generated. Please try again.');
       }
 
-      return validWords;
+      // Shuffle the words to ensure variety in presentation order
+      return this.shuffleArray(validWords);
 
     } catch (error) {
       throw this.handleContentGenerationError(error, 'vocabulary generation');
@@ -105,7 +106,8 @@ export class ContentGenerator {
         throw new Error(`No valid sentences were generated for word: ${word}. Please try again.`);
       }
 
-      return validSentences;
+      // Shuffle the sentences to ensure variety in presentation order
+      return this.shuffleArray(validSentences);
 
     } catch (error) {
       throw this.handleContentGenerationError(error, 'sentence generation');
@@ -247,6 +249,18 @@ export class ContentGenerator {
     }
 
     return new Error(`${operation} failed: Unknown error occurred`);
+  }
+
+  /**
+   * Shuffle an array using Fisher-Yates algorithm
+   */
+  private shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
   }
 
   /**
