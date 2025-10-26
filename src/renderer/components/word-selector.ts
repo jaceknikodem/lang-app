@@ -472,7 +472,11 @@ export class WordSelector extends LitElement {
               wordId,
               sentence.sentence,
               sentence.translation,
-              audioPath
+              audioPath,
+              sentence.contextBefore,
+              sentence.contextAfter,
+              sentence.contextBeforeTranslation,
+              sentence.contextAfterTranslation
             );
           }
 

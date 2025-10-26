@@ -308,16 +308,37 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Insert a new sentence for a word
    */
-  async insertSentence(wordId: number, sentence: string, translation: string, audioPath: string): Promise<number> {
+  async insertSentence(
+    wordId: number, 
+    sentence: string, 
+    translation: string, 
+    audioPath: string,
+    contextBefore?: string,
+    contextAfter?: string,
+    contextBeforeTranslation?: string,
+    contextAfterTranslation?: string
+  ): Promise<number> {
     const db = this.getDb();
     
     try {
       const stmt = db.prepare(`
-        INSERT INTO sentences (word_id, sentence, translation, audio_path)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO sentences (
+          word_id, sentence, translation, audio_path,
+          context_before, context_after, context_before_translation, context_after_translation
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
-      const result = stmt.run(wordId, sentence, translation, audioPath);
+      const result = stmt.run(
+        wordId, 
+        sentence, 
+        translation, 
+        audioPath,
+        contextBefore || null,
+        contextAfter || null,
+        contextBeforeTranslation || null,
+        contextAfterTranslation || null
+      );
       
       return result.lastInsertRowid as number;
     } catch (error) {
@@ -676,7 +697,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       translation: row.translation,
       audioPath: row.audio_path || '',
       createdAt: new Date(row.created_at),
-      lastShown: row.last_shown ? new Date(row.last_shown) : undefined
+      lastShown: row.last_shown ? new Date(row.last_shown) : undefined,
+      contextBefore: row.context_before || undefined,
+      contextAfter: row.context_after || undefined,
+      contextBeforeTranslation: row.context_before_translation || undefined,
+      contextAfterTranslation: row.context_after_translation || undefined
     };
   }
 }

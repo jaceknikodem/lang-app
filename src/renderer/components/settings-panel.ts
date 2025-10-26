@@ -151,8 +151,31 @@ export class SettingsPanel extends LitElement {
         margin-top: 1.5rem;
       }
 
+      .checkbox-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
 
+      .checkbox-row:last-child {
+        margin-bottom: 0;
+      }
 
+      .checkbox-row input[type="checkbox"] {
+        margin-right: 0.5rem;
+        transform: scale(1.2);
+      }
+
+      .checkbox-row label {
+        cursor: pointer;
+        flex: 1;
+      }
+
+      .checkbox-description {
+        margin-top: 0.25rem;
+        color: #666;
+        font-size: 0.9rem;
+      }
 
     `
   ];
@@ -172,12 +195,25 @@ export class SettingsPanel extends LitElement {
   @state()
   private showConfirmation = false;
 
+  @state()
+  private contextSentencesEnabled = false;
+
 
 
 
 
   async connectedCallback() {
     super.connectedCallback();
+    await this.loadSettings();
+  }
+
+  private async loadSettings() {
+    try {
+      const contextSetting = await window.electronAPI.database.getSetting('context_sentences');
+      this.contextSentencesEnabled = contextSetting === 'true';
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+    }
   }
 
 
@@ -241,6 +277,20 @@ export class SettingsPanel extends LitElement {
     }
   }
 
+  private async toggleContextSentences(event: Event) {
+    const checkbox = event.target as HTMLInputElement;
+    this.contextSentencesEnabled = checkbox.checked;
+    
+    try {
+      await window.electronAPI.database.setSetting('context_sentences', checkbox.checked ? 'true' : 'false');
+    } catch (error) {
+      console.error('Failed to save context sentences setting:', error);
+      // Revert the checkbox state if saving failed
+      this.contextSentencesEnabled = !checkbox.checked;
+      checkbox.checked = !checkbox.checked;
+    }
+  }
+
 
 
 
@@ -251,6 +301,24 @@ export class SettingsPanel extends LitElement {
         <h2>Settings</h2>
 
 
+
+        <div class="settings-section">
+          <h3>Learning Preferences</h3>
+          <div class="checkbox-row">
+            <input 
+              type="checkbox" 
+              id="context-sentences"
+              .checked=${this.contextSentencesEnabled}
+              @change=${this.toggleContextSentences}
+            />
+            <label for="context-sentences">
+              <strong>Context Sentences</strong>
+              <div class="checkbox-description">
+                When generating sentences, include additional sentences before and after for better context understanding
+              </div>
+            </label>
+          </div>
+        </div>
 
         <div class="settings-section">
           <h3>Data Management</h3>

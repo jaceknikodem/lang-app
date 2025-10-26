@@ -111,6 +111,20 @@ export class MigrationManager {
         down: [
           // Rollback is not supported for this migration due to file system complexity
         ]
+      },
+      {
+        version: 4,
+        name: 'add_context_sentences',
+        up: [
+          `ALTER TABLE sentences ADD COLUMN context_before TEXT`,
+          `ALTER TABLE sentences ADD COLUMN context_after TEXT`,
+          `ALTER TABLE sentences ADD COLUMN context_before_translation TEXT`,
+          `ALTER TABLE sentences ADD COLUMN context_after_translation TEXT`
+        ],
+        down: [
+          // SQLite doesn't support DROP COLUMN, so we'd need to recreate the table
+          // For now, we'll leave the columns as they won't hurt anything
+        ]
       }
     ];
   }

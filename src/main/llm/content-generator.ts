@@ -201,7 +201,8 @@ export class ContentGenerator {
   async generateWordSentences(
     word: string,
     language?: string,
-    count?: number
+    count?: number,
+    database?: DatabaseLayer
   ): Promise<GeneratedSentence[]> {
     const targetLanguage = language || this.config.defaultLanguage;
     const sentenceCount = count || this.config.defaultSentenceCount;
@@ -217,8 +218,19 @@ export class ContentGenerator {
         throw new Error('LLM service is not available. Please ensure Ollama is running.');
       }
 
+      // Check if context sentences are enabled
+      let useContextSentences = false;
+      if (database) {
+        try {
+          const contextSetting = await database.getSetting('context_sentences');
+          useContextSentences = contextSetting === 'true';
+        } catch (error) {
+          console.warn('Failed to get context sentences setting:', error);
+        }
+      }
+
       const sentences = await this.executeWithRetry(
-        () => this.llmClient.generateSentences(word.trim(), targetLanguage, sentenceCount),
+        () => this.llmClient.generateSentences(word.trim(), targetLanguage, sentenceCount, useContextSentences),
         `generate sentences for word: ${word}`
       );
 

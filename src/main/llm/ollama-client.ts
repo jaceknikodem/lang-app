@@ -15,7 +15,11 @@ const GeneratedWordSchema = z.object({
 
 const GeneratedSentenceSchema = z.object({
   sentence: z.string().min(1, "Sentence cannot be empty").trim(),
-  translation: z.string().min(1, "Translation cannot be empty").trim()
+  translation: z.string().min(1, "Translation cannot be empty").trim(),
+  contextBefore: z.string().optional(),
+  contextAfter: z.string().optional(),
+  contextBeforeTranslation: z.string().optional(),
+  contextAfterTranslation: z.string().optional()
 });
 
 // Fallback schemas for when LLM returns unexpected formats
@@ -36,7 +40,11 @@ const LooseWordSchema = z.object({
 
 const LooseSentenceSchema = z.object({
   sentence: z.string().transform(s => s.trim()).pipe(z.string().min(1)),
-  translation: z.string().transform(s => s.trim()).pipe(z.string().min(1))
+  translation: z.string().transform(s => s.trim()).pipe(z.string().min(1)),
+  contextBefore: z.string().optional().transform(s => s?.trim()),
+  contextAfter: z.string().optional().transform(s => s?.trim()),
+  contextBeforeTranslation: z.string().optional().transform(s => s?.trim()),
+  contextAfterTranslation: z.string().optional().transform(s => s?.trim())
 });
 
 // More flexible schemas that can handle various response formats
@@ -241,10 +249,10 @@ export class OllamaClient implements LLMClient {
     }
   }
 
-  async generateSentences(word: string, language: string, count: number): Promise<GeneratedSentence[]> {
+  async generateSentences(word: string, language: string, count: number, useContextSentences: boolean = false): Promise<GeneratedSentence[]> {
     // Get known words to include in sentences when possible
     const knownWords = await this.getKnownWords(language);
-    const prompt = this.createSentencesPrompt(word, language, count, knownWords);
+    const prompt = this.createSentencesPrompt(word, language, count, knownWords, useContextSentences);
 
     try {
       const response = await this.makeRequest(prompt);
@@ -440,10 +448,33 @@ Rules:
     }
   }
 
-  private createSentencesPrompt(word: string, language: string, count: number, knownWords: string[] = []): string {
-    const examples = Array.from({ length: count }, (_, i) =>
-      `  {"sentence": "${language.toLowerCase()}_sentence${i + 1}_with_${word}", "translation": "english_translation${i + 1}"}`
-    ).join(',\n');
+  private createSentencesPrompt(word: string, language: string, count: number, knownWords: string[] = [], useContextSentences: boolean = false): string {
+    let examples: string;
+    let contextInstructions = '';
+    
+    if (useContextSentences) {
+      examples = Array.from({ length: count }, (_, i) =>
+        `  {
+    "sentence": "${language.toLowerCase()}_sentence${i + 1}_with_${word}",
+    "translation": "english_translation${i + 1}",
+    "contextBefore": "${language.toLowerCase()}_context_before${i + 1}",
+    "contextAfter": "${language.toLowerCase()}_context_after${i + 1}",
+    "contextBeforeTranslation": "english_context_before${i + 1}",
+    "contextAfterTranslation": "english_context_after${i + 1}"
+  }`
+      ).join(',\n');
+      
+      contextInstructions = `
+10. Include contextBefore and contextAfter sentences that provide meaningful context
+11. The context sentences should form a natural conversation or narrative flow
+12. Provide English translations for all context sentences
+13. Context sentences should be short (3-10 words each)
+14. The main sentence should make sense when read with its context`;
+    } else {
+      examples = Array.from({ length: count }, (_, i) =>
+        `  {"sentence": "${language.toLowerCase()}_sentence${i + 1}_with_${word}", "translation": "english_translation${i + 1}"}`
+      ).join(',\n');
+    }
 
     // Create known words guidance
     const knownWordsText = knownWords.length > 0
@@ -469,7 +500,7 @@ Rules:
 6. Each sentence must be different
 7. When natural and appropriate, include some known words from the provided list
 8. Don't force known words if they don't fit naturally
-9. Return ONLY the JSON array, nothing else`;
+9. Return ONLY the JSON array, nothing else${contextInstructions}`;
   }
 
   private async makeRequest(prompt: string): Promise<any> {

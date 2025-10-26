@@ -23,6 +23,10 @@ export interface Sentence {
   audioPath: string;
   createdAt: Date;
   lastShown?: Date;
+  contextBefore?: string;
+  contextAfter?: string;
+  contextBeforeTranslation?: string;
+  contextAfterTranslation?: string;
 }
 
 
@@ -51,6 +55,10 @@ export interface GeneratedWord {
 export interface GeneratedSentence {
   sentence: string;    // Foreign language sentence
   translation: string; // English translation
+  contextBefore?: string; // Optional sentence before for context
+  contextAfter?: string;  // Optional sentence after for context
+  contextBeforeTranslation?: string; // Translation of context before
+  contextAfterTranslation?: string;  // Translation of context after
 }
 
 export interface CreateWordRequest {

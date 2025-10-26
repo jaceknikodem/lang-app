@@ -104,6 +104,36 @@ export class SentenceViewer extends LitElement {
         margin-bottom: var(--spacing-lg);
       }
 
+      .context-section {
+        margin-bottom: var(--spacing-md);
+        padding: var(--spacing-md);
+        background: var(--background-secondary);
+        border-radius: var(--border-radius-small);
+        border-left: 3px solid var(--primary-color);
+      }
+
+      .context-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--primary-color);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: var(--spacing-xs);
+      }
+
+      .context-text {
+        font-size: 16px;
+        line-height: 1.5;
+        color: var(--text-primary);
+        margin-bottom: var(--spacing-xs);
+      }
+
+      .context-translation {
+        font-size: 14px;
+        color: var(--text-secondary);
+        font-style: italic;
+      }
+
       .sentence-text {
         font-size: 20px;
         line-height: 1.6;
@@ -389,6 +419,14 @@ export class SentenceViewer extends LitElement {
         </div>
 
         <div class="sentence-content">
+          ${this.sentence.contextBefore ? html`
+            <div class="context-section">
+              <div class="context-label">Context Before</div>
+              <div class="context-text">${this.sentence.contextBefore}</div>
+              <div class="context-translation">${this.sentence.contextBeforeTranslation}</div>
+            </div>
+          ` : ''}
+          
           <div class="sentence-text">
             ${this.parsedWords.map(wordInfo => html`
               <span
@@ -405,6 +443,14 @@ export class SentenceViewer extends LitElement {
           <div class="sentence-translation">
             ${this.sentence.translation}
           </div>
+          
+          ${this.sentence.contextAfter ? html`
+            <div class="context-section">
+              <div class="context-label">Context After</div>
+              <div class="context-text">${this.sentence.contextAfter}</div>
+              <div class="context-translation">${this.sentence.contextAfterTranslation}</div>
+            </div>
+          ` : ''}
         </div>
 
         <div class="word-actions">

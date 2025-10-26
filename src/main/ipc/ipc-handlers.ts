@@ -126,18 +126,26 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.INSERT_SENTENCE, async (event, wordId, sentence, translation, audioPath) => {
+  ipcMain.handle(IPC_CHANNELS.DATABASE.INSERT_SENTENCE, async (event, wordId, sentence, translation, audioPath, contextBefore, contextAfter, contextBeforeTranslation, contextAfterTranslation) => {
     try {
       const validatedWordId = WordIdSchema.parse(wordId);
       const validatedSentence = TextSchema.parse(sentence);
       const validatedTranslation = TextSchema.parse(translation);
       const validatedAudioPath = z.string().parse(audioPath);
+      const validatedContextBefore = contextBefore ? TextSchema.parse(contextBefore) : undefined;
+      const validatedContextAfter = contextAfter ? TextSchema.parse(contextAfter) : undefined;
+      const validatedContextBeforeTranslation = contextBeforeTranslation ? TextSchema.parse(contextBeforeTranslation) : undefined;
+      const validatedContextAfterTranslation = contextAfterTranslation ? TextSchema.parse(contextAfterTranslation) : undefined;
 
       return await databaseLayer.insertSentence(
         validatedWordId,
         validatedSentence,
         validatedTranslation,
-        validatedAudioPath
+        validatedAudioPath,
+        validatedContextBefore,
+        validatedContextAfter,
+        validatedContextBeforeTranslation,
+        validatedContextAfterTranslation
       );
     } catch (error) {
       console.error('Error inserting sentence:', error);
@@ -307,7 +315,7 @@ function setupLLMHandlers(llmClient: OllamaClient, contentGenerator: ContentGene
       const validatedLanguage = LanguageSchema.parse(language);
 
       // Use ContentGenerator for better error handling and validation
-      return await contentGenerator.generateWordSentences(validatedWord, validatedLanguage, 3);
+      return await contentGenerator.generateWordSentences(validatedWord, validatedLanguage, 3, databaseLayer);
     } catch (error) {
       console.error('Error generating sentences:', error);
       throw new Error(`Failed to generate sentences: ${error instanceof Error ? error.message : 'Unknown error'}`);
