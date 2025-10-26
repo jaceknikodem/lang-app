@@ -14,6 +14,7 @@ export interface IPCBridge {
     getWordsToStudy: (limit: number) => Promise<Word[]>;
     getWordById: (wordId: number) => Promise<Word | null>;
     getAllWords: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
+    getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
     getRecentStudySessions: (limit?: number) => Promise<Array<{id: number, wordsStudied: number, whenStudied: Date}>>;
     insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string) => Promise<number>;
     getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
@@ -70,6 +71,7 @@ export const IPC_CHANNELS = {
     GET_WORDS_TO_STUDY: 'database:getWordsToStudy',
     GET_WORD_BY_ID: 'database:getWordById',
     GET_ALL_WORDS: 'database:getAllWords',
+    GET_WORDS_WITH_SENTENCES: 'database:getWordsWithSentences',
     GET_RECENT_STUDY_SESSIONS: 'database:getRecentStudySessions',
     INSERT_SENTENCE: 'database:insertSentence',
     GET_SENTENCES_BY_WORD: 'database:getSentencesByWord',

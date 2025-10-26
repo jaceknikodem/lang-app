@@ -227,7 +227,7 @@ export class OllamaClient implements LLMClient {
 
       console.log(`Generated ${uniqueWords.length} unique words, ${newWords.length} are new (${uniqueWords.length - newWords.length} duplicates filtered)`);
 
-      // If we got significantly fewer new words than requested, throw an error to trigger retry
+      // If we got significantly fewer new words than requested, throw an error to trigger retry TODO remove this.
       if (newWords.length < Math.max(1, Math.floor(count * 0.7))) {
         throw new Error(`Insufficient new words generated: got ${newWords.length}, expected at least ${Math.floor(count * 0.7)}`);
       }

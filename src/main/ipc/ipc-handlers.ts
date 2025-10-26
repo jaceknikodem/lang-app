@@ -195,6 +195,17 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     }
   });
 
+  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES, async (event, includeKnown, includeIgnored) => {
+    try {
+      const validatedIncludeKnown = includeKnown !== undefined ? BooleanSchema.parse(includeKnown) : true;
+      const validatedIncludeIgnored = includeIgnored !== undefined ? BooleanSchema.parse(includeIgnored) : false;
+      return await databaseLayer.getWordsWithSentences(validatedIncludeKnown, validatedIncludeIgnored);
+    } catch (error) {
+      console.error('Error getting words with sentences:', error);
+      throw new Error(`Failed to get words with sentences: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.DATABASE.GET_RECENT_STUDY_SESSIONS, async (event, limit) => {
     try {
       const validatedLimit = limit !== undefined ? LimitSchema.parse(limit) : 10;

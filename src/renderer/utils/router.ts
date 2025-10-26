@@ -51,12 +51,16 @@ export class Router {
     this.navigateTo('word-selection', { topic });
   }
 
-  goToLearning(): void {
-    this.navigateTo('learning');
+  goToLearning(specificWords?: any[]): void {
+    this.navigateTo('learning', specificWords ? { specificWords } : undefined);
   }
 
-  goToQuiz(direction: 'foreign-to-english' | 'english-to-foreign'): void {
-    this.navigateTo('quiz', { direction });
+  goToQuiz(specificWords?: any[], direction: 'foreign-to-english' | 'english-to-foreign' = 'foreign-to-english'): void {
+    const data: any = { direction };
+    if (specificWords) {
+      data.specificWords = specificWords;
+    }
+    this.navigateTo('quiz', data);
   }
 
   goToProgress(): void {

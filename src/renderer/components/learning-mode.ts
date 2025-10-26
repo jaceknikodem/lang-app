@@ -221,17 +221,26 @@ export class LearningMode extends LitElement {
     // Load words from database first
     await this.loadSelectedWords();
     
-    // Try to restore learning session from session manager
-    this.restoreSessionProgress();
-    
+    // Load words and sentences before restoring session progress
     await this.loadWordsAndSentences();
+    
+    // Try to restore learning session from session manager (after words are loaded)
+    this.restoreSessionProgress();
   }
 
   private async loadSelectedWords() {
     try {
-      // Get all words from database for learning
-      this.selectedWords = await window.electronAPI.database.getAllWords(true, false);
-      console.log('Loaded words for learning:', this.selectedWords.length);
+      // Check if specific words were passed via router
+      const routeData = router.getRouteData();
+      if (routeData?.specificWords) {
+        this.selectedWords = routeData.specificWords;
+        console.log('Using specific words from router:', this.selectedWords.length);
+        return;
+      }
+
+      // Get only words that have sentences available for learning
+      this.selectedWords = await window.electronAPI.database.getWordsWithSentences(true, false);
+      console.log('Loaded words with sentences for learning:', this.selectedWords.length);
     } catch (error) {
       console.error('Failed to load words:', error);
       this.error = 'Failed to load words from database.';
@@ -268,12 +277,17 @@ export class LearningMode extends LitElement {
         });
       }
 
-      // Shuffle the words themselves for varied learning experience
-      const shuffledWordsWithSentences = this.shuffleArray(wordsWithSentences.filter(w => w.sentences.length > 0));
-      this.wordsWithSentences = shuffledWordsWithSentences;
+      // Filter out words with no sentences and shuffle for varied learning experience
+      const wordsWithValidSentences = wordsWithSentences.filter(w => w.sentences.length > 0);
+      console.log(`Words with sentences: ${wordsWithValidSentences.length} out of ${wordsWithSentences.length} total words`);
+      
+      this.wordsWithSentences = this.shuffleArray(wordsWithValidSentences);
 
       if (this.wordsWithSentences.length === 0) {
-        this.error = 'No sentences available for the selected words.';
+        console.warn('No words have sentences available for learning');
+        this.error = 'No sentences available for the selected words. Please generate new words or check if sentence generation completed successfully.';
+      } else {
+        console.log(`Ready to learn with ${this.wordsWithSentences.length} words`);
       }
 
     } catch (error) {

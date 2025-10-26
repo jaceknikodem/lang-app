@@ -13,6 +13,7 @@ export interface DatabaseLayer {
   getWordsToStudy(limit: number, language?: string): Promise<Word[]>;
   getWordsByStrength(minStrength: number, maxStrength: number, limit?: number, language?: string): Promise<Word[]>;
   getAllWords(includeKnown?: boolean, includeIgnored?: boolean, language?: string): Promise<Word[]>;
+  getWordsWithSentences(includeKnown?: boolean, includeIgnored?: boolean, language?: string): Promise<Word[]>;
   getWordById(wordId: number): Promise<Word | null>;
   
   // Sentence management

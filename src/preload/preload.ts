@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORD_BY_ID, wordId),
     getAllWords: (includeKnown?: boolean, includeIgnored?: boolean) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_ALL_WORDS, includeKnown, includeIgnored),
+    getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean) => 
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES, includeKnown, includeIgnored),
     getRecentStudySessions: (limit?: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_RECENT_STUDY_SESSIONS, limit),
     insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string) => 

@@ -157,3 +157,4 @@ audio/*.wav
 Thumbs.db
 
 test-results/*
+*.png

@@ -207,6 +207,42 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
+   * Get words that have sentences available for learning
+   */
+  async getWordsWithSentences(includeKnown: boolean = true, includeIgnored: boolean = false, language?: string): Promise<Word[]> {
+    const db = this.getDb();
+    
+    try {
+      const currentLanguage = language || await this.getCurrentLanguage();
+      let whereConditions: string[] = [`w.language = ?`];
+      
+      if (!includeKnown) {
+        whereConditions.push('w.known = FALSE');
+      }
+      
+      if (!includeIgnored) {
+        whereConditions.push('w.ignored = FALSE');
+      }
+      
+      const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
+      
+      const stmt = db.prepare(`
+        SELECT DISTINCT w.* FROM words w
+        INNER JOIN sentences s ON w.id = s.word_id
+        ${whereClause}
+        ORDER BY w.strength ASC, RANDOM()
+      `);
+      
+      const rows = stmt.all(currentLanguage) as any[];
+      const words = rows.map(this.mapRowToWord);
+      
+      return this.shuffleArray(words);
+    } catch (error) {
+      throw new Error(`Failed to get words with sentences: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Get all words with optional filtering and shuffling for learning
    */
   async getAllWords(includeKnown: boolean = true, includeIgnored: boolean = false, language?: string): Promise<Word[]> {
