@@ -582,53 +582,6 @@ export class ProgressSummary extends LitElement {
               </div>
             </div>
           `}
-
-          <!-- Bottom Left: Recent Sessions -->
-          ${this.recentSessions.length > 0 ? html`
-            <div class="progress-section">
-              <h3 class="section-title">
-                <span class="section-icon">🕒</span>
-                Recent Sessions
-              </h3>
-              <div class="sessions-list">
-                ${this.recentSessions.map(session => html`
-                  <div class="session-item">
-                    <div class="session-info">
-                      <div class="session-words">${session.wordsStudied} words practiced</div>
-                      <div class="session-date">${this.formatDate(new Date(session.whenStudied))}</div>
-                    </div>
-                    <div class="session-badge">Session</div>
-                  </div>
-                `)}
-              </div>
-            </div>
-          ` : html`
-            <div class="progress-section">
-              <h3 class="section-title">
-                <span class="section-icon">🕒</span>
-                Recent Sessions
-              </h3>
-              <div class="empty-state">
-                <p>No study sessions yet</p>
-              </div>
-            </div>
-          `}
-
-          <!-- Bottom Right: Actions -->
-          <div class="progress-section">
-            <h3 class="section-title">
-              <span class="section-icon">🚀</span>
-              Quick Actions
-            </h3>
-            <div class="action-buttons">
-              <button class="btn btn-primary btn-large" @click=${this.handleStartLearning}>
-                New Learning Session
-              </button>
-              <button class="btn btn-secondary" @click=${this.handleContinueWeakWords}>
-                Practice Weak Words
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     `;

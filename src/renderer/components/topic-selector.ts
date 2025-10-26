@@ -356,12 +356,6 @@ export class TopicSelector extends LitElement {
   render() {
     return html`
       <div class="topic-container">
-        <div class="intro-section">
-          <h2 class="intro-title">Choose Your Learning Focus</h2>
-          <p class="intro-text">
-            Enter a topic to generate relevant vocabulary, or skip to practice with general high-frequency words.
-          </p>
-        </div>
 
         <div class="topic-input-section">
           <div class="input-group">

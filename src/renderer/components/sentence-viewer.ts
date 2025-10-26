@@ -296,13 +296,13 @@ export class SentenceViewer extends LitElement {
 
   private getWordTooltip(wordInfo: WordInSentence): string {
     if (wordInfo.isTargetWord) {
-      return `Target word: ${this.targetWord.translation}`;
+      return `Target word`;
     }
 
     const word = wordInfo.wordData;
     
     if (!word) {
-      return 'Click to mark as known/ignored';
+      return '';
     }
     
     if (word.ignored) {

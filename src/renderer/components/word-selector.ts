@@ -444,6 +444,29 @@ export class WordSelector extends LitElement {
           </div>
         </div>
 
+        <div class="action-section">
+          ${this.isProcessing ? html`
+            <div class="loading">
+              <div class="spinner"></div>
+              Processing selected words...
+            </div>
+          ` : html`
+            <button
+              class="btn btn-primary start-btn"
+              @click=${this.handleStartLearning}
+              ?disabled=${selectedCount === 0}
+            >
+              Learn (${selectedCount} words)
+            </button>
+            <button
+              class="btn btn-secondary back-btn"
+              @click=${this.handleGoBack}
+            >
+              Go Back
+            </button>
+          `}
+        </div>
+
         <div class="word-list">
           ${this.selectableWords.map((word, index) => html`
             <div 
@@ -460,9 +483,6 @@ export class WordSelector extends LitElement {
               <div class="word-content">
                 <h4 class="word-foreign">${word.word}</h4>
                 <p class="word-translation">${word.translation}</p>
-                <span class="word-frequency frequency-${word.frequency}">
-                  ${word.frequency}
-                </span>
               </div>
             </div>
           `)}
@@ -473,29 +493,6 @@ export class WordSelector extends LitElement {
             ${this.error}
           </div>
         ` : ''}
-
-        <div class="action-section">
-          ${this.isProcessing ? html`
-            <div class="loading">
-              <div class="spinner"></div>
-              Processing selected words...
-            </div>
-          ` : html`
-            <button
-              class="btn btn-primary btn-large start-btn"
-              @click=${this.handleStartLearning}
-              ?disabled=${selectedCount === 0}
-            >
-              Learn (${selectedCount} words)
-            </button>
-            <button
-              class="btn btn-secondary back-btn"
-              @click=${this.handleGoBack}
-            >
-              Go Back
-            </button>
-          `}
-        </div>
       </div>
     `;
   }

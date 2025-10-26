@@ -408,7 +408,6 @@ export class AppRoot extends LitElement {
     this.showSessionRestore = false;
     sessionManager.clearSession();
     this.sessionState = sessionManager.getCurrentSession();
-    router.goToTopicSelection();
   }
 
   render() {
@@ -428,7 +427,6 @@ export class AppRoot extends LitElement {
     return html`
       <div class="app-container">
         <header class="app-header">
-          <h1 class="app-title">Local Language Learning</h1>
           <nav class="navigation">
             <button 
               class="nav-button ${router.isCurrentMode('topic-selection') || router.isCurrentMode('word-selection') ? 'active' : ''}"
@@ -534,13 +532,13 @@ export class AppRoot extends LitElement {
             class="session-restore-button"
             @click=${this.handleRestoreSession}
           >
-            Continue Session
+            Continue session
           </button>
           <button 
             class="session-restore-button secondary"
             @click=${this.handleStartFresh}
           >
-            Start Fresh
+            No, thanks
           </button>
         </div>
       </div>
