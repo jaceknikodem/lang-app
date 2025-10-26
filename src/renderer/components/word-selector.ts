@@ -11,6 +11,7 @@ import { GeneratedWord } from '../../shared/types/core.js';
 
 interface SelectableWord extends GeneratedWord {
   selected: boolean;
+  markedAsKnown: boolean;
 }
 
 @customElement('word-selector')
@@ -134,17 +135,73 @@ export class WordSelector extends LitElement {
         background: var(--primary-light);
       }
 
+      .word-item.known {
+        border-color: #4caf50;
+        background: #e8f5e8;
+        opacity: 0.7;
+      }
+
+      .word-item.known .word-content {
+        text-decoration: line-through;
+      }
+
       .word-checkbox {
-        position: absolute;
-        top: var(--spacing-sm);
-        right: var(--spacing-sm);
         width: 20px;
         height: 20px;
         cursor: pointer;
+        margin: 0;
+      }
+
+      .word-actions {
+        position: absolute;
+        top: var(--spacing-sm);
+        right: var(--spacing-sm);
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-xs);
+        align-items: flex-end;
+      }
+
+      .known-btn {
+        background: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 3px 6px;
+        font-size: 11px;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        white-space: nowrap;
+        min-width: 50px;
+      }
+
+      .known-btn:hover {
+        background: #45a049;
+      }
+
+      .known-btn.active {
+        background: #2e7d32;
+      }
+
+      .undo-btn {
+        background: #ff9800;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 3px 6px;
+        font-size: 11px;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        white-space: nowrap;
+        min-width: 50px;
+      }
+
+      .undo-btn:hover {
+        background: #f57c00;
       }
 
       .word-content {
-        margin-right: var(--spacing-lg);
+        margin-right: calc(var(--spacing-lg) + 70px);
       }
 
       .word-foreign {
@@ -248,21 +305,36 @@ export class WordSelector extends LitElement {
     // Convert generated words to selectable format and auto-select all words
     this.selectableWords = this.generatedWords.map(word => ({
       ...word,
-      selected: true  // Auto-select all generated words by default
+      selected: true,  // Auto-select all generated words by default
+      markedAsKnown: false
     }));
   }
 
   private toggleWordSelection(index: number) {
     const word = this.selectableWords[index];
-    if (word) {
+    if (word && !word.markedAsKnown) {
       word.selected = !word.selected;
+      this.requestUpdate();
+    }
+  }
+
+  private markWordAsKnown(index: number, event: Event) {
+    event.stopPropagation();
+    const word = this.selectableWords[index];
+    if (word) {
+      word.markedAsKnown = !word.markedAsKnown;
+      if (word.markedAsKnown) {
+        word.selected = false; // Unselect when marked as known
+      }
       this.requestUpdate();
     }
   }
 
   private selectAll() {
     this.selectableWords.forEach(word => {
-      word.selected = true;
+      if (!word.markedAsKnown) {
+        word.selected = true;
+      }
     });
     this.requestUpdate();
   }
@@ -276,15 +348,22 @@ export class WordSelector extends LitElement {
 
   private getSelectedWords(): GeneratedWord[] {
     return this.selectableWords
-      .filter(word => word.selected)
-      .map(({ selected, ...word }) => word);
+      .filter(word => word.selected && !word.markedAsKnown)
+      .map(({ selected, markedAsKnown, ...word }) => word);
+  }
+
+  private getKnownWords(): GeneratedWord[] {
+    return this.selectableWords
+      .filter(word => word.markedAsKnown)
+      .map(({ selected, markedAsKnown, ...word }) => word);
   }
 
   private async handleStartLearning() {
     const selectedWords = this.getSelectedWords();
+    const knownWords = this.getKnownWords();
 
-    if (selectedWords.length === 0) {
-      this.error = 'Please select at least one word to study.';
+    if (selectedWords.length === 0 && knownWords.length === 0) {
+      this.error = 'Please select at least one word to study or mark some as known.';
       return;
     }
 
@@ -297,11 +376,40 @@ export class WordSelector extends LitElement {
     this.error = '';
 
     try {
-      console.log('Processing', selectedWords.length, 'selected words...');
+      console.log('Processing', selectedWords.length, 'selected words and', knownWords.length, 'known words...');
 
       // Set the current language in database to match the words being inserted
       await window.electronAPI.database.setCurrentLanguage(this.language);
       console.log('Set current language to:', this.language);
+
+      // Process known words first (simpler - no sentences needed)
+      for (let i = 0; i < knownWords.length; i++) {
+        const word = knownWords[i];
+        console.log(`Processing known word ${i + 1}/${knownWords.length}: ${word.word}`);
+
+        try {
+          // Generate audio for the word
+          const wordAudioPath = await window.electronAPI.audio.generateAudio(
+            word.word,
+            this.language
+          );
+
+          // Insert word into database
+          const wordId = await window.electronAPI.database.insertWord({
+            word: word.word,
+            language: this.language,
+            translation: word.translation,
+            audioPath: wordAudioPath
+          });
+
+          // Mark as known immediately
+          await window.electronAPI.database.markWordKnown(wordId, true);
+          console.log('Known word processed:', word.word);
+        } catch (wordError) {
+          console.error(`Failed to process known word ${word.word}:`, wordError);
+          // Continue processing other words instead of stopping
+        }
+      }
 
       // Store selected words in database and generate sentences
       const storedWords = [];
@@ -370,20 +478,26 @@ export class WordSelector extends LitElement {
         }
       }
 
-      console.log('All words processed successfully. Stored', storedWords.length, 'words.');
+      console.log('All words processed successfully. Stored', storedWords.length, 'words for learning and', knownWords.length, 'known words.');
 
       // Update session with topic
       if (this.topic) {
         sessionManager.updateSelectedTopic(this.topic);
       }
 
-      console.log('Navigating to learning mode...');
+      if (storedWords.length > 0) {
+        console.log('Navigating to learning mode...');
 
-      // Small delay to ensure database operations are fully committed
-      await new Promise(resolve => setTimeout(resolve, 100));
+        // Small delay to ensure database operations are fully committed
+        await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Navigate to learning mode with the specific words that were just processed
-      router.goToLearning(storedWords);
+        // Navigate to learning mode with the specific words that were just processed
+        router.goToLearning(storedWords);
+      } else {
+        // All words were marked as known, go back to topic selection
+        console.log('All words marked as known, returning to topic selection...');
+        router.goToTopicSelection();
+      }
 
     } catch (error) {
       console.error('Failed to process selected words:', error);
@@ -412,7 +526,8 @@ export class WordSelector extends LitElement {
       `;
     }
 
-    const selectedCount = this.selectableWords.filter(w => w.selected).length;
+    const selectedCount = this.selectableWords.filter(w => w.selected && !w.markedAsKnown).length;
+    const knownCount = this.selectableWords.filter(w => w.markedAsKnown).length;
 
     return html`
       <div class="word-selector-container">
@@ -432,7 +547,7 @@ export class WordSelector extends LitElement {
 
         <div class="selection-controls">
           <div class="selection-info">
-            ${selectedCount} of ${this.selectableWords.length} words selected
+            ${selectedCount} selected • ${knownCount} marked as known • ${this.selectableWords.length - selectedCount - knownCount} unselected
           </div>
           <div class="selection-actions">
             <button class="btn btn-small btn-secondary" @click=${this.selectAll}>
@@ -454,9 +569,9 @@ export class WordSelector extends LitElement {
             <button
               class="btn btn-primary start-btn"
               @click=${this.handleStartLearning}
-              ?disabled=${selectedCount === 0}
+              ?disabled=${selectedCount === 0 && knownCount === 0}
             >
-              Learn (${selectedCount} words)
+              ${selectedCount > 0 ? `Learn (${selectedCount} words)` : knownCount > 0 ? `Save (${knownCount} known)` : 'Start Learning'}
             </button>
             <button
               class="btn btn-secondary back-btn"
@@ -470,16 +585,36 @@ export class WordSelector extends LitElement {
         <div class="word-list">
           ${this.selectableWords.map((word, index) => html`
             <div 
-              class="word-item ${word.selected ? 'selected' : ''}"
+              class="word-item ${word.selected ? 'selected' : ''} ${word.markedAsKnown ? 'known' : ''}"
               @click=${() => this.toggleWordSelection(index)}
             >
-              <input
-                type="checkbox"
-                class="word-checkbox"
-                .checked=${word.selected}
-                @click=${(e: Event) => e.stopPropagation()}
-                @change=${() => this.toggleWordSelection(index)}
-              />
+              <div class="word-actions">
+                ${word.markedAsKnown ? html`
+                  <button
+                    class="undo-btn"
+                    @click=${(e: Event) => this.markWordAsKnown(index, e)}
+                    title="Undo mark as known"
+                  >
+                    Undo
+                  </button>
+                ` : html`
+                  <input
+                    type="checkbox"
+                    class="word-checkbox"
+                    .checked=${word.selected}
+                    @click=${(e: Event) => e.stopPropagation()}
+                    @change=${() => this.toggleWordSelection(index)}
+                    title="Select for learning"
+                  />
+                  <button
+                    class="known-btn"
+                    @click=${(e: Event) => this.markWordAsKnown(index, e)}
+                    title="Mark as known"
+                  >
+                    Known
+                  </button>
+                `}
+              </div>
               <div class="word-content">
                 <h4 class="word-foreign">${word.word}</h4>
                 <p class="word-translation">${word.translation}</p>
