@@ -76,7 +76,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
     playAudio: (audioPath: string) => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.PLAY_AUDIO, audioPath),
     audioExists: (audioPath: string) => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.AUDIO_EXISTS, audioPath)
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.AUDIO_EXISTS, audioPath),
+    startRecording: (options?: any) => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.START_RECORDING, options),
+    stopRecording: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.STOP_RECORDING),
+    cancelRecording: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.CANCEL_RECORDING),
+    getCurrentRecordingSession: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GET_CURRENT_RECORDING_SESSION),
+    isRecording: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.IS_RECORDING),
+    getAvailableRecordingDevices: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GET_AVAILABLE_RECORDING_DEVICES),
+    deleteRecording: (filePath: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.DELETE_RECORDING, filePath),
+    getRecordingInfo: (filePath: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GET_RECORDING_INFO, filePath)
   },
 
   // Quiz operations
@@ -152,6 +168,14 @@ declare global {
         generateAudio: (text: string, language?: string, word?: string) => Promise<string>;
         playAudio: (audioPath: string) => Promise<void>;
         audioExists: (audioPath: string) => Promise<boolean>;
+        startRecording: (options?: any) => Promise<any>;
+        stopRecording: () => Promise<any>;
+        cancelRecording: () => Promise<void>;
+        getCurrentRecordingSession: () => Promise<any>;
+        isRecording: () => Promise<boolean>;
+        getAvailableRecordingDevices: () => Promise<string[]>;
+        deleteRecording: (filePath: string) => Promise<void>;
+        getRecordingInfo: (filePath: string) => Promise<{ size: number; duration?: number } | null>;
       };
       quiz: {
         getWeakestWords: (limit: number) => Promise<any[]>;

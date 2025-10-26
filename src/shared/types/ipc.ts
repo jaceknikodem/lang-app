@@ -3,6 +3,7 @@
  */
 
 import { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest } from './core.js';
+import { RecordingOptions, RecordingSession } from './audio.js';
 
 export interface IPCBridge {
   // Database operations
@@ -55,6 +56,14 @@ export interface IPCBridge {
     generateAudio: (text: string, language?: string, word?: string) => Promise<string>;
     playAudio: (audioPath: string) => Promise<void>;
     audioExists: (audioPath: string) => Promise<boolean>;
+    startRecording: (options?: RecordingOptions) => Promise<RecordingSession>;
+    stopRecording: () => Promise<RecordingSession | null>;
+    cancelRecording: () => Promise<void>;
+    getCurrentRecordingSession: () => Promise<RecordingSession | null>;
+    isRecording: () => Promise<boolean>;
+    getAvailableRecordingDevices: () => Promise<string[]>;
+    deleteRecording: (filePath: string) => Promise<void>;
+    getRecordingInfo: (filePath: string) => Promise<{ size: number; duration?: number } | null>;
   };
 
   // Quiz operations
@@ -110,7 +119,15 @@ export const IPC_CHANNELS = {
   AUDIO: {
     GENERATE_AUDIO: 'audio:generateAudio',
     PLAY_AUDIO: 'audio:playAudio',
-    AUDIO_EXISTS: 'audio:audioExists'
+    AUDIO_EXISTS: 'audio:audioExists',
+    START_RECORDING: 'audio:startRecording',
+    STOP_RECORDING: 'audio:stopRecording',
+    CANCEL_RECORDING: 'audio:cancelRecording',
+    GET_CURRENT_RECORDING_SESSION: 'audio:getCurrentRecordingSession',
+    IS_RECORDING: 'audio:isRecording',
+    GET_AVAILABLE_RECORDING_DEVICES: 'audio:getAvailableRecordingDevices',
+    DELETE_RECORDING: 'audio:deleteRecording',
+    GET_RECORDING_INFO: 'audio:getRecordingInfo'
   },
   QUIZ: {
     GET_WEAKEST_WORDS: 'quiz:getWeakestWords',

@@ -16,6 +16,23 @@ export interface AudioConfig {
 }
 
 export interface AudioError extends Error {
-  code: 'GENERATION_FAILED' | 'PLAYBACK_FAILED' | 'FILE_NOT_FOUND' | 'INVALID_PATH';
+  code: 'GENERATION_FAILED' | 'PLAYBACK_FAILED' | 'FILE_NOT_FOUND' | 'INVALID_PATH' | 'RECORDING_FAILED' | 'FILE_OPERATION_FAILED';
   audioPath?: string;
+}
+
+export interface RecordingOptions {
+  sampleRate?: number;
+  channels?: number;
+  threshold?: number;
+  silence?: string;
+  endOnSilence?: boolean;
+  device?: string;
+}
+
+export interface RecordingSession {
+  id: string;
+  filePath: string;
+  isRecording: boolean;
+  startTime: number;
+  duration?: number;
 }

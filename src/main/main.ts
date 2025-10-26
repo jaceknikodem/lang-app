@@ -2,7 +2,7 @@
  * Electron main process entry point
  */
 
-import { app, BrowserWindow, ipcMain, session } from 'electron';
+import { app, BrowserWindow, ipcMain, session, systemPreferences } from 'electron';
 import * as path from 'path';
 import { setupIPCHandlers, cleanupIPCHandlers } from './ipc/index.js';
 import { SQLiteDatabaseLayer } from './database/database-layer.js';
@@ -77,7 +77,7 @@ async function initializeServices(): Promise<void> {
   }
 }
 
-function setupSecurity(): void {
+async function setupSecurity(): Promise<void> {
   // Block external requests except to localhost (for Ollama)
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
     const url = new URL(details.url);
@@ -98,6 +98,29 @@ function setupSecurity(): void {
     console.warn('Blocked external request:', details.url);
     callback({ cancel: true });
   });
+
+  // Request microphone permissions on macOS
+  if (process.platform === 'darwin') {
+    try {
+      const microphoneAccess = systemPreferences.getMediaAccessStatus('microphone');
+      
+      if (microphoneAccess === 'not-determined') {
+        console.log('Requesting microphone access...');
+        const granted = await systemPreferences.askForMediaAccess('microphone');
+        if (granted) {
+          console.log('Microphone access granted');
+        } else {
+          console.warn('Microphone access denied');
+        }
+      } else if (microphoneAccess === 'granted') {
+        console.log('Microphone access already granted');
+      } else {
+        console.warn('Microphone access denied');
+      }
+    } catch (error) {
+      console.warn('Could not request microphone permissions:', error);
+    }
+  }
 }
 
 function createWindow(): void {
@@ -158,7 +181,7 @@ if (process.platform === 'darwin') {
 app.whenReady().then(async () => {
   try {
     // Set up security policies
-    setupSecurity();
+    await setupSecurity();
 
     // Initialize all services
     await initializeServices();

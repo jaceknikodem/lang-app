@@ -419,6 +419,89 @@ function setupAudioHandlers(audioService: AudioService): void {
       return false;
     }
   });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.START_RECORDING, async (event, options) => {
+    try {
+      const validatedOptions = options ? z.object({
+        sampleRate: z.number().optional(),
+        channels: z.number().optional(),
+        threshold: z.number().optional(),
+        silence: z.string().optional(),
+        endOnSilence: z.boolean().optional(),
+        device: z.string().optional()
+      }).parse(options) : undefined;
+      
+      return await audioService.startRecording(validatedOptions);
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      throw new Error(`Failed to start recording: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.STOP_RECORDING, async (event) => {
+    try {
+      return await audioService.stopRecording();
+    } catch (error) {
+      console.error('Error stopping recording:', error);
+      throw new Error(`Failed to stop recording: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.CANCEL_RECORDING, async (event) => {
+    try {
+      await audioService.cancelRecording();
+    } catch (error) {
+      console.error('Error cancelling recording:', error);
+      throw new Error(`Failed to cancel recording: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.GET_CURRENT_RECORDING_SESSION, async (event) => {
+    try {
+      return audioService.getCurrentRecordingSession();
+    } catch (error) {
+      console.error('Error getting current recording session:', error);
+      return null;
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.IS_RECORDING, async (event) => {
+    try {
+      return audioService.isRecording();
+    } catch (error) {
+      console.error('Error checking recording status:', error);
+      return false;
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.GET_AVAILABLE_RECORDING_DEVICES, async (event) => {
+    try {
+      return await audioService.getAvailableRecordingDevices();
+    } catch (error) {
+      console.error('Error getting available recording devices:', error);
+      return ['default'];
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.DELETE_RECORDING, async (event, filePath) => {
+    try {
+      const validatedFilePath = AudioPathSchema.parse(filePath);
+      await audioService.deleteRecording(validatedFilePath);
+    } catch (error) {
+      console.error('Error deleting recording:', error);
+      throw new Error(`Failed to delete recording: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.GET_RECORDING_INFO, async (event, filePath) => {
+    try {
+      const validatedFilePath = AudioPathSchema.parse(filePath);
+      return await audioService.getRecordingInfo(validatedFilePath);
+    } catch (error) {
+      console.error('Error getting recording info:', error);
+      return null;
+    }
+  });
 }
 
 /**

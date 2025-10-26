@@ -1,6 +1,7 @@
 import { TTSAudioGenerator } from './audio-generator';
 import { AudioGenerator, AudioError } from '../../shared/types/audio';
 import { DatabaseLayer } from '../../shared/types/database';
+import { AudioRecorder, RecordingSession, RecordingOptions } from './audio-recorder';
 
 /**
  * Audio service that coordinates audio generation and playback
@@ -8,9 +9,11 @@ import { DatabaseLayer } from '../../shared/types/database';
  */
 export class AudioService {
   private audioGenerator: AudioGenerator;
+  private audioRecorder: AudioRecorder;
 
   constructor(audioGenerator?: AudioGenerator, database?: DatabaseLayer) {
     this.audioGenerator = audioGenerator || new TTSAudioGenerator(undefined, database);
+    this.audioRecorder = new AudioRecorder();
   }
 
   /**
@@ -136,10 +139,110 @@ export class AudioService {
   }
 
   /**
+   * Start recording audio
+   */
+  async startRecording(options?: RecordingOptions): Promise<RecordingSession> {
+    try {
+      return await this.audioRecorder.startRecording(options);
+    } catch (error) {
+      let errorMessage = 'Failed to start recording';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('sox')) {
+          errorMessage = 'Audio recording requires sox. Please install it with: brew install sox';
+        } else {
+          errorMessage = `Failed to start recording: ${error.message}`;
+        }
+      }
+      
+      const audioError = new Error(errorMessage) as AudioError;
+      audioError.code = 'RECORDING_FAILED';
+      throw audioError;
+    }
+  }
+
+  /**
+   * Stop current recording
+   */
+  async stopRecording(): Promise<RecordingSession | null> {
+    try {
+      return await this.audioRecorder.stopRecording();
+    } catch (error) {
+      const audioError = new Error(`Failed to stop recording: ${error instanceof Error ? error.message : 'Unknown error'}`) as AudioError;
+      audioError.code = 'RECORDING_FAILED';
+      throw audioError;
+    }
+  }
+
+  /**
+   * Cancel current recording
+   */
+  async cancelRecording(): Promise<void> {
+    try {
+      await this.audioRecorder.cancelRecording();
+    } catch (error) {
+      const audioError = new Error(`Failed to cancel recording: ${error instanceof Error ? error.message : 'Unknown error'}`) as AudioError;
+      audioError.code = 'RECORDING_FAILED';
+      throw audioError;
+    }
+  }
+
+  /**
+   * Get current recording session
+   */
+  getCurrentRecordingSession(): RecordingSession | null {
+    return this.audioRecorder.getCurrentSession();
+  }
+
+  /**
+   * Check if currently recording
+   */
+  isRecording(): boolean {
+    return this.audioRecorder.isRecording();
+  }
+
+  /**
+   * Get available recording devices
+   */
+  async getAvailableRecordingDevices(): Promise<string[]> {
+    try {
+      return await this.audioRecorder.getAvailableDevices();
+    } catch (error) {
+      console.error('Error getting recording devices:', error);
+      return ['default'];
+    }
+  }
+
+  /**
+   * Delete a recording file
+   */
+  async deleteRecording(filePath: string): Promise<void> {
+    try {
+      await this.audioRecorder.deleteRecording(filePath);
+    } catch (error) {
+      const audioError = new Error(`Failed to delete recording: ${error instanceof Error ? error.message : 'Unknown error'}`) as AudioError;
+      audioError.code = 'FILE_OPERATION_FAILED';
+      throw audioError;
+    }
+  }
+
+  /**
+   * Get recording file information
+   */
+  async getRecordingInfo(filePath: string): Promise<{ size: number; duration?: number } | null> {
+    try {
+      return await this.audioRecorder.getRecordingInfo(filePath);
+    } catch (error) {
+      console.error('Error getting recording info:', error);
+      return null;
+    }
+  }
+
+  /**
    * Type guard to check if error is AudioError
    */
   private isAudioError(error: unknown): error is AudioError {
     return error instanceof Error && 'code' in error && 
-           ['GENERATION_FAILED', 'PLAYBACK_FAILED', 'FILE_NOT_FOUND', 'INVALID_PATH'].includes((error as AudioError).code);
+           ['GENERATION_FAILED', 'PLAYBACK_FAILED', 'FILE_NOT_FOUND', 'INVALID_PATH', 'RECORDING_FAILED', 'FILE_OPERATION_FAILED'].includes((error as AudioError).code);
   }
 }

@@ -11,3 +11,4 @@ export { QuizMode } from './quiz-mode.js';
 export { ProgressSummary } from './progress-summary.js';
 export { SessionComplete } from './session-complete.js';
 export { SettingsPanel } from './settings-panel.js';
+export { AudioRecorder } from './audio-recorder.js';

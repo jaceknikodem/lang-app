@@ -9,7 +9,9 @@ import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
 import './session-complete.js';
+import './audio-recorder.js';
 import type { SessionSummary } from './session-complete.js';
+import type { RecordingResult } from './audio-recorder.js';
 
 @customElement('quiz-mode')
 export class QuizMode extends LitElement {
@@ -43,6 +45,12 @@ export class QuizMode extends LitElement {
 
   @state()
   private selectedWords: Word[] = [];
+
+  @state()
+  private showRecorder = false;
+
+  @state()
+  private currentRecording: RecordingResult | null = null;
 
   private sessionStartTime = Date.now();
 
@@ -419,6 +427,60 @@ export class QuizMode extends LitElement {
         transform: none;
       }
 
+      .recording-section {
+        margin-top: var(--spacing-lg);
+        padding: var(--spacing-lg);
+        background: var(--background-primary);
+        border-radius: var(--border-radius);
+        border: 2px solid var(--primary-color);
+      }
+
+      .recording-header {
+        text-align: center;
+        margin-bottom: var(--spacing-md);
+      }
+
+      .language-label {
+        display: inline-block;
+        background: var(--primary-color);
+        color: white;
+        padding: var(--spacing-xs) var(--spacing-sm);
+        border-radius: var(--border-radius-small);
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .sentence-to-record {
+        font-size: 20px;
+        font-weight: 500;
+        color: var(--text-primary);
+        text-align: center;
+        margin-bottom: var(--spacing-lg);
+        padding: var(--spacing-md);
+        background: var(--background-secondary);
+        border-radius: var(--border-radius);
+        border-left: 4px solid var(--primary-color);
+        line-height: 1.4;
+      }
+
+      .close-recorder-button {
+        background: var(--text-secondary);
+        color: white;
+        border: none;
+        border-radius: var(--border-radius);
+        padding: var(--spacing-sm) var(--spacing-md);
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin-top: var(--spacing-md);
+      }
+
+      .close-recorder-button:hover {
+        background: var(--text-primary);
+      }
+
       @media (max-width: 768px) {
         .quiz-container {
           padding: var(--spacing-md);
@@ -456,6 +518,17 @@ export class QuizMode extends LitElement {
         .direction-button {
           width: 100%;
           max-width: 250px;
+        }
+
+        .recording-section {
+          margin-top: var(--spacing-md);
+          padding: var(--spacing-md);
+        }
+
+        .sentence-to-record {
+          font-size: 18px;
+          margin-bottom: var(--spacing-md);
+          padding: var(--spacing-sm);
         }
       }
     `
@@ -727,6 +800,39 @@ export class QuizMode extends LitElement {
     sessionManager.updateQuizDirection(direction);
   }
 
+  private toggleRecorder() {
+    this.showRecorder = !this.showRecorder;
+    this.currentRecording = null;
+  }
+
+  private handleRecordingCompleted(event: CustomEvent<{ recording: RecordingResult; autoStopped?: boolean }>) {
+    this.currentRecording = event.detail.recording;
+    const autoStopped = event.detail.autoStopped || false;
+
+    console.log('Recording completed:', {
+      recording: this.currentRecording,
+      autoStopped,
+      sentence: this.currentQuestion?.sentence.sentence,
+      word: this.currentQuestion?.word.word
+    });
+
+    // Show success feedback
+    if (autoStopped) {
+      console.log('Recording stopped automatically due to silence detection');
+    }
+
+    // You could add additional logic here, such as:
+    // - Automatic speech recognition
+    // - Pronunciation scoring against the target sentence
+    // - Saving the recording with sentence context for later review
+    // - Comparing pronunciation with the original TTS audio
+  }
+
+  private handleRecordingCancelled() {
+    this.currentRecording = null;
+    console.log('Recording cancelled');
+  }
+
   render() {
     if (this.error) {
       return html`
@@ -855,6 +961,8 @@ export class QuizMode extends LitElement {
               Do you know what ${questionWord} means in this context?
             </div>
 
+            ${this.showRecorder ? this.renderRecordingSection() : ''}
+
             ${this.showResult ? this.renderResult() : this.renderAnswerButtons()}
           </div>
         </div>
@@ -876,6 +984,46 @@ export class QuizMode extends LitElement {
           @click=${() => this.handleAnswer(false)}
         >
           Not yet ✗
+        </button>
+        <button 
+          class="answer-button"
+          @click=${this.toggleRecorder}
+        >
+          🎤 Practice Pronunciation
+        </button>
+      </div>
+    `;
+  }
+
+  private renderRecordingSection() {
+    if (!this.currentQuestion) return '';
+
+    const sentenceToRecord = this.direction === 'foreign-to-english'
+      ? this.currentQuestion.sentence.sentence
+      : this.currentQuestion.sentence.translation;
+
+    const languageLabel = this.direction === 'foreign-to-english'
+      ? 'Foreign Language'
+      : 'English';
+
+    const prompt = `Try pronouncing this ${languageLabel.toLowerCase()} sentence:`;
+
+    return html`
+      <div class="recording-section">
+        <div class="recording-header">
+          <span class="language-label">${languageLabel}</span>
+        </div>
+        <div class="sentence-to-record">
+          "${sentenceToRecord}"
+        </div>
+        <audio-recorder
+          .prompt=${prompt}
+          @recording-completed=${this.handleRecordingCompleted}
+          @recording-cancelled=${this.handleRecordingCancelled}
+        ></audio-recorder>
+        
+        <button class="close-recorder-button" @click=${this.toggleRecorder}>
+          Close Recorder
         </button>
       </div>
     `;
