@@ -145,15 +145,15 @@ export class TTSAudioGenerator implements AudioGenerator {
       'pt': 'Luciana',
       'italian': 'Alice',
       'it': 'Alice',
-      'spanish': 'Monica',
-      'es': 'Monica',
+      'spanish': 'Eddy (Spanish (Mexico))',
+      'es': 'Eddy (Spanish (Mexico))',
       'polish': 'Zosia',
       'pl': 'Zosia',
     };
 
-    // Always return a non-English voice, defaulting to Monica (Spanish) if no match found
+    // Always return a non-English voice, defaulting to Spanish if no match found
     // This ensures we never accidentally use the system default English voice
-    return voiceMap[language.toLowerCase()] || 'Monica';
+    return voiceMap[language.toLowerCase()] || 'Eddy (Spanish (Mexico))';
   }
 
   /**
