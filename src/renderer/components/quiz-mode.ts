@@ -35,6 +35,9 @@ export class QuizMode extends LitElement {
   private showResult = false;
 
   @state()
+  private showAnswer = false;
+
+  @state()
   private lastResult: QuizResult | null = null;
 
   @state()
@@ -243,6 +246,68 @@ export class QuizMode extends LitElement {
         background: var(--background-secondary);
         border-color: var(--border-color);
         transform: none;
+      }
+
+      .answer-button.primary {
+        background: var(--primary-color);
+        color: white;
+        border-color: var(--primary-color);
+      }
+
+      .answer-button.primary:hover {
+        background: var(--primary-dark);
+        color: white;
+        border-color: var(--primary-dark);
+      }
+
+      .revealed-answer {
+        margin: var(--spacing-md) 0;
+        padding: var(--spacing-md);
+        background: var(--background-secondary);
+        border-radius: var(--border-radius);
+        border-left: 4px solid var(--primary-color);
+        text-align: center;
+      }
+
+      .answer-container h3 {
+        margin: 0 0 var(--spacing-sm) 0;
+        color: var(--text-primary);
+        font-size: 18px;
+        font-weight: 600;
+      }
+
+      .word-pair {
+        font-size: 20px;
+        color: var(--text-primary);
+        margin: var(--spacing-sm) 0;
+        font-weight: 500;
+      }
+
+      .sentence-pair {
+        font-size: 16px;
+        color: var(--text-primary);
+        margin: var(--spacing-md) 0 0 0;
+        line-height: 1.4;
+      }
+
+      .sentence-label {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .sentence-pair strong {
+        display: block;
+        margin: var(--spacing-xs) 0;
+      }
+
+      .sentence-pair em {
+        display: block;
+        color: var(--text-secondary);
+        font-style: italic;
+        margin-top: var(--spacing-xs);
       }
 
       .result-feedback {
@@ -968,6 +1033,10 @@ export class QuizMode extends LitElement {
     return shuffled;
   }
 
+  private revealAnswer() {
+    this.showAnswer = true;
+  }
+
   private async handleAnswer(correct: boolean) {
     if (!this.quizSession || !this.currentQuestion) return;
 
@@ -1014,6 +1083,7 @@ export class QuizMode extends LitElement {
     if (!this.quizSession) return;
 
     this.showResult = false;
+    this.showAnswer = false;
     this.lastResult = null;
 
     if (this.quizSession.currentQuestionIndex + 1 >= this.quizSession.totalQuestions) {
@@ -1096,6 +1166,7 @@ export class QuizMode extends LitElement {
     this.quizSession = null;
     this.currentQuestion = null;
     this.showResult = false;
+    this.showAnswer = false;
     this.lastResult = null;
     this.error = null;
   }
@@ -1396,15 +1467,39 @@ export class QuizMode extends LitElement {
 
             ${this.showRecorder ? this.renderRecordingSection() : ''}
 
-            ${this.showResult ? this.renderResult() : this.renderAnswerButtons()}
+            ${this.showResult ? this.renderResult() : this.renderQuizButtons()}
           </div>
         </div>
       </div>
     `;
   }
 
-  private renderAnswerButtons() {
+  private renderQuizButtons() {
+    if (!this.showAnswer) {
+      // First show the reveal button
+      return html`
+        <div class="answer-buttons">
+          <button 
+            class="answer-button primary"
+            @click=${this.revealAnswer}
+          >
+            Reveal Answer
+          </button>
+          <button 
+            class="answer-button"
+            @click=${this.toggleRecorder}
+            ?disabled=${!this.speechRecognitionReady}
+            title=${this.speechRecognitionReady ? 'Practice pronunciation with speech recognition' : 'Speech recognition not available - setting up for first use'}
+          >
+            🎤 Practice Pronunciation${this.speechRecognitionReady ? '' : ' (Setting up...)'}
+          </button>
+        </div>
+      `;
+    }
+
+    // After reveal, show the answer and self-assessment buttons
     return html`
+      ${this.renderRevealedAnswer()}
       <div class="answer-buttons">
         <button 
           class="answer-button"
@@ -1418,14 +1513,29 @@ export class QuizMode extends LitElement {
         >
           Not yet ✗
         </button>
-        <button 
-          class="answer-button"
-          @click=${this.toggleRecorder}
-          ?disabled=${!this.speechRecognitionReady}
-          title=${this.speechRecognitionReady ? 'Practice pronunciation with speech recognition' : 'Speech recognition not available - setting up for first use'}
-        >
-          🎤 Practice Pronunciation${this.speechRecognitionReady ? '' : ' (Setting up...)'}
-        </button>
+      </div>
+    `;
+  }
+
+  private renderRevealedAnswer() {
+    if (!this.currentQuestion) return '';
+
+    const word = this.currentQuestion.word;
+    const sentence = this.currentQuestion.sentence;
+
+    return html`
+      <div class="revealed-answer">
+        <div class="answer-container">
+          <h3>Answer:</h3>
+          <p class="word-pair">
+            <strong>${word.word}</strong> = <strong>${word.translation}</strong>
+          </p>
+          <p class="sentence-pair">
+            <span class="sentence-label">Sentence:</span><br>
+            <strong>${sentence.sentence}</strong><br>
+            <em>${sentence.translation}</em>
+          </p>
+        </div>
       </div>
     `;
   }
