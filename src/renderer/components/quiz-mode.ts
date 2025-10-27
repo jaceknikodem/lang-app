@@ -1472,17 +1472,17 @@ export class QuizMode extends LitElement {
               </div>
             ` : ''}
             
-            <div class="question-text-container ${this.audioOnlyMode ? 'hidden' : ''}">
-              <div class="question-text">${displayText}</div>
-              <button class="audio-button" @click=${this.playAudio}>
-                🔊
-              </button>
-            </div>
-            
-            ${!this.audioOnlyMode ? '' : html`
+            ${this.audioOnlyMode ? html`
               <button class="audio-button" @click=${this.playAudio} style="margin: 0 auto var(--spacing-sm);">
                 🔊
               </button>
+            ` : html`
+              <div class="question-text-container">
+                <div class="question-text">${displayText}</div>
+                <button class="audio-button" @click=${this.playAudio}>
+                  🔊
+                </button>
+              </div>
             `}
 
             <div class="question-translation ${this.audioOnlyMode ? 'hidden' : ''}">

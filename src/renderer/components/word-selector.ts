@@ -145,12 +145,7 @@ export class WordSelector extends LitElement {
         text-decoration: line-through;
       }
 
-      .word-checkbox {
-        width: 20px;
-        height: 20px;
-        cursor: pointer;
-        margin: 0;
-      }
+
 
       .word-actions {
         position: absolute;
@@ -613,14 +608,7 @@ export class WordSelector extends LitElement {
                     Undo
                   </button>
                 ` : html`
-                  <input
-                    type="checkbox"
-                    class="word-checkbox"
-                    .checked=${word.selected}
-                    @click=${(e: Event) => e.stopPropagation()}
-                    @change=${() => this.toggleWordSelection(index)}
-                    title="Select for learning"
-                  />
+
                   <button
                     class="known-btn"
                     @click=${(e: Event) => this.markWordAsKnown(index, e)}

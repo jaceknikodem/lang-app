@@ -65,14 +65,21 @@ export class SentenceViewer extends LitElement {
 
       .target-word {
         font-size: 18px;
-        font-weight: 600;
+        font-weight: 700;
         color: var(--primary-color);
       }
 
+      .word-separator {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin: 0 var(--spacing-sm);
+      }
+
       .word-translation {
-        font-size: 14px;
-        color: var(--text-secondary);
-        font-style: italic;
+        font-size: 18px;
+        color: var(--text-primary);
+        font-weight: 400;
       }
 
       .audio-button {
@@ -423,6 +430,7 @@ export class SentenceViewer extends LitElement {
         <div class="sentence-header">
           <div class="target-word-info">
             <span class="target-word">${this.targetWord.word}</span>
+            <span class="word-separator">•</span>
             <span class="word-translation">${this.targetWord.translation}</span>
           </div>
           
