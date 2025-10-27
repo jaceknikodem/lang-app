@@ -272,6 +272,14 @@ export class SettingsPanel extends LitElement {
 
 
 
+  @state()
+  private currentLanguage = '';
+
+  @state()
+  private languageStats: Array<{ language: string, totalWords: number, studiedWords: number }> = [];
+
+
+
 
 
   async connectedCallback() {
@@ -283,9 +291,12 @@ export class SettingsPanel extends LitElement {
     try {
       const contextSetting = await window.electronAPI.database.getSetting('context_sentences');
       this.contextSentencesEnabled = contextSetting === 'true';
-      
+
       const autoplaySetting = await window.electronAPI.database.getSetting('autoplay_audio');
       this.autoplayAudioEnabled = autoplaySetting === 'true';
+
+      // Load language settings
+      await this.loadLanguageSettings();
 
       // Load speech recognition settings
       await this.loadSpeechRecognitionSettings();
@@ -301,14 +312,14 @@ export class SettingsPanel extends LitElement {
     try {
       // Check if speech recognition is available
       this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
-      
+
       if (this.speechRecognitionReady) {
         // Get available models
         this.availableSpeechModels = await window.electronAPI.audio.getAvailableSpeechModels();
-        
+
         // Get current model
         this.currentSpeechModel = await window.electronAPI.audio.getCurrentSpeechModel();
-        
+
         console.log('Speech recognition settings loaded:', {
           ready: this.speechRecognitionReady,
           models: this.availableSpeechModels,
@@ -323,14 +334,14 @@ export class SettingsPanel extends LitElement {
 
   private async loadLLMSettings() {
     this.isLoadingLLMModels = true;
-    
+
     try {
       // Get available LLM models
       this.availableLLMModels = await window.electronAPI.llm.getAvailableModels();
-      
+
       // Get current LLM model
       this.currentLLMModel = await window.electronAPI.llm.getCurrentModel();
-      
+
       console.log('LLM settings loaded:', {
         models: this.availableLLMModels,
         current: this.currentLLMModel
@@ -341,6 +352,26 @@ export class SettingsPanel extends LitElement {
       this.currentLLMModel = '';
     } finally {
       this.isLoadingLLMModels = false;
+    }
+  }
+
+  private async loadLanguageSettings() {
+    try {
+      // Get current language
+      this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+
+      // Get language statistics (only for languages that have words)
+      this.languageStats = await window.electronAPI.database.getLanguageStats();
+
+      console.log('Language settings loaded:', {
+        current: this.currentLanguage,
+        supported: this.getSupportedLanguages(),
+        stats: this.languageStats
+      });
+    } catch (error) {
+      console.error('Failed to load language settings:', error);
+      this.currentLanguage = 'spanish'; // Default fallback
+      this.languageStats = [];
     }
   }
 
@@ -377,10 +408,10 @@ export class SettingsPanel extends LitElement {
     try {
       await window.electronAPI.lifecycle.restartAll();
       this.restartStatus = 'All data has been cleared successfully. The application will restart with a fresh database.';
-      
+
       // Clear any local state/cache if needed
       // The app will automatically reinitialize with empty database
-      
+
       // Optionally reload the page to reset the UI state
       setTimeout(() => {
         window.location.reload();
@@ -408,7 +439,7 @@ export class SettingsPanel extends LitElement {
   private async toggleContextSentences(event: Event) {
     const checkbox = event.target as HTMLInputElement;
     this.contextSentencesEnabled = checkbox.checked;
-    
+
     try {
       await window.electronAPI.database.setSetting('context_sentences', checkbox.checked ? 'true' : 'false');
     } catch (error) {
@@ -422,7 +453,7 @@ export class SettingsPanel extends LitElement {
   private async toggleAutoplayAudio(event: Event) {
     const checkbox = event.target as HTMLInputElement;
     this.autoplayAudioEnabled = checkbox.checked;
-    
+
     try {
       await window.electronAPI.database.setSetting('autoplay_audio', checkbox.checked ? 'true' : 'false');
     } catch (error) {
@@ -436,17 +467,17 @@ export class SettingsPanel extends LitElement {
   private async changeSpeechModel(event: Event) {
     const select = event.target as HTMLSelectElement;
     const selectedModel = select.value;
-    
+
     if (!selectedModel) return;
-    
+
     try {
       // The model path should be the full path, so we need to construct it
       const projectDir = process.cwd ? process.cwd() : '';
       const modelPath = selectedModel.includes('/') ? selectedModel : `models/${selectedModel}`;
-      
+
       await window.electronAPI.audio.setSpeechModel(modelPath);
       this.currentSpeechModel = await window.electronAPI.audio.getCurrentSpeechModel();
-      
+
       console.log('Speech model changed to:', this.currentSpeechModel);
     } catch (error) {
       console.error('Failed to change speech model:', error);
@@ -457,7 +488,7 @@ export class SettingsPanel extends LitElement {
 
   private getModelDisplayName(modelPath: string): string {
     if (!modelPath) return '';
-    
+
     // Extract just the filename from the full path
     const filename = modelPath.split('/').pop() || modelPath;
     return filename;
@@ -465,7 +496,7 @@ export class SettingsPanel extends LitElement {
 
   private getModelDescription(modelName: string): string {
     if (!modelName) return '';
-    
+
     if (modelName.includes('tiny')) {
       return '(Fastest, least accurate ~39MB)';
     } else if (modelName.includes('base')) {
@@ -477,20 +508,20 @@ export class SettingsPanel extends LitElement {
     } else if (modelName.includes('large')) {
       return '(Best accuracy ~1550MB)';
     }
-    
+
     return '';
   }
 
   private async changeLLMModel(event: Event) {
     const select = event.target as HTMLSelectElement;
     const selectedModel = select.value;
-    
+
     if (!selectedModel) return;
-    
+
     try {
       await window.electronAPI.llm.setModel(selectedModel);
       this.currentLLMModel = selectedModel;
-      
+
       console.log('LLM model changed to:', this.currentLLMModel);
     } catch (error) {
       console.error('Failed to change LLM model:', error);
@@ -499,9 +530,41 @@ export class SettingsPanel extends LitElement {
     }
   }
 
+  private async changeLanguage(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const selectedLanguage = select.value;
 
+    if (!selectedLanguage) return;
 
+    try {
+      await window.electronAPI.database.setCurrentLanguage(selectedLanguage);
+      this.currentLanguage = selectedLanguage;
 
+      // Reload language stats after changing language
+      this.languageStats = await window.electronAPI.database.getLanguageStats();
+
+      // Dispatch custom event to notify other components
+      this.dispatchEvent(new CustomEvent('language-changed', {
+        detail: { language: selectedLanguage },
+        bubbles: true,
+        composed: true
+      }));
+
+      console.log('Language changed to:', this.currentLanguage);
+    } catch (error) {
+      console.error('Failed to change language:', error);
+      // Revert the selection
+      select.value = this.currentLanguage;
+    }
+  }
+
+  private capitalizeLanguage(language: string): string {
+    return language.charAt(0).toUpperCase() + language.slice(1);
+  }
+
+  private getSupportedLanguages(): string[] {
+    return ['italian', 'spanish', 'portuguese', 'polish', 'indonesian'];
+  }
 
   render() {
     return html`
@@ -537,6 +600,59 @@ export class SettingsPanel extends LitElement {
           ` : html`
             <div class="status-message status-error">
               No LLM models available. Please ensure Ollama is running and has models installed.
+            </div>
+          `}
+        </div>
+
+        <div class="settings-section">
+          <h3>Language Selection</h3>
+          <div class="dropdown-row">
+            <div class="dropdown-description">
+              <strong>Current Language</strong>
+              <p>Choose the language you want to learn. Progress and statistics are tracked separately for each language.</p>
+            </div>
+            <select 
+              class="model-select"
+              .value=${this.currentLanguage}
+              @change=${this.changeLanguage}
+            >
+              ${this.getSupportedLanguages().map(language => html`
+                <option value=${language} ?selected=${language === this.currentLanguage}>
+                  ${this.capitalizeLanguage(language)}
+                </option>
+              `)}
+            </select>
+          </div>
+          <div class="model-info">
+            Current language: ${this.capitalizeLanguage(this.currentLanguage)}
+          </div>
+          ${this.languageStats.length > 0 ? html`
+            <div style="margin-top: 1rem;">
+              <strong>Language Statistics:</strong>
+              <div style="margin-top: 0.5rem; font-size: 0.9rem;">
+                ${this.getSupportedLanguages().map(language => {
+                  const stat = this.languageStats.find(s => s.language === language);
+                  const studiedWords = stat ? stat.studiedWords : 0;
+                  const totalWords = stat ? stat.totalWords : 0;
+                  return html`
+                    <div style="margin-bottom: 0.25rem; color: ${language === this.currentLanguage ? '#007acc' : '#666'};">
+                      ${this.capitalizeLanguage(language)}: ${studiedWords}/${totalWords} words studied
+                      ${language === this.currentLanguage ? ' (current)' : ''}
+                    </div>
+                  `;
+                })}
+              </div>
+            </div>
+          ` : html`
+            <div style="margin-top: 1rem;">
+              <strong>Supported Languages:</strong>
+              <div style="margin-top: 0.5rem; font-size: 0.9rem; color: #666;">
+                ${this.getSupportedLanguages().map(language => html`
+                  <div style="margin-bottom: 0.25rem; color: ${language === this.currentLanguage ? '#007acc' : '#666'};">
+                    ${this.capitalizeLanguage(language)}${language === this.currentLanguage ? ' (current)' : ''}
+                  </div>
+                `)}
+              </div>
             </div>
           `}
         </div>

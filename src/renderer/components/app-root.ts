@@ -38,6 +38,9 @@ export class AppRoot extends LitElement {
   @state()
   private hasExistingWords = false;
 
+  @state()
+  private currentLanguage = '';
+
   private routerUnsubscribe?: () => void;
 
   static styles = [
@@ -79,6 +82,29 @@ export class AppRoot extends LitElement {
       .navigation {
         display: flex;
         gap: var(--spacing-sm);
+        align-items: center;
+      }
+
+      .language-indicator {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        padding: var(--spacing-xs) var(--spacing-sm);
+        background: var(--background-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-small);
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-left: var(--spacing-sm);
+      }
+
+      .language-flag {
+        font-size: 14px;
+      }
+
+      .language-name {
+        font-weight: 500;
+        color: var(--text-primary);
       }
 
       .nav-button {
@@ -219,11 +245,21 @@ export class AppRoot extends LitElement {
         
         .navigation {
           justify-content: center;
+          flex-wrap: wrap;
         }
         
         .nav-button {
           flex: 1;
           text-align: center;
+          min-width: 80px;
+        }
+
+        .language-indicator {
+          margin-left: 0;
+          margin-top: var(--spacing-xs);
+          justify-content: center;
+          order: 10;
+          flex-basis: 100%;
         }
       }
     `
@@ -240,6 +276,9 @@ export class AppRoot extends LitElement {
       this.updateSessionFromRoute();
     });
 
+    // Listen for language changes
+    this.addEventListener('language-changed', this.handleLanguageChanged);
+
     // Initialize current route
     this.currentRoute = router.getCurrentRoute();
 
@@ -251,6 +290,7 @@ export class AppRoot extends LitElement {
     if (this.routerUnsubscribe) {
       this.routerUnsubscribe();
     }
+    this.removeEventListener('language-changed', this.handleLanguageChanged);
   }
 
   private async initializeApp() {
@@ -283,6 +323,11 @@ export class AppRoot extends LitElement {
       console.log('Checking existing words...');
       await this.checkExistingWords();
       console.log('Existing words check complete');
+
+      // Load current language
+      console.log('Loading current language...');
+      await this.loadCurrentLanguage();
+      console.log('Current language loaded');
 
       console.log('App initialization complete');
       this.isLoading = false;
@@ -321,6 +366,41 @@ export class AppRoot extends LitElement {
       console.error('Failed to check existing words:', error);
       this.hasExistingWords = false;
     }
+  }
+
+  private async loadCurrentLanguage() {
+    try {
+      this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+    } catch (error) {
+      console.error('Failed to load current language:', error);
+      this.currentLanguage = 'spanish'; // Default fallback
+    }
+  }
+
+  // Method to refresh current language (can be called when language changes)
+  async refreshCurrentLanguage() {
+    await this.loadCurrentLanguage();
+  }
+
+  private handleLanguageChanged = async (event: Event) => {
+    const customEvent = event as CustomEvent;
+    console.log('Language changed event received:', customEvent.detail);
+    await this.refreshCurrentLanguage();
+  };
+
+  private capitalizeLanguage(language: string): string {
+    return language.charAt(0).toUpperCase() + language.slice(1);
+  }
+
+  private getLanguageFlag(language: string): string {
+    const flags: Record<string, string> = {
+      'italian': '🇮🇹',
+      'spanish': '🇪🇸',
+      'portuguese': '🇵🇹',
+      'polish': '🇵🇱',
+      'indonesian': '🇮🇩'
+    };
+    return flags[language] || '🌐';
   }
 
   private updateAppState() {
@@ -459,6 +539,12 @@ export class AppRoot extends LitElement {
             >
               Settings
             </button>
+            ${this.currentLanguage ? html`
+              <div class="language-indicator">
+                <span class="language-flag">${this.getLanguageFlag(this.currentLanguage)}</span>
+                <span class="language-name">${this.capitalizeLanguage(this.currentLanguage)}</span>
+              </div>
+            ` : ''}
           </nav>
         </header>
 

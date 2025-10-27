@@ -22,16 +22,7 @@ export class TopicSelector extends LitElement {
 
 
   @state()
-  private language = 'Spanish'; // Make language a state property so it can be changed
-
-  @state()
-  private availableLanguages = [
-    'Polish',
-    'Portuguese',
-    'Spanish',
-    'Italian',
-    'Indonesian'
-  ];
+  private currentLanguage = '';
 
   static styles = [
     sharedStyles,
@@ -133,27 +124,7 @@ export class TopicSelector extends LitElement {
 
 
 
-      .language-dropdown {
-        width: 100%;
-        padding: var(--spacing-md);
-        border: 2px solid var(--border-color);
-        border-radius: var(--border-radius);
-        font-size: 16px;
-        background: white;
-        transition: border-color 0.2s ease;
-        box-sizing: border-box;
-      }
 
-      .language-dropdown:focus {
-        outline: none;
-        border-color: var(--primary-color);
-      }
-
-      .language-dropdown:disabled {
-        background: #f5f5f5;
-        color: var(--text-tertiary);
-        cursor: not-allowed;
-      }
 
       .error-message {
         color: var(--error-color);
@@ -189,6 +160,20 @@ export class TopicSelector extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback();
+    await this.loadCurrentLanguage();
+  }
+
+  private async loadCurrentLanguage() {
+    try {
+      this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+    } catch (error) {
+      console.error('Failed to load current language:', error);
+      this.currentLanguage = 'spanish'; // Default fallback
+    }
+  }
+
+  private capitalizeLanguage(language: string): string {
+    return language.charAt(0).toUpperCase() + language.slice(1);
   }
 
 
@@ -201,16 +186,12 @@ export class TopicSelector extends LitElement {
 
 
 
-  private handleLanguageChange(e: Event) {
-    const select = e.target as HTMLSelectElement;
-    this.language = select.value;
-    this.error = ''; // Clear any previous errors
-  }
+
 
   private async handleGenerateWords() {
     if (this.isGenerating) return;
 
-    console.log('Starting word generation...', { topic: this.topic, language: this.language });
+    console.log('Starting word generation...', { topic: this.topic, language: this.currentLanguage });
 
     this.isGenerating = true;
     this.error = '';
@@ -220,7 +201,7 @@ export class TopicSelector extends LitElement {
       console.log('Calling generateWords API...');
       const words = await window.electronAPI.llm.generateWords(
         this.topic.trim() || undefined,
-        this.language
+        this.currentLanguage
       );
 
       console.log('Generated words result:', words);
@@ -241,7 +222,7 @@ export class TopicSelector extends LitElement {
       router.navigateTo('word-selection', {
         topic: topicToSave,
         generatedWords: words,
-        language: this.language
+        language: this.currentLanguage
       });
 
     } catch (error) {
@@ -267,35 +248,10 @@ export class TopicSelector extends LitElement {
   render() {
     return html`
       <div class="topic-container">
-
         <div class="topic-input-section">
           <div class="input-group">
-            <label class="input-label" for="language-select">
-              Language
-            </label>
-            <select
-              id="language-select"
-              class="language-dropdown"
-              .value=${this.language}
-              @change=${this.handleLanguageChange}
-              ?disabled=${this.isGenerating}
-            >
-              ${this.availableLanguages.map(lang => html`
-                <option value=${lang} ?selected=${lang === this.language}>
-                  ${lang}
-                </option>
-              `)}
-            </select>
-            <p class="help-text">
-              Select the language you want to learn. Configure the LLM model in Settings.
-            </p>
-          </div>
-
-
-
-          <div class="input-group">
             <label class="input-label" for="topic-input">
-              Topic (Optional)
+              Topic/prompt (Optional)
             </label>
             <input
               id="topic-input"
@@ -307,9 +263,6 @@ export class TopicSelector extends LitElement {
               placeholder="e.g., travel, food, business, family..."
               ?disabled=${this.isGenerating}
             />
-            <p class="help-text">
-              Leave blank for general vocabulary, or enter a specific topic like "cooking", "travel", or "business".
-            </p>
           </div>
         </div>
 

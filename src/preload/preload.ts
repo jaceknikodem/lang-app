@@ -19,14 +19,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.MARK_WORD_KNOWN, wordId, known),
     markWordIgnored: (wordId: number, ignored: boolean) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.MARK_WORD_IGNORED, wordId, ignored),
-    getWordsToStudy: (limit: number) => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_TO_STUDY, limit),
+    getWordsToStudy: (limit: number, language?: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_TO_STUDY, limit, language),
     getWordById: (wordId: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORD_BY_ID, wordId),
-    getAllWords: (includeKnown?: boolean, includeIgnored?: boolean) => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_ALL_WORDS, includeKnown, includeIgnored),
-    getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean) => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES, includeKnown, includeIgnored),
+    getAllWords: (includeKnown?: boolean, includeIgnored?: boolean, language?: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_ALL_WORDS, includeKnown, includeIgnored, language),
+    getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean, language?: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES, includeKnown, includeIgnored, language),
     getRecentStudySessions: (limit?: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_RECENT_STUDY_SESSIONS, limit),
     insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string, contextBefore?: string, contextAfter?: string, contextBeforeTranslation?: string, contextAfterTranslation?: string) => 
@@ -35,8 +35,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_SENTENCES_BY_WORD, wordId),
     updateLastStudied: (wordId: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.UPDATE_LAST_STUDIED, wordId),
-    getStudyStats: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_STUDY_STATS),
+    getStudyStats: (language?: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_STUDY_STATS, language),
     recordStudySession: (wordsStudied: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.RECORD_STUDY_SESSION, wordsStudied),
     getSetting: (key: string) => 
@@ -111,8 +111,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Quiz operations
   quiz: {
-    getWeakestWords: (limit: number) => 
-      ipcRenderer.invoke(IPC_CHANNELS.QUIZ.GET_WEAKEST_WORDS, limit),
+    getWeakestWords: (limit: number, language?: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.QUIZ.GET_WEAKEST_WORDS, limit, language),
     getRandomSentenceForWord: (wordId: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.QUIZ.GET_RANDOM_SENTENCE_FOR_WORD, wordId)
   },
@@ -153,15 +153,15 @@ declare global {
         updateWordStrength: (wordId: number, strength: number) => Promise<void>;
         markWordKnown: (wordId: number, known: boolean) => Promise<void>;
         markWordIgnored: (wordId: number, ignored: boolean) => Promise<void>;
-        getWordsToStudy: (limit: number) => Promise<any[]>;
+        getWordsToStudy: (limit: number, language?: string) => Promise<any[]>;
         getWordById: (wordId: number) => Promise<any | null>;
-        getAllWords: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<any[]>;
-        getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<any[]>;
+        getAllWords: (includeKnown?: boolean, includeIgnored?: boolean, language?: string) => Promise<any[]>;
+        getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean, language?: string) => Promise<any[]>;
         getRecentStudySessions: (limit?: number) => Promise<any[]>;
         insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string, contextBefore?: string, contextAfter?: string, contextBeforeTranslation?: string, contextAfterTranslation?: string) => Promise<number>;
         getSentencesByWord: (wordId: number) => Promise<any[]>;
         updateLastStudied: (wordId: number) => Promise<void>;
-        getStudyStats: () => Promise<any>;
+        getStudyStats: (language?: string) => Promise<any>;
         recordStudySession: (wordsStudied: number) => Promise<void>;
         getSetting: (key: string) => Promise<string | null>;
         setSetting: (key: string, value: string) => Promise<void>;
@@ -199,7 +199,7 @@ declare global {
         isSpeechRecognitionReady: () => Promise<boolean>;
       };
       quiz: {
-        getWeakestWords: (limit: number) => Promise<any[]>;
+        getWeakestWords: (limit: number, language?: string) => Promise<any[]>;
         getRandomSentenceForWord: (wordId: number) => Promise<any | null>;
       };
       lifecycle: {

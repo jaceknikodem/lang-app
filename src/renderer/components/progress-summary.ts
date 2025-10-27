@@ -46,6 +46,12 @@ export class ProgressSummary extends LitElement {
   @state()
   private error = '';
 
+  @state()
+  private currentLanguage = '';
+
+  @state()
+  private languageStats: Array<{language: string, totalWords: number, studiedWords: number}> = [];
+
   static styles = [
     sharedStyles,
     css`
@@ -362,6 +368,66 @@ export class ProgressSummary extends LitElement {
         text-align: center;
       }
 
+      .language-selector {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-md);
+        margin-bottom: var(--spacing-lg);
+        padding: var(--spacing-md);
+        background: var(--background-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+      }
+
+      .language-selector label {
+        font-weight: 500;
+        color: var(--text-primary);
+        white-space: nowrap;
+      }
+
+      .language-select {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-small);
+        background: var(--background-primary);
+        color: var(--text-primary);
+        font-size: 14px;
+        cursor: pointer;
+        min-width: 150px;
+      }
+
+      .language-select:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+      }
+
+      .language-stats {
+        flex: 1;
+        display: flex;
+        gap: var(--spacing-lg);
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
+
+      .language-stat {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--spacing-xs);
+      }
+
+      .language-stat-value {
+        font-weight: 600;
+        color: var(--primary-color);
+      }
+
+      .language-stat-label {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
       @media (max-width: 1024px) {
         .progress-grid {
           grid-template-columns: 1fr;
@@ -407,14 +473,18 @@ export class ProgressSummary extends LitElement {
     this.error = '';
 
     try {
-      // Load study statistics
-      this.studyStats = await window.electronAPI.database.getStudyStats();
+      // Load language information
+      this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+      this.languageStats = await window.electronAPI.database.getLanguageStats();
 
-      // Load all words to calculate category statistics
-      const allWords = await window.electronAPI.database.getAllWords(true, false);
+      // Load study statistics for current language
+      this.studyStats = await window.electronAPI.database.getStudyStats(this.currentLanguage);
+
+      // Load all words for current language to calculate category statistics
+      const allWords = await window.electronAPI.database.getAllWords(true, false, this.currentLanguage);
       this.wordCategoryStats = this.calculateWordCategoryStats(allWords);
 
-      // Load recent words with progress
+      // Load recent words with progress for current language
       this.recentWords = allWords
         .filter(word => word.lastStudied) // Only words that have been studied
         .sort((a, b) => {
@@ -511,6 +581,33 @@ export class ProgressSummary extends LitElement {
     router.goToTopicSelection();
   }
 
+  private async handleLanguageChange(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const selectedLanguage = select.value;
+    
+    if (!selectedLanguage || selectedLanguage === this.currentLanguage) return;
+    
+    try {
+      await window.electronAPI.database.setCurrentLanguage(selectedLanguage);
+      this.currentLanguage = selectedLanguage;
+      
+      // Reload progress data for the new language
+      await this.loadProgressData();
+    } catch (error) {
+      console.error('Failed to change language:', error);
+      // Revert the selection
+      select.value = this.currentLanguage;
+    }
+  }
+
+  private capitalizeLanguage(language: string): string {
+    return language.charAt(0).toUpperCase() + language.slice(1);
+  }
+
+  private getSupportedLanguages(): string[] {
+    return ['italian', 'spanish', 'portuguese', 'polish', 'indonesian'];
+  }
+
   private async handleContinueWeakWords() {
     try {
       const weakWords = await window.electronAPI.quiz.getWeakestWords(10);
@@ -574,12 +671,40 @@ export class ProgressSummary extends LitElement {
 
     return html`
       <div class="progress-container">
+        <div class="language-selector">
+          <label for="language-select">Learning:</label>
+          <select 
+            id="language-select"
+            class="language-select"
+            .value=${this.currentLanguage}
+            @change=${this.handleLanguageChange}
+          >
+            ${this.getSupportedLanguages().map(language => html`
+              <option value=${language} ?selected=${language === this.currentLanguage}>
+                ${this.capitalizeLanguage(language)}
+              </option>
+            `)}
+          </select>
+          <div class="language-stats">
+            ${this.getSupportedLanguages().map(language => {
+              const stat = this.languageStats.find(s => s.language === language);
+              const studiedWords = stat ? stat.studiedWords : 0;
+              const totalWords = stat ? stat.totalWords : 0;
+              return html`
+                <div class="language-stat">
+                  <div class="language-stat-value">${studiedWords}/${totalWords}</div>
+                  <div class="language-stat-label">${this.capitalizeLanguage(language)}</div>
+                </div>
+              `;
+            })}
+          </div>
+        </div>
         <div class="progress-grid">
           <!-- Top Left: Word Categories -->
           <div class="progress-section">
             <h3 class="section-title">
               <span class="section-icon">📊</span>
-              Study Statistics
+              Study Statistics - ${this.capitalizeLanguage(this.currentLanguage)}
             </h3>
             <div class="stats-grid">
               <div class="stat-card known">
