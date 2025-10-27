@@ -540,94 +540,11 @@ export class QuizMode extends LitElement {
         color: white;
       }
 
-      .setup-container {
-        text-align: center;
-        max-width: 500px;
-        margin: 0 auto;
-      }
 
-      .setup-title {
-        font-size: 24px;
-        font-weight: 600;
-        color: var(--text-primary);
-        margin-bottom: var(--spacing-sm);
-      }
 
-      .direction-selector {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: var(--spacing-xs);
-        margin-bottom: var(--spacing-md);
-      }
 
-      .direction-toggle {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-md);
-        font-size: 16px;
-        color: var(--text-primary);
-      }
 
-      .toggle-switch {
-        position: relative;
-        width: 60px;
-        height: 30px;
-        background: var(--border-color);
-        border-radius: 15px;
-        cursor: pointer;
-        transition: background-color 0.3s ease;
-      }
 
-      .toggle-switch.active {
-        background: var(--primary-color);
-      }
-
-      .toggle-slider {
-        position: absolute;
-        top: 3px;
-        left: 3px;
-        width: 24px;
-        height: 24px;
-        background: white;
-        border-radius: 50%;
-        transition: transform 0.3s ease;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-      }
-
-      .toggle-switch.active .toggle-slider {
-        transform: translateX(30px);
-      }
-
-      .direction-label {
-        font-weight: 500;
-        min-width: 120px;
-        text-align: center;
-      }
-
-      .start-button {
-        background: var(--primary-color);
-        color: white;
-        border: none;
-        border-radius: var(--border-radius);
-        padding: var(--spacing-md) var(--spacing-lg);
-        font-size: 16px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s ease;
-      }
-
-      .start-button:hover {
-        background: var(--primary-dark);
-        color: white;
-        transform: translateY(-1px);
-      }
-
-      .start-button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        transform: none;
-      }
 
       .recording-section {
         margin-top: var(--spacing-md);
@@ -979,10 +896,7 @@ export class QuizMode extends LitElement {
           max-width: 250px;
         }
 
-        .direction-toggle {
-          flex-direction: column;
-          gap: var(--spacing-sm);
-        }
+
 
         .recording-section {
           margin-top: var(--spacing-md);
@@ -1018,10 +932,9 @@ export class QuizMode extends LitElement {
     // Try to restore quiz session from session manager
     this.restoreQuizSession();
 
-    // If we don't have a quiz session, show setup
+    // If we don't have a quiz session, start one automatically
     if (!this.quizSession) {
-      // Quiz setup will be shown in render
-      return;
+      await this.startQuiz();
     }
   }
 
@@ -1288,13 +1201,7 @@ export class QuizMode extends LitElement {
         context: 'quiz',
         description: 'Start quiz / Reveal answer / Continue'
       },
-      // Direction toggle
-      {
-        key: 'd',
-        action: () => this.toggleDirection(),
-        context: 'quiz',
-        description: 'Toggle quiz direction'
-      },
+
       // Audio only mode
       {
         ...GlobalShortcuts.TOGGLE_AUDIO_ONLY,
@@ -1360,12 +1267,8 @@ export class QuizMode extends LitElement {
   }
 
   private handleEnterKey() {
-    // Don't handle if we're in setup mode or loading
+    // Don't handle if we're loading or have an error
     if (!this.quizSession || this.isLoading || this.error) {
-      // In setup mode, start the quiz
-      if (!this.quizSession && !this.isLoading && !this.error) {
-        this.startQuiz();
-      }
       return;
     }
 
@@ -1396,12 +1299,7 @@ export class QuizMode extends LitElement {
     }
   }
 
-  private toggleDirection() {
-    this.direction = this.direction === 'foreign-to-english'
-      ? 'english-to-foreign'
-      : 'foreign-to-english';
-    sessionManager.updateQuizDirection(this.direction);
-  }
+
 
   private toggleRecorder() {
     this.showRecorder = !this.showRecorder;
@@ -1555,9 +1453,18 @@ export class QuizMode extends LitElement {
       `;
     }
 
-    // Show quiz setup if no session
+    // Show loading if no session yet (quiz is starting automatically)
     if (!this.quizSession) {
-      return this.renderQuizSetup();
+      return html`
+        <div class="quiz-container">
+          <div class="loading-container">
+            <div class="loading">
+              <div class="spinner"></div>
+              Starting quiz...
+            </div>
+          </div>
+        </div>
+      `;
     }
 
     // Show quiz complete screen
@@ -1576,48 +1483,7 @@ export class QuizMode extends LitElement {
     return this.renderQuestion();
   }
 
-  private renderQuizSetup() {
-    return html`
-      <div class="quiz-container">
-        <div class="setup-container">
-          <p>Next quiz will include ${this.selectedWords.length} words.</p>
-          
-          <div class="direction-selector">
-            <div class="direction-toggle">
-              <span class="direction-label">Foreign → English</span>
-              <div 
-                class="toggle-switch ${this.direction === 'english-to-foreign' ? 'active' : ''}"
-                @click=${this.toggleDirection}
-              >
-                <div class="toggle-slider"></div>
-              </div>
-              <span class="direction-label">English → Foreign</span>
-            </div>
-          </div>
 
-          <div class="audio-only-toggle">
-            <span class="audio-only-label">Audio Only Mode</span>
-            <div 
-              class="audio-only-switch ${this.audioOnlyMode ? 'active' : ''}"
-              @click=${this.toggleAudioOnlyMode}
-              title="Hide text and rely only on audio for quiz questions"
-            >
-              <div class="audio-only-slider"></div>
-            </div>
-            <span style="font-size: 12px; color: var(--text-secondary);">🎧</span>
-          </div>
-
-          <button 
-            class="start-button"
-            @click=${this.startQuiz}
-            ?disabled=${this.isLoading}
-          >
-            Start Quiz <span class="keyboard-hint">(Enter)</span>
-          </button>
-        </div>
-      </div>
-    `;
-  }
 
   private renderQuestion() {
     if (!this.quizSession || !this.currentQuestion) return html``;
