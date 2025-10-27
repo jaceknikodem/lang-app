@@ -565,6 +565,18 @@ export class QuizMode extends LitElement {
         line-height: 1.4;
       }
 
+      .sentence-placeholder {
+        font-size: 16px;
+        color: var(--text-secondary);
+        text-align: center;
+        margin-bottom: var(--spacing-md);
+        padding: var(--spacing-sm);
+        background: var(--background-secondary);
+        border-radius: var(--border-radius);
+        border-left: 4px solid var(--border-color);
+        font-style: italic;
+      }
+
       .close-recorder-button {
         background: var(--text-secondary);
         color: white;
@@ -1738,14 +1750,22 @@ export class QuizMode extends LitElement {
 
     const prompt = `Try pronouncing this ${languageLabel.toLowerCase()} sentence:`;
 
+    const isAudioOnly = this.audioOnlyMode;
+
     return html`
       <div class="recording-section">
         <div class="recording-header">
           <span class="language-label">${languageLabel}</span>
         </div>
-        <div class="sentence-to-record">
-          "${sentenceToRecord}"
-        </div>
+        ${isAudioOnly ? html`
+          <div class="sentence-placeholder">
+            Sentence hidden in audio-only mode. Repeat what you hear to practice pronunciation.
+          </div>
+        ` : html`
+          <div class="sentence-to-record">
+            "${sentenceToRecord}"
+          </div>
+        `}
         <audio-recorder
           .prompt=${prompt}
           @recording-completed=${this.handleRecordingCompleted}
