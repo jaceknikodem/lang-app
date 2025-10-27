@@ -40,7 +40,7 @@ export class ContentGenerator {
     } else {
       this.llmClient = this.createLLMClient();
     }
-    
+
     this.frequencyWordManager = new FrequencyWordManager();
   }
 
@@ -60,13 +60,15 @@ export class ContentGenerator {
     };
 
     if (this.config.llmProvider === 'gemini') {
-      if (!this.config.geminiApiKey) {
-        throw new Error('Gemini API key is required when using Gemini provider');
-      }
       factoryConfig.geminiConfig = {
-        apiKey: this.config.geminiApiKey
+        apiKey: this.config.geminiApiKey || ''
       };
     }
+
+    console.log('Creating LLM client:', {
+      provider: this.config.llmProvider,
+      hasApiKey: !!(this.config.geminiApiKey && this.config.geminiApiKey.trim())
+    });
 
     return LLMFactory.createClient(factoryConfig);
   }
@@ -75,6 +77,13 @@ export class ContentGenerator {
    * Switch LLM provider and recreate client
    */
   switchProvider(provider: LLMProvider, geminiApiKey?: string): void {
+    console.log('Switching provider:', {
+      from: this.config.llmProvider,
+      to: provider,
+      providedApiKey: !!geminiApiKey,
+      existingApiKey: !!(this.config.geminiApiKey && this.config.geminiApiKey.trim())
+    });
+
     this.config.llmProvider = provider;
     if (provider === 'gemini') {
       // Update API key if provided, otherwise keep existing one
@@ -97,12 +106,12 @@ export class ContentGenerator {
    */
   setGeminiApiKey(apiKey: string, switchToGemini: boolean = false): void {
     this.config.geminiApiKey = apiKey;
-    
+
     // If we're currently using Gemini, update the API key in the client
     if (this.config.llmProvider === 'gemini' && 'setApiKey' in this.llmClient) {
       (this.llmClient as any).setApiKey(apiKey);
     }
-    
+
     if (switchToGemini) {
       this.switchProvider('gemini', apiKey);
     }
@@ -161,7 +170,7 @@ export class ContentGenerator {
 
     // Get the next words from the frequency list
     const nextWordEntries = await this.frequencyWordManager.getNextWordsToProcess(language, database, count);
-    
+
     if (nextWordEntries.length === 0) {
       throw new Error(`No new words available from frequency list for ${language}`);
     }
@@ -170,20 +179,20 @@ export class ContentGenerator {
 
     // Process word entries - use existing translations or generate them
     const generatedWords: GeneratedWord[] = [];
-    
+
     for (const wordEntry of nextWordEntries) {
       try {
         let translation = wordEntry.translation;
-        
+
         // If no translation is available, use LLM to generate it
         if (!translation) {
           translation = await this.getWordTranslation(wordEntry.word, language);
         }
-        
+
         // Get frequency position and tier information
         const frequencyPosition = wordEntry.position;
         const frequencyTier = frequencyPosition ? this.frequencyWordManager.getFrequencyTier(frequencyPosition) : undefined;
-        
+
         generatedWords.push({
           word: wordEntry.word,
           translation: translation,
@@ -244,7 +253,7 @@ export class ContentGenerator {
     const wordsWithFrequencyInfo = validWords.map(word => {
       const frequencyPosition = this.frequencyWordManager.getWordFrequencyPosition(word.word, targetLanguage.toLowerCase());
       const frequencyTier = frequencyPosition ? this.frequencyWordManager.getFrequencyTier(frequencyPosition) : undefined;
-      
+
       return {
         ...word,
         frequencyPosition,
@@ -267,7 +276,7 @@ export class ContentGenerator {
 
     // Use a simple prompt to get just the translation
     const prompt = `Translate the ${language} word "${word}" to English. Respond with only the English translation, no additional text.`;
-    
+
     try {
       // Use the word generation model for simple translations
       const wordModel = this.llmClient.getWordGenerationModel();

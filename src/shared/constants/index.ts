@@ -28,9 +28,9 @@ export const LLM_CONFIG = {
   DEFAULT_TIMEOUT: 80000, // Increased to 80 seconds for better reliability
   MAX_RETRIES: 2,
   // Gemini configuration
-  GEMINI_DEFAULT_MODEL: 'gemini-1.5-flash',
-  GEMINI_DEFAULT_WORD_MODEL: 'gemini-1.5-flash-8b', // Fastest, most cost-effective for word generation
-  GEMINI_DEFAULT_SENTENCE_MODEL: 'gemini-1.5-pro', // Higher quality model for complex sentences
+  GEMINI_DEFAULT_MODEL: 'gemini-2.5-flash',
+  GEMINI_DEFAULT_WORD_MODEL: 'gemini-2.5-flash-lite', // Fastest, most cost-effective for word generation
+  GEMINI_DEFAULT_SENTENCE_MODEL: 'gemini-2.5-flash', // Higher quality model for complex sentences
   GEMINI_DEFAULT_TIMEOUT: 30000
 } as const;
 

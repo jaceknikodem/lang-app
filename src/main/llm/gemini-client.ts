@@ -119,37 +119,45 @@ export class GeminiClient implements LLMClient {
   }
 
   async isAvailable(): Promise<boolean> {
+    console.log('Gemini isAvailable check - API key length:', this.config.apiKey?.length || 0);
+    
     if (!this.config.apiKey || this.config.apiKey.trim() === '') {
+      console.log('Gemini isAvailable: No API key configured');
       return false;
     }
     
     try {
-      const response = await fetch(`${this.baseUrl}/${this.config.model}?key=${this.config.apiKey}`, {
+      // Use a simpler endpoint to test API availability
+      const url = `${this.baseUrl}?key=${this.config.apiKey}`;
+      console.log('Gemini isAvailable: Testing models list endpoint');
+      
+      const response = await fetch(url, {
         method: 'GET',
-        signal: AbortSignal.timeout(5000)
+        signal: AbortSignal.timeout(10000) // Increased timeout
       });
+      
+      console.log('Gemini isAvailable: Response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log('Gemini isAvailable: Error response:', errorText);
+      }
+      
       return response.ok;
     } catch (error) {
+      console.log('Gemini isAvailable: Error:', error);
       return false;
     }
   }
 
   async getAvailableModels(): Promise<string[]> {
-    // Return comprehensive list of Gemini models
+    // Return comprehensive list of Gemini models (official supported models)
     const geminiModels = [
-      // Latest experimental models
-      'gemini-2.0-flash-exp',
-      
-      // Gemini 1.5 series (current stable)
-      'gemini-1.5-pro',
-      'gemini-1.5-pro-exp-0827',
-      'gemini-1.5-flash',
-      'gemini-1.5-flash-exp-0827',
-      'gemini-1.5-flash-8b',
-      'gemini-1.5-flash-8b-exp-0827',
-      
-      // Gemini 1.0 series (legacy)
-      'gemini-1.0-pro'
+      'gemini-2.5-pro',
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite',
+      'gemini-2.0-flash',
+      'gemini-2.0-flash-lite'
     ];
 
     // If we have an API key, try to fetch the actual available models

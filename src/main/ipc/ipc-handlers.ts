@@ -455,6 +455,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       // If switching to Gemini and no API key provided, get it from database
       if (validatedProvider === 'gemini' && !validatedApiKey && databaseLayer) {
         const storedApiKey = await databaseLayer.getSetting('gemini_api_key');
+        console.log('Retrieved Gemini API key from database:', !!storedApiKey);
         validatedApiKey = storedApiKey || undefined;
       }
 

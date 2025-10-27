@@ -813,16 +813,16 @@ export class SettingsPanel extends LitElement {
 
     // Gemini model descriptions
     if (modelName.includes('gemini')) {
-      if (modelName.includes('2.0-flash-exp')) {
-        return '(Latest experimental, fastest response)';
-      } else if (modelName.includes('1.5-pro')) {
-        return '(High quality, best for complex tasks)';
-      } else if (modelName.includes('1.5-flash-8b')) {
+      if (modelName.includes('2.5-pro')) {
+        return '(Highest quality, best for complex tasks)';
+      } else if (modelName.includes('2.5-flash-lite')) {
         return '(Fastest, most cost-effective)';
-      } else if (modelName.includes('1.5-flash')) {
+      } else if (modelName.includes('2.5-flash')) {
         return '(Fast, good balance of speed and quality)';
-      } else if (modelName.includes('1.0-pro')) {
-        return '(Legacy model, stable)';
+      } else if (modelName.includes('2.0-flash-lite')) {
+        return '(Fast and cost-effective)';
+      } else if (modelName.includes('2.0-flash')) {
+        return '(Good performance and speed)';
       }
       return '(Gemini model)';
     }
