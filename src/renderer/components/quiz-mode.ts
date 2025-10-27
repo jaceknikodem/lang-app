@@ -190,29 +190,6 @@ export class QuizMode extends LitElement {
         letter-spacing: 0.5px;
       }
 
-      .audio-button {
-        background: var(--primary-color);
-        color: white;
-        border: none;
-        border-radius: var(--border-radius);
-        padding: var(--spacing-sm);
-        font-size: 14px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 32px;
-        height: 32px;
-        flex-shrink: 0;
-      }
-
-      .audio-button:hover {
-        background: var(--primary-dark);
-        color: white;
-        transform: translateY(-1px);
-      }
-
       .answer-buttons {
         display: flex;
         gap: var(--spacing-sm);
@@ -677,6 +654,47 @@ export class QuizMode extends LitElement {
         text-align: center;
         margin-bottom: var(--spacing-sm);
         border: 1px solid var(--primary-color);
+      }
+
+      .audio-only-controls {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: var(--spacing-xs);
+        margin-bottom: var(--spacing-sm);
+      }
+
+      .audio-only-controls .audio-only-hint {
+        width: 100%;
+        margin-bottom: 0;
+      }
+
+      .audio-replay-button {
+        background: var(--background-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 999px;
+        padding: 4px 12px;
+        font-size: 13px;
+        color: var(--text-secondary);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        line-height: 1.2;
+        flex-shrink: 0;
+      }
+
+      .audio-replay-button:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+        background: rgba(0, 0, 0, 0.03);
+      }
+
+      .audio-replay-label {
+        font-size: 12px;
+        letter-spacing: 0.3px;
       }
 
       .transcription-results {
@@ -1580,14 +1598,31 @@ export class QuizMode extends LitElement {
             </div>
             
             ${this.audioOnlyMode ? html`
-              <button class="audio-button" @click=${this.playAudio} style="margin: 0 auto var(--spacing-sm);">
-                🔊
-              </button>
+              <div class="audio-only-controls">
+                <div class="audio-only-hint">
+                  🎧 Listen carefully to the audio and answer based on what you hear
+                </div>
+                <button 
+                  class="audio-replay-button" 
+                  @click=${this.playAudio} 
+                  title="Replay audio"
+                  aria-label="Replay audio"
+                >
+                  <span aria-hidden="true">🔊</span>
+                  <span class="audio-replay-label">Replay audio</span>
+                </button>
+              </div>
             ` : html`
               <div class="question-text-container">
                 <div class="question-text">${displayText}</div>
-                <button class="audio-button" @click=${this.playAudio}>
-                  🔊
+                <button 
+                  class="audio-replay-button" 
+                  @click=${this.playAudio}
+                  title="Replay audio"
+                  aria-label="Replay audio"
+                >
+                  <span aria-hidden="true">🔊</span>
+                  <span class="audio-replay-label">Replay audio</span>
                 </button>
               </div>
             `}
