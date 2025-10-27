@@ -203,7 +203,8 @@ export class ContentGenerator {
     word: string,
     language?: string,
     count?: number,
-    database?: DatabaseLayer
+    database?: DatabaseLayer,
+    topic?: string
   ): Promise<GeneratedSentence[]> {
     const targetLanguage = language || this.config.defaultLanguage;
     const sentenceCount = count || this.config.defaultSentenceCount;
@@ -231,7 +232,7 @@ export class ContentGenerator {
       }
 
       const sentences = await this.executeWithRetry(
-        () => this.llmClient.generateSentences(word.trim(), targetLanguage, sentenceCount, useContextSentences),
+        () => this.llmClient.generateSentences(word.trim(), targetLanguage, sentenceCount, useContextSentences, topic),
         `generate sentences for word: ${word}`
       );
 

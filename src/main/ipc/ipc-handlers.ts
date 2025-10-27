@@ -325,13 +325,14 @@ function setupLLMHandlers(llmClient: OllamaClient, contentGenerator: ContentGene
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.LLM.GENERATE_SENTENCES, async (event, word, language) => {
+  ipcMain.handle(IPC_CHANNELS.LLM.GENERATE_SENTENCES, async (event, word, language, topic) => {
     try {
       const validatedWord = TextSchema.parse(word);
       const validatedLanguage = LanguageSchema.parse(language);
+      const validatedTopic = topic && topic.trim() ? TopicSchema.parse(topic.trim()) : undefined;
 
       // Use ContentGenerator for better error handling and validation
-      return await contentGenerator.generateWordSentences(validatedWord, validatedLanguage, 3, databaseLayer);
+      return await contentGenerator.generateWordSentences(validatedWord, validatedLanguage, 3, databaseLayer, validatedTopic);
     } catch (error) {
       console.error('Error generating sentences:', error);
       throw new Error(`Failed to generate sentences: ${error instanceof Error ? error.message : 'Unknown error'}`);

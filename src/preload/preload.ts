@@ -59,8 +59,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   llm: {
     generateWords: (topic: string | undefined, language: string) => 
       ipcRenderer.invoke(IPC_CHANNELS.LLM.GENERATE_WORDS, topic, language),
-    generateSentences: (word: string, language: string) => 
-      ipcRenderer.invoke(IPC_CHANNELS.LLM.GENERATE_SENTENCES, word, language),
+    generateSentences: (word: string, language: string, topic?: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.LLM.GENERATE_SENTENCES, word, language, topic),
     isAvailable: () => 
       ipcRenderer.invoke(IPC_CHANNELS.LLM.IS_AVAILABLE),
     getAvailableModels: () => 
@@ -214,7 +214,7 @@ declare global {
       };
       llm: {
         generateWords: (topic: string | undefined, language: string) => Promise<any[]>;
-        generateSentences: (word: string, language: string) => Promise<any[]>;
+        generateSentences: (word: string, language: string, topic?: string) => Promise<any[]>;
         isAvailable: () => Promise<boolean>;
         getAvailableModels: () => Promise<string[]>;
         setModel: (model: string) => Promise<void>;

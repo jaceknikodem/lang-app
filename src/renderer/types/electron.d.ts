@@ -30,7 +30,7 @@ declare global {
       };
       llm: {
         generateWords: (topic: string | undefined, language: string) => Promise<GeneratedWord[]>;
-        generateSentences: (word: string, language: string) => Promise<GeneratedSentence[]>;
+        generateSentences: (word: string, language: string, topic?: string) => Promise<GeneratedSentence[]>;
         isAvailable: () => Promise<boolean>;
       };
       audio: {

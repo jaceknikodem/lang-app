@@ -24,7 +24,7 @@ class MockOllamaClient {
         return words;
     }
 
-    async generateSentences(): Promise<any[]> {
+    async generateSentences(word: string, language: string, count: number, useContextSentences?: boolean, topic?: string): Promise<any[]> {
         return [];
     }
 
@@ -123,7 +123,7 @@ describe('ContentGenerator', () => {
 
         test('should shuffle words to provide variety in order', async () => {
             // Generate words multiple times and check that order varies
-            const results = [];
+            const results: string[][] = [];
             for (let i = 0; i < 5; i++) {
                 const words = await contentGenerator.generateTopicVocabulary(
                     'test',

@@ -182,11 +182,11 @@ export class OllamaClient implements LLMClient {
   }
 
   getWordGenerationModel(): string {
-    return this.config.wordGenerationModel || this.config.model;
+    return this.config.wordGenerationModel ?? this.config.model;
   }
 
   getSentenceGenerationModel(): string {
-    return this.config.sentenceGenerationModel || this.config.model;
+    return this.config.sentenceGenerationModel ?? this.config.model;
   }
 
   async generateTopicWords(topic: string, language: string, count: number): Promise<GeneratedWord[]> {
@@ -259,10 +259,10 @@ export class OllamaClient implements LLMClient {
     }
   }
 
-  async generateSentences(word: string, language: string, count: number, useContextSentences: boolean = false): Promise<GeneratedSentence[]> {
+  async generateSentences(word: string, language: string, count: number, useContextSentences: boolean = false, topic?: string): Promise<GeneratedSentence[]> {
     // Get known words to include in sentences when possible
     const knownWords = await this.getKnownWords(language);
-    const prompt = this.createSentencesPrompt(word, language, count, knownWords, useContextSentences);
+    const prompt = this.createSentencesPrompt(word, language, count, knownWords, useContextSentences, topic);
 
     try {
       const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
@@ -456,7 +456,7 @@ Rules:
     }
   }
 
-  private createSentencesPrompt(word: string, language: string, count: number, knownWords: string[] = [], useContextSentences: boolean = false): string {
+  private createSentencesPrompt(word: string, language: string, count: number, knownWords: string[] = [], useContextSentences: boolean = false, topic?: string): string {
     let examples: string;
     let contextInstructions = '';
 
@@ -489,10 +489,15 @@ Rules:
       ? `\nWhen possible, try to include some of these known words in your sentences (when it makes sense naturally): ${knownWords.join(', ')}`
       : '';
 
+    // Create topic guidance
+    const topicText = topic && topic.trim()
+      ? `\nIMPORTANT: All sentences should relate to or be contextually relevant to the topic: "${topic.trim()}"`
+      : '';
+
     return `CRITICAL: You must return exactly ${count} sentences in a JSON array. No more, no less.
 CRITICAL: Return ONLY the JSON array, no explanations or extra text.
 
-Task: Generate exactly ${count} natural, conversational sentences in ${language} using the word '${word}' (note: this word is in its canonical dictionary form).${knownWordsText}
+Task: Generate exactly ${count} natural, conversational sentences in ${language} using the word '${word}' (note: this word is in its canonical dictionary form).${knownWordsText}${topicText}
 
 Expected output format (${count} items):
 [

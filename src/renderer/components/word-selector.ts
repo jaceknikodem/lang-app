@@ -447,7 +447,8 @@ export class WordSelector extends LitElement {
           console.log('Generating sentences for word:', word.word);
           const sentences = await window.electronAPI.llm.generateSentences(
             word.word,
-            this.language
+            this.language,
+            this.topic
           );
           console.log('Generated', sentences.length, 'sentences for', word.word);
 

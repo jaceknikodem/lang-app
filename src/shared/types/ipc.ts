@@ -58,7 +58,7 @@ export interface IPCBridge {
   // LLM operations
   llm: {
     generateWords: (topic: string | undefined, language: string) => Promise<GeneratedWord[]>;
-    generateSentences: (word: string, language: string) => Promise<GeneratedSentence[]>;
+    generateSentences: (word: string, language: string, topic?: string) => Promise<GeneratedSentence[]>;
     isAvailable: () => Promise<boolean>;
     getAvailableModels: () => Promise<string[]>;
     setModel: (model: string) => Promise<void>;
