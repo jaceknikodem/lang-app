@@ -2,7 +2,7 @@
  * Manages frequency-based word selection from pre-sorted word lists
  */
 
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { DatabaseLayer } from '../../shared/types/database.js';
 
@@ -53,14 +53,16 @@ export class FrequencyWordManager {
         const languages: string[] = [];
 
         try {
-            const files = ['spanish_words.txt', 'portuguese_words.txt', 'polish_words.txt'];
+            const files = readdirSync(this.config.wordsDirectory);
 
             for (const file of files) {
-                const filePath = join(this.config.wordsDirectory, file);
-                if (existsSync(filePath)) {
-                    // Extract language name from filename (e.g., 'spanish_words.txt' -> 'spanish')
-                    const language = file.replace('_words.txt', '');
-                    languages.push(language);
+                if (file.endsWith('_words.txt')) {
+                    const filePath = join(this.config.wordsDirectory, file);
+                    if (existsSync(filePath)) {
+                        // Extract language name from filename (e.g., 'spanish_words.txt' -> 'spanish')
+                        const language = file.replace('_words.txt', '');
+                        languages.push(language);
+                    }
                 }
             }
         } catch (error) {
