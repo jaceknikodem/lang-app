@@ -56,16 +56,24 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
+      // Initialize SRS values for new word
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
       const stmt = db.prepare(`
-        INSERT INTO words (word, language, translation, audio_path)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO words (
+          word, language, translation, audio_path,
+          strength, interval_days, ease_factor, next_due
+        )
+        VALUES (?, ?, ?, ?, 20, 1, 2.5, ?)
       `);
       
       const result = stmt.run(
         wordData.word,
         wordData.language,
         wordData.translation,
-        wordData.audioPath || null
+        wordData.audioPath || null,
+        tomorrow.toISOString()
       );
       
       return result.lastInsertRowid as number;
@@ -147,7 +155,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
-   * Get words to study, prioritizing by lowest strength with randomization
+   * Get words to study, prioritizing SRS due words first, then by lowest strength
    */
   async getWordsToStudy(limit: number, language?: string): Promise<Word[]> {
     const db = this.getDb();
@@ -155,22 +163,31 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     try {
       const currentLanguage = language || await this.getCurrentLanguage();
       
-      // Get more words than needed to allow for shuffling within strength tiers
-      const expandedLimit = Math.min(limit * 3, 100);
+      // First, get words due for review (SRS priority)
+      const dueWords = await this.getWordsDueWithPriority(limit, currentLanguage);
+      
+      // If we have enough due words, return them
+      if (dueWords.length >= limit) {
+        return dueWords.slice(0, limit);
+      }
+      
+      // If we need more words, get additional words by strength
+      const remainingLimit = limit - dueWords.length;
+      const now = new Date().toISOString();
       
       const stmt = db.prepare(`
         SELECT * FROM words 
         WHERE known = FALSE AND ignored = FALSE AND language = ?
+        AND next_due > ?
         ORDER BY strength ASC, RANDOM()
         LIMIT ?
       `);
       
-      const rows = stmt.all(currentLanguage, expandedLimit) as any[];
-      const words = rows.map(this.mapRowToWord);
+      const rows = stmt.all(currentLanguage, now, remainingLimit) as any[];
+      const additionalWords = rows.map(this.mapRowToWord);
       
-      // Shuffle and return the requested limit
-      const shuffled = this.shuffleArray(words);
-      return shuffled.slice(0, limit);
+      // Combine due words with additional words
+      return [...dueWords, ...additionalWords];
     } catch (error) {
       throw new Error(`Failed to get words to study: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -510,7 +527,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   // Quiz-specific operations
 
   /**
-   * Get weakest words for quiz generation, prioritizing lowest strength with randomization
+   * Get weakest words for quiz generation, prioritizing SRS due words and lowest strength
    */
   async getWeakestWords(limit: number, language?: string): Promise<Word[]> {
     const db = this.getDb();
@@ -518,22 +535,29 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     try {
       const currentLanguage = language || await this.getCurrentLanguage();
       
-      // Get more words than needed to allow for shuffling within strength tiers
-      const expandedLimit = Math.min(limit * 2, 50);
+      // Prioritize words due for review, then weakest words
+      const dueWords = await this.getWordsDueWithPriority(limit, currentLanguage);
+      
+      if (dueWords.length >= limit) {
+        return dueWords.slice(0, limit);
+      }
+      
+      // Get additional weak words if needed
+      const remainingLimit = limit - dueWords.length;
+      const now = new Date().toISOString();
       
       const stmt = db.prepare(`
         SELECT * FROM words 
         WHERE known = FALSE AND ignored = FALSE AND language = ?
+        AND next_due > ?
         ORDER BY strength ASC, RANDOM()
         LIMIT ?
       `);
       
-      const rows = stmt.all(currentLanguage, expandedLimit) as any[];
-      const words = rows.map(this.mapRowToWord);
+      const rows = stmt.all(currentLanguage, now, remainingLimit) as any[];
+      const additionalWords = rows.map(this.mapRowToWord);
       
-      // Shuffle and return the requested limit
-      const shuffled = this.shuffleArray(words);
-      return shuffled.slice(0, limit);
+      return [...dueWords, ...additionalWords];
     } catch (error) {
       throw new Error(`Failed to get weakest words: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -663,6 +687,184 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
+  // SRS-specific operations
+
+  /**
+   * Update word with SRS values after review
+   */
+  async updateWordSRS(
+    wordId: number,
+    strength: number,
+    intervalDays: number,
+    easeFactor: number,
+    nextDue: Date
+  ): Promise<void> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare(`
+        UPDATE words 
+        SET strength = ?, interval_days = ?, ease_factor = ?, 
+            last_review = CURRENT_TIMESTAMP, next_due = ?,
+            last_studied = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `);
+      
+      const result = stmt.run(
+        Math.max(0, Math.min(100, strength)),
+        intervalDays,
+        easeFactor,
+        nextDue.toISOString(),
+        wordId
+      );
+      
+      if (result.changes === 0) {
+        throw new Error(`Word with ID ${wordId} not found`);
+      }
+    } catch (error) {
+      throw new Error(`Failed to update word SRS: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get words that are due for review (SRS-based selection)
+   */
+  async getWordsDueForReview(limit?: number, language?: string): Promise<Word[]> {
+    const db = this.getDb();
+    
+    try {
+      const currentLanguage = language || await this.getCurrentLanguage();
+      const now = new Date().toISOString();
+      
+      let query = `
+        SELECT * FROM words 
+        WHERE known = FALSE AND ignored = FALSE 
+        AND language = ? AND next_due <= ?
+        ORDER BY next_due ASC, strength ASC
+      `;
+      
+      if (limit) {
+        query += ' LIMIT ?';
+      }
+      
+      const stmt = db.prepare(query);
+      const params = limit ? [currentLanguage, now, limit] : [currentLanguage, now];
+      const rows = stmt.all(...params) as any[];
+      
+      return rows.map(this.mapRowToWord);
+    } catch (error) {
+      throw new Error(`Failed to get words due for review: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get count of words due for review
+   */
+  async getWordsDueCount(language?: string): Promise<number> {
+    const db = this.getDb();
+    
+    try {
+      const currentLanguage = language || await this.getCurrentLanguage();
+      const now = new Date().toISOString();
+      
+      const stmt = db.prepare(`
+        SELECT COUNT(*) as count FROM words 
+        WHERE known = FALSE AND ignored = FALSE 
+        AND language = ? AND next_due <= ?
+      `);
+      
+      const result = stmt.get(currentLanguage, now) as { count: number };
+      return result.count;
+    } catch (error) {
+      throw new Error(`Failed to get words due count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get words due for review with priority sorting for SRS
+   */
+  async getWordsDueWithPriority(limit?: number, language?: string): Promise<Word[]> {
+    const db = this.getDb();
+    
+    try {
+      const currentLanguage = language || await this.getCurrentLanguage();
+      const now = new Date().toISOString();
+      
+      // Get all due words first
+      const stmt = db.prepare(`
+        SELECT * FROM words 
+        WHERE known = FALSE AND ignored = FALSE 
+        AND language = ? AND next_due <= ?
+      `);
+      
+      const rows = stmt.all(currentLanguage, now) as any[];
+      const words = rows.map(this.mapRowToWord);
+      
+      // Sort by SRS priority (overdue first, then by strength)
+      const sortedWords = words.sort((a, b) => {
+        const nowTime = new Date().getTime();
+        const aDaysOverdue = Math.max(0, Math.floor((nowTime - a.nextDue.getTime()) / (1000 * 60 * 60 * 24)));
+        const bDaysOverdue = Math.max(0, Math.floor((nowTime - b.nextDue.getTime()) / (1000 * 60 * 60 * 24)));
+        
+        // First sort by overdue status
+        if (aDaysOverdue !== bDaysOverdue) {
+          return bDaysOverdue - aDaysOverdue; // More overdue first
+        }
+        
+        // Then by strength (weaker first)
+        return a.strength - b.strength;
+      });
+      
+      return limit ? sortedWords.slice(0, limit) : sortedWords;
+    } catch (error) {
+      throw new Error(`Failed to get words due with priority: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get SRS statistics for dashboard
+   */
+  async getSRSStats(language?: string): Promise<{
+    totalWords: number;
+    dueToday: number;
+    overdue: number;
+    averageInterval: number;
+    averageEaseFactor: number;
+  }> {
+    const db = this.getDb();
+    
+    try {
+      const currentLanguage = language || await this.getCurrentLanguage();
+      const now = new Date().toISOString();
+      const today = new Date();
+      today.setHours(23, 59, 59, 999); // End of today
+      const todayStr = today.toISOString();
+      
+      const stmt = db.prepare(`
+        SELECT 
+          COUNT(*) as totalWords,
+          COUNT(CASE WHEN next_due <= ? THEN 1 END) as dueToday,
+          COUNT(CASE WHEN next_due < ? THEN 1 END) as overdue,
+          AVG(interval_days) as averageInterval,
+          AVG(ease_factor) as averageEaseFactor
+        FROM words
+        WHERE ignored = FALSE AND known = FALSE AND language = ?
+      `);
+      
+      const result = stmt.get(todayStr, now, currentLanguage) as any;
+      
+      return {
+        totalWords: result.totalWords || 0,
+        dueToday: result.dueToday || 0,
+        overdue: result.overdue || 0,
+        averageInterval: result.averageInterval || 1,
+        averageEaseFactor: result.averageEaseFactor || 2.5
+      };
+    } catch (error) {
+      throw new Error(`Failed to get SRS stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   // Helper methods for mapping database rows to objects and utilities
 
   private shuffleArray<T>(array: T[]): T[] {
@@ -685,7 +887,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       known: Boolean(row.known),
       ignored: Boolean(row.ignored),
       createdAt: new Date(row.created_at),
-      lastStudied: row.last_studied ? new Date(row.last_studied) : undefined
+      lastStudied: row.last_studied ? new Date(row.last_studied) : undefined,
+      // SRS fields
+      intervalDays: row.interval_days || 1,
+      easeFactor: row.ease_factor || 2.5,
+      lastReview: row.last_review ? new Date(row.last_review) : undefined,
+      nextDue: row.next_due ? new Date(row.next_due) : new Date()
     };
   }
 

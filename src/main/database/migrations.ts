@@ -125,6 +125,27 @@ export class MigrationManager {
           // SQLite doesn't support DROP COLUMN, so we'd need to recreate the table
           // For now, we'll leave the columns as they won't hurt anything
         ]
+      },
+      {
+        version: 5,
+        name: 'add_srs_fields',
+        up: [
+          `ALTER TABLE words ADD COLUMN interval_days INTEGER DEFAULT 1`,
+          `ALTER TABLE words ADD COLUMN ease_factor REAL DEFAULT 2.5`,
+          `ALTER TABLE words ADD COLUMN last_review DATETIME`,
+          `ALTER TABLE words ADD COLUMN next_due DATETIME`,
+          
+          // Update existing words with default next_due value
+          `UPDATE words SET next_due = datetime('now', '+1 day') WHERE next_due IS NULL`,
+          
+          // Create index for efficient SRS queries
+          `CREATE INDEX IF NOT EXISTS idx_words_next_due ON words(next_due)`,
+          `CREATE INDEX IF NOT EXISTS idx_words_srs_review ON words(next_due, strength)`
+        ],
+        down: [
+          // SQLite doesn't support DROP COLUMN, so we'd need to recreate the table
+          // For now, we'll leave the columns as they won't hurt anything
+        ]
       }
     ];
   }

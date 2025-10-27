@@ -8,6 +8,7 @@ import { setupIPCHandlers, cleanupIPCHandlers } from './ipc/index.js';
 import { SQLiteDatabaseLayer } from './database/database-layer.js';
 import { OllamaClient, ContentGenerator } from './llm/index.js';
 import { AudioService } from './audio/audio-service.js';
+import { SRSService } from './srs/srs-service.js';
 import { LifecycleManager, UpdateManager } from './lifecycle/index.js';
 
 let mainWindow: BrowserWindow;
@@ -15,6 +16,7 @@ let databaseLayer: SQLiteDatabaseLayer | undefined;
 let llmClient: OllamaClient | undefined;
 let contentGenerator: ContentGenerator | undefined;
 let audioService: AudioService | undefined;
+let srsService: SRSService | undefined;
 let lifecycleManager: LifecycleManager | undefined;
 let updateManager: UpdateManager | undefined;
 
@@ -72,6 +74,10 @@ async function initializeServices(): Promise<void> {
       console.warn('Speech recognition initialization failed:', error);
       // Don't fail the entire app startup if speech recognition fails
     }
+
+    // Initialize SRS service
+    srsService = new SRSService(databaseLayer);
+    console.log('SRS service initialized successfully');
 
     // Initialize update manager
     await updateManager.initialize();
@@ -196,7 +202,7 @@ app.whenReady().then(async () => {
     await initializeServices();
 
     // Set up IPC handlers with initialized services
-    setupIPCHandlers(databaseLayer!, llmClient!, contentGenerator!, audioService!, lifecycleManager!, updateManager!);
+    setupIPCHandlers(databaseLayer!, llmClient!, contentGenerator!, audioService!, srsService!, lifecycleManager!, updateManager!);
     console.log('IPC handlers initialized successfully');
 
     // Create the main window

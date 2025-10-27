@@ -13,6 +13,11 @@ export interface Word {
   ignored: boolean;
   createdAt: Date;
   lastStudied?: Date;
+  // SRS fields
+  intervalDays: number;    // Days until next review
+  easeFactor: number;      // Multiplier for interval calculation (starts at 2.5)
+  lastReview?: Date;       // When word was last reviewed
+  nextDue: Date;          // When word is next due for review
 }
 
 export interface Sentence {

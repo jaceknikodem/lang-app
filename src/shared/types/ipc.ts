@@ -29,6 +29,30 @@ export interface IPCBridge {
     getAvailableLanguages: () => Promise<string[]>;
     getLanguageStats: () => Promise<Array<{language: string, totalWords: number, studiedWords: number}>>;
   };
+
+  // SRS operations
+  srs: {
+    processReview: (wordId: number, recall: 0 | 1 | 2 | 3) => Promise<void>;
+    processQuizResults: (results: Array<{
+      wordId: number;
+      correct: boolean;
+      responseTime?: number;
+      difficulty?: 'easy' | 'medium' | 'hard';
+    }>) => Promise<void>;
+    getTodaysStudyWords: (maxWords?: number, language?: string) => Promise<Word[]>;
+    getDashboardStats: (language?: string) => Promise<{
+      totalWords: number;
+      dueToday: number;
+      overdue: number;
+      averageInterval: number;
+      averageEaseFactor: number;
+      recommendedStudySize: number;
+    }>;
+    markWordDifficulty: (wordId: number, difficulty: 'easy' | 'hard') => Promise<void>;
+    resetWordProgress: (wordId: number) => Promise<void>;
+    getOverdueWords: (language?: string) => Promise<Word[]>;
+    initializeExistingWords: (language?: string) => Promise<number>;
+  };
   
   // LLM operations
   llm: {
@@ -163,5 +187,15 @@ export const IPC_CHANNELS = {
   FREQUENCY: {
     GET_PROGRESS: 'frequency:getProgress',
     GET_AVAILABLE_LANGUAGES: 'frequency:getAvailableLanguages'
+  },
+  SRS: {
+    PROCESS_REVIEW: 'srs:processReview',
+    PROCESS_QUIZ_RESULTS: 'srs:processQuizResults',
+    GET_TODAYS_STUDY_WORDS: 'srs:getTodaysStudyWords',
+    GET_DASHBOARD_STATS: 'srs:getDashboardStats',
+    MARK_WORD_DIFFICULTY: 'srs:markWordDifficulty',
+    RESET_WORD_PROGRESS: 'srs:resetWordProgress',
+    GET_OVERDUE_WORDS: 'srs:getOverdueWords',
+    INITIALIZE_EXISTING_WORDS: 'srs:initializeExistingWords'
   }
 } as const;

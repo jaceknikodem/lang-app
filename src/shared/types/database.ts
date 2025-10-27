@@ -16,6 +16,19 @@ export interface DatabaseLayer {
   getWordsWithSentences(includeKnown?: boolean, includeIgnored?: boolean, language?: string): Promise<Word[]>;
   getWordById(wordId: number): Promise<Word | null>;
   
+  // SRS-specific operations
+  updateWordSRS(wordId: number, strength: number, intervalDays: number, easeFactor: number, nextDue: Date): Promise<void>;
+  getWordsDueForReview(limit?: number, language?: string): Promise<Word[]>;
+  getWordsDueCount(language?: string): Promise<number>;
+  getWordsDueWithPriority(limit?: number, language?: string): Promise<Word[]>;
+  getSRSStats(language?: string): Promise<{
+    totalWords: number;
+    dueToday: number;
+    overdue: number;
+    averageInterval: number;
+    averageEaseFactor: number;
+  }>;
+  
   // Sentence management
   insertSentence(wordId: number, sentence: string, translation: string, audioPath: string): Promise<number>;
   getSentencesByWord(wordId: number): Promise<Sentence[]>;

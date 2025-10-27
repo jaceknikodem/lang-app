@@ -9,6 +9,7 @@ import { SQLiteDatabaseLayer } from '../database/database-layer.js';
 import { OllamaClient, ContentGenerator } from '../llm/index.js';
 import { AudioService } from '../audio/audio-service.js';
 import { LifecycleManager, UpdateManager } from '../lifecycle/index.js';
+import { SRSService } from '../srs/srs-service.js';
 import { CreateWordRequest } from '../../shared/types/core.js';
 
 // Validation schemas for input sanitization
@@ -36,6 +37,7 @@ export function setupIPCHandlers(
   llmClient: OllamaClient,
   contentGenerator: ContentGenerator,
   audioService: AudioService,
+  srsService: SRSService,
   lifecycleManager?: LifecycleManager,
   updateManager?: UpdateManager
 ): void {
@@ -50,6 +52,9 @@ export function setupIPCHandlers(
 
   // Quiz handlers
   setupQuizHandlers(databaseLayer);
+
+  // SRS handlers
+  setupSRSHandlers(srsService);
 
   // Lifecycle handlers
   if (lifecycleManager && updateManager) {
@@ -637,6 +642,99 @@ function setupQuizHandlers(databaseLayer: SQLiteDatabaseLayer): void {
 }
 
 /**
+ * Set up SRS-related IPC handlers
+ */
+function setupSRSHandlers(srsService: SRSService): void {
+  ipcMain.handle(IPC_CHANNELS.SRS.PROCESS_REVIEW, async (event, wordId, recall) => {
+    try {
+      const validatedWordId = WordIdSchema.parse(wordId);
+      const validatedRecall = z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]).parse(recall);
+      return await srsService.processReview(validatedWordId, { recall: validatedRecall });
+    } catch (error) {
+      console.error('Error processing review:', error);
+      throw new Error(`Failed to process review: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SRS.PROCESS_QUIZ_RESULTS, async (event, results) => {
+    try {
+      const validatedResults = z.array(z.object({
+        wordId: WordIdSchema,
+        correct: BooleanSchema,
+        responseTime: z.number().optional(),
+        difficulty: z.enum(['easy', 'medium', 'hard']).optional()
+      })).parse(results);
+      return await srsService.processQuizResults(validatedResults);
+    } catch (error) {
+      console.error('Error processing quiz results:', error);
+      throw new Error(`Failed to process quiz results: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SRS.GET_TODAYS_STUDY_WORDS, async (event, maxWords, language) => {
+    try {
+      const validatedMaxWords = maxWords ? LimitSchema.parse(maxWords) : undefined;
+      const validatedLanguage = language ? LanguageSchema.parse(language) : undefined;
+      return await srsService.getTodaysStudyWords(validatedMaxWords, validatedLanguage);
+    } catch (error) {
+      console.error('Error getting todays study words:', error);
+      throw new Error(`Failed to get todays study words: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SRS.GET_DASHBOARD_STATS, async (event, language) => {
+    try {
+      const validatedLanguage = language ? LanguageSchema.parse(language) : undefined;
+      return await srsService.getDashboardStats(validatedLanguage);
+    } catch (error) {
+      console.error('Error getting dashboard stats:', error);
+      throw new Error(`Failed to get dashboard stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SRS.MARK_WORD_DIFFICULTY, async (event, wordId, difficulty) => {
+    try {
+      const validatedWordId = WordIdSchema.parse(wordId);
+      const validatedDifficulty = z.enum(['easy', 'hard']).parse(difficulty);
+      return await srsService.markWordDifficulty(validatedWordId, validatedDifficulty);
+    } catch (error) {
+      console.error('Error marking word difficulty:', error);
+      throw new Error(`Failed to mark word difficulty: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SRS.RESET_WORD_PROGRESS, async (event, wordId) => {
+    try {
+      const validatedWordId = WordIdSchema.parse(wordId);
+      return await srsService.resetWordProgress(validatedWordId);
+    } catch (error) {
+      console.error('Error resetting word progress:', error);
+      throw new Error(`Failed to reset word progress: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SRS.GET_OVERDUE_WORDS, async (event, language) => {
+    try {
+      const validatedLanguage = language ? LanguageSchema.parse(language) : undefined;
+      return await srsService.getOverdueWords(validatedLanguage);
+    } catch (error) {
+      console.error('Error getting overdue words:', error);
+      throw new Error(`Failed to get overdue words: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SRS.INITIALIZE_EXISTING_WORDS, async (event, language) => {
+    try {
+      const validatedLanguage = language ? LanguageSchema.parse(language) : undefined;
+      return await srsService.initializeExistingWords(validatedLanguage);
+    } catch (error) {
+      console.error('Error initializing existing words:', error);
+      throw new Error(`Failed to initialize existing words: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+}
+
+/**
  * Set up lifecycle-related IPC handlers
  */
 function setupLifecycleHandlers(lifecycleManager: LifecycleManager, updateManager: UpdateManager): void {
@@ -742,6 +840,10 @@ export function cleanupIPCHandlers(): void {
   });
 
   Object.values(IPC_CHANNELS.FREQUENCY).forEach(channel => {
+    ipcMain.removeAllListeners(channel);
+  });
+
+  Object.values(IPC_CHANNELS.SRS).forEach(channel => {
     ipcMain.removeAllListeners(channel);
   });
 
