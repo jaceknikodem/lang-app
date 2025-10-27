@@ -715,7 +715,7 @@ export class ProgressSummary extends LitElement {
               <div class="stat-card new">
                 <div class="stat-value">${this.wordCategoryStats?.new || 0}</div>
                 <div class="stat-label">New</div>
-                <div class="stat-description">Never studied</div>
+                <div class="stat-description">Never quizzed</div>
               </div>
             </div>
           </div>
