@@ -270,6 +270,70 @@ export class QuizMode extends LitElement {
         border-color: var(--primary-dark);
       }
 
+      /* SRS Difficulty Button Styles */
+      .difficulty-prompt {
+        margin-bottom: var(--spacing-sm);
+        text-align: center;
+      }
+
+      .difficulty-prompt p {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 500;
+        color: var(--text-primary);
+      }
+
+      .difficulty-buttons {
+        display: flex;
+        gap: var(--spacing-xs);
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .difficulty-fail {
+        background: #fee2e2;
+        border-color: #fca5a5;
+        color: #dc2626;
+      }
+
+      .difficulty-fail:hover {
+        background: #fecaca;
+        border-color: #f87171;
+      }
+
+      .difficulty-hard {
+        background: #fef3c7;
+        border-color: #fcd34d;
+        color: #d97706;
+      }
+
+      .difficulty-hard:hover {
+        background: #fde68a;
+        border-color: #f59e0b;
+      }
+
+      .difficulty-good {
+        background: #dcfce7;
+        border-color: #86efac;
+        color: #16a34a;
+      }
+
+      .difficulty-good:hover {
+        background: #bbf7d0;
+        border-color: #4ade80;
+      }
+
+      .difficulty-easy {
+        background: #dbeafe;
+        border-color: #93c5fd;
+        color: #2563eb;
+      }
+
+      .difficulty-easy:hover {
+        background: #bfdbfe;
+        border-color: #60a5fa;
+      }
+
       .revealed-answer {
         margin: var(--spacing-md) 0;
         padding: var(--spacing-md);
@@ -1055,44 +1119,38 @@ export class QuizMode extends LitElement {
   }
 
   private async handleAnswer(correct: boolean) {
+    // Legacy method - map to SRS values
+    const srsRecall = correct ? 2 : 0;
+    await this.handleSRSAnswer(srsRecall);
+  }
+
+  private async handleSRSAnswer(recall: 0 | 1 | 2 | 3) {
     if (!this.quizSession || !this.currentQuestion) return;
 
     this.showResult = true;
     this.lastResult = {
       wordId: this.currentQuestion.word.id,
-      correct,
-      responseTime: Date.now() // Simple timestamp for now
+      correct: recall > 0, // Any non-zero recall counts as correct
+      responseTime: Date.now()
     };
 
-    if (correct) {
+    if (recall > 0) {
       this.quizSession.score++;
     }
 
-    // Update word strength based on answer with adaptive scoring
+    // Update word using SRS system
     try {
-      const currentStrength = this.currentQuestion.word.strength;
-      let newStrength: number;
-
-      if (correct) {
-        // Adaptive increase: lower strength words get bigger boosts
-        const strengthBoost = currentStrength < 30 ? 20 :
-          currentStrength < 60 ? 15 : 10;
-        newStrength = Math.min(100, currentStrength + strengthBoost);
-      } else {
-        // Adaptive decrease: higher strength words lose more points
-        const strengthPenalty = currentStrength > 70 ? 15 :
-          currentStrength > 40 ? 10 : 5;
-        newStrength = Math.max(0, currentStrength - strengthPenalty);
-      }
-
-      await window.electronAPI.database.updateWordStrength(this.currentQuestion.word.id, newStrength);
+      await window.electronAPI.srs.processReview(this.currentQuestion.word.id, recall);
       await window.electronAPI.database.updateLastStudied(this.currentQuestion.word.id);
 
-      // Update the word in our local data
-      this.currentQuestion.word.strength = newStrength;
+      // Refresh the word data to get updated SRS values
+      const updatedWord = await window.electronAPI.database.getWordById(this.currentQuestion.word.id);
+      if (updatedWord) {
+        this.currentQuestion.word = updatedWord;
+      }
 
     } catch (error) {
-      console.error('Error updating word strength:', error);
+      console.error('Error updating word with SRS:', error);
     }
   }
 
@@ -1525,18 +1583,35 @@ export class QuizMode extends LitElement {
     return html`
       ${this.renderRevealedAnswer()}
       <div class="answer-buttons">
-        <button 
-          class="answer-button"
-          @click=${() => this.handleAnswer(true)}
-        >
-          I knew it ✓
-        </button>
-        <button 
-          class="answer-button"
-          @click=${() => this.handleAnswer(false)}
-        >
-          Not yet ✗
-        </button>
+        <div class="difficulty-prompt">
+          <p>How well did you know this?</p>
+        </div>
+        <div class="difficulty-buttons">
+          <button 
+            class="answer-button difficulty-fail"
+            @click=${() => this.handleSRSAnswer(0)}
+          >
+            Failed ✗
+          </button>
+          <button 
+            class="answer-button difficulty-hard"
+            @click=${() => this.handleSRSAnswer(1)}
+          >
+            Hard 😓
+          </button>
+          <button 
+            class="answer-button difficulty-good"
+            @click=${() => this.handleSRSAnswer(2)}
+          >
+            Good ✓
+          </button>
+          <button 
+            class="answer-button difficulty-easy"
+            @click=${() => this.handleSRSAnswer(3)}
+          >
+            Easy 😊
+          </button>
+        </div>
       </div>
     `;
   }

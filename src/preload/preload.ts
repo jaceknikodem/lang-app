@@ -145,6 +145,31 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.FREQUENCY.GET_PROGRESS, language),
     getAvailableLanguages: () => 
       ipcRenderer.invoke(IPC_CHANNELS.FREQUENCY.GET_AVAILABLE_LANGUAGES)
+  },
+
+  // SRS operations
+  srs: {
+    processReview: (wordId: number, recall: 0 | 1 | 2 | 3) => 
+      ipcRenderer.invoke(IPC_CHANNELS.SRS.PROCESS_REVIEW, wordId, recall),
+    processQuizResults: (results: Array<{
+      wordId: number;
+      correct: boolean;
+      responseTime?: number;
+      difficulty?: 'easy' | 'medium' | 'hard';
+    }>) => 
+      ipcRenderer.invoke(IPC_CHANNELS.SRS.PROCESS_QUIZ_RESULTS, results),
+    getTodaysStudyWords: (maxWords?: number, language?: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.SRS.GET_TODAYS_STUDY_WORDS, maxWords, language),
+    getDashboardStats: (language?: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.SRS.GET_DASHBOARD_STATS, language),
+    markWordDifficulty: (wordId: number, difficulty: 'easy' | 'hard') => 
+      ipcRenderer.invoke(IPC_CHANNELS.SRS.MARK_WORD_DIFFICULTY, wordId, difficulty),
+    resetWordProgress: (wordId: number) => 
+      ipcRenderer.invoke(IPC_CHANNELS.SRS.RESET_WORD_PROGRESS, wordId),
+    getOverdueWords: (language?: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.SRS.GET_OVERDUE_WORDS, language),
+    initializeExistingWords: (language?: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.SRS.INITIALIZE_EXISTING_WORDS, language)
   }
 });
 
@@ -225,6 +250,28 @@ declare global {
           percentComplete: number;
         }>;
         getAvailableLanguages: () => Promise<string[]>;
+      };
+      srs: {
+        processReview: (wordId: number, recall: 0 | 1 | 2 | 3) => Promise<void>;
+        processQuizResults: (results: Array<{
+          wordId: number;
+          correct: boolean;
+          responseTime?: number;
+          difficulty?: 'easy' | 'medium' | 'hard';
+        }>) => Promise<void>;
+        getTodaysStudyWords: (maxWords?: number, language?: string) => Promise<any[]>;
+        getDashboardStats: (language?: string) => Promise<{
+          totalWords: number;
+          dueToday: number;
+          overdue: number;
+          averageInterval: number;
+          averageEaseFactor: number;
+          recommendedStudySize: number;
+        }>;
+        markWordDifficulty: (wordId: number, difficulty: 'easy' | 'hard') => Promise<void>;
+        resetWordProgress: (wordId: number) => Promise<void>;
+        getOverdueWords: (language?: string) => Promise<any[]>;
+        initializeExistingWords: (language?: string) => Promise<number>;
       };
     };
   }
