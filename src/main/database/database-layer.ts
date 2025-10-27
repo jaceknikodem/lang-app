@@ -987,10 +987,26 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     const deleteStmt = db.prepare('DELETE FROM dict WHERE lang = ?');
     const insertStmt = db.prepare('INSERT INTO dict (word, pos, glosses, lang) VALUES (?, ?, ?, ?)');
+    const hasEntriesStmt = db.prepare('SELECT 1 FROM dict WHERE lang = ? LIMIT 1');
 
     for (const file of jsonlFiles) {
       const language = file.replace('_dict.jsonl', '');
       const filePath = path.join(dictDir, file);
+
+      const existingEntry = hasEntriesStmt.get(language);
+      const markerKey = `dictionary_populated_${language}`;
+      const alreadyMarked = await this.getSetting(markerKey);
+
+      if (alreadyMarked === 'true' && existingEntry) {
+        console.log(`Dictionary already populated for ${language}, skipping`);
+        continue;
+      }
+
+      if (existingEntry && alreadyMarked !== 'true') {
+        await this.setSetting(markerKey, 'true');
+        console.log(`Dictionary entries already present for ${language}, skipping re-import`);
+        continue;
+      }
 
       try {
         const entries = await this.parseDictionaryFile(filePath, language);
@@ -1003,6 +1019,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         });
 
         transaction(entries);
+        await this.setSetting(markerKey, 'true');
         console.log(`Dictionary populated for ${language} (${entries.length} entries)`);
       } catch (error) {
         console.warn(`Failed to import dictionary for ${language}:`, error);
