@@ -18,6 +18,12 @@ export interface Word {
   easeFactor: number;      // Multiplier for interval calculation (starts at 2.5)
   lastReview?: Date;       // When word was last reviewed
   nextDue: Date;          // When word is next due for review
+  // FSRS fields (optional until migration initialized)
+  fsrsDifficulty?: number;
+  fsrsStability?: number;
+  fsrsLapses?: number;
+  fsrsLastRating?: number;
+  fsrsVersion?: string;
 }
 
 export interface DictionaryEntry {

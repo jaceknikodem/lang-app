@@ -18,7 +18,20 @@ export interface DatabaseLayer {
   getWordById(wordId: number): Promise<Word | null>;
   
   // SRS-specific operations
-  updateWordSRS(wordId: number, strength: number, intervalDays: number, easeFactor: number, nextDue: Date): Promise<void>;
+  updateWordSRS(
+    wordId: number,
+    strength: number,
+    intervalDays: number,
+    easeFactor: number,
+    nextDue: Date,
+    options?: {
+      fsrsDifficulty?: number;
+      fsrsStability?: number;
+      fsrsLapses?: number;
+      fsrsLastRating?: number | null;
+      fsrsVersion?: string;
+    }
+  ): Promise<void>;
   getWordsDueForReview(limit?: number, language?: string): Promise<Word[]>;
   getWordsDueCount(language?: string): Promise<number>;
   getWordsDueWithPriority(limit?: number, language?: string): Promise<Word[]>;

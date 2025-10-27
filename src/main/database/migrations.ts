@@ -163,6 +163,25 @@ export class MigrationManager {
           `DROP INDEX IF EXISTS idx_word_lang`,
           `DROP TABLE IF EXISTS dict`
         ]
+      },
+      {
+        version: 7,
+        name: 'add_fsrs_fields',
+        up: [
+          `ALTER TABLE words ADD COLUMN fsrs_difficulty REAL DEFAULT 5.0`,
+          `ALTER TABLE words ADD COLUMN fsrs_stability REAL DEFAULT 1.0`,
+          `ALTER TABLE words ADD COLUMN fsrs_lapses INTEGER DEFAULT 0`,
+          `ALTER TABLE words ADD COLUMN fsrs_last_rating INTEGER`,
+          `ALTER TABLE words ADD COLUMN fsrs_version TEXT DEFAULT 'fsrs-baseline'`,
+          `UPDATE words SET fsrs_difficulty = 5.0 WHERE fsrs_difficulty IS NULL`,
+          `UPDATE words SET fsrs_stability = 1.0 WHERE fsrs_stability IS NULL`,
+          `UPDATE words SET fsrs_lapses = 0 WHERE fsrs_lapses IS NULL`,
+          `UPDATE words SET fsrs_version = 'fsrs-baseline' WHERE fsrs_version IS NULL`,
+          `CREATE INDEX IF NOT EXISTS idx_words_fsrs_state ON words(fsrs_stability, fsrs_difficulty)`
+        ],
+        down: [
+          // SQLite does not support dropping columns; leave them in place on rollback.
+        ]
       }
     ];
   }

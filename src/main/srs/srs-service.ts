@@ -5,37 +5,28 @@
 import { DatabaseLayer } from '../../shared/types/database.js';
 import { Word } from '../../shared/types/core.js';
 import { SRSAlgorithm, SRSReviewResult } from './srs-algorithm.js';
+import { ClassicSrsEngine } from './classic-engine.js';
+import { FsrsEngine } from './fsrs-engine.js';
+import { SchedulerEngine, SchedulerEngineName, SchedulerEngineUpdate } from './engine.js';
+
+type UpdateWordSRSOptions = Parameters<DatabaseLayer['updateWordSRS']>[5];
 
 export class SRSService {
-  constructor(private database: DatabaseLayer) {}
+  private readonly engines: Record<SchedulerEngineName, SchedulerEngine>;
+
+  constructor(private database: DatabaseLayer) {
+    this.engines = {
+      classic: new ClassicSrsEngine(),
+      fsrs: new FsrsEngine()
+    };
+  }
 
   /**
    * Process a word review and update SRS values
    */
   async processReview(wordId: number, reviewResult: SRSReviewResult): Promise<void> {
-    const word = await this.database.getWordById(wordId);
-    if (!word) {
-      throw new Error(`Word with ID ${wordId} not found`);
-    }
-
-    // Calculate new SRS values
-    const update = SRSAlgorithm.updateAfterReview(
-      word.strength,
-      word.intervalDays,
-      word.easeFactor,
-      word.lastReview,
-      word.nextDue,
-      reviewResult
-    );
-
-    // Update database
-    await this.database.updateWordSRS(
-      wordId,
-      update.newStrength,
-      update.newIntervalDays,
-      update.newEaseFactor,
-      update.nextDue
-    );
+    const engine = await this.getActiveEngine();
+    await this.processReviewWithEngine(wordId, reviewResult, engine, new Date());
   }
 
   /**
@@ -47,14 +38,20 @@ export class SRSService {
     responseTime?: number;
     difficulty?: 'easy' | 'medium' | 'hard';
   }>): Promise<void> {
+    if (results.length === 0) {
+      return;
+    }
+
+    const engine = await this.getActiveEngine();
+
     for (const result of results) {
       const reviewResult = SRSAlgorithm.convertQuizPerformanceToRecall(
         result.correct,
         result.responseTime,
         result.difficulty
       );
-      
-      await this.processReview(result.wordId, reviewResult);
+
+      await this.processReviewWithEngine(result.wordId, reviewResult, engine, new Date());
     }
   }
 
@@ -65,8 +62,15 @@ export class SRSService {
     const dueCount = await this.database.getWordsDueCount(language);
     const recommendedBatch = SRSAlgorithm.getRecommendedBatchSize(dueCount);
     const limit = maxWords ? Math.min(maxWords, recommendedBatch) : recommendedBatch;
-    
-    return await this.database.getWordsDueWithPriority(limit, language);
+
+    const engine = await this.getActiveEngine();
+    const fetchLimit =
+      engine.name === 'fsrs'
+        ? Math.max(Math.min(limit * 3, limit + 50), limit)
+        : limit;
+    const dueWords = await this.database.getWordsDueWithPriority(fetchLimit, language);
+
+    return engine.sortByPriority(dueWords, new Date()).slice(0, limit);
   }
 
   /**
@@ -82,7 +86,7 @@ export class SRSService {
   }> {
     const stats = await this.database.getSRSStats(language);
     const recommendedStudySize = SRSAlgorithm.getRecommendedBatchSize(stats.dueToday);
-    
+
     return {
       ...stats,
       recommendedStudySize
@@ -96,7 +100,7 @@ export class SRSService {
     const reviewResult: SRSReviewResult = {
       recall: difficulty === 'easy' ? 3 : 1
     };
-    
+
     await this.processReview(wordId, reviewResult);
   }
 
@@ -104,14 +108,16 @@ export class SRSService {
    * Reset a word's SRS progress (useful for words marked as "unknown" again)
    */
   async resetWordProgress(wordId: number): Promise<void> {
-    const initValues = SRSAlgorithm.initializeWord();
-    
+    const engine = await this.getActiveEngine();
+    const initValues = engine.initialize(new Date());
+
     await this.database.updateWordSRS(
       wordId,
       initValues.strength,
       initValues.intervalDays,
       initValues.easeFactor,
-      initValues.nextDue
+      initValues.nextDue,
+      this.extractFsrsOptions(initValues)
     );
   }
 
@@ -119,13 +125,11 @@ export class SRSService {
    * Get words that are overdue (for prioritization)
    */
   async getOverdueWords(language?: string): Promise<Word[]> {
+    const engine = await this.getActiveEngine();
     const allDue = await this.database.getWordsDueForReview(undefined, language);
     const now = new Date();
-    
-    return allDue.filter(word => {
-      const daysOverdue = Math.floor((now.getTime() - word.nextDue.getTime()) / (1000 * 60 * 60 * 24));
-      return daysOverdue > 0;
-    });
+
+    return allDue.filter(word => engine.isDue(word, now));
   }
 
   /**
@@ -133,25 +137,103 @@ export class SRSService {
    */
   async initializeExistingWords(language?: string): Promise<number> {
     const words = await this.database.getAllWords(false, false, language);
+    const engine = await this.getActiveEngine();
+    const now = new Date();
     let updatedCount = 0;
-    
+
     for (const word of words) {
-      // Only initialize if SRS values are at defaults
-      if (word.intervalDays === 1 && word.easeFactor === 2.5 && !word.lastReview) {
-        const initValues = SRSAlgorithm.initializeWord();
-        
-        await this.database.updateWordSRS(
-          word.id,
-          initValues.strength,
-          initValues.intervalDays,
-          initValues.easeFactor,
-          initValues.nextDue
-        );
-        
-        updatedCount++;
+      const shouldInitialize =
+        (word.intervalDays === 1 && word.easeFactor === 2.5 && !word.lastReview) ||
+        word.fsrsDifficulty === undefined ||
+        word.fsrsStability === undefined;
+
+      if (!shouldInitialize) {
+        continue;
       }
+
+      const initValues = engine.initialize(now);
+
+      await this.database.updateWordSRS(
+        word.id,
+        initValues.strength,
+        initValues.intervalDays,
+        initValues.easeFactor,
+        initValues.nextDue,
+        this.extractFsrsOptions(initValues)
+      );
+
+      updatedCount++;
     }
-    
+
     return updatedCount;
+  }
+
+  private async processReviewWithEngine(
+    wordId: number,
+    reviewResult: SRSReviewResult,
+    engine: SchedulerEngine,
+    now: Date
+  ): Promise<void> {
+    const word = await this.database.getWordById(wordId);
+    if (!word) {
+      throw new Error(`Word with ID ${wordId} not found`);
+    }
+
+    const update = engine.update(word, reviewResult, now);
+
+    await this.database.updateWordSRS(
+      wordId,
+      update.strength,
+      update.intervalDays,
+      update.easeFactor,
+      update.nextDue,
+      this.extractFsrsOptions(update)
+    );
+  }
+
+  private async getActiveEngine(): Promise<SchedulerEngine> {
+    try {
+      const preference = await this.database.getSetting('srs_algorithm');
+      if (preference && this.isValidEngineName(preference)) {
+        return this.engines[preference];
+      }
+    } catch (error) {
+      console.warn('Failed to load SRS engine preference; defaulting to classic algorithm:', error);
+    }
+
+    return this.engines.classic;
+  }
+
+  private isValidEngineName(value: string): value is SchedulerEngineName {
+    return value === 'classic' || value === 'fsrs';
+  }
+
+  private extractFsrsOptions(update: SchedulerEngineUpdate): UpdateWordSRSOptions {
+    const {
+      fsrsDifficulty,
+      fsrsStability,
+      fsrsLapses,
+      fsrsLastRating,
+      fsrsVersion
+    } = update;
+
+    const hasFsrsValues =
+      fsrsDifficulty !== undefined ||
+      fsrsStability !== undefined ||
+      fsrsLapses !== undefined ||
+      fsrsLastRating !== undefined ||
+      fsrsVersion !== undefined;
+
+    if (!hasFsrsValues) {
+      return undefined;
+    }
+
+    return {
+      fsrsDifficulty,
+      fsrsStability,
+      fsrsLapses,
+      fsrsLastRating: fsrsLastRating ?? null,
+      fsrsVersion
+    };
   }
 }

@@ -792,26 +792,66 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     strength: number,
     intervalDays: number,
     easeFactor: number,
-    nextDue: Date
+    nextDue: Date,
+    options?: {
+      fsrsDifficulty?: number;
+      fsrsStability?: number;
+      fsrsLapses?: number;
+      fsrsLastRating?: number | null;
+      fsrsVersion?: string;
+    }
   ): Promise<void> {
     const db = this.getDb();
     
     try {
-      const stmt = db.prepare(`
-        UPDATE words 
-        SET strength = ?, interval_days = ?, ease_factor = ?, 
-            last_review = CURRENT_TIMESTAMP, next_due = ?,
-            last_studied = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `);
-      
-      const result = stmt.run(
+      const nowIso = new Date().toISOString();
+      const updates = [
+        'strength = ?',
+        'interval_days = ?',
+        'ease_factor = ?',
+        'last_review = ?',
+        'next_due = ?',
+        'last_studied = ?'
+      ];
+      const params: Array<number | string | null> = [
         Math.max(0, Math.min(100, strength)),
         intervalDays,
         easeFactor,
+        nowIso,
         nextDue.toISOString(),
-        wordId
-      );
+        nowIso
+      ];
+      
+      if (options) {
+        if (options.fsrsDifficulty !== undefined) {
+          updates.push('fsrs_difficulty = ?');
+          params.push(options.fsrsDifficulty);
+        }
+        if (options.fsrsStability !== undefined) {
+          updates.push('fsrs_stability = ?');
+          params.push(options.fsrsStability);
+        }
+        if (options.fsrsLapses !== undefined) {
+          updates.push('fsrs_lapses = ?');
+          params.push(options.fsrsLapses);
+        }
+        if (options.fsrsLastRating !== undefined) {
+          updates.push('fsrs_last_rating = ?');
+          params.push(options.fsrsLastRating);
+        }
+        if (options.fsrsVersion !== undefined) {
+          updates.push('fsrs_version = ?');
+          params.push(options.fsrsVersion);
+        }
+      }
+
+      const stmt = db.prepare(`
+        UPDATE words 
+        SET ${updates.join(', ')}
+        WHERE id = ?
+      `);
+      
+      const result = stmt.run(...params, wordId);
       
       if (result.changes === 0) {
         throw new Error(`Word with ID ${wordId} not found`);
@@ -1122,7 +1162,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       intervalDays: row.interval_days || 1,
       easeFactor: row.ease_factor || 2.5,
       lastReview: row.last_review ? new Date(row.last_review) : undefined,
-      nextDue: row.next_due ? new Date(row.next_due) : new Date()
+      nextDue: row.next_due ? new Date(row.next_due) : new Date(),
+      fsrsDifficulty: row.fsrs_difficulty ?? undefined,
+      fsrsStability: row.fsrs_stability ?? undefined,
+      fsrsLapses: row.fsrs_lapses ?? undefined,
+      fsrsLastRating: row.fsrs_last_rating ?? undefined,
+      fsrsVersion: row.fsrs_version ?? undefined
     };
   }
 
