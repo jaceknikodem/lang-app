@@ -90,23 +90,19 @@ export class WordSelector extends LitElement {
 
       .selection-controls {
         display: flex;
-        justify-content: space-between;
+        justify-content: center;
         align-items: center;
         padding: var(--spacing-md);
         background: var(--background-secondary);
         border-radius: var(--border-radius);
         flex-wrap: wrap;
         gap: var(--spacing-sm);
+        text-align: center;
       }
 
       .selection-info {
         font-size: 14px;
         color: var(--text-secondary);
-      }
-
-      .selection-actions {
-        display: flex;
-        gap: var(--spacing-sm);
       }
 
       .word-list {
@@ -152,9 +148,9 @@ export class WordSelector extends LitElement {
         top: var(--spacing-sm);
         right: var(--spacing-sm);
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
         gap: var(--spacing-xs);
-        align-items: flex-end;
+        align-items: center;
       }
 
       .known-btn {
@@ -162,12 +158,12 @@ export class WordSelector extends LitElement {
         color: white;
         border: none;
         border-radius: 4px;
-        padding: 3px 6px;
-        font-size: 11px;
+        padding: 4px 10px;
+        font-size: 12px;
         cursor: pointer;
         transition: background-color 0.2s ease;
         white-space: nowrap;
-        min-width: 50px;
+        min-width: 110px;
       }
 
       .known-btn:hover {
@@ -197,19 +193,23 @@ export class WordSelector extends LitElement {
 
       .word-content {
         margin-right: calc(var(--spacing-lg) + 70px);
+        display: flex;
+        align-items: baseline;
+        gap: var(--spacing-sm);
+        flex-wrap: wrap;
       }
 
       .word-foreign {
         font-size: 18px;
         font-weight: 600;
         color: var(--text-primary);
-        margin: 0 0 var(--spacing-xs) 0;
+        margin: 0;
       }
 
       .word-translation {
         font-size: 14px;
         color: var(--text-secondary);
-        margin: 0 0 var(--spacing-xs) 0;
+        margin: 0;
       }
 
       .word-frequency {
@@ -237,28 +237,30 @@ export class WordSelector extends LitElement {
 
       .frequency-tier {
         font-size: 11px;
-        padding: 2px 6px;
+        padding: 2px 8px;
         border-radius: 10px;
         background: #f5f5f5;
         color: #666;
         font-weight: 500;
         text-transform: uppercase;
         letter-spacing: 0.5px;
+        white-space: nowrap;
       }
 
       .action-section {
         display: flex;
         justify-content: center;
-        gap: var(--spacing-md);
+      }
+
+      .primary-actions {
+        display: flex;
+        gap: var(--spacing-sm);
         flex-wrap: wrap;
+        justify-content: center;
       }
 
       .start-btn {
-        min-width: 160px;
-      }
-
-      .back-btn {
-        min-width: 120px;
+        min-width: 180px;
       }
 
       .error-message {
@@ -286,16 +288,11 @@ export class WordSelector extends LitElement {
           align-items: stretch;
         }
 
-        .selection-actions {
-          justify-content: center;
+        .primary-actions {
+          width: 100%;
         }
 
-        .action-section {
-          flex-direction: column;
-        }
-
-        .start-btn,
-        .back-btn {
+        .start-btn {
           width: 100%;
         }
       }
@@ -519,20 +516,13 @@ export class WordSelector extends LitElement {
     }
   }
 
-  private handleGoBack() {
-    router.goToTopicSelection();
-  }
-
   render() {
     if (this.generatedWords.length === 0) {
       return html`
         <div class="word-selector-container">
           <div class="empty-state">
             <h3>No words generated</h3>
-            <p>Please go back and try generating words again.</p>
-            <button class="btn btn-primary" @click=${this.handleGoBack}>
-              Go Back
-            </button>
+            <p>Please generate words again from the topics view.</p>
           </div>
         </div>
       `;
@@ -560,14 +550,6 @@ export class WordSelector extends LitElement {
           <div class="selection-info">
             ${selectedCount} selected • ${knownCount} marked as known • ${this.selectableWords.length - selectedCount - knownCount} unselected
           </div>
-          <div class="selection-actions">
-            <button class="btn btn-small btn-secondary" @click=${this.selectAll}>
-              Select All
-            </button>
-            <button class="btn btn-small btn-secondary" @click=${this.selectNone}>
-              Select None
-            </button>
-          </div>
         </div>
 
         <div class="action-section">
@@ -577,19 +559,21 @@ export class WordSelector extends LitElement {
               Processing selected words...
             </div>
           ` : html`
-            <button
-              class="btn btn-primary start-btn"
-              @click=${this.handleStartLearning}
-              ?disabled=${selectedCount === 0 && knownCount === 0}
-            >
-              ${selectedCount > 0 ? `Learn (${selectedCount} words)` : knownCount > 0 ? `Save (${knownCount} known)` : 'Start Learning'}
-            </button>
-            <button
-              class="btn btn-secondary back-btn"
-              @click=${this.handleGoBack}
-            >
-              Go Back
-            </button>
+            <div class="primary-actions">
+              <button
+                class="btn btn-primary start-btn"
+                @click=${this.handleStartLearning}
+                ?disabled=${selectedCount === 0 && knownCount === 0}
+              >
+                ${selectedCount > 0 ? `Learn (${selectedCount} words)` : knownCount > 0 ? `Save (${knownCount} known)` : 'Start Learning'}
+              </button>
+              <button class="btn btn-small btn-secondary" @click=${this.selectAll}>
+                Select All
+              </button>
+              <button class="btn btn-small btn-secondary" @click=${this.selectNone}>
+                Select None
+              </button>
+            </div>
           `}
         </div>
 
@@ -615,16 +599,17 @@ export class WordSelector extends LitElement {
                     @click=${(e: Event) => this.markWordAsKnown(index, e)}
                     title="Mark as known"
                   >
-                    Known
+                    Mark as known
                   </button>
                 `}
-              </div>
-              <div class="word-content">
-                <h4 class="word-foreign">${word.word}</h4>
-                <p class="word-translation">${word.translation}</p>
                 ${word.frequencyTier ? html`
                   <span class="frequency-tier">${word.frequencyTier}</span>
                 ` : ''}
+              </div>
+              <div class="word-content">
+                <h4 class="word-foreign">${word.word}</h4>
+                •
+                <p class="word-translation">${word.translation}</p>
               </div>
             </div>
           `)}

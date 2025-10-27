@@ -560,7 +560,6 @@ export class SentenceViewer extends LitElement {
         <div class="sentence-content">
           ${this.sentence.contextBefore ? html`
             <div class="context-section">
-              <div class="context-label">Context Before</div>
               <div class="context-text">${this.sentence.contextBefore}</div>
               <div class="context-translation">${this.sentence.contextBeforeTranslation}</div>
             </div>
@@ -593,7 +592,6 @@ export class SentenceViewer extends LitElement {
           
           ${this.sentence.contextAfter ? html`
             <div class="context-section">
-              <div class="context-label">Context After</div>
               <div class="context-text">${this.sentence.contextAfter}</div>
               <div class="context-translation">${this.sentence.contextAfterTranslation}</div>
             </div>
