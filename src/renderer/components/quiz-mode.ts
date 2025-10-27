@@ -86,15 +86,15 @@ export class QuizMode extends LitElement {
         height: 100%;
         max-width: 800px;
         margin: 0 auto;
-        padding: var(--spacing-lg);
+        padding: var(--spacing-sm);
       }
 
       .quiz-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: var(--spacing-xl);
-        padding-bottom: var(--spacing-md);
+        margin-bottom: var(--spacing-sm);
+        padding-bottom: var(--spacing-xs);
         border-bottom: 2px solid var(--border-color);
       }
 
@@ -131,16 +131,17 @@ export class QuizMode extends LitElement {
         flex: 1;
         display: flex;
         flex-direction: column;
-        justify-content: center;
+        justify-content: flex-start;
         align-items: center;
         text-align: center;
-        gap: var(--spacing-xl);
+        gap: var(--spacing-sm);
+        padding-top: var(--spacing-md);
       }
 
       .question-container {
         background: var(--background-secondary);
         border-radius: var(--border-radius);
-        padding: var(--spacing-xl);
+        padding: var(--spacing-md);
         width: 100%;
         max-width: 600px;
         box-shadow: var(--shadow-medium);
@@ -150,21 +151,21 @@ export class QuizMode extends LitElement {
         font-size: 28px;
         font-weight: 500;
         color: var(--text-primary);
-        margin-bottom: var(--spacing-lg);
-        line-height: 1.4;
+        margin-bottom: var(--spacing-sm);
+        line-height: 1.3;
       }
 
       .question-translation {
         font-size: 18px;
         color: var(--text-secondary);
-        margin-bottom: var(--spacing-lg);
+        margin-bottom: var(--spacing-sm);
         font-style: italic;
       }
 
       .direction-indicator {
         font-size: 14px;
         color: var(--text-secondary);
-        margin-bottom: var(--spacing-md);
+        margin-bottom: var(--spacing-xs);
         text-transform: uppercase;
         letter-spacing: 0.5px;
       }
@@ -174,14 +175,14 @@ export class QuizMode extends LitElement {
         color: white;
         border: none;
         border-radius: var(--border-radius);
-        padding: var(--spacing-md) var(--spacing-lg);
-        font-size: 16px;
+        padding: var(--spacing-sm) var(--spacing-md);
+        font-size: 14px;
         cursor: pointer;
         transition: all 0.2s ease;
         display: flex;
         align-items: center;
         gap: var(--spacing-sm);
-        margin: 0 auto var(--spacing-lg);
+        margin: 0 auto var(--spacing-sm);
       }
 
       .audio-button:hover {
@@ -191,22 +192,22 @@ export class QuizMode extends LitElement {
 
       .answer-buttons {
         display: flex;
-        gap: var(--spacing-lg);
+        gap: var(--spacing-sm);
         justify-content: center;
         flex-wrap: wrap;
       }
 
       .answer-button {
-        padding: var(--spacing-lg) var(--spacing-xl);
+        padding: var(--spacing-sm) var(--spacing-md);
         border: 2px solid var(--border-color);
         background: var(--background-primary);
         color: var(--text-primary);
         border-radius: var(--border-radius);
-        font-size: 18px;
+        font-size: 14px;
         font-weight: 500;
         cursor: pointer;
         transition: all 0.2s ease;
-        min-width: 150px;
+        min-width: 120px;
       }
 
       .answer-button:hover {
@@ -243,8 +244,8 @@ export class QuizMode extends LitElement {
       .result-feedback {
         background: var(--background-secondary);
         border-radius: var(--border-radius);
-        padding: var(--spacing-lg);
-        margin-top: var(--spacing-lg);
+        padding: var(--spacing-sm);
+        margin-top: var(--spacing-sm);
         text-align: center;
       }
 
@@ -261,12 +262,12 @@ export class QuizMode extends LitElement {
         color: white;
         border: none;
         border-radius: var(--border-radius);
-        padding: var(--spacing-md) var(--spacing-xl);
-        font-size: 16px;
+        padding: var(--spacing-sm) var(--spacing-md);
+        font-size: 14px;
         font-weight: 500;
         cursor: pointer;
         transition: all 0.2s ease;
-        margin-top: var(--spacing-lg);
+        margin-top: var(--spacing-sm);
       }
 
       .next-button:hover {
@@ -277,7 +278,7 @@ export class QuizMode extends LitElement {
         text-align: center;
         background: var(--background-secondary);
         border-radius: var(--border-radius);
-        padding: var(--spacing-xl);
+        padding: var(--spacing-md);
         max-width: 500px;
         margin: 0 auto;
       }
@@ -292,7 +293,7 @@ export class QuizMode extends LitElement {
       .score-details {
         font-size: 18px;
         color: var(--text-secondary);
-        margin-bottom: var(--spacing-lg);
+        margin-bottom: var(--spacing-sm);
       }
 
       .performance-message {
@@ -324,9 +325,9 @@ export class QuizMode extends LitElement {
 
       .score-breakdown {
         display: flex;
-        gap: var(--spacing-lg);
+        gap: var(--spacing-sm);
         justify-content: center;
-        margin-bottom: var(--spacing-xl);
+        margin-bottom: var(--spacing-md);
       }
 
       .score-item {
@@ -367,12 +368,12 @@ export class QuizMode extends LitElement {
       }
 
       .action-button {
-        padding: var(--spacing-md) var(--spacing-lg);
+        padding: var(--spacing-sm) var(--spacing-md);
         border: 2px solid var(--primary-color);
         background: var(--background-primary);
         color: var(--primary-color);
         border-radius: var(--border-radius);
-        font-size: 16px;
+        font-size: 14px;
         font-weight: 500;
         cursor: pointer;
         transition: all 0.2s ease;
@@ -402,37 +403,59 @@ export class QuizMode extends LitElement {
         font-size: 24px;
         font-weight: 600;
         color: var(--text-primary);
-        margin-bottom: var(--spacing-lg);
+        margin-bottom: var(--spacing-sm);
       }
 
       .direction-selector {
         display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--spacing-xs);
+        margin-bottom: var(--spacing-md);
+      }
+
+      .direction-toggle {
+        display: flex;
+        align-items: center;
         gap: var(--spacing-md);
-        justify-content: center;
-        margin-bottom: var(--spacing-xl);
-      }
-
-      .direction-button {
-        padding: var(--spacing-md) var(--spacing-lg);
-        border: 2px solid var(--border-color);
-        background: var(--background-primary);
-        color: var(--text-primary);
-        border-radius: var(--border-radius);
         font-size: 16px;
+        color: var(--text-primary);
+      }
+
+      .toggle-switch {
+        position: relative;
+        width: 60px;
+        height: 30px;
+        background: var(--border-color);
+        border-radius: 15px;
         cursor: pointer;
-        transition: all 0.2s ease;
-        flex: 1;
-        max-width: 200px;
+        transition: background-color 0.3s ease;
       }
 
-      .direction-button:hover {
-        border-color: var(--primary-color);
-      }
-
-      .direction-button.selected {
+      .toggle-switch.active {
         background: var(--primary-color);
-        border-color: var(--primary-color);
-        color: white;
+      }
+
+      .toggle-slider {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 24px;
+        height: 24px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
+
+      .toggle-switch.active .toggle-slider {
+        transform: translateX(30px);
+      }
+
+      .direction-label {
+        font-weight: 500;
+        min-width: 120px;
+        text-align: center;
       }
 
       .start-button {
@@ -440,8 +463,8 @@ export class QuizMode extends LitElement {
         color: white;
         border: none;
         border-radius: var(--border-radius);
-        padding: var(--spacing-lg) var(--spacing-xl);
-        font-size: 18px;
+        padding: var(--spacing-md) var(--spacing-lg);
+        font-size: 16px;
         font-weight: 500;
         cursor: pointer;
         transition: all 0.2s ease;
@@ -459,8 +482,8 @@ export class QuizMode extends LitElement {
       }
 
       .recording-section {
-        margin-top: var(--spacing-lg);
-        padding: var(--spacing-lg);
+        margin-top: var(--spacing-md);
+        padding: var(--spacing-md);
         background: var(--background-primary);
         border-radius: var(--border-radius);
         border: 2px solid var(--primary-color);
@@ -488,8 +511,8 @@ export class QuizMode extends LitElement {
         font-weight: 500;
         color: var(--text-primary);
         text-align: center;
-        margin-bottom: var(--spacing-lg);
-        padding: var(--spacing-md);
+        margin-bottom: var(--spacing-md);
+        padding: var(--spacing-sm);
         background: var(--background-secondary);
         border-radius: var(--border-radius);
         border-left: 4px solid var(--primary-color);
@@ -501,8 +524,8 @@ export class QuizMode extends LitElement {
         color: white;
         border: none;
         border-radius: var(--border-radius);
-        padding: var(--spacing-sm) var(--spacing-md);
-        font-size: 14px;
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: 12px;
         cursor: pointer;
         transition: all 0.2s ease;
         margin-top: var(--spacing-md);
@@ -513,8 +536,8 @@ export class QuizMode extends LitElement {
       }
 
       .transcription-results {
-        margin-top: var(--spacing-lg);
-        padding: var(--spacing-lg);
+        margin-top: var(--spacing-md);
+        padding: var(--spacing-md);
         background: var(--background-secondary);
         border-radius: var(--border-radius);
         border: 2px solid var(--border-color);
@@ -698,7 +721,7 @@ export class QuizMode extends LitElement {
 
         .quiz-header {
           flex-direction: column;
-          gap: var(--spacing-md);
+          gap: var(--spacing-sm);
           align-items: stretch;
         }
 
@@ -717,17 +740,12 @@ export class QuizMode extends LitElement {
 
         .answer-button {
           width: 100%;
-          max-width: 300px;
-        }
-
-        .direction-selector {
-          flex-direction: column;
-          align-items: center;
-        }
-
-        .direction-button {
-          width: 100%;
           max-width: 250px;
+        }
+
+        .direction-toggle {
+          flex-direction: column;
+          gap: var(--spacing-sm);
         }
 
         .recording-section {
@@ -737,8 +755,8 @@ export class QuizMode extends LitElement {
 
         .sentence-to-record {
           font-size: 18px;
-          margin-bottom: var(--spacing-md);
-          padding: var(--spacing-sm);
+          margin-bottom: var(--spacing-sm);
+          padding: var(--spacing-xs);
         }
       }
     `
@@ -1008,9 +1026,11 @@ export class QuizMode extends LitElement {
     router.goToTopicSelection();
   }
 
-  private handleDirectionChange(direction: 'foreign-to-english' | 'english-to-foreign') {
-    this.direction = direction;
-    sessionManager.updateQuizDirection(direction);
+  private toggleDirection() {
+    this.direction = this.direction === 'foreign-to-english'
+      ? 'english-to-foreign'
+      : 'foreign-to-english';
+    sessionManager.updateQuizDirection(this.direction);
   }
 
   private toggleRecorder() {
@@ -1052,14 +1072,14 @@ export class QuizMode extends LitElement {
       await window.electronAPI.audio.initializeSpeechRecognition();
       this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
       console.log('Quiz: Speech recognition initialized:', this.speechRecognitionReady);
-      
+
       if (this.speechRecognitionReady) {
         console.log('✓ Speech recognition is ready for use');
       }
     } catch (error) {
       console.error('Quiz: Failed to initialize speech recognition:', error);
       this.speechRecognitionReady = false;
-      
+
       // Show user-friendly message
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.warn('Speech recognition not available:', errorMessage);
@@ -1082,10 +1102,10 @@ export class QuizMode extends LitElement {
 
       // Get the current language for transcription
       const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
-      
+
       // Determine transcription language based on quiz direction
-      const transcriptionLanguage = this.direction === 'foreign-to-english' 
-        ? currentLanguage 
+      const transcriptionLanguage = this.direction === 'foreign-to-english'
+        ? currentLanguage
         : 'en'; // English for english-to-foreign direction
 
       console.log('Transcribing audio:', {
@@ -1186,23 +1206,19 @@ export class QuizMode extends LitElement {
     return html`
       <div class="quiz-container">
         <div class="setup-container">
-          <h2 class="setup-title">Quiz Setup</h2>
-          
-          <p>Quiz will include ${this.selectedWords.length} words (max 10 per session).</p>
+          <p>Next quiz will include ${this.selectedWords.length} words.</p>
           
           <div class="direction-selector">
-            <button 
-              class="direction-button ${this.direction === 'foreign-to-english' ? 'selected' : ''}"
-              @click=${() => this.handleDirectionChange('foreign-to-english')}
-            >
-              Foreign → English
-            </button>
-            <button 
-              class="direction-button ${this.direction === 'english-to-foreign' ? 'selected' : ''}"
-              @click=${() => this.handleDirectionChange('english-to-foreign')}
-            >
-              English → Foreign
-            </button>
+            <div class="direction-toggle">
+              <span class="direction-label">Foreign → English</span>
+              <div 
+                class="toggle-switch ${this.direction === 'english-to-foreign' ? 'active' : ''}"
+                @click=${this.toggleDirection}
+              >
+                <div class="toggle-slider"></div>
+              </div>
+              <span class="direction-label">English → Foreign</span>
+            </div>
           </div>
 
           <button 
@@ -1357,7 +1373,7 @@ export class QuizMode extends LitElement {
 
     const similarity = this.transcriptionResult.similarity;
     const similarityPercentage = Math.round(similarity * 100);
-    
+
     // Determine similarity level and feedback
     let similarityClass = 'poor';
     let feedbackClass = 'poor';

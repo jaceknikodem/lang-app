@@ -506,8 +506,6 @@ export class SettingsPanel extends LitElement {
   render() {
     return html`
       <div class="settings-container">
-        <h2>Settings</h2>
-
         <div class="settings-section">
           <h3>Language Model (LLM)</h3>
           ${this.isLoadingLLMModels ? html`

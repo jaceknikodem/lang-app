@@ -609,7 +609,6 @@ export class LearningMode extends LitElement {
     return html`
       <div class="learning-container">
         <div class="learning-header">
-          <h2 class="learning-title">Learning Mode</h2>
           <p class="learning-subtitle">
             Review sentences and mark words as known or ignored
           </p>

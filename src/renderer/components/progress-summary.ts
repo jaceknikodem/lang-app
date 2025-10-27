@@ -574,13 +574,6 @@ export class ProgressSummary extends LitElement {
 
     return html`
       <div class="progress-container">
-        <div class="progress-header">
-          <h2 class="progress-title">Learning Progress</h2>
-          <p class="progress-subtitle">
-            Track your vocabulary mastery and study statistics
-          </p>
-        </div>
-
         <div class="progress-grid">
           <!-- Top Left: Word Categories -->
           <div class="progress-section">
