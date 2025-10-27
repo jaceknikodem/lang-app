@@ -34,7 +34,7 @@ export class AudioService {
 
       // Generate audio and return path
       const audioPath = await this.audioGenerator.generateAudio(text.trim(), targetLanguage, word);
-      
+
       // Verify the file was actually created
       if (!await this.audioExists(audioPath)) {
         throw new Error(`Audio generation succeeded but file not found: ${audioPath}`);
@@ -46,7 +46,7 @@ export class AudioService {
       if (this.isAudioError(error)) {
         throw error;
       }
-      
+
       const audioError = new Error(`Audio generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`) as AudioError;
       audioError.code = 'GENERATION_FAILED';
       throw audioError;
@@ -78,7 +78,7 @@ export class AudioService {
       if (this.isAudioError(error)) {
         throw error;
       }
-      
+
       const audioError = new Error(`Audio playback failed: ${error instanceof Error ? error.message : 'Unknown error'}`) as AudioError;
       audioError.code = 'PLAYBACK_FAILED';
       audioError.audioPath = audioPath;
@@ -94,7 +94,7 @@ export class AudioService {
       if (!audioPath || typeof audioPath !== 'string') {
         return false;
       }
-      
+
       return await this.audioGenerator.audioExists(audioPath);
     } catch (error) {
       // If there's an error checking existence, assume file doesn't exist
@@ -125,7 +125,7 @@ export class AudioService {
    */
   async generateBatchAudio(texts: string[], language?: string, word?: string): Promise<string[]> {
     const results: string[] = [];
-    
+
     for (const text of texts) {
       try {
         const audioPath = await this.generateAudio(text, language, word);
@@ -137,7 +137,7 @@ export class AudioService {
         results.push('');
       }
     }
-    
+
     return results;
   }
 
@@ -149,7 +149,7 @@ export class AudioService {
       return await this.audioRecorder.startRecording(options);
     } catch (error) {
       let errorMessage = 'Failed to start recording';
-      
+
       if (error instanceof Error) {
         if (error.message.includes('sox')) {
           errorMessage = 'Audio recording requires sox. Please install it with: brew install sox';
@@ -157,7 +157,7 @@ export class AudioService {
           errorMessage = `Failed to start recording: ${error.message}`;
         }
       }
-      
+
       const audioError = new Error(errorMessage) as AudioError;
       audioError.code = 'RECORDING_FAILED';
       throw audioError;
@@ -246,9 +246,26 @@ export class AudioService {
    */
   async initializeSpeechRecognition(): Promise<void> {
     try {
+      console.log('AudioService: Initializing speech recognition...');
       await this.speechRecognition.initialize();
+      console.log('AudioService: Speech recognition initialized successfully');
     } catch (error) {
-      const audioError = new Error(`Failed to initialize speech recognition: ${error instanceof Error ? error.message : 'Unknown error'}`) as AudioError;
+      console.error('AudioService: Speech recognition initialization failed:', error);
+
+      // Provide more specific error messages
+      let errorMessage = 'Failed to initialize speech recognition';
+
+      if (error instanceof Error) {
+        if (error.message.includes('whisper-node')) {
+          errorMessage = 'Whisper speech recognition is not available. This feature requires additional setup.';
+        } else if (error.message.includes('compilation')) {
+          errorMessage = 'Speech recognition is setting up for first use. Please try again in a moment.';
+        } else {
+          errorMessage = `Speech recognition initialization failed: ${error.message}`;
+        }
+      }
+
+      const audioError = new Error(errorMessage) as AudioError;
       audioError.code = 'RECORDING_FAILED';
       throw audioError;
     }
@@ -290,11 +307,11 @@ export class AudioService {
   }
 
   /**
-   * Set default speech recognition model
+   * Set speech recognition model path
    */
-  async setSpeechModel(model: string): Promise<void> {
+  async setSpeechModel(modelPath: string): Promise<void> {
     try {
-      await this.speechRecognition.setDefaultModel(model);
+      await this.speechRecognition.setModelPath(modelPath);
     } catch (error) {
       const audioError = new Error(`Failed to set speech model: ${error instanceof Error ? error.message : 'Unknown error'}`) as AudioError;
       audioError.code = 'RECORDING_FAILED';
@@ -303,10 +320,10 @@ export class AudioService {
   }
 
   /**
-   * Get current speech recognition model
+   * Get current speech recognition model path
    */
   getCurrentSpeechModel(): string {
-    return this.speechRecognition.getDefaultModel();
+    return this.speechRecognition.getCurrentModelPath();
   }
 
   /**
@@ -320,7 +337,7 @@ export class AudioService {
    * Type guard to check if error is AudioError
    */
   private isAudioError(error: unknown): error is AudioError {
-    return error instanceof Error && 'code' in error && 
-           ['GENERATION_FAILED', 'PLAYBACK_FAILED', 'FILE_NOT_FOUND', 'INVALID_PATH', 'RECORDING_FAILED', 'FILE_OPERATION_FAILED'].includes((error as AudioError).code);
+    return error instanceof Error && 'code' in error &&
+      ['GENERATION_FAILED', 'PLAYBACK_FAILED', 'FILE_NOT_FOUND', 'INVALID_PATH', 'RECORDING_FAILED', 'FILE_OPERATION_FAILED'].includes((error as AudioError).code);
   }
 }

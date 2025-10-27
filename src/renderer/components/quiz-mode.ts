@@ -226,6 +226,20 @@ export class QuizMode extends LitElement {
         color: white;
       }
 
+      .answer-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        background: var(--background-secondary);
+        border-color: var(--border-color);
+        color: var(--text-secondary);
+      }
+
+      .answer-button:disabled:hover {
+        background: var(--background-secondary);
+        border-color: var(--border-color);
+        transform: none;
+      }
+
       .result-feedback {
         background: var(--background-secondary);
         border-radius: var(--border-radius);
@@ -1034,12 +1048,21 @@ export class QuizMode extends LitElement {
 
   private async initializeSpeechRecognition() {
     try {
+      console.log('Quiz: Initializing speech recognition...');
       await window.electronAPI.audio.initializeSpeechRecognition();
       this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
-      console.log('Speech recognition initialized:', this.speechRecognitionReady);
+      console.log('Quiz: Speech recognition initialized:', this.speechRecognitionReady);
+      
+      if (this.speechRecognitionReady) {
+        console.log('✓ Speech recognition is ready for use');
+      }
     } catch (error) {
-      console.error('Failed to initialize speech recognition:', error);
+      console.error('Quiz: Failed to initialize speech recognition:', error);
       this.speechRecognitionReady = false;
+      
+      // Show user-friendly message
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.warn('Speech recognition not available:', errorMessage);
     }
   }
 
@@ -1266,8 +1289,10 @@ export class QuizMode extends LitElement {
         <button 
           class="answer-button"
           @click=${this.toggleRecorder}
+          ?disabled=${!this.speechRecognitionReady}
+          title=${this.speechRecognitionReady ? 'Practice pronunciation with speech recognition' : 'Speech recognition not available - setting up for first use'}
         >
-          🎤 Practice Pronunciation
+          🎤 Practice Pronunciation${this.speechRecognitionReady ? '' : ' (Setting up...)'}
         </button>
       </div>
     `;
@@ -1316,6 +1341,11 @@ export class QuizMode extends LitElement {
           <div class="transcription-loading">
             <div class="spinner"></div>
             Analyzing your pronunciation...
+            ${!this.speechRecognitionReady ? html`
+              <div style="margin-top: var(--spacing-sm); font-size: 14px; color: var(--text-secondary);">
+                First-time setup: This may take 1-2 minutes while speech recognition compiles...
+              </div>
+            ` : ''}
           </div>
         </div>
       `;

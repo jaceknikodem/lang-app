@@ -7,8 +7,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
 
-// Import whisper-node
-const whisper = require('whisper-node');
+// Use system whisper-cpp binary instead of whisper-node
+import { spawn } from 'child_process';
+import { promisify } from 'util';
+const execFile = promisify(require('child_process').execFile);
 
 export interface TranscriptionOptions {
   language?: string;
@@ -44,19 +46,50 @@ export interface SpeechRecognitionError extends Error {
 }
 
 export class SpeechRecognitionService {
-  private modelPath: string;
-  private defaultModel: string = 'base';
+  private whisperBinaryPath: string = '/opt/homebrew/bin/whisper-cli';
+  private modelPath: string = '';
+  private defaultModelPath: string;
   private isInitialized: boolean = false;
 
   constructor() {
-    // Set up model directory
-    this.modelPath = path.join(app.getPath('userData'), 'whisper-models');
-    this.ensureModelDirectory();
+    // Look for models in the current project directory first, then Downloads
+    const projectDir = process.cwd();
+    const homeDir = require('os').homedir();
+    
+    // Model search locations in order of preference
+    const searchPaths = [
+      projectDir,
+      path.join(homeDir, 'Downloads')
+    ];
+    
+    // Common model filenames to look for (including your specific model)
+    const commonModels = [
+      'ggml-small-q5_1.bin',  // Your specific model
+      'ggml-base.bin',
+      'ggml-base.en.bin', 
+      'ggml-small.bin',
+      'ggml-small.en.bin',
+      'ggml-medium.bin',
+      'ggml-large.bin'
+    ];
+    
+    // Find the first available model
+    this.defaultModelPath = '';
+    for (const searchPath of searchPaths) {
+      for (const modelName of commonModels) {
+        const modelFile = path.join(searchPath, modelName);
+        if (fs.existsSync(modelFile)) {
+          this.defaultModelPath = modelFile;
+          this.modelPath = searchPath;
+          console.log(`Found Whisper model: ${modelFile}`);
+          return; // Exit both loops when found
+        }
+      }
+    }
   }
 
   /**
    * Initialize the speech recognition service
-   * Downloads the default model if not present
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) {
@@ -64,15 +97,23 @@ export class SpeechRecognitionService {
     }
 
     try {
-      // Check if whisper is available
+      console.log('Initializing speech recognition service...');
+      
+      // Check if whisper binary is available
       await this.checkWhisperAvailability();
 
-      // Ensure default model is available
-      await this.ensureModelAvailable(this.defaultModel);
+      // Check if we have a model
+      if (!this.defaultModelPath) {
+        throw new Error('No Whisper model found in Downloads folder. Please download a model (e.g., ggml-base.bin)');
+      }
 
       this.isInitialized = true;
       console.log('Speech recognition service initialized successfully');
+      console.log(`Using model: ${this.defaultModelPath}`);
+      console.log(`Using binary: ${this.whisperBinaryPath}`);
+      
     } catch (error) {
+      console.error('Speech recognition initialization failed:', error);
       const speechError = new Error(`Failed to initialize speech recognition: ${error instanceof Error ? error.message : 'Unknown error'}`) as SpeechRecognitionError;
       speechError.code = 'WHISPER_NOT_AVAILABLE';
       throw speechError;
@@ -80,7 +121,7 @@ export class SpeechRecognitionService {
   }
 
   /**
-   * Transcribe audio file to text
+   * Transcribe audio file to text using system whisper-cpp binary
    */
   async transcribeAudio(filePath: string, options: TranscriptionOptions = {}): Promise<TranscriptionResult> {
     if (!this.isInitialized) {
@@ -96,55 +137,119 @@ export class SpeechRecognitionService {
         throw error;
       }
 
-      // Prepare whisper options
-      const whisperOptions = {
-        modelPath: path.join(this.modelPath, `ggml-${options.model || this.defaultModel}.bin`),
-        whisperOptions: {
-          language: options.language || 'auto',
-          gen_file_txt: false,
-          gen_file_subtitle: false,
-          gen_file_vtt: false,
-          word_timestamps: true,
-          ...this.buildWhisperOptions(options)
-        }
-      };
-
-      console.log(`Transcribing audio: ${filePath} with model: ${options.model || this.defaultModel}`);
-
-      // Perform transcription
-      const result = await whisper(filePath, whisperOptions);
-
-      // Parse result
-      if (!result || typeof result !== 'object') {
-        throw new Error('Invalid transcription result');
+      // Check file size - if too small, likely no speech
+      const stats = fs.statSync(filePath);
+      if (stats.size < 1000) { // Less than 1KB
+        throw new Error('Audio recording is too short or empty. Please record a longer sample.');
       }
 
-      // Extract text from result
-      let transcribedText = '';
-      let segments: Array<{ start: number; end: number; text: string }> = [];
+      console.log(`Transcribing audio: ${filePath} (${(stats.size / 1024).toFixed(1)} KB)`);
+      console.log(`Using model: ${this.defaultModelPath}`);
 
-      if (Array.isArray(result)) {
-        // Handle array result format
-        transcribedText = result.map(segment => segment.speech || segment.text || '').join(' ').trim();
-        segments = result.map(segment => ({
-          start: segment.start || 0,
-          end: segment.end || 0,
-          text: segment.speech || segment.text || ''
-        }));
-      } else if (typeof result === 'string') {
-        // Handle string result format
-        transcribedText = result.trim();
-      } else if (result.text) {
-        // Handle object with text property
-        transcribedText = result.text.trim();
+      // Build whisper-cli command arguments with conservative settings
+      const args = [
+        '-m', this.defaultModelPath,  // Model path
+        '-f', filePath,               // Input file
+        '--output-txt',               // Output as text
+        '--no-timestamps',            // No timestamps for cleaner output
+        '--no-prints',                // Reduce verbose output
+        '--temperature', '0.0',       // Use deterministic output (no randomness)
+        '--best-of', '1',             // Use single best candidate
+        '--beam-size', '5',           // Use reasonable beam size for quality
+        '--entropy-thold', '2.4',     // Default entropy threshold
+        '--logprob-thold', '-1.0',    // Default log probability threshold
+        '--no-speech-thold', '0.6',   // Default no-speech threshold
+        '--suppress-nst'              // Suppress non-speech tokens
+      ];
+
+      // Always specify language to prevent hallucination
+      const language = options.language && options.language !== 'auto' ? options.language : 'es'; // Default to Spanish
+      args.push('-l', language);
+      
+      // Limit duration to prevent processing too much audio (max 5 seconds)
+      args.push('-d', '5000');
+      
+      console.log(`Using language: ${language}`);
+
+      console.log('Whisper command:', this.whisperBinaryPath, args.join(' '));
+
+      // Execute whisper-cli
+      let result;
+      try {
+        const { stdout, stderr } = await execFile(this.whisperBinaryPath, args, {
+          timeout: 60000, // 60 second timeout
+          maxBuffer: 1024 * 1024 // 1MB buffer
+        });
+
+        console.log('Whisper stdout length:', stdout.length);
+        console.log('Whisper stdout preview:', stdout.substring(0, 200) + (stdout.length > 200 ? '...' : ''));
+        if (stderr) {
+          console.log('Whisper stderr:', stderr);
+        }
+
+        result = stdout;
+        
+      } catch (execError) {
+        console.error('Whisper execution error:', execError);
+        
+        const errorMessage = execError instanceof Error ? execError.message : String(execError);
+        
+        // Check if it's actually an error or just stderr output
+        if (execError && typeof execError === 'object' && 'stdout' in execError) {
+          // If we have stdout, it might not be a real error
+          result = (execError as any).stdout || '';
+          console.log('Whisper completed with stderr but has output:', result);
+        } else if (errorMessage.includes('timeout')) {
+          throw new Error('Transcription took too long. The audio file may be too large.');
+        } else if (errorMessage.includes('model') || errorMessage.includes('ggml')) {
+          throw new Error('Whisper model file is invalid or corrupted. Please re-download the model.');
+        } else if (errorMessage.includes('audio') || errorMessage.includes('format')) {
+          throw new Error('Invalid audio format. Please ensure the recording is in WAV format.');
+        } else {
+          throw new Error(`Whisper transcription failed: ${errorMessage}`);
+        }
+      }
+
+      // Parse the result
+      let transcribedText = '';
+      
+      if (typeof result === 'string') {
+        // Clean up the output - whisper-cli often includes extra info
+        const lines = result.split('\n');
+        
+        // Find lines that look like transcribed text (not metadata)
+        const textLines = lines.filter(line => {
+          const trimmed = line.trim();
+          return trimmed.length > 0 && 
+                 !trimmed.startsWith('[') && 
+                 !trimmed.includes('whisper_') &&
+                 !trimmed.includes('load time') &&
+                 !trimmed.includes('sample time') &&
+                 !trimmed.includes('encode time') &&
+                 !trimmed.includes('decode time') &&
+                 !trimmed.includes('total time');
+        });
+        
+        // Join all text and clean it up
+        let rawText = textLines.join(' ').trim();
+        
+        console.log('Raw transcription before cleaning:', rawText);
+        
+        // Remove repeated [Música], [Music], and similar tokens
+        transcribedText = this.cleanTranscriptionText(rawText);
+        
+        console.log('Cleaned transcription:', transcribedText);
+      }
+
+      if (!transcribedText || transcribedText.length === 0) {
+        throw new Error('No speech detected in audio. Please speak more clearly or check your microphone.');
       }
 
       console.log(`Transcription completed: "${transcribedText}"`);
 
       return {
         text: transcribedText,
-        language: options.language,
-        segments: segments.length > 0 ? segments : undefined
+        language: options.language
       };
 
     } catch (error) {
@@ -225,30 +330,55 @@ export class SpeechRecognitionService {
   }
 
   /**
-   * Get available models
+   * Get available models (scan current directory and Downloads folder)
    */
   getAvailableModels(): string[] {
-    return ['tiny', 'base', 'small', 'medium', 'large'];
+    const models: string[] = [];
+    
+    // Scan both project directory and Downloads
+    const searchPaths = [
+      process.cwd(),
+      path.join(require('os').homedir(), 'Downloads')
+    ];
+    
+    for (const searchPath of searchPaths) {
+      try {
+        const files = fs.readdirSync(searchPath);
+        const modelFiles = files.filter(file => 
+          file.startsWith('ggml-') && file.endsWith('.bin')
+        );
+        
+        for (const modelFile of modelFiles) {
+          const fullPath = path.join(searchPath, modelFile);
+          if (fs.existsSync(fullPath) && !models.includes(modelFile)) {
+            models.push(modelFile);
+          }
+        }
+      } catch (error) {
+        // Ignore errors reading directories
+      }
+    }
+    
+    return models;
   }
 
   /**
-   * Set default model
+   * Set model path
    */
-  async setDefaultModel(model: string): Promise<void> {
-    if (!this.getAvailableModels().includes(model)) {
-      throw new Error(`Invalid model: ${model}. Available models: ${this.getAvailableModels().join(', ')}`);
+  async setModelPath(modelPath: string): Promise<void> {
+    if (!fs.existsSync(modelPath)) {
+      throw new Error(`Model file not found: ${modelPath}`);
     }
 
-    await this.ensureModelAvailable(model);
-    this.defaultModel = model;
-    console.log(`Default model set to: ${model}`);
+    this.defaultModelPath = modelPath;
+    console.log(`Model path set to: ${modelPath}`);
   }
 
   /**
-   * Get current default model
+   * Get current model path
    */
-  getDefaultModel(): string {
-    return this.defaultModel;
+  getCurrentModelPath(): string {
+    return this.defaultModelPath;
   }
 
   /**
@@ -259,22 +389,22 @@ export class SpeechRecognitionService {
   }
 
   /**
-   * Check if whisper is available on the system
+   * Check if whisper binary is available on the system
    */
   private async checkWhisperAvailability(): Promise<void> {
     try {
-      // Test whisper-node availability
-      const testResult = await whisper('', { 
-        modelPath: 'test',
-        whisperOptions: { gen_file_txt: false }
-      }).catch(() => {
-        // Expected to fail, we just want to check if whisper-node is available
-        return null;
-      });
+      // Check if whisper-cli binary exists
+      if (!fs.existsSync(this.whisperBinaryPath)) {
+        throw new Error(`Whisper binary not found at ${this.whisperBinaryPath}`);
+      }
+
+      // Test the binary
+      const { stdout } = await execFile(this.whisperBinaryPath, ['--help']);
+      console.log('System whisper-cpp binary is available');
       
-      console.log('Whisper-node is available');
     } catch (error) {
-      throw new Error('whisper-node package is not properly installed or configured');
+      console.error('Whisper availability check failed:', error);
+      throw new Error(`System whisper-cpp binary is not available: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -317,20 +447,77 @@ export class SpeechRecognitionService {
   private buildWhisperOptions(options: TranscriptionOptions): Record<string, any> {
     const whisperOptions: Record<string, any> = {};
 
+    // Only include basic options for better compatibility
     if (options.temperature !== undefined) whisperOptions.temperature = options.temperature;
-    if (options.best_of !== undefined) whisperOptions.best_of = options.best_of;
-    if (options.beam_size !== undefined) whisperOptions.beam_size = options.beam_size;
-    if (options.patience !== undefined) whisperOptions.patience = options.patience;
-    if (options.length_penalty !== undefined) whisperOptions.length_penalty = options.length_penalty;
-    if (options.suppress_tokens !== undefined) whisperOptions.suppress_tokens = options.suppress_tokens;
     if (options.initial_prompt !== undefined) whisperOptions.initial_prompt = options.initial_prompt;
-    if (options.condition_on_previous_text !== undefined) whisperOptions.condition_on_previous_text = options.condition_on_previous_text;
-    if (options.fp16 !== undefined) whisperOptions.fp16 = options.fp16;
-    if (options.compression_ratio_threshold !== undefined) whisperOptions.compression_ratio_threshold = options.compression_ratio_threshold;
-    if (options.logprob_threshold !== undefined) whisperOptions.logprob_threshold = options.logprob_threshold;
-    if (options.no_speech_threshold !== undefined) whisperOptions.no_speech_threshold = options.no_speech_threshold;
 
     return whisperOptions;
+  }
+
+
+
+  /**
+   * Clean transcription text by removing unwanted tokens and repetitions
+   */
+  private cleanTranscriptionText(text: string): string {
+    // Remove bracketed tokens like [Música], [Music], [Applause], etc.
+    let cleaned = text.replace(/\[.*?\]/g, '');
+    
+    // Remove extra whitespace
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    
+    // Remove common whisper artifacts
+    cleaned = cleaned.replace(/\b(música|music|applause|laughter|silence|gracias|thank you)\b/gi, '');
+    
+    // Remove non-Latin characters that indicate hallucination (Tamil, Chinese, etc.)
+    cleaned = cleaned.replace(/[\u0B80-\u0BFF\u4E00-\u9FFF\u0900-\u097F]/g, '');
+    
+    // Remove words that are clearly not Spanish/English (common hallucinations)
+    const badWords = /\b(seiten|怎麼|பட|cus|te\s+cus|lo\s+de\s+la\s+怎麼)\b/gi;
+    cleaned = cleaned.replace(badWords, '');
+    
+    // Split into words and validate each word
+    const words = cleaned.split(' ').filter(word => {
+      const trimmed = word.trim();
+      if (trimmed.length === 0) return false;
+      
+      // Filter out words with mixed scripts or obvious garbage
+      if (/[^\w\sáéíóúüñ¿¡]/i.test(trimmed)) return false;
+      
+      // Filter out very short fragments that don't make sense
+      if (trimmed.length === 1 && !/[aeiouáéíóú]/i.test(trimmed)) return false;
+      
+      return true;
+    });
+    
+    // Remove repeated words (sometimes whisper repeats words)
+    const filteredWords = [];
+    let lastWord = '';
+    let repeatCount = 0;
+    
+    for (const word of words) {
+      if (word.toLowerCase() === lastWord.toLowerCase()) {
+        repeatCount++;
+        // Allow up to 1 repetition, then skip
+        if (repeatCount <= 1) {
+          filteredWords.push(word);
+        }
+      } else {
+        filteredWords.push(word);
+        lastWord = word;
+        repeatCount = 0;
+      }
+    }
+    
+    // Final cleanup
+    cleaned = filteredWords.join(' ').replace(/\s+/g, ' ').trim();
+    
+    // If the result is too short or looks like garbage, reject it
+    if (cleaned.length < 3 || filteredWords.length === 0) {
+      throw new Error('Transcription result appears to be invalid or too short.');
+    }
+    
+    return cleaned;
   }
 
   /**

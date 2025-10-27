@@ -72,8 +72,50 @@ npm run test:e2e
 ## Prerequisites
 
 - **Node.js**: Version 18+ for Electron compatibility
-- **Ollama**: Must be installed and running locally on port 11434
 - **macOS**: Required for system TTS integration (`say` command)
+- **Homebrew**: Package manager for installing dependencies
+
+### Required Dependencies
+
+Install the following dependencies using Homebrew:
+
+```bash
+# Install Ollama for local LLM inference
+brew install ollama
+
+# Install whisper-cpp for speech recognition
+brew install whisper-cpp
+```
+
+### Model Downloads
+
+After installing the dependencies, download the required models:
+
+```bash
+# Download and run a language model (e.g., Llama 3.2)
+ollama pull llama3.2
+
+# Download Whisper model for speech recognition
+# Create models directory and download from Hugging Face
+mkdir -p models
+cd models
+
+# Download the small model (39MB) - good balance of speed and accuracy
+curl -L -o ggml-small.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
+
+cd ..
+```
+
+### Service Setup
+
+Ensure Ollama is running before starting the application:
+
+```bash
+# Start Ollama service (runs on port 11434 by default)
+ollama serve
+```
+
+You can verify Ollama is running by visiting `http://localhost:11434` in your browser.
 
 ## Getting Started
 
