@@ -235,8 +235,8 @@ export class SentenceViewer extends LitElement {
       .tooltip {
         position: absolute;
         bottom: 100%;
-        left: 50%;
-        transform: translateX(-50%);
+        left: 0;
+        transform: none;
         background: var(--text-primary);
         color: white;
         padding: var(--spacing-xs) var(--spacing-sm);
@@ -257,8 +257,8 @@ export class SentenceViewer extends LitElement {
         content: '';
         position: absolute;
         top: 100%;
-        left: 50%;
-        transform: translateX(-50%);
+        left: 14px;
+        transform: none;
         border: 4px solid transparent;
         border-top-color: var(--text-primary);
       }
