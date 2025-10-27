@@ -34,9 +34,6 @@ export class AppRoot extends LitElement {
   private sessionState: SessionState | null = null;
 
   @state()
-  private showSessionRestore = false;
-
-  @state()
   private hasExistingWords = false;
 
   @state()
@@ -206,61 +203,7 @@ export class AppRoot extends LitElement {
         justify-content: center;
       }
 
-      .session-restore {
-        background: var(--primary-light);
-        border: 1px solid var(--primary-color);
-        border-radius: var(--border-radius);
-        padding: var(--spacing-lg);
-        margin-bottom: var(--spacing-md);
-        text-align: center;
-      }
 
-      .session-restore-title {
-        font-size: 16px;
-        font-weight: 600;
-        color: var(--primary-color);
-        margin: 0 0 var(--spacing-sm) 0;
-      }
-
-      .session-restore-description {
-        font-size: 12px;
-        color: var(--text-secondary);
-        margin: 0 0 var(--spacing-md) 0;
-      }
-
-      .session-restore-actions {
-        display: flex;
-        gap: var(--spacing-md);
-        justify-content: center;
-        flex-wrap: wrap;
-      }
-
-      .session-restore-button {
-        padding: var(--spacing-md) var(--spacing-lg);
-        border: 1px solid var(--primary-color);
-        background: var(--primary-color);
-        color: white;
-        border-radius: var(--border-radius);
-        font-size: 12px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s ease;
-      }
-
-      .session-restore-button:hover {
-        background: var(--primary-dark);
-        border-color: var(--primary-dark);
-        color: white;
-      }
-
-      .session-restore-button.secondary {
-        background: var(--background-primary);
-        color: var(--primary-color);
-      }
-
-      .session-restore-button.secondary:hover {
-        background: var(--primary-light);
-      }
 
       @media (max-width: 768px) {
         .app-container {
@@ -381,16 +324,8 @@ export class AppRoot extends LitElement {
 
   private async loadSession() {
     try {
-      const savedSession = sessionManager.loadSession();
-
-      if (savedSession && sessionManager.hasActiveSession()) {
-        this.sessionState = savedSession;
-        this.showSessionRestore = true;
-        console.log('Found active session:', savedSession.currentMode);
-      } else {
-        // No active session, start fresh
-        this.sessionState = sessionManager.getCurrentSession();
-      }
+      // Always start with a fresh session - no restoration needed
+      this.sessionState = sessionManager.getCurrentSession();
     } catch (error) {
       console.error('Failed to load session:', error);
       this.sessionState = sessionManager.getCurrentSession();
@@ -534,32 +469,7 @@ export class AppRoot extends LitElement {
     }
   }
 
-  private handleRestoreSession() {
-    if (!this.sessionState) return;
 
-    this.showSessionRestore = false;
-
-    // Navigate to the saved session mode
-    switch (this.sessionState.currentMode) {
-      case 'learning':
-        // Use the navigation handler which will fetch words from database
-        this.handleNavigation('learning');
-        break;
-      case 'quiz':
-        // Use the navigation handler which will fetch words from database
-        this.handleNavigation('quiz');
-        break;
-      default:
-        router.goToTopicSelection();
-        break;
-    }
-  }
-
-  private handleStartFresh() {
-    this.showSessionRestore = false;
-    sessionManager.clearSession();
-    this.sessionState = sessionManager.getCurrentSession();
-  }
 
   private setupKeyboardBindings() {
     const bindings = [
@@ -675,7 +585,6 @@ export class AppRoot extends LitElement {
         </header>
 
         <main class="content-area">
-          ${this.showSessionRestore ? this.renderSessionRestore() : ''}
           <div class="route-content">
             ${this.renderCurrentRoute()}
           </div>
@@ -726,56 +635,5 @@ export class AppRoot extends LitElement {
     }
   }
 
-  private renderSessionRestore() {
-    if (!this.sessionState || !sessionManager.hasActiveSession()) {
-      return html``;
-    }
 
-    const sessionSummary = sessionManager.getSessionSummary();
-
-    return html`
-      <div class="session-restore">
-        <h3 class="session-restore-title">Continue Previous Session?</h3>
-        <p class="session-restore-description">
-          ${sessionSummary} • Last activity: ${this.formatLastActivity()}
-        </p>
-        <div class="session-restore-actions">
-          <button 
-            class="session-restore-button"
-            @click=${this.handleRestoreSession}
-          >
-            Continue session
-          </button>
-          <button 
-            class="session-restore-button secondary"
-            @click=${this.handleStartFresh}
-          >
-            No, thanks
-          </button>
-        </div>
-      </div>
-    `;
-  }
-
-  private formatLastActivity(): string {
-    if (!this.sessionState?.lastActivity) {
-      return 'Unknown';
-    }
-
-    const lastActivity = new Date(this.sessionState.lastActivity);
-    const now = new Date();
-    const diffMs = now.getTime() - lastActivity.getTime();
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMinutes / 60);
-
-    if (diffMinutes < 1) {
-      return 'Just now';
-    } else if (diffMinutes < 60) {
-      return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
-    } else if (diffHours < 24) {
-      return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
-    } else {
-      return lastActivity.toLocaleDateString();
-    }
-  }
 }

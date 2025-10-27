@@ -127,6 +127,8 @@ export class OllamaClient implements LLMClient {
     this.databaseLayer = databaseLayer;
   }
 
+
+
   async isAvailable(): Promise<boolean> {
     try {
       const response = await fetch(`${this.config.baseUrl}/api/tags`, {
@@ -587,7 +589,7 @@ Rules:
           parsed = JSON.parse(cleanResponse);
         } catch (parseError) {
           console.error('JSON parsing failed for response:', cleanResponse);
-          throw new Error(`Invalid JSON response: ${cleanResponse.substring(0, 200)}...`);
+          throw new Error(`Invalid JSON response: ${cleanResponse}...`);
         }
 
         return parsed;

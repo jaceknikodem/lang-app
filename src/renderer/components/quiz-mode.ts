@@ -929,13 +929,8 @@ export class QuizMode extends LitElement {
       return;
     }
 
-    // Try to restore quiz session from session manager
-    this.restoreQuizSession();
-
-    // If we don't have a quiz session, start one automatically
-    if (!this.quizSession) {
-      await this.startQuiz();
-    }
+    // Start a fresh quiz session
+    await this.startQuiz();
   }
 
   disconnectedCallback() {
@@ -1018,15 +1013,7 @@ export class QuizMode extends LitElement {
     }
   }
 
-  private restoreQuizSession() {
-    const session = sessionManager.getCurrentSession();
-    if (session.quizProgress) {
-      // We have a saved quiz session, but we need to rebuild the quiz questions
-      // For now, we'll just restore the direction preference
-      this.direction = session.quizDirection;
-      console.log('Restored quiz direction:', this.direction);
-    }
-  }
+
 
   private saveQuizProgressToSession() {
     if (this.quizSession) {
@@ -1071,7 +1058,7 @@ export class QuizMode extends LitElement {
       this.quizSession.score++;
     }
 
-    // Update word using SRS system
+    // Update word using SRS system and save progress immediately
     try {
       await window.electronAPI.srs.processReview(this.currentQuestion.word.id, recall);
       await window.electronAPI.database.updateLastStudied(this.currentQuestion.word.id);
@@ -1081,6 +1068,9 @@ export class QuizMode extends LitElement {
       if (updatedWord) {
         this.currentQuestion.word = updatedWord;
       }
+
+      // Save progress immediately after each answer
+      this.saveQuizProgressToSession();
 
     } catch (error) {
       console.error('Error updating word with SRS:', error);
@@ -1109,7 +1099,7 @@ export class QuizMode extends LitElement {
       this.quizSession.currentQuestionIndex++;
       this.currentQuestion = this.quizSession.questions[this.quizSession.currentQuestionIndex];
 
-      // Save progress to session
+      // Save progress immediately when moving to next question
       this.saveQuizProgressToSession();
     }
   }

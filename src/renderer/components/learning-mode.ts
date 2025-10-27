@@ -417,6 +417,9 @@ export class LearningMode extends LitElement {
         };
       }
 
+      // Save progress immediately after updating word status
+      this.saveProgressToSession();
+
       this.requestUpdate();
 
     } catch (error) {

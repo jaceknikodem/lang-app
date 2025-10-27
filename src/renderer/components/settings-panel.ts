@@ -770,8 +770,6 @@ export class SettingsPanel extends LitElement {
           `}
         </div>
 
-
-
         <div class="settings-section">
           <h3>Speech Recognition</h3>
           ${this.speechRecognitionReady ? html`
