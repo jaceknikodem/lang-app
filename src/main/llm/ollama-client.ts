@@ -4,6 +4,7 @@
 
 import { GeneratedWord, GeneratedSentence } from '../../shared/types/core.js';
 import { LLMClient, LLMConfig, LLMError } from '../../shared/types/llm.js';
+import { LLM_CONFIG } from '../../shared/constants/index.js';
 import { z } from 'zod';
 
 // Zod schemas for response validation with coercion and fallbacks
@@ -121,10 +122,10 @@ export class OllamaClient implements LLMClient {
 
   constructor(config: Partial<LLMConfig> = {}) {
     this.config = {
-      baseUrl: config.baseUrl || 'http://localhost:11434',
-      model: config.model || 'granite4:tiny-h',
-      timeout: config.timeout || 10000,
-      maxRetries: config.maxRetries || 3
+      baseUrl: config.baseUrl || LLM_CONFIG.DEFAULT_BASE_URL,
+      model: config.model || LLM_CONFIG.DEFAULT_MODEL,
+      timeout: config.timeout || LLM_CONFIG.DEFAULT_TIMEOUT,
+      maxRetries: config.maxRetries || LLM_CONFIG.MAX_RETRIES
     };
   }
 

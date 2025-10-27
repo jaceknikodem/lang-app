@@ -23,7 +23,7 @@ export const APP_CONFIG = {
 export const LLM_CONFIG = {
   DEFAULT_BASE_URL: 'http://localhost:11434',
   DEFAULT_MODEL: 'qwen3:8b',
-  DEFAULT_TIMEOUT: 30000,
+  DEFAULT_TIMEOUT: 60000, // Increased to 60 seconds for better reliability
   MAX_RETRIES: 3
 } as const;
 
