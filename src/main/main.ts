@@ -140,7 +140,7 @@ function createWindow(): void {
   // Create the browser window with enhanced security
   mainWindow = new BrowserWindow({
     height: 800,
-    width: 1200,
+    width: 800,
     title: 'KotobaAI',
     webPreferences: {
       preload: preloadPath,

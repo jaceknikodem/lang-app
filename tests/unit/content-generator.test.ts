@@ -53,17 +53,17 @@ describe('ContentGenerator', () => {
             const words = await contentGenerator.generateTopicVocabulary(
                 undefined, // No topic - should generate general vocabulary
                 'Spanish',
-                10
+                5
             );
 
-            expect(words).toHaveLength(10);
-            
+            expect(words).toHaveLength(5);
+
             // Check that all expected words are present (order may vary due to shuffling)
             const wordTexts = words.map(w => w.word);
-            for (let i = 1; i <= 10; i++) {
+            for (let i = 1; i <= 5; i++) {
                 expect(wordTexts).toContain(`general_word_${i}`);
             }
-            
+
             // Check that first word has expected structure (regardless of which one it is)
             expect(words[0].word).toMatch(/^general_word_\d+$/);
             expect(words[0].translation).toMatch(/^general word \d+$/);
@@ -77,13 +77,13 @@ describe('ContentGenerator', () => {
             );
 
             expect(words).toHaveLength(5);
-            
+
             // Check that all expected words are present (order may vary due to shuffling)
             const wordTexts = words.map(w => w.word);
             for (let i = 1; i <= 5; i++) {
                 expect(wordTexts).toContain(`food_word_${i}`);
             }
-            
+
             // Check that first word has expected structure (regardless of which one it is)
             expect(words[0].word).toMatch(/^food_word_\d+$/);
             expect(words[0].translation).toMatch(/^food word \d+$/);
@@ -97,7 +97,7 @@ describe('ContentGenerator', () => {
             );
 
             expect(words).toHaveLength(3);
-            
+
             // Check that all expected words are present (order may vary due to shuffling)
             const wordTexts = words.map(w => w.word);
             for (let i = 1; i <= 3; i++) {
@@ -113,7 +113,7 @@ describe('ContentGenerator', () => {
             );
 
             expect(words).toHaveLength(3);
-            
+
             // Check that all expected words are present (order may vary due to shuffling)
             const wordTexts = words.map(w => w.word);
             for (let i = 1; i <= 3; i++) {
@@ -135,10 +135,10 @@ describe('ContentGenerator', () => {
 
             // Check that not all results are identical (shuffling should provide variety)
             const firstResult = results[0];
-            const allIdentical = results.every(result => 
+            const allIdentical = results.every(result =>
                 result.every((word, index) => word === firstResult[index])
             );
-            
+
             // With shuffling, it's extremely unlikely all 5 results would be identical
             // (probability is 1/5! = 1/120 for each comparison, much lower for all)
             expect(allIdentical).toBe(false);

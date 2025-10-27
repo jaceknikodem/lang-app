@@ -6,11 +6,11 @@ export const APP_CONFIG = {
   DATABASE_NAME: 'language_learning.db',
   AUDIO_DIRECTORY: 'audio',
   DEFAULT_LANGUAGE: 'spanish',
-  DEFAULT_WORD_COUNT: 10,
+  DEFAULT_WORD_COUNT: 5,
   DEFAULT_SENTENCE_COUNT: 3,
   MAX_WORD_STRENGTH: 100,
   MIN_WORD_STRENGTH: 0,
-  QUIZ_WORD_LIMIT: 20,
+  QUIZ_WORD_LIMIT: 10,
   SUPPORTED_LANGUAGES: [
     'spanish',
     'italian',
@@ -22,7 +22,7 @@ export const APP_CONFIG = {
 
 export const LLM_CONFIG = {
   DEFAULT_BASE_URL: 'http://localhost:11434',
-  DEFAULT_MODEL: 'qwen3:8b',
+  DEFAULT_MODEL: 'granite4:tiny-h',
   DEFAULT_TIMEOUT: 60000, // Increased to 60 seconds for better reliability
   MAX_RETRIES: 3
 } as const;

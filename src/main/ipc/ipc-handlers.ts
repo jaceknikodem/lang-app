@@ -300,7 +300,7 @@ function setupLLMHandlers(llmClient: OllamaClient, contentGenerator: ContentGene
       return await contentGenerator.generateTopicVocabulary(
         topic && topic.trim() ? topic.trim() : undefined,
         validatedLanguage,
-        10,
+        undefined, // Use default word count from ContentGenerator (5)
         databaseLayer
       );
     } catch (error) {
