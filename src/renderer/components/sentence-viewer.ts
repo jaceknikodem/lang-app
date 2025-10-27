@@ -303,13 +303,24 @@ export class SentenceViewer extends LitElement {
       return;
     }
 
-    // Simple word parsing - split by spaces and punctuation
-    const words = this.sentence.sentence.split(/(\s+|[.,!?;:])/);
+    // Better word parsing - split by spaces and punctuation but handle them properly
+    const parts = this.sentence.sentence.split(/(\s+|[.,!?;:])/);
     
-    this.parsedWords = words.map(text => {
+    this.parsedWords = parts.map(text => {
+      // If it's just whitespace, keep it as is for proper spacing
+      if (/^\s+$/.test(text)) {
+        return { text, isTargetWord: false };
+      }
+      
+      // If it's punctuation, keep it as is
+      if (/^[.,!?;:]+$/.test(text)) {
+        return { text, isTargetWord: false };
+      }
+      
+      // For actual words, clean them for comparison but keep original text for display
       const cleanText = text.trim().toLowerCase().replace(/[.,!?;:]/g, '');
       
-      if (!cleanText || /^\s+$/.test(text)) {
+      if (!cleanText) {
         return { text, isTargetWord: false };
       }
 
@@ -330,6 +341,11 @@ export class SentenceViewer extends LitElement {
   }
 
   private getWordClass(wordInfo: WordInSentence): string {
+    // Don't style whitespace or punctuation
+    if (/^\s+$/.test(wordInfo.text) || /^[.,!?;:]+$/.test(wordInfo.text)) {
+      return '';
+    }
+    
     if (!wordInfo.wordData && !wordInfo.isTargetWord) {
       return 'word-neutral';
     }
@@ -354,6 +370,11 @@ export class SentenceViewer extends LitElement {
   }
 
   private getWordTooltip(wordInfo: WordInSentence): string {
+    // No tooltip for whitespace or punctuation
+    if (/^\s+$/.test(wordInfo.text) || /^[.,!?;:]+$/.test(wordInfo.text)) {
+      return '';
+    }
+    
     if (wordInfo.isTargetWord) {
       return `Target word`;
     }
@@ -376,6 +397,11 @@ export class SentenceViewer extends LitElement {
   }
 
   private async handleWordClick(wordInfo: WordInSentence) {
+    // Don't handle clicks on whitespace or punctuation
+    if (/^\s+$/.test(wordInfo.text) || /^[.,!?;:]+$/.test(wordInfo.text)) {
+      return;
+    }
+    
     if (!wordInfo.wordData && !wordInfo.isTargetWord) {
       // This is a new word - we could add it to the database
       console.log('Clicked on unknown word:', wordInfo.text);
@@ -399,6 +425,10 @@ export class SentenceViewer extends LitElement {
     this.isPlayingAudio = true;
 
     try {
+      // Stop any currently playing audio first
+      await window.electronAPI.audio.stopAudio();
+      
+      // Play the new audio
       await window.electronAPI.audio.playAudio(this.sentence.audioPath);
     } catch (error) {
       console.error('Failed to play audio:', error);
@@ -457,16 +487,24 @@ export class SentenceViewer extends LitElement {
           ` : ''}
           
           <div class="sentence-text">
-            ${this.parsedWords.map(wordInfo => html`
-              <span
-                class="word-in-sentence ${this.getWordClass(wordInfo)}"
-                @click=${() => this.handleWordClick(wordInfo)}
-                title=${this.getWordTooltip(wordInfo)}
-              >
-                ${wordInfo.text}
-                <div class="tooltip">${this.getWordTooltip(wordInfo)}</div>
-              </span>
-            `)}
+            ${this.parsedWords.map(wordInfo => {
+              // For whitespace and punctuation, render without word styling
+              if (/^\s+$/.test(wordInfo.text) || /^[.,!?;:]+$/.test(wordInfo.text)) {
+                return html`${wordInfo.text}`;
+              }
+              
+              // For actual words, render with full styling
+              return html`
+                <span
+                  class="word-in-sentence ${this.getWordClass(wordInfo)}"
+                  @click=${() => this.handleWordClick(wordInfo)}
+                  title=${this.getWordTooltip(wordInfo)}
+                >
+                  ${wordInfo.text}
+                  ${this.getWordTooltip(wordInfo) ? html`<div class="tooltip">${this.getWordTooltip(wordInfo)}</div>` : ''}
+                </span>
+              `;
+            })}
           </div>
           
           <div class="sentence-translation">

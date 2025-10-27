@@ -77,6 +77,35 @@ export class QuizMode extends LitElement {
 
   private sessionStartTime = Date.now();
 
+  private handleKeyDown(event: KeyboardEvent) {
+    // Only handle Enter key
+    if (event.key !== 'Enter') return;
+
+    // Prevent default behavior
+    event.preventDefault();
+
+    // Don't handle if we're in setup mode or loading
+    if (!this.quizSession || this.isLoading || this.error) return;
+
+    // Don't handle if quiz is complete
+    if (this.quizSession.isComplete) return;
+
+    // Don't handle if recorder is open (let recorder handle its own keys)
+    if (this.showRecorder) return;
+
+    // If showing result, the auto-advance will handle progression
+    if (this.showResult) return;
+
+    // If answer is not revealed yet, reveal it
+    if (!this.showAnswer) {
+      this.revealAnswer();
+      return;
+    }
+
+    // If answer is revealed but no result yet, we're in self-assessment mode
+    // Don't auto-advance here as user needs to select difficulty
+  }
+
   static styles = [
     sharedStyles,
     css`
@@ -935,6 +964,12 @@ export class QuizMode extends LitElement {
         border: 1px solid var(--error-color);
       }
 
+      .keyboard-hint {
+        font-size: 0.8em;
+        opacity: 0.7;
+        font-weight: normal;
+      }
+
       @media (max-width: 768px) {
         .quiz-container {
           padding: var(--spacing-md);
@@ -993,6 +1028,10 @@ export class QuizMode extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
 
+    // Add keyboard event listener
+    this.handleKeyDown = this.handleKeyDown.bind(this);
+    document.addEventListener('keydown', this.handleKeyDown);
+
     // Initialize speech recognition
     await this.initializeSpeechRecognition();
 
@@ -1012,6 +1051,13 @@ export class QuizMode extends LitElement {
       // Quiz setup will be shown in render
       return;
     }
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+
+    // Remove keyboard event listener
+    document.removeEventListener('keydown', this.handleKeyDown);
   }
 
   private async startQuiz() {
@@ -1152,6 +1198,11 @@ export class QuizMode extends LitElement {
     } catch (error) {
       console.error('Error updating word with SRS:', error);
     }
+
+    // Automatically move to next question after a short delay
+    setTimeout(() => {
+      this.nextQuestion();
+    }, 1500); // 1.5 second delay to show the result briefly
   }
 
   private async nextQuestion() {
@@ -1565,7 +1616,7 @@ export class QuizMode extends LitElement {
             class="answer-button primary"
             @click=${this.revealAnswer}
           >
-            Reveal Answer
+            Reveal Answer (Enter)
           </button>
           <button 
             class="answer-button"
@@ -1784,10 +1835,9 @@ export class QuizMode extends LitElement {
           <strong>${word.word}</strong> = <strong>${word.translation}</strong>
         </p>
         <p>Word strength: ${word.strength}/100</p>
-        
-        <button class="next-button" @click=${this.nextQuestion}>
-          ${this.quizSession!.currentQuestionIndex + 1 >= this.quizSession!.totalQuestions ? 'Finish Quiz' : 'Next Question'}
-        </button>
+        <p style="font-size: 14px; color: var(--text-secondary); margin-top: var(--spacing-sm);">
+          ${this.quizSession!.currentQuestionIndex + 1 >= this.quizSession!.totalQuestions ? 'Finishing quiz...' : 'Moving to next question...'}
+        </p>
       </div>
     `;
   }

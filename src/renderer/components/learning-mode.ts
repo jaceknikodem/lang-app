@@ -51,6 +51,27 @@ export class LearningMode extends LitElement {
 
   private sessionStartTime = Date.now();
 
+  private handleKeyDown(event: KeyboardEvent) {
+    // Only handle Enter key
+    if (event.key !== 'Enter') return;
+
+    // Prevent default behavior
+    event.preventDefault();
+
+    // Don't handle if we're loading, have an error, or showing completion
+    if (this.isLoading || this.error || this.showCompletion || this.isProcessing) return;
+
+    // Don't handle if no words available
+    if (!this.wordsWithSentences.length) return;
+
+    // Check if this is the last sentence, if so finish learning, otherwise go to next
+    if (this.isLastSentence()) {
+      this.handleFinishLearning();
+    } else {
+      this.goToNextSentence();
+    }
+  }
+
   static styles = [
     sharedStyles,
     css`
@@ -148,6 +169,13 @@ export class LearningMode extends LitElement {
 
       .error-message {
         color: var(--error-color);
+      }
+
+      .keyboard-hint {
+        font-size: 0.8em;
+        opacity: 0.7;
+        font-weight: normal;
+      }
         background: #ffebee;
         padding: var(--spacing-md);
         border-radius: var(--border-radius);
@@ -223,6 +251,10 @@ export class LearningMode extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
     
+    // Add keyboard event listener
+    this.handleKeyDown = this.handleKeyDown.bind(this);
+    document.addEventListener('keydown', this.handleKeyDown);
+    
     // Load all words for highlighting purposes
     await this.loadAllWords();
     
@@ -234,6 +266,13 @@ export class LearningMode extends LitElement {
     
     // Try to restore learning session from session manager (after words are loaded)
     this.restoreSessionProgress();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    
+    // Remove keyboard event listener
+    document.removeEventListener('keydown', this.handleKeyDown);
   }
 
   private async loadAllWords() {
@@ -662,7 +701,7 @@ export class LearningMode extends LitElement {
             @click=${this.isLastSentence() ? this.handleFinishLearning : this.goToNextSentence}
             ?disabled=${this.isProcessing}
           >
-            ${this.isLastSentence() ? 'Finish' : 'Next →'}
+            ${this.isLastSentence() ? 'Finish (Enter)' : 'Next → (Enter)'}
           </button>
         </div>
       </div>

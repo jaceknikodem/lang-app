@@ -14,6 +14,7 @@ const execFileAsync = promisify(execFile);
 export class ElevenLabsAudioGenerator implements AudioGenerator {
   private config: AudioConfig;
   private database?: DatabaseLayer;
+  private currentAudioProcess?: any; // Track current audio process
 
   constructor(config?: Partial<AudioConfig>, database?: DatabaseLayer) {
     this.config = {
@@ -103,11 +104,46 @@ export class ElevenLabsAudioGenerator implements AudioGenerator {
     }
 
     try {
+      // Stop any currently playing audio first
+      this.stopAudio();
+
       // Use 'afplay' command on macOS to play audio files
-      await execFileAsync('afplay', [audioPath]);
+      const { spawn } = await import('child_process');
+      this.currentAudioProcess = spawn('afplay', [audioPath]);
+      
+      // Wait for the process to complete
+      await new Promise<void>((resolve, reject) => {
+        this.currentAudioProcess.on('close', (code: number) => {
+          this.currentAudioProcess = undefined;
+          if (code === 0) {
+            resolve();
+          } else {
+            reject(new Error(`afplay exited with code ${code}`));
+          }
+        });
+        
+        this.currentAudioProcess.on('error', (error: Error) => {
+          this.currentAudioProcess = undefined;
+          reject(error);
+        });
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown playback error';
       throw this.createAudioError('PLAYBACK_FAILED', `Audio playback failed: ${message}`, audioPath);
+    }
+  }
+
+  /**
+   * Stop currently playing audio
+   */
+  stopAudio(): void {
+    if (this.currentAudioProcess) {
+      try {
+        this.currentAudioProcess.kill('SIGTERM');
+        this.currentAudioProcess = undefined;
+      } catch (error) {
+        console.warn('Failed to stop audio process:', error);
+      }
     }
   }
 

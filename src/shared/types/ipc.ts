@@ -79,6 +79,7 @@ export interface IPCBridge {
   audio: {
     generateAudio: (text: string, language?: string, word?: string) => Promise<string>;
     playAudio: (audioPath: string) => Promise<void>;
+    stopAudio: () => Promise<void>;
     audioExists: (audioPath: string) => Promise<boolean>;
     startRecording: (options?: RecordingOptions) => Promise<RecordingSession>;
     stopRecording: () => Promise<RecordingSession | null>;
@@ -152,6 +153,7 @@ export const IPC_CHANNELS = {
   AUDIO: {
     GENERATE_AUDIO: 'audio:generateAudio',
     PLAY_AUDIO: 'audio:playAudio',
+    STOP_AUDIO: 'audio:stopAudio',
     AUDIO_EXISTS: 'audio:audioExists',
     START_RECORDING: 'audio:startRecording',
     STOP_RECORDING: 'audio:stopRecording',

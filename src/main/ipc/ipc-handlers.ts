@@ -415,6 +415,15 @@ function setupAudioHandlers(audioService: AudioService): void {
     }
   });
 
+  ipcMain.handle(IPC_CHANNELS.AUDIO.STOP_AUDIO, async (event) => {
+    try {
+      audioService.stopAudio();
+    } catch (error) {
+      console.error('Error stopping audio:', error);
+      throw new Error(`Failed to stop audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.AUDIO.AUDIO_EXISTS, async (event, audioPath) => {
     try {
       const validatedAudioPath = AudioPathSchema.parse(audioPath);

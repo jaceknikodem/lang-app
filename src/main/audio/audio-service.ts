@@ -177,6 +177,13 @@ export class AudioService {
   }
 
   /**
+   * Stop currently playing audio
+   */
+  stopAudio(): void {
+    this.audioGenerator.stopAudio();
+  }
+
+  /**
    * Check if audio file exists
    */
   async audioExists(audioPath: string): Promise<boolean> {
