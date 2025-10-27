@@ -493,33 +493,11 @@ export class SentenceViewer extends LitElement {
   }
 
   private setupKeyboardBindings() {
-    const bindings = [
-      // These bindings are context-specific to sentence viewer
-      // They will only work when this component is active
-      {
-        ...GlobalShortcuts.PLAY_AUDIO,
-        action: () => this.handlePlayAudio(),
-        context: 'sentence-viewer',
-        description: 'Play sentence audio'
-      },
-      {
-        ...GlobalShortcuts.REPLAY_AUDIO,
-        action: () => this.handlePlayAudio(),
-        context: 'sentence-viewer',
-        description: 'Replay sentence audio'
-      },
-      {
-        ...GlobalShortcuts.MARK_KNOWN,
-        action: () => this.handleMarkKnown(),
-        context: 'sentence-viewer',
-        description: 'Mark target word as known'
-      },
-      {
-        ...GlobalShortcuts.MARK_IGNORED,
-        action: () => this.handleMarkIgnored(),
-        context: 'sentence-viewer',
-        description: 'Mark target word as ignored'
-      }
+    // Note: Audio playback and word marking keyboard shortcuts are handled 
+    // by the parent learning-mode component to avoid conflicts
+    // This component focuses on its own internal interactions
+    const bindings: any[] = [
+      // Add any sentence-viewer specific bindings here if needed
     ];
 
     this.keyboardUnsubscribe = useKeyboardBindings(bindings);
