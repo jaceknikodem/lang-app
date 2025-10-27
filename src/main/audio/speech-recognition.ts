@@ -52,12 +52,13 @@ export class SpeechRecognitionService {
   private isInitialized: boolean = false;
 
   constructor() {
-    // Look for models in the current project directory first, then Downloads
+    // Look for models in the models/ folder first, then project directory, then Downloads
     const projectDir = process.cwd();
     const homeDir = require('os').homedir();
     
     // Model search locations in order of preference
     const searchPaths = [
+      path.join(projectDir, 'models'),  // New models/ folder
       projectDir,
       path.join(homeDir, 'Downloads')
     ];
@@ -65,9 +66,9 @@ export class SpeechRecognitionService {
     // Common model filenames to look for (including your specific model)
     const commonModels = [
       'ggml-small-q5_1.bin',  // Your specific model
+      'ggml-small.bin',       // Standard small model
       'ggml-base.bin',
       'ggml-base.en.bin', 
-      'ggml-small.bin',
       'ggml-small.en.bin',
       'ggml-medium.bin',
       'ggml-large.bin'
@@ -330,13 +331,14 @@ export class SpeechRecognitionService {
   }
 
   /**
-   * Get available models (scan current directory and Downloads folder)
+   * Get available models (scan models/ folder, current directory and Downloads folder)
    */
   getAvailableModels(): string[] {
     const models: string[] = [];
     
-    // Scan both project directory and Downloads
+    // Scan models/ folder, project directory and Downloads
     const searchPaths = [
+      path.join(process.cwd(), 'models'),  // New models/ folder
       process.cwd(),
       path.join(require('os').homedir(), 'Downloads')
     ];

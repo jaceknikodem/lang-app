@@ -177,6 +177,57 @@ export class SettingsPanel extends LitElement {
         font-size: 0.9rem;
       }
 
+      .dropdown-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+
+      .dropdown-row:last-child {
+        margin-bottom: 0;
+      }
+
+      .dropdown-description {
+        flex: 1;
+        margin-right: 1rem;
+      }
+
+      .dropdown-description p {
+        margin: 0;
+        color: #666;
+        font-size: 0.9rem;
+      }
+
+      .model-select {
+        padding: 0.5rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: white;
+        font-size: 0.9rem;
+        min-width: 200px;
+        cursor: pointer;
+      }
+
+      .model-select:focus {
+        outline: none;
+        border-color: #007acc;
+        box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+      }
+
+      .model-select:disabled {
+        background: #f5f5f5;
+        color: #999;
+        cursor: not-allowed;
+      }
+
+      .model-info {
+        margin-top: 0.5rem;
+        font-size: 0.8rem;
+        color: #666;
+        font-style: italic;
+      }
+
     `
   ];
 
@@ -201,6 +252,15 @@ export class SettingsPanel extends LitElement {
   @state()
   private autoplayAudioEnabled = false;
 
+  @state()
+  private availableSpeechModels: string[] = [];
+
+  @state()
+  private currentSpeechModel = '';
+
+  @state()
+  private speechRecognitionReady = false;
+
 
 
 
@@ -217,8 +277,35 @@ export class SettingsPanel extends LitElement {
       
       const autoplaySetting = await window.electronAPI.database.getSetting('autoplay_audio');
       this.autoplayAudioEnabled = autoplaySetting === 'true';
+
+      // Load speech recognition settings
+      await this.loadSpeechRecognitionSettings();
     } catch (error) {
       console.error('Failed to load settings:', error);
+    }
+  }
+
+  private async loadSpeechRecognitionSettings() {
+    try {
+      // Check if speech recognition is available
+      this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
+      
+      if (this.speechRecognitionReady) {
+        // Get available models
+        this.availableSpeechModels = await window.electronAPI.audio.getAvailableSpeechModels();
+        
+        // Get current model
+        this.currentSpeechModel = await window.electronAPI.audio.getCurrentSpeechModel();
+        
+        console.log('Speech recognition settings loaded:', {
+          ready: this.speechRecognitionReady,
+          models: this.availableSpeechModels,
+          current: this.currentSpeechModel
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load speech recognition settings:', error);
+      this.speechRecognitionReady = false;
     }
   }
 
@@ -311,6 +398,54 @@ export class SettingsPanel extends LitElement {
     }
   }
 
+  private async changeSpeechModel(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const selectedModel = select.value;
+    
+    if (!selectedModel) return;
+    
+    try {
+      // The model path should be the full path, so we need to construct it
+      const projectDir = process.cwd ? process.cwd() : '';
+      const modelPath = selectedModel.includes('/') ? selectedModel : `models/${selectedModel}`;
+      
+      await window.electronAPI.audio.setSpeechModel(modelPath);
+      this.currentSpeechModel = await window.electronAPI.audio.getCurrentSpeechModel();
+      
+      console.log('Speech model changed to:', this.currentSpeechModel);
+    } catch (error) {
+      console.error('Failed to change speech model:', error);
+      // Revert the selection
+      select.value = this.currentSpeechModel;
+    }
+  }
+
+  private getModelDisplayName(modelPath: string): string {
+    if (!modelPath) return '';
+    
+    // Extract just the filename from the full path
+    const filename = modelPath.split('/').pop() || modelPath;
+    return filename;
+  }
+
+  private getModelDescription(modelName: string): string {
+    if (!modelName) return '';
+    
+    if (modelName.includes('tiny')) {
+      return '(Fastest, least accurate ~39MB)';
+    } else if (modelName.includes('base')) {
+      return '(Good balance ~74MB)';
+    } else if (modelName.includes('small')) {
+      return '(Better accuracy ~244MB)';
+    } else if (modelName.includes('medium')) {
+      return '(High accuracy ~769MB)';
+    } else if (modelName.includes('large')) {
+      return '(Best accuracy ~1550MB)';
+    }
+    
+    return '';
+  }
+
 
 
 
@@ -321,6 +456,37 @@ export class SettingsPanel extends LitElement {
         <h2>Settings</h2>
 
 
+
+        <div class="settings-section">
+          <h3>Speech Recognition</h3>
+          ${this.speechRecognitionReady ? html`
+            <div class="dropdown-row">
+              <div class="dropdown-description">
+                <strong>Whisper Model</strong>
+                <p>Choose the speech recognition model for pronunciation practice</p>
+              </div>
+              <select 
+                class="model-select"
+                .value=${this.getModelDisplayName(this.currentSpeechModel)}
+                @change=${this.changeSpeechModel}
+              >
+                ${this.availableSpeechModels.map(model => html`
+                  <option value=${model} ?selected=${this.getModelDisplayName(this.currentSpeechModel) === model}>
+                    ${this.getModelDisplayName(model)}
+                  </option>
+                `)}
+              </select>
+            </div>
+            <div class="model-info">
+              Current model: ${this.getModelDisplayName(this.currentSpeechModel)}
+              ${this.getModelDescription(this.getModelDisplayName(this.currentSpeechModel))}
+            </div>
+          ` : html`
+            <div class="status-message status-info">
+              Speech recognition is not available. Make sure Whisper models are installed in the models/ folder.
+            </div>
+          `}
+        </div>
 
         <div class="settings-section">
           <h3>Learning Preferences</h3>
