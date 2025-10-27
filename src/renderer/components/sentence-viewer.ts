@@ -280,10 +280,8 @@ export class SentenceViewer extends LitElement {
     
     // Auto-play audio when sentence changes (if enabled)
     if (changedProperties.has('sentence') && this.autoplayEnabled && this.sentence?.audioPath) {
-      // Small delay to ensure the component is fully rendered
-      setTimeout(() => {
-        this.handlePlayAudio();
-      }, 100);
+      // Handle auto-play asynchronously
+      this.handleAutoPlay();
     }
   }
 
@@ -294,6 +292,22 @@ export class SentenceViewer extends LitElement {
     } catch (error) {
       console.error('Failed to load autoplay setting:', error);
       this.autoplayEnabled = false;
+    }
+  }
+
+  private async handleAutoPlay() {
+    try {
+      console.log('Auto-play: Stopping previous audio...');
+      // Stop any currently playing audio first
+      await window.electronAPI.audio.stopAudio();
+      console.log('Auto-play: Previous audio stopped, starting new audio...');
+      
+      // Small delay to ensure audio is stopped before starting new one
+      setTimeout(() => {
+        this.handlePlayAudio();
+      }, 100);
+    } catch (error) {
+      console.warn('Failed to handle auto-play:', error);
     }
   }
 

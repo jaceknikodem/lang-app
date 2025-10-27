@@ -105,22 +105,22 @@ export class TTSAudioGenerator implements AudioGenerator {
       const { spawn } = await import('child_process');
       this.currentAudioProcess = spawn('afplay', [audioPath]);
       
-      // Wait for the process to complete
-      await new Promise<void>((resolve, reject) => {
-        this.currentAudioProcess.on('close', (code: number) => {
+      // Set up process event handlers but don't wait for completion
+      this.currentAudioProcess.on('close', (code: number) => {
+        if (this.currentAudioProcess) {
           this.currentAudioProcess = undefined;
-          if (code === 0) {
-            resolve();
-          } else {
-            reject(new Error(`afplay exited with code ${code}`));
-          }
-        });
-        
-        this.currentAudioProcess.on('error', (error: Error) => {
-          this.currentAudioProcess = undefined;
-          reject(error);
-        });
+        }
       });
+      
+      this.currentAudioProcess.on('error', (error: Error) => {
+        console.warn('Audio playback error:', error);
+        if (this.currentAudioProcess) {
+          this.currentAudioProcess = undefined;
+        }
+      });
+
+      // Return immediately without waiting for completion
+      // This allows for non-blocking audio playback
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown playback error';
       throw this.createAudioError('PLAYBACK_FAILED', `Audio playback failed: ${message}`, audioPath);
@@ -133,11 +133,15 @@ export class TTSAudioGenerator implements AudioGenerator {
   stopAudio(): void {
     if (this.currentAudioProcess) {
       try {
+        console.log('Stopping current audio process...');
         this.currentAudioProcess.kill('SIGTERM');
         this.currentAudioProcess = undefined;
+        console.log('Audio process stopped successfully');
       } catch (error) {
         console.warn('Failed to stop audio process:', error);
       }
+    } else {
+      console.log('No audio process to stop');
     }
   }
 
