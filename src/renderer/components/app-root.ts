@@ -85,7 +85,12 @@ export class AppRoot extends LitElement {
         align-items: center;
       }
 
-      .language-indicator {
+      .language-dropdown {
+        position: relative;
+        margin-left: var(--spacing-sm);
+      }
+
+      .language-select {
         display: flex;
         align-items: center;
         gap: var(--spacing-xs);
@@ -94,8 +99,31 @@ export class AppRoot extends LitElement {
         border: 1px solid var(--border-color);
         border-radius: var(--border-radius-small);
         font-size: 12px;
-        color: var(--text-secondary);
-        margin-left: var(--spacing-sm);
+        color: var(--text-primary);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        min-width: 100px;
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+      }
+
+      .language-select:hover {
+        border-color: var(--primary-color);
+        background: var(--primary-light);
+      }
+
+      .language-select:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+      }
+
+      .language-option {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        padding: var(--spacing-xs);
       }
 
       .language-flag {
@@ -104,7 +132,6 @@ export class AppRoot extends LitElement {
 
       .language-name {
         font-weight: 500;
-        color: var(--text-primary);
       }
 
       .nav-button {
@@ -254,12 +281,17 @@ export class AppRoot extends LitElement {
           min-width: 80px;
         }
 
-        .language-indicator {
+        .language-dropdown {
           margin-left: 0;
           margin-top: var(--spacing-xs);
-          justify-content: center;
           order: 10;
           flex-basis: 100%;
+          display: flex;
+          justify-content: center;
+        }
+
+        .language-select {
+          min-width: 120px;
         }
       }
     `
@@ -388,6 +420,31 @@ export class AppRoot extends LitElement {
     await this.refreshCurrentLanguage();
   };
 
+  private async handleLanguageDropdownChange(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const selectedLanguage = select.value;
+    
+    if (!selectedLanguage || selectedLanguage === this.currentLanguage) return;
+    
+    try {
+      await window.electronAPI.database.setCurrentLanguage(selectedLanguage);
+      this.currentLanguage = selectedLanguage;
+      
+      // Dispatch event to notify other components (like settings panel)
+      this.dispatchEvent(new CustomEvent('language-changed', {
+        detail: { language: selectedLanguage },
+        bubbles: true,
+        composed: true
+      }));
+      
+      console.log('Language changed to:', this.currentLanguage);
+    } catch (error) {
+      console.error('Failed to change language:', error);
+      // Revert the selection
+      select.value = this.currentLanguage;
+    }
+  }
+
   private capitalizeLanguage(language: string): string {
     return language.charAt(0).toUpperCase() + language.slice(1);
   }
@@ -401,6 +458,10 @@ export class AppRoot extends LitElement {
       'indonesian': '🇮🇩'
     };
     return flags[language] || '🌐';
+  }
+
+  private getSupportedLanguages(): string[] {
+    return ['italian', 'spanish', 'portuguese', 'polish', 'indonesian'];
   }
 
   private updateAppState() {
@@ -540,9 +601,19 @@ export class AppRoot extends LitElement {
               Settings
             </button>
             ${this.currentLanguage ? html`
-              <div class="language-indicator">
-                <span class="language-flag">${this.getLanguageFlag(this.currentLanguage)}</span>
-                <span class="language-name">${this.capitalizeLanguage(this.currentLanguage)}</span>
+              <div class="language-dropdown">
+                <select 
+                  class="language-select"
+                  .value=${this.currentLanguage}
+                  @change=${this.handleLanguageDropdownChange}
+                  title="Select Language"
+                >
+                  ${this.getSupportedLanguages().map(language => html`
+                    <option value=${language} ?selected=${language === this.currentLanguage}>
+                      ${this.getLanguageFlag(language)} ${this.capitalizeLanguage(language)}
+                    </option>
+                  `)}
+                </select>
               </div>
             ` : ''}
           </nav>

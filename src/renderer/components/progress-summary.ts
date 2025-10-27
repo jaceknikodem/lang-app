@@ -671,27 +671,14 @@ export class ProgressSummary extends LitElement {
 
     return html`
       <div class="progress-container">
-        <div class="language-selector">
-          <label for="language-select">Learning:</label>
-          <select 
-            id="language-select"
-            class="language-select"
-            .value=${this.currentLanguage}
-            @change=${this.handleLanguageChange}
-          >
-            ${this.getSupportedLanguages().map(language => html`
-              <option value=${language} ?selected=${language === this.currentLanguage}>
-                ${this.capitalizeLanguage(language)}
-              </option>
-            `)}
-          </select>
+        <div class="language-stats-display">
           <div class="language-stats">
             ${this.getSupportedLanguages().map(language => {
               const stat = this.languageStats.find(s => s.language === language);
               const studiedWords = stat ? stat.studiedWords : 0;
               const totalWords = stat ? stat.totalWords : 0;
               return html`
-                <div class="language-stat">
+                <div class="language-stat ${language === this.currentLanguage ? 'current' : ''}">
                   <div class="language-stat-value">${studiedWords}/${totalWords}</div>
                   <div class="language-stat-label">${this.capitalizeLanguage(language)}</div>
                 </div>

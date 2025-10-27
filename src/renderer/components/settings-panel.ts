@@ -275,8 +275,7 @@ export class SettingsPanel extends LitElement {
   @state()
   private currentLanguage = '';
 
-  @state()
-  private languageStats: Array<{ language: string, totalWords: number, studiedWords: number }> = [];
+
 
 
 
@@ -285,6 +284,14 @@ export class SettingsPanel extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
     await this.loadSettings();
+    
+    // Listen for language changes from the navigation dropdown
+    document.addEventListener('language-changed', this.handleExternalLanguageChange);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    document.removeEventListener('language-changed', this.handleExternalLanguageChange);
   }
 
   private async loadSettings() {
@@ -360,18 +367,12 @@ export class SettingsPanel extends LitElement {
       // Get current language
       this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
 
-      // Get language statistics (only for languages that have words)
-      this.languageStats = await window.electronAPI.database.getLanguageStats();
-
       console.log('Language settings loaded:', {
-        current: this.currentLanguage,
-        supported: this.getSupportedLanguages(),
-        stats: this.languageStats
+        current: this.currentLanguage
       });
     } catch (error) {
       console.error('Failed to load language settings:', error);
       this.currentLanguage = 'spanish'; // Default fallback
-      this.languageStats = [];
     }
   }
 
@@ -530,41 +531,21 @@ export class SettingsPanel extends LitElement {
     }
   }
 
-  private async changeLanguage(event: Event) {
-    const select = event.target as HTMLSelectElement;
-    const selectedLanguage = select.value;
 
-    if (!selectedLanguage) return;
-
-    try {
-      await window.electronAPI.database.setCurrentLanguage(selectedLanguage);
-      this.currentLanguage = selectedLanguage;
-
-      // Reload language stats after changing language
-      this.languageStats = await window.electronAPI.database.getLanguageStats();
-
-      // Dispatch custom event to notify other components
-      this.dispatchEvent(new CustomEvent('language-changed', {
-        detail: { language: selectedLanguage },
-        bubbles: true,
-        composed: true
-      }));
-
-      console.log('Language changed to:', this.currentLanguage);
-    } catch (error) {
-      console.error('Failed to change language:', error);
-      // Revert the selection
-      select.value = this.currentLanguage;
-    }
-  }
 
   private capitalizeLanguage(language: string): string {
     return language.charAt(0).toUpperCase() + language.slice(1);
   }
 
-  private getSupportedLanguages(): string[] {
-    return ['italian', 'spanish', 'portuguese', 'polish', 'indonesian'];
-  }
+
+
+  private handleExternalLanguageChange = async (event: Event) => {
+    const customEvent = event as CustomEvent;
+    console.log('Settings panel received language change:', customEvent.detail);
+    
+    // Update current language
+    this.currentLanguage = customEvent.detail.language;
+  };
 
   render() {
     return html`
@@ -604,58 +585,7 @@ export class SettingsPanel extends LitElement {
           `}
         </div>
 
-        <div class="settings-section">
-          <h3>Language Selection</h3>
-          <div class="dropdown-row">
-            <div class="dropdown-description">
-              <strong>Current Language</strong>
-              <p>Choose the language you want to learn. Progress and statistics are tracked separately for each language.</p>
-            </div>
-            <select 
-              class="model-select"
-              .value=${this.currentLanguage}
-              @change=${this.changeLanguage}
-            >
-              ${this.getSupportedLanguages().map(language => html`
-                <option value=${language} ?selected=${language === this.currentLanguage}>
-                  ${this.capitalizeLanguage(language)}
-                </option>
-              `)}
-            </select>
-          </div>
-          <div class="model-info">
-            Current language: ${this.capitalizeLanguage(this.currentLanguage)}
-          </div>
-          ${this.languageStats.length > 0 ? html`
-            <div style="margin-top: 1rem;">
-              <strong>Language Statistics:</strong>
-              <div style="margin-top: 0.5rem; font-size: 0.9rem;">
-                ${this.getSupportedLanguages().map(language => {
-                  const stat = this.languageStats.find(s => s.language === language);
-                  const studiedWords = stat ? stat.studiedWords : 0;
-                  const totalWords = stat ? stat.totalWords : 0;
-                  return html`
-                    <div style="margin-bottom: 0.25rem; color: ${language === this.currentLanguage ? '#007acc' : '#666'};">
-                      ${this.capitalizeLanguage(language)}: ${studiedWords}/${totalWords} words studied
-                      ${language === this.currentLanguage ? ' (current)' : ''}
-                    </div>
-                  `;
-                })}
-              </div>
-            </div>
-          ` : html`
-            <div style="margin-top: 1rem;">
-              <strong>Supported Languages:</strong>
-              <div style="margin-top: 0.5rem; font-size: 0.9rem; color: #666;">
-                ${this.getSupportedLanguages().map(language => html`
-                  <div style="margin-bottom: 0.25rem; color: ${language === this.currentLanguage ? '#007acc' : '#666'};">
-                    ${this.capitalizeLanguage(language)}${language === this.currentLanguage ? ' (current)' : ''}
-                  </div>
-                `)}
-              </div>
-            </div>
-          `}
-        </div>
+
 
         <div class="settings-section">
           <h3>Speech Recognition</h3>
