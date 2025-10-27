@@ -485,6 +485,15 @@ export class SentenceViewer extends LitElement {
       
       // Play the new audio
       await window.electronAPI.audio.playAudio(this.sentence.audioPath);
+
+      this.dispatchEvent(new CustomEvent('sentence-audio-played', {
+        detail: {
+          sentenceId: this.sentence.id,
+          wordId: this.targetWord.id
+        },
+        bubbles: true,
+        composed: true
+      }));
     } catch (error) {
       console.error('Failed to play audio:', error);
     } finally {

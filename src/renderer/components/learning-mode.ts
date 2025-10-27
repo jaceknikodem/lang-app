@@ -740,13 +740,59 @@ export class LearningMode extends LitElement {
     if (this.isLoading || this.error || this.showCompletion) return;
     
     const currentSentence = this.getCurrentSentence();
-    if (currentSentence?.audioPath) {
+    const currentWord = this.getCurrentWord();
+    if (currentSentence?.audioPath && currentWord) {
       try {
         await window.electronAPI.audio.playAudio(currentSentence.audioPath);
+        void this.incrementStrengthForWord(currentWord.id);
       } catch (error) {
         console.error('Failed to play audio:', error);
       }
     }
+  }
+
+  private handleSentenceAudioPlayed(event: CustomEvent<{ wordId?: number }>) {
+    const wordId = event.detail?.wordId;
+    if (!wordId) {
+      return;
+    }
+
+    void this.incrementStrengthForWord(wordId);
+  }
+
+  private async incrementStrengthForWord(wordId: number): Promise<void> {
+    const word = this.wordsWithSentences.find(w => w.id === wordId);
+    if (!word) {
+      return;
+    }
+
+    const currentStrength = typeof word.strength === 'number' ? word.strength : 0;
+    if (currentStrength >= 100) {
+      return;
+    }
+
+    const newStrength = Math.min(100, currentStrength + 1);
+    this.applyStrengthUpdate(wordId, newStrength);
+
+    try {
+      await window.electronAPI.database.updateWordStrength(wordId, newStrength);
+    } catch (error) {
+      console.error('Failed to update word strength after sentence exposure:', error);
+    }
+  }
+
+  private applyStrengthUpdate(wordId: number, strength: number): void {
+    this.wordsWithSentences = this.wordsWithSentences.map(word =>
+      word.id === wordId ? { ...word, strength } : word
+    );
+
+    this.selectedWords = this.selectedWords.map(word =>
+      word.id === wordId ? { ...word, strength } : word
+    );
+
+    this.allWords = this.allWords.map(word =>
+      word.id === wordId ? { ...word, strength } : word
+    );
   }
 
   private goToFirstSentence() {
@@ -883,6 +929,7 @@ export class LearningMode extends LitElement {
           @mark-word-known=${this.handleMarkWordKnown}
           @mark-word-ignored=${this.handleMarkWordIgnored}
           @remove-sentence=${this.handleRemoveCurrentSentence}
+          @sentence-audio-played=${this.handleSentenceAudioPlayed}
         ></sentence-viewer>
 
         <div class="navigation-section">

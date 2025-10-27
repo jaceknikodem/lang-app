@@ -584,6 +584,9 @@ export class WordSelector extends LitElement {
               @click=${() => this.toggleWordSelection(index)}
             >
               <div class="word-actions">
+                ${word.frequencyTier ? html`
+                  <span class="frequency-tier">${word.frequencyTier}</span>
+                ` : ''}
                 ${word.markedAsKnown ? html`
                   <button
                     class="undo-btn"
@@ -602,9 +605,6 @@ export class WordSelector extends LitElement {
                     Mark as known
                   </button>
                 `}
-                ${word.frequencyTier ? html`
-                  <span class="frequency-tier">${word.frequencyTier}</span>
-                ` : ''}
               </div>
               <div class="word-content">
                 <h4 class="word-foreign">${word.word}</h4>
