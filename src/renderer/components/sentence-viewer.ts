@@ -113,6 +113,23 @@ export class SentenceViewer extends LitElement {
         height: 16px;
       }
 
+      .word-strength {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        background: var(--background-secondary);
+        border-radius: var(--border-radius-small);
+        padding: 2px 6px;
+        line-height: 1;
+      }
+
+      .word-strength-value {
+        color: var(--primary-color);
+      }
+
       .sentence-content {
         margin-bottom: var(--spacing-md);
       }
@@ -511,6 +528,8 @@ export class SentenceViewer extends LitElement {
   }
 
   render() {
+    const wordStrength = Math.round(this.targetWord?.strength ?? 0);
+
     return html`
       <div class="sentence-container">
         <div class="sentence-header">
@@ -518,6 +537,10 @@ export class SentenceViewer extends LitElement {
             <span class="target-word">${this.targetWord.word}</span>
             <span class="word-separator">•</span>
             <span class="word-translation">${this.targetWord.translation}</span>
+            <span class="word-separator">•</span>
+            <span class="word-strength" title="Current spaced repetition strength">
+              Strength <span class="word-strength-value">${wordStrength}</span>
+            </span>
           </div>
           
           ${this.sentence.audioPath ? html`
