@@ -74,10 +74,14 @@ export class QuizMode extends LitElement {
   private speechRecognitionReady = false;
 
   @state()
+  private autoplayEnabled = false;
+
+  @state()
   private audioOnlyMode = false;
 
   private sessionStartTime = Date.now();
   private keyboardUnsubscribe?: () => void;
+  private lastAutoplayKey: string | null = null;
 
   static styles = [
     sharedStyles,
@@ -921,6 +925,9 @@ export class QuizMode extends LitElement {
     // Initialize speech recognition
     await this.initializeSpeechRecognition();
 
+    // Load autoplay preference
+    await this.loadAutoplaySetting();
+
     // Load words from database first
     await this.loadSelectedWords();
 
@@ -989,6 +996,7 @@ export class QuizMode extends LitElement {
       };
 
       this.currentQuestion = shuffledQuestions[0];
+      void this.maybeAutoplayCurrentQuestion(true);
 
       // Save initial quiz state to session
       this.saveQuizProgressToSession();
@@ -998,6 +1006,16 @@ export class QuizMode extends LitElement {
       this.error = 'Failed to start quiz. Please try again.';
     } finally {
       this.isLoading = false;
+    }
+  }
+
+  private async loadAutoplaySetting() {
+    try {
+      const autoplaySetting = await window.electronAPI.database.getSetting('autoplay_audio');
+      this.autoplayEnabled = autoplaySetting === 'true';
+    } catch (error) {
+      console.error('Failed to load autoplay setting:', error);
+      this.autoplayEnabled = false;
     }
   }
 
@@ -1098,6 +1116,7 @@ export class QuizMode extends LitElement {
       // Move to next question
       this.quizSession.currentQuestionIndex++;
       this.currentQuestion = this.quizSession.questions[this.quizSession.currentQuestionIndex];
+      void this.maybeAutoplayCurrentQuestion();
 
       // Save progress immediately when moving to next question
       this.saveQuizProgressToSession();
@@ -1152,6 +1171,43 @@ export class QuizMode extends LitElement {
     this.showCompletion = true;
   }
 
+  private async maybeAutoplayCurrentQuestion(force = false) {
+    if (!this.autoplayEnabled || !this.currentQuestion) {
+      return;
+    }
+
+    const currentIndex = this.quizSession?.currentQuestionIndex ?? null;
+    const sentenceId = this.currentQuestion.sentence?.id ?? null;
+    const autoplayKey = currentIndex !== null && sentenceId !== null
+      ? `${currentIndex}-${sentenceId}`
+      : currentIndex !== null
+        ? `${currentIndex}`
+        : sentenceId !== null
+          ? `sentence-${sentenceId}`
+          : null;
+
+    if (!force && autoplayKey && this.lastAutoplayKey === autoplayKey) {
+      return;
+    }
+
+    if (autoplayKey) {
+      this.lastAutoplayKey = autoplayKey;
+    }
+
+    const audioPath = this.currentQuestion.sentence.audioPath;
+    if (!audioPath) {
+      return;
+    }
+
+    try {
+      await window.electronAPI.audio.stopAudio();
+    } catch (error) {
+      console.warn('Failed to stop audio before autoplay:', error);
+    }
+
+    await this.playAudio();
+  }
+
   private async playAudio() {
     if (!this.currentQuestion) return;
 
@@ -1172,6 +1228,7 @@ export class QuizMode extends LitElement {
     this.showAnswer = false;
     this.lastResult = null;
     this.error = null;
+    this.lastAutoplayKey = null;
   }
 
   private goToLearning() {
@@ -1523,12 +1580,6 @@ export class QuizMode extends LitElement {
             </div>
             
             ${this.audioOnlyMode ? html`
-              <div class="audio-only-hint">
-                🎧 Listen carefully to the audio and answer based on what you hear
-              </div>
-            ` : ''}
-            
-            ${this.audioOnlyMode ? html`
               <button class="audio-button" @click=${this.playAudio} style="margin: 0 auto var(--spacing-sm);">
                 🔊
               </button>
@@ -1627,11 +1678,13 @@ export class QuizMode extends LitElement {
           <p class="word-pair">
             <strong>${word.word}</strong> = <strong>${word.translation}</strong>
           </p>
-          <p class="sentence-pair">
-            <span class="sentence-label">Sentence:</span><br>
-            <strong>${sentence.sentence}</strong><br>
-            <em>${sentence.translation}</em>
-          </p>
+          ${this.audioOnlyMode ? html`
+            <p class="sentence-pair">
+              <span class="sentence-label">Sentence:</span><br>
+              <strong>${sentence.sentence}</strong><br>
+              <em>${sentence.translation}</em>
+            </p>
+          ` : ''}
         </div>
       </div>
     `;
