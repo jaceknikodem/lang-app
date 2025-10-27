@@ -4,6 +4,7 @@ import { existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { AudioGenerator, AudioConfig, AudioError } from '../../shared/types/audio';
 import { DatabaseLayer } from '../../shared/types/database';
+import { sanitizeFilename } from '../../shared/utils/sanitizeFilename';
 
 const execFileAsync = promisify(execFile);
 
@@ -158,27 +159,16 @@ export class TTSAudioGenerator implements AudioGenerator {
    */
   private getAudioPath(text: string, language: string, word?: string): string {
     // Create safe filename from text
-    const safeFilename = this.sanitizeFilename(text);
+    const safeFilename = sanitizeFilename(text);
 
     // If word is provided, use the new nested structure
     if (word) {
-      const safeWord = this.sanitizeFilename(word);
+      const safeWord = sanitizeFilename(word);
       return join(this.config.audioDirectory, language, safeWord, `${safeFilename}${this.config.fileExtension}`);
     }
 
     // For standalone words (no parent word context), place directly in language folder
     return join(this.config.audioDirectory, language, `${safeFilename}${this.config.fileExtension}`);
-  }
-
-  /**
-   * Convert text to safe filename
-   */
-  private sanitizeFilename(text: string): string {
-    return text
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, '') // Remove special characters
-      .replace(/\s+/g, '_') // Replace spaces with underscores
-      .substring(0, 100); // Limit length to avoid filesystem issues
   }
 
   /**

@@ -307,17 +307,6 @@ export class MigrationManager {
   }
 
   /**
-   * Convert text to safe filename (same logic as in audio generator)
-   */
-  private sanitizeFilename(text: string): string {
-    return text
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, '') // Remove special characters
-      .replace(/\s+/g, '_') // Replace spaces with underscores
-      .substring(0, 100); // Limit length to avoid filesystem issues
-  }
-
-  /**
    * Rollback to a specific version (if down migrations are available)
    */
   async rollback(targetVersion: number): Promise<void> {
@@ -358,5 +347,14 @@ export class MigrationManager {
     } catch (error) {
       throw new Error(`Rollback failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  // Legacy filename sanitizer (matches existing audio assets on disk)
+  private sanitizeFilename(text: string): string {
+    return text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, '_')
+      .substring(0, 100);
   }
 }
