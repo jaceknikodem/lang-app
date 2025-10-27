@@ -54,6 +54,7 @@ A vocabulary coach that teaches *words in context*, *incorporating the words you
 - **Homebrew**: Package manager for installing dependencies
 - **Ollama**: Local language model for inference
 - **Whisper**: Speech recognition model for audio input
+- ElevenLabs API keys: optional for generating high-quality TTS audio (Free account gives you 600-700 audio sentences)
 
 ### Required Dependencies
 

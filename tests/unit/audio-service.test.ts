@@ -1,6 +1,13 @@
 import { AudioService } from '../../src/main/audio/audio-service';
 import { TTSAudioGenerator } from '../../src/main/audio/audio-generator';
 
+// Mock Electron app
+jest.mock('electron', () => ({
+  app: {
+    getPath: jest.fn().mockReturnValue('/tmp/test-app-data')
+  }
+}));
+
 describe('Audio Service', () => {
   let audioService: AudioService;
 

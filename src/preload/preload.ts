@@ -106,7 +106,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getCurrentSpeechModel: () => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GET_CURRENT_SPEECH_MODEL),
     isSpeechRecognitionReady: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.IS_SPEECH_RECOGNITION_READY)
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.IS_SPEECH_RECOGNITION_READY),
+    switchToElevenLabs: (apiKey: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.SWITCH_TO_ELEVENLABS, apiKey),
+    switchToSystemTTS: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.SWITCH_TO_SYSTEM_TTS)
   },
 
   // Quiz operations
@@ -197,6 +201,8 @@ declare global {
         setSpeechModel: (model: string) => Promise<void>;
         getCurrentSpeechModel: () => Promise<string>;
         isSpeechRecognitionReady: () => Promise<boolean>;
+        switchToElevenLabs: (apiKey: string) => Promise<void>;
+        switchToSystemTTS: () => Promise<void>;
       };
       quiz: {
         getWeakestWords: (limit: number, language?: string) => Promise<any[]>;

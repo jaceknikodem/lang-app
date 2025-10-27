@@ -588,6 +588,27 @@ function setupAudioHandlers(audioService: AudioService): void {
       return false;
     }
   });
+
+  // ElevenLabs TTS handlers
+  ipcMain.handle(IPC_CHANNELS.AUDIO.SWITCH_TO_ELEVENLABS, async (event, apiKey) => {
+    try {
+      const validatedApiKey = z.string().min(1).parse(apiKey);
+      
+      await audioService.switchToElevenLabs(validatedApiKey);
+    } catch (error) {
+      console.error('Error switching to ElevenLabs:', error);
+      throw new Error(`Failed to switch to ElevenLabs: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.SWITCH_TO_SYSTEM_TTS, async (event) => {
+    try {
+      await audioService.switchToSystemTTS();
+    } catch (error) {
+      console.error('Error switching to system TTS:', error);
+      throw new Error(`Failed to switch to system TTS: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
 }
 
 /**

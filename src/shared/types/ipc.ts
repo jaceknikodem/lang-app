@@ -71,6 +71,8 @@ export interface IPCBridge {
     setSpeechModel: (model: string) => Promise<void>;
     getCurrentSpeechModel: () => Promise<string>;
     isSpeechRecognitionReady: () => Promise<boolean>;
+    switchToElevenLabs: (apiKey: string) => Promise<void>;
+    switchToSystemTTS: () => Promise<void>;
   };
 
   // Quiz operations
@@ -141,7 +143,9 @@ export const IPC_CHANNELS = {
     GET_AVAILABLE_SPEECH_MODELS: 'audio:getAvailableSpeechModels',
     SET_SPEECH_MODEL: 'audio:setSpeechModel',
     GET_CURRENT_SPEECH_MODEL: 'audio:getCurrentSpeechModel',
-    IS_SPEECH_RECOGNITION_READY: 'audio:isSpeechRecognitionReady'
+    IS_SPEECH_RECOGNITION_READY: 'audio:isSpeechRecognitionReady',
+    SWITCH_TO_ELEVENLABS: 'audio:switchToElevenLabs',
+    SWITCH_TO_SYSTEM_TTS: 'audio:switchToSystemTTS'
   },
   QUIZ: {
     GET_WEAKEST_WORDS: 'quiz:getWeakestWords',

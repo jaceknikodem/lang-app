@@ -228,6 +228,32 @@ export class SettingsPanel extends LitElement {
         font-style: italic;
       }
 
+      .text-input {
+        padding: 0.5rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: white;
+        font-size: 0.9rem;
+        min-width: 300px;
+        font-family: monospace;
+      }
+
+      .text-input:focus {
+        outline: none;
+        border-color: #007acc;
+        box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+      }
+
+      .text-input:disabled {
+        background: #f5f5f5;
+        color: #999;
+        cursor: not-allowed;
+      }
+
+      .text-input[type="password"] {
+        letter-spacing: 0.1em;
+      }
+
     `
   ];
 
@@ -275,6 +301,15 @@ export class SettingsPanel extends LitElement {
   @state()
   private currentLanguage = '';
 
+  @state()
+  private elevenLabsApiKey = '';
+
+  @state()
+  private isElevenLabsEnabled = false;
+
+  @state()
+  private elevenLabsModel = 'eleven_flash_v2_5';
+
 
 
 
@@ -310,6 +345,9 @@ export class SettingsPanel extends LitElement {
 
       // Load LLM settings
       await this.loadLLMSettings();
+
+      // Load ElevenLabs settings
+      await this.loadElevenLabsSettings();
     } catch (error) {
       console.error('Failed to load settings:', error);
     }
@@ -373,6 +411,32 @@ export class SettingsPanel extends LitElement {
     } catch (error) {
       console.error('Failed to load language settings:', error);
       this.currentLanguage = 'spanish'; // Default fallback
+    }
+  }
+
+  private async loadElevenLabsSettings() {
+    try {
+      // Get ElevenLabs API key
+      const apiKey = await window.electronAPI.database.getSetting('elevenlabs_api_key');
+      this.elevenLabsApiKey = apiKey || '';
+
+      // Get ElevenLabs model
+      const model = await window.electronAPI.database.getSetting('elevenlabs_model');
+      this.elevenLabsModel = model || 'eleven_flash_v2_5';
+
+      // Check if ElevenLabs is enabled (has API key and model is not disabled)
+      this.isElevenLabsEnabled = !!(this.elevenLabsApiKey && this.elevenLabsApiKey.trim() && this.elevenLabsModel !== 'disabled');
+
+      console.log('ElevenLabs settings loaded:', {
+        hasApiKey: !!this.elevenLabsApiKey,
+        model: this.elevenLabsModel,
+        enabled: this.isElevenLabsEnabled
+      });
+    } catch (error) {
+      console.error('Failed to load ElevenLabs settings:', error);
+      this.elevenLabsApiKey = '';
+      this.elevenLabsModel = 'eleven_flash_v2_5';
+      this.isElevenLabsEnabled = false;
     }
   }
 
@@ -547,6 +611,56 @@ export class SettingsPanel extends LitElement {
     this.currentLanguage = customEvent.detail.language;
   };
 
+  private async updateElevenLabsApiKey(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const apiKey = input.value.trim();
+
+    try {
+      await window.electronAPI.database.setSetting('elevenlabs_api_key', apiKey);
+      this.elevenLabsApiKey = apiKey;
+      this.isElevenLabsEnabled = !!(apiKey && apiKey.length > 0 && this.elevenLabsModel !== 'disabled');
+
+      // Switch TTS based on current settings
+      await this.switchTTSBasedOnSettings();
+
+      console.log('ElevenLabs API key updated:', { enabled: this.isElevenLabsEnabled });
+    } catch (error) {
+      console.error('Failed to save ElevenLabs API key:', error);
+      // Revert the input value if saving failed
+      input.value = this.elevenLabsApiKey;
+    }
+  }
+
+  private async updateElevenLabsModel(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const model = select.value;
+
+    try {
+      await window.electronAPI.database.setSetting('elevenlabs_model', model);
+      this.elevenLabsModel = model;
+      this.isElevenLabsEnabled = !!(this.elevenLabsApiKey && this.elevenLabsApiKey.trim() && model !== 'disabled');
+
+      // Switch TTS based on current settings
+      await this.switchTTSBasedOnSettings();
+
+      console.log('ElevenLabs model updated:', model);
+    } catch (error) {
+      console.error('Failed to save ElevenLabs model:', error);
+      // Revert the selection
+      select.value = this.elevenLabsModel;
+    }
+  }
+
+  private async switchTTSBasedOnSettings() {
+    if (this.isElevenLabsEnabled) {
+      // Switch to ElevenLabs TTS
+      await window.electronAPI.audio.switchToElevenLabs(this.elevenLabsApiKey);
+    } else {
+      // Switch back to system TTS
+      await window.electronAPI.audio.switchToSystemTTS();
+    }
+  }
+
   render() {
     return html`
       <div class="settings-container">
@@ -616,6 +730,52 @@ export class SettingsPanel extends LitElement {
               Speech recognition is not available. Make sure Whisper models are installed in the models/ folder.
             </div>
           `}
+        </div>
+
+        <div class="settings-section">
+          <h3>🎙️ Text-to-Speech</h3>
+          
+          <div class="dropdown-row">
+            <div class="dropdown-description">
+              <strong>TTS Engine</strong>
+              <p>Choose the text-to-speech engine and model</p>
+            </div>
+            <select 
+              class="model-select"
+              .value=${this.elevenLabsModel}
+              @change=${this.updateElevenLabsModel}
+            >
+              <option value="disabled">System TTS (macOS say command)</option>
+              <option value="eleven_flash_v2_5">ElevenLabs Flash v2.5 (Fastest, most cost-effective)</option>
+              <option value="eleven_multilingual_v2">ElevenLabs Multilingual v2 (High quality, slower)</option>
+            </select>
+          </div>
+
+          ${this.elevenLabsModel !== 'disabled' ? html`
+            <div class="settings-row">
+              <div class="settings-description">
+                <strong>ElevenLabs API Key</strong>
+                <p>Enter your ElevenLabs API key to use AI voices</p>
+              </div>
+              <input 
+                type="password" 
+                class="text-input"
+                .value=${this.elevenLabsApiKey}
+                @blur=${this.updateElevenLabsApiKey}
+                placeholder="Enter ElevenLabs API key..."
+              />
+            </div>
+          ` : ''}
+          
+          <div class="model-info">
+            Status: ${this.isElevenLabsEnabled ? 
+              html`<span style="color: #28a745;">✓ ElevenLabs TTS Active (${this.elevenLabsModel})</span>` : 
+              html`<span style="color: #6c757d;">System TTS Active</span>`
+            }
+            ${this.elevenLabsModel !== 'disabled' && !this.elevenLabsApiKey ? html`
+              <br><span style="color: #dc3545;">⚠️ API key required for ElevenLabs TTS</span>
+            ` : ''}
+          </div>
         </div>
 
         <div class="settings-section">

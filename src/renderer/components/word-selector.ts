@@ -548,7 +548,6 @@ export class WordSelector extends LitElement {
     return html`
       <div class="word-selector-container">
         <div class="header-section">
-          <h2 class="header-title">Select Words to Study</h2>
           <p class="header-subtitle">
             Choose the vocabulary words you want to focus on in this session.
           </p>

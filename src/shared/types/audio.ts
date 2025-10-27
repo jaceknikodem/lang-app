@@ -13,10 +13,13 @@ export interface AudioConfig {
   ttsCommand: string;
   fileExtension: string;
   rate?: number;
+  elevenLabsApiKey?: string;
+  elevenLabsVoiceId?: string;
+  elevenLabsModel?: string;
 }
 
 export interface AudioError extends Error {
-  code: 'GENERATION_FAILED' | 'PLAYBACK_FAILED' | 'FILE_NOT_FOUND' | 'INVALID_PATH' | 'RECORDING_FAILED' | 'FILE_OPERATION_FAILED';
+  code: 'GENERATION_FAILED' | 'PLAYBACK_FAILED' | 'FILE_NOT_FOUND' | 'INVALID_PATH' | 'RECORDING_FAILED' | 'FILE_OPERATION_FAILED' | 'API_ERROR';
   audioPath?: string;
 }
 
