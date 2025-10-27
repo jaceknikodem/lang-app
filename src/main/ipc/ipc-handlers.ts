@@ -219,6 +219,17 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     }
   });
 
+  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES_ORDERED_BY_STRENGTH, async (event, includeKnown, includeIgnored) => {
+    try {
+      const validatedIncludeKnown = includeKnown !== undefined ? BooleanSchema.parse(includeKnown) : true;
+      const validatedIncludeIgnored = includeIgnored !== undefined ? BooleanSchema.parse(includeIgnored) : false;
+      return await databaseLayer.getWordsWithSentencesOrderedByStrength(validatedIncludeKnown, validatedIncludeIgnored);
+    } catch (error) {
+      console.error('Error getting words with sentences ordered by strength:', error);
+      throw new Error(`Failed to get words with sentences ordered by strength: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.DATABASE.GET_RECENT_STUDY_SESSIONS, async (event, limit) => {
     try {
       const validatedLimit = limit !== undefined ? LimitSchema.parse(limit) : 10;

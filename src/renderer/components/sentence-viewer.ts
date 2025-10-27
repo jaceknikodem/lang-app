@@ -271,6 +271,9 @@ export class SentenceViewer extends LitElement {
     super.connectedCallback();
     this.parseSentence();
     await this.loadAutoplaySettings();
+    
+    // Trigger autoplay for the initial sentence if autoplay is enabled
+    this.checkInitialAutoplay();
   }
 
   updated(changedProperties: Map<string, any>) {
@@ -279,7 +282,9 @@ export class SentenceViewer extends LitElement {
     }
     
     // Auto-play audio when sentence changes (if enabled)
+    // This includes both when sentence changes AND when it's first set
     if (changedProperties.has('sentence') && this.autoplayEnabled && this.sentence?.audioPath) {
+      console.log('Autoplay triggered - sentence changed or first set');
       // Handle auto-play asynchronously
       this.handleAutoPlay();
     }
@@ -292,6 +297,14 @@ export class SentenceViewer extends LitElement {
     } catch (error) {
       console.error('Failed to load autoplay setting:', error);
       this.autoplayEnabled = false;
+    }
+  }
+
+  private checkInitialAutoplay() {
+    // Trigger autoplay for the initial sentence if autoplay is enabled
+    if (this.autoplayEnabled && this.sentence?.audioPath) {
+      console.log('Initial autoplay triggered for first sentence');
+      this.handleAutoPlay();
     }
   }
 

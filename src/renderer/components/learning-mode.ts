@@ -296,10 +296,10 @@ export class LearningMode extends LitElement {
         return;
       }
 
-      // Fallback: Get words that have sentences available for learning
+      // Fallback: Get words that have sentences available for learning, ordered by strength (weakest first)
       // This handles cases like "Continue Learning" or "Practice Weak Words"
-      this.selectedWords = await window.electronAPI.database.getWordsWithSentences(true, false);
-      console.log('Loaded all words with sentences for learning:', this.selectedWords.length);
+      this.selectedWords = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(true, false);
+      console.log('Loaded words with sentences for learning (ordered by strength):', this.selectedWords.length);
     } catch (error) {
       console.error('Failed to load words:', error);
       this.error = 'Failed to load words from database.';
@@ -327,20 +327,19 @@ export class LearningMode extends LitElement {
           console.warn(`No sentences found for word: ${word.word}`);
         }
 
-        // Shuffle sentences for each word to avoid predictable order
-        const shuffledSentences = this.shuffleArray(sentences);
-
+        // Keep sentences in their original order for consistent review
         wordsWithSentences.push({
           ...word,
-          sentences: shuffledSentences
+          sentences: sentences
         });
       }
 
-      // Filter out words with no sentences and shuffle for varied learning experience
+      // Filter out words with no sentences but maintain strength-based order
       const wordsWithValidSentences = wordsWithSentences.filter(w => w.sentences.length > 0);
       console.log(`Words with sentences: ${wordsWithValidSentences.length} out of ${wordsWithSentences.length} total words`);
       
-      this.wordsWithSentences = this.shuffleArray(wordsWithValidSentences);
+      // Keep words ordered by strength (weakest first) - no shuffling for review mode
+      this.wordsWithSentences = wordsWithValidSentences;
 
       if (this.wordsWithSentences.length === 0) {
         console.warn('No words have sentences available for learning');
