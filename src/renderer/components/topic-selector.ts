@@ -7,6 +7,7 @@ import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
+import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 
 @customElement('topic-selector')
 export class TopicSelector extends LitElement {
@@ -23,6 +24,8 @@ export class TopicSelector extends LitElement {
 
   @state()
   private currentLanguage = '';
+
+  private keyboardUnsubscribe?: () => void;
 
   static styles = [
     sharedStyles,
@@ -189,6 +192,14 @@ export class TopicSelector extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
     await this.loadCurrentLanguage();
+    this.setupKeyboardBindings();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this.keyboardUnsubscribe) {
+      this.keyboardUnsubscribe();
+    }
   }
 
   private async loadCurrentLanguage() {
@@ -273,6 +284,45 @@ export class TopicSelector extends LitElement {
     }
   }
 
+  private setupKeyboardBindings() {
+    const bindings = [
+      {
+        key: CommonKeys.ENTER,
+        action: () => this.handleGenerateWords(),
+        context: 'topic-selection',
+        description: 'Generate words for topic'
+      },
+      {
+        key: 'g',
+        action: () => this.handleGenerateWords(),
+        context: 'topic-selection',
+        description: 'Generate words for topic'
+      },
+      {
+        key: 's',
+        action: () => this.handleSkipTopic(),
+        context: 'topic-selection',
+        description: 'Skip topic and generate general vocabulary'
+      },
+      {
+        key: 'c',
+        action: () => this.clearTopic(),
+        context: 'topic-selection',
+        description: 'Clear topic input'
+      }
+    ];
+
+    this.keyboardUnsubscribe = useKeyboardBindings(bindings);
+  }
+
+  private clearTopic() {
+    this.topic = '';
+    const input = this.shadowRoot?.querySelector('#topic-input') as HTMLInputElement;
+    if (input) {
+      input.focus();
+    }
+  }
+
   render() {
     return html`
       <div class="topic-container">
@@ -302,8 +352,9 @@ export class TopicSelector extends LitElement {
                   class="btn btn-primary generate-btn inline"
                   @click=${this.handleGenerateWords}
                   ?disabled=${this.isGenerating}
+                  title="Generate words (Enter or G)"
                 >
-                  Generate
+                  Generate <span class="keyboard-hint">(G)</span>
                 </button>
               `}
             </div>

@@ -6,6 +6,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { Word, Sentence } from '../../shared/types/core.js';
+import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 
 interface WordInSentence {
   text: string;
@@ -32,6 +33,8 @@ export class SentenceViewer extends LitElement {
 
   @state()
   private autoplayEnabled = false;
+
+  private keyboardUnsubscribe?: () => void;
 
   static styles = [
     sharedStyles,
@@ -271,9 +274,17 @@ export class SentenceViewer extends LitElement {
     super.connectedCallback();
     this.parseSentence();
     await this.loadAutoplaySettings();
+    this.setupKeyboardBindings();
     
     // Trigger autoplay for the initial sentence if autoplay is enabled
     this.checkInitialAutoplay();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this.keyboardUnsubscribe) {
+      this.keyboardUnsubscribe();
+    }
   }
 
   updated(changedProperties: Map<string, any>) {
@@ -481,6 +492,39 @@ export class SentenceViewer extends LitElement {
     }));
   }
 
+  private setupKeyboardBindings() {
+    const bindings = [
+      // These bindings are context-specific to sentence viewer
+      // They will only work when this component is active
+      {
+        ...GlobalShortcuts.PLAY_AUDIO,
+        action: () => this.handlePlayAudio(),
+        context: 'sentence-viewer',
+        description: 'Play sentence audio'
+      },
+      {
+        ...GlobalShortcuts.REPLAY_AUDIO,
+        action: () => this.handlePlayAudio(),
+        context: 'sentence-viewer',
+        description: 'Replay sentence audio'
+      },
+      {
+        ...GlobalShortcuts.MARK_KNOWN,
+        action: () => this.handleMarkKnown(),
+        context: 'sentence-viewer',
+        description: 'Mark target word as known'
+      },
+      {
+        ...GlobalShortcuts.MARK_IGNORED,
+        action: () => this.handleMarkIgnored(),
+        context: 'sentence-viewer',
+        description: 'Mark target word as ignored'
+      }
+    ];
+
+    this.keyboardUnsubscribe = useKeyboardBindings(bindings);
+  }
+
   render() {
     return html`
       <div class="sentence-container">
@@ -496,6 +540,7 @@ export class SentenceViewer extends LitElement {
               class="audio-button"
               @click=${this.handlePlayAudio}
               ?disabled=${this.isPlayingAudio}
+              title="Play audio (Space)"
             >
               <svg class="audio-icon" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
@@ -553,7 +598,8 @@ export class SentenceViewer extends LitElement {
             @click=${this.handleMarkKnown}
             ?disabled=${this.targetWord.known}
           >
-            ${this.targetWord.known ? 'Already Known' : 'Mark as Known'}
+            ${this.targetWord.known ? 'Already Known' : 'Mark as Known'} 
+            ${!this.targetWord.known ? html`<span class="keyboard-hint">(K)</span>` : ''}
           </button>
           
           <button
@@ -562,6 +608,7 @@ export class SentenceViewer extends LitElement {
             ?disabled=${this.targetWord.ignored}
           >
             ${this.targetWord.ignored ? 'Already Ignored' : 'Mark as Ignored'}
+            ${!this.targetWord.ignored ? html`<span class="keyboard-hint">(I)</span>` : ''}
           </button>
         </div>
       </div>

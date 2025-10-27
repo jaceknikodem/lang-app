@@ -8,6 +8,7 @@ import { AppState } from '../../shared/types/core.js';
 import { router, RouteState, AppMode } from '../utils/router.js';
 import { sessionManager, SessionState } from '../utils/session-manager.js';
 import { sharedStyles } from '../styles/shared.js';
+import { keyboardManager, useKeyboardBindings, GlobalShortcuts } from '../utils/keyboard-manager.js';
 import './topic-selector.js';
 import './word-selector.js';
 import './learning-mode.js';
@@ -42,6 +43,7 @@ export class AppRoot extends LitElement {
   private currentLanguage = '';
 
   private routerUnsubscribe?: () => void;
+  private keyboardUnsubscribe?: () => void;
 
   static styles = [
     sharedStyles,
@@ -307,10 +309,14 @@ export class AppRoot extends LitElement {
       this.currentRoute = route;
       this.updateAppState();
       this.updateSessionFromRoute();
+      this.updateKeyboardContext();
     });
 
     // Listen for language changes
     this.addEventListener('language-changed', this.handleLanguageChanged);
+
+    // Setup keyboard bindings
+    this.setupKeyboardBindings();
 
     // Initialize current route
     this.currentRoute = router.getCurrentRoute();
@@ -322,6 +328,9 @@ export class AppRoot extends LitElement {
     super.disconnectedCallback();
     if (this.routerUnsubscribe) {
       this.routerUnsubscribe();
+    }
+    if (this.keyboardUnsubscribe) {
+      this.keyboardUnsubscribe();
     }
     this.removeEventListener('language-changed', this.handleLanguageChanged);
   }
@@ -552,6 +561,46 @@ export class AppRoot extends LitElement {
     this.sessionState = sessionManager.getCurrentSession();
   }
 
+  private setupKeyboardBindings() {
+    const bindings = [
+      // Global navigation shortcuts
+      {
+        ...GlobalShortcuts.LEARN,
+        action: () => this.handleNavigation('topic-selection'),
+        context: 'global'
+      },
+      {
+        ...GlobalShortcuts.REVIEW,
+        action: () => this.handleNavigation('learning'),
+        context: 'global'
+      },
+      {
+        ...GlobalShortcuts.QUIZ,
+        action: () => this.handleNavigation('quiz'),
+        context: 'global'
+      },
+      {
+        ...GlobalShortcuts.PROGRESS,
+        action: () => this.handleNavigation('progress'),
+        context: 'global'
+      },
+      {
+        ...GlobalShortcuts.SETTINGS,
+        action: () => this.handleNavigation('settings'),
+        context: 'global'
+      }
+    ];
+
+    this.keyboardUnsubscribe = useKeyboardBindings(bindings);
+  }
+
+  private updateKeyboardContext() {
+    // Set keyboard context based on current route
+    keyboardManager.setContext(this.currentRoute.mode);
+  }
+
+
+
   render() {
     if (this.isLoading) {
       return html`
@@ -573,6 +622,7 @@ export class AppRoot extends LitElement {
             <button 
               class="nav-button ${router.isCurrentMode('topic-selection') || router.isCurrentMode('word-selection') ? 'active' : ''}"
               @click=${() => this.handleNavigation('topic-selection')}
+              title="Learn new words (Ctrl+1)"
             >
               Learn
             </button>
@@ -580,24 +630,28 @@ export class AppRoot extends LitElement {
               class="nav-button ${router.isCurrentMode('learning') ? 'active' : ''}"
               @click=${() => this.handleNavigation('learning')}
               ?disabled=${!this.hasExistingWords}
+              title="Review existing words (Ctrl+2)"
             >
               Review
             </button>
             <button 
               class="nav-button ${router.isCurrentMode('quiz') ? 'active' : ''}"
               @click=${() => this.handleNavigation('quiz')}
+              title="Take a quiz (Ctrl+3)"
             >
               Quiz
             </button>
             <button 
               class="nav-button ${router.isCurrentMode('progress') ? 'active' : ''}"
               @click=${() => this.handleNavigation('progress')}
+              title="View progress (Ctrl+4)"
             >
               Progress
             </button>
             <button 
               class="nav-button ${router.isCurrentMode('settings') ? 'active' : ''}"
               @click=${() => this.handleNavigation('settings')}
+              title="Settings (Ctrl+5)"
             >
               Settings
             </button>

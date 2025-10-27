@@ -8,6 +8,7 @@ import { Word, Sentence, QuizQuestion, QuizSession, QuizResult } from '../../sha
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
+import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 import './session-complete.js';
 import './audio-recorder.js';
 import type { SessionSummary } from './session-complete.js';
@@ -76,35 +77,7 @@ export class QuizMode extends LitElement {
   private audioOnlyMode = false;
 
   private sessionStartTime = Date.now();
-
-  private handleKeyDown(event: KeyboardEvent) {
-    // Only handle Enter key
-    if (event.key !== 'Enter') return;
-
-    // Prevent default behavior
-    event.preventDefault();
-
-    // Don't handle if we're in setup mode or loading
-    if (!this.quizSession || this.isLoading || this.error) return;
-
-    // Don't handle if quiz is complete
-    if (this.quizSession.isComplete) return;
-
-    // Don't handle if recorder is open (let recorder handle its own keys)
-    if (this.showRecorder) return;
-
-    // If showing result, the auto-advance will handle progression
-    if (this.showResult) return;
-
-    // If answer is not revealed yet, reveal it
-    if (!this.showAnswer) {
-      this.revealAnswer();
-      return;
-    }
-
-    // If answer is revealed but no result yet, we're in self-assessment mode
-    // Don't auto-advance here as user needs to select difficulty
-  }
+  private keyboardUnsubscribe?: () => void;
 
   static styles = [
     sharedStyles,
@@ -1028,9 +1001,8 @@ export class QuizMode extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
 
-    // Add keyboard event listener
-    this.handleKeyDown = this.handleKeyDown.bind(this);
-    document.addEventListener('keydown', this.handleKeyDown);
+    // Setup keyboard bindings
+    this.setupKeyboardBindings();
 
     // Initialize speech recognition
     await this.initializeSpeechRecognition();
@@ -1056,8 +1028,10 @@ export class QuizMode extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
 
-    // Remove keyboard event listener
-    document.removeEventListener('keydown', this.handleKeyDown);
+    // Clean up keyboard bindings
+    if (this.keyboardUnsubscribe) {
+      this.keyboardUnsubscribe();
+    }
   }
 
   private async startQuiz() {
@@ -1305,6 +1279,123 @@ export class QuizMode extends LitElement {
     router.goToTopicSelection();
   }
 
+  private setupKeyboardBindings() {
+    const bindings = [
+      // Quiz setup
+      {
+        key: CommonKeys.ENTER,
+        action: () => this.handleEnterKey(),
+        context: 'quiz',
+        description: 'Start quiz / Reveal answer / Continue'
+      },
+      // Direction toggle
+      {
+        key: 'd',
+        action: () => this.toggleDirection(),
+        context: 'quiz',
+        description: 'Toggle quiz direction'
+      },
+      // Audio only mode
+      {
+        ...GlobalShortcuts.TOGGLE_AUDIO_ONLY,
+        action: () => this.toggleAudioOnlyMode(),
+        context: 'quiz',
+        description: 'Toggle audio-only mode'
+      },
+      // Audio controls
+      {
+        ...GlobalShortcuts.PLAY_AUDIO,
+        action: () => this.playAudio(),
+        context: 'quiz',
+        description: 'Play sentence audio'
+      },
+      {
+        ...GlobalShortcuts.REPLAY_AUDIO,
+        action: () => this.playAudio(),
+        context: 'quiz',
+        description: 'Replay sentence audio'
+      },
+      // SRS difficulty ratings (when answer is revealed)
+      {
+        ...GlobalShortcuts.SRS_FAIL,
+        action: () => this.handleSRSAnswer(0),
+        context: 'quiz',
+        description: 'Rate as Failed (when answer revealed)'
+      },
+      {
+        ...GlobalShortcuts.SRS_HARD,
+        action: () => this.handleSRSAnswer(1),
+        context: 'quiz',
+        description: 'Rate as Hard (when answer revealed)'
+      },
+      {
+        ...GlobalShortcuts.SRS_GOOD,
+        action: () => this.handleSRSAnswer(2),
+        context: 'quiz',
+        description: 'Rate as Good (when answer revealed)'
+      },
+      {
+        ...GlobalShortcuts.SRS_EASY,
+        action: () => this.handleSRSAnswer(3),
+        context: 'quiz',
+        description: 'Rate as Easy (when answer revealed)'
+      },
+      // Pronunciation practice
+      {
+        ...GlobalShortcuts.RECORD_PRONUNCIATION,
+        action: () => this.toggleRecorder(),
+        context: 'quiz',
+        description: 'Toggle pronunciation recorder'
+      },
+      // Navigation
+      {
+        ...GlobalShortcuts.ESCAPE,
+        action: () => this.handleEscape(),
+        context: 'quiz',
+        description: 'Close recorder / Back to topic selection'
+      }
+    ];
+
+    this.keyboardUnsubscribe = useKeyboardBindings(bindings);
+  }
+
+  private handleEnterKey() {
+    // Don't handle if we're in setup mode or loading
+    if (!this.quizSession || this.isLoading || this.error) {
+      // In setup mode, start the quiz
+      if (!this.quizSession && !this.isLoading && !this.error) {
+        this.startQuiz();
+      }
+      return;
+    }
+
+    // Don't handle if quiz is complete
+    if (this.quizSession.isComplete) return;
+
+    // Don't handle if recorder is open (let recorder handle its own keys)
+    if (this.showRecorder) return;
+
+    // If showing result, the auto-advance will handle progression
+    if (this.showResult) return;
+
+    // If answer is not revealed yet, reveal it
+    if (!this.showAnswer) {
+      this.revealAnswer();
+      return;
+    }
+
+    // If answer is revealed but no result yet, we're in self-assessment mode
+    // Don't auto-advance here as user needs to select difficulty
+  }
+
+  private handleEscape() {
+    if (this.showRecorder) {
+      this.toggleRecorder();
+    } else {
+      this.goToTopicSelection();
+    }
+  }
+
   private toggleDirection() {
     this.direction = this.direction === 'foreign-to-english'
       ? 'english-to-foreign'
@@ -1521,7 +1612,7 @@ export class QuizMode extends LitElement {
             @click=${this.startQuiz}
             ?disabled=${this.isLoading}
           >
-            Start Quiz
+            Start Quiz <span class="keyboard-hint">(Enter)</span>
           </button>
         </div>
       </div>
@@ -1616,7 +1707,7 @@ export class QuizMode extends LitElement {
             class="answer-button primary"
             @click=${this.revealAnswer}
           >
-            Reveal Answer (Enter)
+            Reveal Answer <span class="keyboard-hint">(Enter)</span>
           </button>
           <button 
             class="answer-button"
@@ -1642,25 +1733,25 @@ export class QuizMode extends LitElement {
             class="answer-button difficulty-fail"
             @click=${() => this.handleSRSAnswer(0)}
           >
-            Failed ✗
+            Failed ✗ <span class="keyboard-hint">(1)</span>
           </button>
           <button 
             class="answer-button difficulty-hard"
             @click=${() => this.handleSRSAnswer(1)}
           >
-            Hard 😓
+            Hard 😓 <span class="keyboard-hint">(2)</span>
           </button>
           <button 
             class="answer-button difficulty-good"
             @click=${() => this.handleSRSAnswer(2)}
           >
-            Good ✓
+            Good ✓ <span class="keyboard-hint">(3)</span>
           </button>
           <button 
             class="answer-button difficulty-easy"
             @click=${() => this.handleSRSAnswer(3)}
           >
-            Easy 😊
+            Easy 😊 <span class="keyboard-hint">(4)</span>
           </button>
         </div>
       </div>

@@ -8,6 +8,7 @@ import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
 import { Word, Sentence } from '../../shared/types/core.js';
+import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 import './sentence-viewer.js';
 import './session-complete.js';
 import type { SessionSummary } from './session-complete.js';
@@ -50,27 +51,7 @@ export class LearningMode extends LitElement {
   private sessionSummary: SessionSummary | null = null;
 
   private sessionStartTime = Date.now();
-
-  private handleKeyDown(event: KeyboardEvent) {
-    // Only handle Enter key
-    if (event.key !== 'Enter') return;
-
-    // Prevent default behavior
-    event.preventDefault();
-
-    // Don't handle if we're loading, have an error, or showing completion
-    if (this.isLoading || this.error || this.showCompletion || this.isProcessing) return;
-
-    // Don't handle if no words available
-    if (!this.wordsWithSentences.length) return;
-
-    // Check if this is the last sentence, if so finish learning, otherwise go to next
-    if (this.isLastSentence()) {
-      this.handleFinishLearning();
-    } else {
-      this.goToNextSentence();
-    }
-  }
+  private keyboardUnsubscribe?: () => void;
 
   static styles = [
     sharedStyles,
@@ -251,9 +232,8 @@ export class LearningMode extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
     
-    // Add keyboard event listener
-    this.handleKeyDown = this.handleKeyDown.bind(this);
-    document.addEventListener('keydown', this.handleKeyDown);
+    // Setup keyboard bindings
+    this.setupKeyboardBindings();
     
     // Load all words for highlighting purposes
     await this.loadAllWords();
@@ -271,8 +251,10 @@ export class LearningMode extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     
-    // Remove keyboard event listener
-    document.removeEventListener('keydown', this.handleKeyDown);
+    // Clean up keyboard bindings
+    if (this.keyboardUnsubscribe) {
+      this.keyboardUnsubscribe();
+    }
   }
 
   private async loadAllWords() {
@@ -564,6 +546,143 @@ export class LearningMode extends LitElement {
     this.showCompletion = true;
   }
 
+  private setupKeyboardBindings() {
+    const bindings = [
+      // Navigation
+      {
+        ...GlobalShortcuts.NEXT,
+        action: () => this.handleNextAction(),
+        context: 'learning',
+        description: 'Next sentence / Finish learning'
+      },
+      {
+        ...GlobalShortcuts.PREVIOUS,
+        action: () => this.goToPreviousSentence(),
+        context: 'learning',
+        description: 'Previous sentence'
+      },
+      {
+        key: CommonKeys.ENTER,
+        action: () => this.handleNextAction(),
+        context: 'learning',
+        description: 'Next sentence / Finish learning'
+      },
+      // Word actions
+      {
+        ...GlobalShortcuts.MARK_KNOWN,
+        action: () => this.handleMarkCurrentWordKnown(),
+        context: 'learning',
+        description: 'Mark current word as known'
+      },
+      {
+        ...GlobalShortcuts.MARK_IGNORED,
+        action: () => this.handleMarkCurrentWordIgnored(),
+        context: 'learning',
+        description: 'Mark current word as ignored'
+      },
+      // Audio
+      {
+        ...GlobalShortcuts.PLAY_AUDIO,
+        action: () => this.handlePlayCurrentAudio(),
+        context: 'learning',
+        description: 'Play sentence audio'
+      },
+      {
+        ...GlobalShortcuts.REPLAY_AUDIO,
+        action: () => this.handlePlayCurrentAudio(),
+        context: 'learning',
+        description: 'Replay sentence audio'
+      },
+      // Navigation shortcuts
+      {
+        key: CommonKeys.HOME,
+        action: () => this.goToFirstSentence(),
+        context: 'learning',
+        description: 'Go to first sentence'
+      },
+      {
+        key: CommonKeys.END,
+        action: () => this.goToLastSentence(),
+        context: 'learning',
+        description: 'Go to last sentence'
+      },
+      // Back to selection
+      {
+        ...GlobalShortcuts.ESCAPE,
+        action: () => this.handleBackToSelection(),
+        context: 'learning',
+        description: 'Back to topic selection'
+      }
+    ];
+
+    this.keyboardUnsubscribe = useKeyboardBindings(bindings);
+  }
+
+  private handleNextAction() {
+    // Don't handle if we're loading, have an error, or showing completion
+    if (this.isLoading || this.error || this.showCompletion || this.isProcessing) return;
+
+    // Don't handle if no words available
+    if (!this.wordsWithSentences.length) return;
+
+    // Check if this is the last sentence, if so finish learning, otherwise go to next
+    if (this.isLastSentence()) {
+      this.handleFinishLearning();
+    } else {
+      this.goToNextSentence();
+    }
+  }
+
+  private handleMarkCurrentWordKnown() {
+    if (this.isLoading || this.error || this.showCompletion || this.isProcessing) return;
+    
+    const currentWord = this.getCurrentWord();
+    if (currentWord && !currentWord.known) {
+      this.handleWordStatusChange(currentWord, true);
+    }
+  }
+
+  private handleMarkCurrentWordIgnored() {
+    if (this.isLoading || this.error || this.showCompletion || this.isProcessing) return;
+    
+    const currentWord = this.getCurrentWord();
+    if (currentWord && !currentWord.ignored) {
+      this.handleWordStatusChange(currentWord, false);
+    }
+  }
+
+  private async handlePlayCurrentAudio() {
+    if (this.isLoading || this.error || this.showCompletion) return;
+    
+    const currentSentence = this.getCurrentSentence();
+    if (currentSentence?.audioPath) {
+      try {
+        await window.electronAPI.audio.playAudio(currentSentence.audioPath);
+      } catch (error) {
+        console.error('Failed to play audio:', error);
+      }
+    }
+  }
+
+  private goToFirstSentence() {
+    if (this.isLoading || this.error || this.showCompletion || this.isProcessing) return;
+    
+    this.currentWordIndex = 0;
+    this.currentSentenceIndex = 0;
+    this.saveProgressToSession();
+  }
+
+  private goToLastSentence() {
+    if (this.isLoading || this.error || this.showCompletion || this.isProcessing) return;
+    
+    if (this.wordsWithSentences.length > 0) {
+      this.currentWordIndex = this.wordsWithSentences.length - 1;
+      const lastWord = this.wordsWithSentences[this.currentWordIndex];
+      this.currentSentenceIndex = Math.max(0, lastWord.sentences.length - 1);
+      this.saveProgressToSession();
+    }
+  }
+
   private handleBackToSelection() {
     router.goToTopicSelection();
   }
@@ -686,7 +805,7 @@ export class LearningMode extends LitElement {
             @click=${this.goToPreviousSentence}
             ?disabled=${this.isFirstSentence() || this.isProcessing}
           >
-            ← Previous
+            ← Previous <span class="keyboard-hint">(←)</span>
           </button>
 
           <div class="nav-info">
@@ -700,7 +819,7 @@ export class LearningMode extends LitElement {
             @click=${this.isLastSentence() ? this.handleFinishLearning : this.goToNextSentence}
             ?disabled=${this.isProcessing}
           >
-            ${this.isLastSentence() ? 'Finish (Enter)' : 'Next → (Enter)'}
+            ${this.isLastSentence() ? 'Finish' : 'Next →'} <span class="keyboard-hint">(Enter)</span>
           </button>
         </div>
       </div>
