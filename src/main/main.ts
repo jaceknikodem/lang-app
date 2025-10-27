@@ -6,14 +6,14 @@ import { app, BrowserWindow, ipcMain, session, systemPreferences } from 'electro
 import * as path from 'path';
 import { setupIPCHandlers, cleanupIPCHandlers } from './ipc/index.js';
 import { SQLiteDatabaseLayer } from './database/database-layer.js';
-import { OllamaClient, ContentGenerator } from './llm/index.js';
+import { LLMClient, ContentGenerator, LLMFactory, LLMProvider } from './llm/index.js';
 import { AudioService } from './audio/audio-service.js';
 import { SRSService } from './srs/srs-service.js';
 import { LifecycleManager, UpdateManager } from './lifecycle/index.js';
 
 let mainWindow: BrowserWindow;
 let databaseLayer: SQLiteDatabaseLayer | undefined;
-let llmClient: OllamaClient | undefined;
+let llmClient: LLMClient | undefined;
 let contentGenerator: ContentGenerator | undefined;
 let audioService: AudioService | undefined;
 let srsService: SRSService | undefined;
@@ -51,8 +51,8 @@ async function initializeServices(): Promise<void> {
       autoDownload: false
     });
 
-    // Initialize LLM client
-    llmClient = new OllamaClient();
+    // Initialize LLM client (default to Ollama)
+    llmClient = LLMFactory.createOllamaClient();
     
     // Inject database layer into LLM client for duplicate checking
     llmClient.setDatabaseLayer(databaseLayer);
@@ -93,12 +93,18 @@ async function initializeServices(): Promise<void> {
 }
 
 async function setupSecurity(): Promise<void> {
-  // Block external requests except to localhost (for Ollama)
+  // Block external requests except to localhost (for Ollama) and Gemini API
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
     const url = new URL(details.url);
 
     // Allow localhost requests (for Ollama)
     if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+      callback({ cancel: false });
+      return;
+    }
+
+    // Allow Gemini API requests
+    if (url.hostname === 'generativelanguage.googleapis.com') {
       callback({ cancel: false });
       return;
     }
@@ -203,6 +209,13 @@ app.whenReady().then(async () => {
 
     // Set up IPC handlers with initialized services
     setupIPCHandlers(databaseLayer!, llmClient!, contentGenerator!, audioService!, srsService!, lifecycleManager!, updateManager!);
+    
+    // Keep llmClient reference updated when provider switches
+    const originalSwitchProvider = contentGenerator!.switchProvider.bind(contentGenerator!);
+    contentGenerator!.switchProvider = (provider: LLMProvider, geminiApiKey?: string) => {
+      originalSwitchProvider(provider, geminiApiKey);
+      llmClient = contentGenerator!.getCurrentClient();
+    };
     console.log('IPC handlers initialized successfully');
 
     // Create the main window

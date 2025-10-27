@@ -67,6 +67,11 @@ export interface IPCBridge {
     setSentenceGenerationModel: (model: string) => Promise<void>;
     getWordGenerationModel: () => Promise<string>;
     getSentenceGenerationModel: () => Promise<string>;
+    // Provider management
+    getCurrentProvider: () => Promise<'ollama' | 'gemini'>;
+    switchProvider: (provider: 'ollama' | 'gemini', geminiApiKey?: string) => Promise<void>;
+    setGeminiApiKey: (apiKey: string, switchToGemini?: boolean) => Promise<void>;
+    getAvailableProviders: () => Promise<Array<'ollama' | 'gemini'>>;
   };
 
   // Frequency word management
@@ -158,7 +163,12 @@ export const IPC_CHANNELS = {
     SET_WORD_GENERATION_MODEL: 'llm:setWordGenerationModel',
     SET_SENTENCE_GENERATION_MODEL: 'llm:setSentenceGenerationModel',
     GET_WORD_GENERATION_MODEL: 'llm:getWordGenerationModel',
-    GET_SENTENCE_GENERATION_MODEL: 'llm:getSentenceGenerationModel'
+    GET_SENTENCE_GENERATION_MODEL: 'llm:getSentenceGenerationModel',
+    // Provider management
+    GET_CURRENT_PROVIDER: 'llm:getCurrentProvider',
+    SWITCH_PROVIDER: 'llm:switchProvider',
+    SET_GEMINI_API_KEY: 'llm:setGeminiApiKey',
+    GET_AVAILABLE_PROVIDERS: 'llm:getAvailableProviders'
   },
   AUDIO: {
     GENERATE_AUDIO: 'audio:generateAudio',

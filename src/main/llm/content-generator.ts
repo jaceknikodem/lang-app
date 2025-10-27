@@ -5,7 +5,7 @@
 import { GeneratedWord, GeneratedSentence } from '../../shared/types/core.js';
 import { LLMClient, LLMError } from '../../shared/types/llm.js';
 import { DatabaseLayer } from '../../shared/types/database.js';
-import { OllamaClient } from './ollama-client.js';
+import { LLMFactory, LLMFactoryConfig, LLMProvider } from './llm-factory.js';
 import { FrequencyWordManager } from './frequency-word-manager.js';
 
 export interface ContentGeneratorConfig {
@@ -14,6 +14,8 @@ export interface ContentGeneratorConfig {
   defaultSentenceCount: number;
   retryAttempts: number;
   retryDelay: number;
+  llmProvider?: LLMProvider;
+  geminiApiKey?: string;
 }
 
 export class ContentGenerator {
@@ -22,14 +24,23 @@ export class ContentGenerator {
   private frequencyWordManager: FrequencyWordManager;
 
   constructor(llmClient?: LLMClient, config?: Partial<ContentGeneratorConfig>) {
-    this.llmClient = llmClient || new OllamaClient();
     this.config = {
       defaultLanguage: config?.defaultLanguage || 'Spanish',
       defaultWordCount: config?.defaultWordCount || 5,
       defaultSentenceCount: config?.defaultSentenceCount || 3,
       retryAttempts: config?.retryAttempts || 2,
-      retryDelay: config?.retryDelay || 1000
+      retryDelay: config?.retryDelay || 1000,
+      llmProvider: config?.llmProvider || 'ollama',
+      geminiApiKey: config?.geminiApiKey
     };
+
+    // Create LLM client using factory if not provided
+    if (llmClient) {
+      this.llmClient = llmClient;
+    } else {
+      this.llmClient = this.createLLMClient();
+    }
+    
     this.frequencyWordManager = new FrequencyWordManager();
   }
 
@@ -38,6 +49,70 @@ export class ContentGenerator {
    */
   async initialize(): Promise<void> {
     await this.frequencyWordManager.initialize();
+  }
+
+  /**
+   * Create LLM client based on configuration
+   */
+  private createLLMClient(): LLMClient {
+    const factoryConfig: LLMFactoryConfig = {
+      provider: this.config.llmProvider || 'ollama'
+    };
+
+    if (this.config.llmProvider === 'gemini') {
+      if (!this.config.geminiApiKey) {
+        throw new Error('Gemini API key is required when using Gemini provider');
+      }
+      factoryConfig.geminiConfig = {
+        apiKey: this.config.geminiApiKey
+      };
+    }
+
+    return LLMFactory.createClient(factoryConfig);
+  }
+
+  /**
+   * Switch LLM provider and recreate client
+   */
+  switchProvider(provider: LLMProvider, geminiApiKey?: string): void {
+    this.config.llmProvider = provider;
+    if (provider === 'gemini') {
+      // Update API key if provided, otherwise keep existing one
+      if (geminiApiKey !== undefined) {
+        this.config.geminiApiKey = geminiApiKey;
+      }
+    }
+    this.llmClient = this.createLLMClient();
+  }
+
+  /**
+   * Get current LLM provider
+   */
+  getCurrentProvider(): LLMProvider {
+    return this.config.llmProvider || 'ollama';
+  }
+
+  /**
+   * Set Gemini API key and optionally switch to Gemini
+   */
+  setGeminiApiKey(apiKey: string, switchToGemini: boolean = false): void {
+    this.config.geminiApiKey = apiKey;
+    
+    // If we're currently using Gemini, update the API key in the client
+    if (this.config.llmProvider === 'gemini' && 'setApiKey' in this.llmClient) {
+      (this.llmClient as any).setApiKey(apiKey);
+    }
+    
+    if (switchToGemini) {
+      this.switchProvider('gemini', apiKey);
+    }
+  }
+
+  /**
+   * Get current LLM client instance
+   */
+  getCurrentClient(): LLMClient {
+    return this.llmClient;
   }
 
   /**
@@ -139,7 +214,14 @@ export class ContentGenerator {
     // Validate LLM availability before attempting generation
     const isAvailable = await this.llmClient.isAvailable();
     if (!isAvailable) {
-      throw new Error('LLM service is not available. Please ensure Ollama is running.');
+      const providerName = this.getCurrentProvider();
+      if (providerName === 'ollama') {
+        throw new Error('LLM service is not available. Please ensure Ollama is running.');
+      } else if (providerName === 'gemini') {
+        throw new Error('Gemini API is not available. Please check your API key and internet connection.');
+      } else {
+        throw new Error('LLM service is not available. Please check your configuration.');
+      }
     }
 
     console.log(`Generating LLM vocabulary: topic="${topicText}", language="${targetLanguage}", count=${wordCount}`);
@@ -217,7 +299,14 @@ export class ContentGenerator {
       // Validate LLM availability
       const isAvailable = await this.llmClient.isAvailable();
       if (!isAvailable) {
-        throw new Error('LLM service is not available. Please ensure Ollama is running.');
+        const providerName = this.getCurrentProvider();
+        if (providerName === 'ollama') {
+          throw new Error('LLM service is not available. Please ensure Ollama is running.');
+        } else if (providerName === 'gemini') {
+          throw new Error('Gemini API is not available. Please check your API key and internet connection.');
+        } else {
+          throw new Error('LLM service is not available. Please check your configuration.');
+        }
       }
 
       // Check if context sentences are enabled

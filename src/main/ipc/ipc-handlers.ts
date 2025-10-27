@@ -6,7 +6,7 @@ import { ipcMain, app, dialog, BrowserWindow } from 'electron';
 import { z } from 'zod';
 import { IPC_CHANNELS } from '../../shared/types/ipc.js';
 import { SQLiteDatabaseLayer } from '../database/database-layer.js';
-import { OllamaClient, ContentGenerator } from '../llm/index.js';
+import { LLMClient, ContentGenerator, LLMFactory, LLMProvider } from '../llm/index.js';
 import { AudioService } from '../audio/audio-service.js';
 import { LifecycleManager, UpdateManager } from '../lifecycle/index.js';
 import { SRSService } from '../srs/srs-service.js';
@@ -34,7 +34,7 @@ const AudioPathSchema = z.string().min(1).max(500);
  */
 export function setupIPCHandlers(
   databaseLayer: SQLiteDatabaseLayer,
-  llmClient: OllamaClient,
+  llmClient: LLMClient,
   contentGenerator: ContentGenerator,
   audioService: AudioService,
   srsService: SRSService,
@@ -302,7 +302,7 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
 /**
  * Set up LLM-related IPC handlers
  */
-function setupLLMHandlers(llmClient: OllamaClient, contentGenerator: ContentGenerator, databaseLayer?: SQLiteDatabaseLayer): void {
+function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerator, databaseLayer?: SQLiteDatabaseLayer): void {
   ipcMain.handle(IPC_CHANNELS.LLM.GENERATE_WORDS, async (event, topic, language) => {
     try {
       const validatedLanguage = LanguageSchema.parse(language);
@@ -434,6 +434,74 @@ function setupLLMHandlers(llmClient: OllamaClient, contentGenerator: ContentGene
     } catch (error) {
       console.error('Error getting available frequency languages:', error);
       throw new Error(`Failed to get available frequency languages: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  // Provider management handlers
+  ipcMain.handle(IPC_CHANNELS.LLM.GET_CURRENT_PROVIDER, async (event) => {
+    try {
+      return contentGenerator.getCurrentProvider();
+    } catch (error) {
+      console.error('Error getting current provider:', error);
+      throw new Error(`Failed to get current provider: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.LLM.SWITCH_PROVIDER, async (event, provider, geminiApiKey) => {
+    try {
+      const validatedProvider = z.enum(['ollama', 'gemini']).parse(provider);
+      let validatedApiKey = geminiApiKey ? z.string().min(1).parse(geminiApiKey) : undefined;
+
+      // If switching to Gemini and no API key provided, get it from database
+      if (validatedProvider === 'gemini' && !validatedApiKey && databaseLayer) {
+        const storedApiKey = await databaseLayer.getSetting('gemini_api_key');
+        validatedApiKey = storedApiKey || undefined;
+      }
+
+      // Switch provider in content generator
+      contentGenerator.switchProvider(validatedProvider, validatedApiKey);
+
+      // Update the main process llmClient reference
+      const newClient = contentGenerator.getCurrentClient();
+      if (newClient && databaseLayer) {
+        newClient.setDatabaseLayer(databaseLayer);
+      }
+
+      console.log(`Switched to ${validatedProvider} provider`);
+    } catch (error) {
+      console.error('Error switching provider:', error);
+      throw new Error(`Failed to switch provider: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.LLM.SET_GEMINI_API_KEY, async (event, apiKey, switchToGemini) => {
+    try {
+      const validatedApiKey = z.string().min(1).parse(apiKey);
+      const validatedSwitch = switchToGemini !== undefined ? z.boolean().parse(switchToGemini) : false;
+
+      contentGenerator.setGeminiApiKey(validatedApiKey, validatedSwitch);
+
+      // If switching to Gemini, update the main process llmClient reference
+      if (validatedSwitch) {
+        const newClient = contentGenerator.getCurrentClient();
+        if (newClient && databaseLayer) {
+          newClient.setDatabaseLayer(databaseLayer);
+        }
+      }
+
+      console.log('Gemini API key set successfully');
+    } catch (error) {
+      console.error('Error setting Gemini API key:', error);
+      throw new Error(`Failed to set Gemini API key: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.LLM.GET_AVAILABLE_PROVIDERS, async (event) => {
+    try {
+      return LLMFactory.getAvailableProviders();
+    } catch (error) {
+      console.error('Error getting available providers:', error);
+      throw new Error(`Failed to get available providers: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
 }

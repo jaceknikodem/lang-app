@@ -76,7 +76,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getWordGenerationModel: () => 
       ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_WORD_GENERATION_MODEL),
     getSentenceGenerationModel: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_SENTENCE_GENERATION_MODEL)
+      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_SENTENCE_GENERATION_MODEL),
+    // Provider management
+    getCurrentProvider: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_CURRENT_PROVIDER),
+    switchProvider: (provider: 'ollama' | 'gemini', geminiApiKey?: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.LLM.SWITCH_PROVIDER, provider, geminiApiKey),
+    setGeminiApiKey: (apiKey: string, switchToGemini?: boolean) => 
+      ipcRenderer.invoke(IPC_CHANNELS.LLM.SET_GEMINI_API_KEY, apiKey, switchToGemini),
+    getAvailableProviders: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_AVAILABLE_PROVIDERS)
   },
 
   // Audio operations
@@ -223,6 +232,11 @@ declare global {
         setSentenceGenerationModel: (model: string) => Promise<void>;
         getWordGenerationModel: () => Promise<string>;
         getSentenceGenerationModel: () => Promise<string>;
+        // Provider management
+        getCurrentProvider: () => Promise<'ollama' | 'gemini'>;
+        switchProvider: (provider: 'ollama' | 'gemini', geminiApiKey?: string) => Promise<void>;
+        setGeminiApiKey: (apiKey: string, switchToGemini?: boolean) => Promise<void>;
+        getAvailableProviders: () => Promise<Array<'ollama' | 'gemini'>>;
       };
       audio: {
         generateAudio: (text: string, language?: string, word?: string) => Promise<string>;

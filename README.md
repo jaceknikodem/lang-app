@@ -79,9 +79,10 @@ Language learners who prioritize privacy, prefer audio-based learning, and want 
 - **Node.js**: Version 18+ for Electron compatibility
 - **macOS**: Required for system TTS integration (`say` command)
 - **Homebrew**: Package manager for installing dependencies
-- **Ollama**: Local language model for inference
+- **Ollama**: Local language model for inference (default)
 - **Whisper**: Speech recognition model for audio input
-- ElevenLabs API keys: optional for generating high-quality TTS audio (Free account gives you 600-700 audio sentences)
+- **ElevenLabs API Key** (optional): For high-quality TTS audio (free account provides 600-700 audio sentences)
+- **Google Gemini API Key** (optional): For cloud-based LLM as alternative to local Ollama
 
 ### Required Dependencies
 
@@ -125,14 +126,15 @@ ollama serve
 
 You can verify Ollama is running by visiting `http://localhost:11434` in your browser.
 
-### Model Selection for Optimal Performance
+### LLM Provider Options
 
-The app supports using separate models for different tasks to optimize performance:
+The app supports two LLM providers:
 
-- **Small Model (Word Generation)**: Fast, lightweight model for generating vocabulary words and simple translations
-- **Big Model (Sentence Generation)**: More capable model for creating complex sentences with context
+#### 1. Ollama (Local, Default)
+- **Pros**: Complete privacy, no internet required, no API costs
+- **Cons**: Requires local setup and model downloads
+- **Setup**: Install Ollama and download models locally
 
-**Recommended Setup:**
 ```bash
 # For word generation (fast, lightweight)
 ollama pull granite4:tiny-h
@@ -141,7 +143,33 @@ ollama pull granite4:tiny-h
 ollama pull llama3.2:3b
 ```
 
-Configure these in the app's Settings panel under "Language Model (LLM)" section. See [MODEL_SELECTION.md](MODEL_SELECTION.md) for detailed configuration guide.
+#### 2. Google Gemini (Cloud)
+- **Pros**: No local setup, high-quality generation, fast responses
+- **Cons**: Requires internet connection, API costs, data sent to Google
+- **Setup**: Get API key from [Google AI Studio](https://aistudio.google.com/api-keys)
+
+**Available Models:**
+- **gemini-2.0-flash-exp**: Latest experimental model, fastest response times
+- **gemini-1.5-pro**: High quality, best for complex sentence generation
+- **gemini-1.5-flash**: Fast, good balance of speed and quality
+- **gemini-1.5-flash-8b**: Fastest and most cost-effective option
+- **gemini-1.0-pro**: Legacy model, stable and reliable
+
+**Recommended Setup:**
+- **Word Generation**: `gemini-1.5-flash-8b` (fastest, most cost-effective)
+- **Sentence Generation**: `gemini-1.5-pro` (highest quality for complex sentences)
+
+Configure your preferred provider in the app's Settings panel under "Language Model (LLM)" section.
+
+### Switching Between Providers
+
+1. **Open Settings**: Click the settings icon in the app
+2. **Navigate to LLM Section**: Find "Language Model (LLM)" section
+3. **Select Provider**: Choose between "Ollama (Local)" or "Google Gemini (Cloud)"
+4. **Configure API Key** (Gemini only): Enter your Gemini API key when switching to cloud provider
+5. **Select Models**: Choose appropriate models for word and sentence generation
+
+The app will automatically switch providers and reload available models. You can switch back and forth at any time without losing your learning progress.
 
 ## Architecture
 

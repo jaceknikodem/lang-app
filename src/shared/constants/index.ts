@@ -26,7 +26,12 @@ export const LLM_CONFIG = {
   DEFAULT_WORD_GENERATION_MODEL: 'granite4:tiny-h', // Small model for word generation
   DEFAULT_SENTENCE_GENERATION_MODEL: 'granite4:tiny-h', // Big model for sentence generation (can be changed to larger model)
   DEFAULT_TIMEOUT: 80000, // Increased to 80 seconds for better reliability
-  MAX_RETRIES: 2
+  MAX_RETRIES: 2,
+  // Gemini configuration
+  GEMINI_DEFAULT_MODEL: 'gemini-1.5-flash',
+  GEMINI_DEFAULT_WORD_MODEL: 'gemini-1.5-flash-8b', // Fastest, most cost-effective for word generation
+  GEMINI_DEFAULT_SENTENCE_MODEL: 'gemini-1.5-pro', // Higher quality model for complex sentences
+  GEMINI_DEFAULT_TIMEOUT: 30000
 } as const;
 
 export const AUDIO_CONFIG = {

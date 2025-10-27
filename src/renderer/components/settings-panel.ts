@@ -304,6 +304,18 @@ export class SettingsPanel extends LitElement {
   @state()
   private isLoadingLLMModels = false;
 
+  @state()
+  private currentLLMProvider: 'ollama' | 'gemini' = 'ollama';
+
+  @state()
+  private availableLLMProviders: Array<'ollama' | 'gemini'> = [];
+
+  @state()
+  private geminiApiKey = '';
+
+  @state()
+  private isLoadingProviders = false;
+
 
 
   @state()
@@ -387,8 +399,19 @@ export class SettingsPanel extends LitElement {
 
   private async loadLLMSettings() {
     this.isLoadingLLMModels = true;
+    this.isLoadingProviders = true;
 
     try {
+      // Get available LLM providers
+      this.availableLLMProviders = await window.electronAPI.llm.getAvailableProviders();
+
+      // Get current LLM provider
+      this.currentLLMProvider = await window.electronAPI.llm.getCurrentProvider();
+
+      // Get Gemini API key from settings
+      const geminiKey = await window.electronAPI.database.getSetting('gemini_api_key');
+      this.geminiApiKey = geminiKey || '';
+
       // Get available LLM models
       this.availableLLMModels = await window.electronAPI.llm.getAvailableModels();
 
@@ -398,6 +421,9 @@ export class SettingsPanel extends LitElement {
       this.currentSentenceGenerationModel = await window.electronAPI.llm.getSentenceGenerationModel();
 
       console.log('LLM settings loaded:', {
+        providers: this.availableLLMProviders,
+        currentProvider: this.currentLLMProvider,
+        geminiApiKey: !!this.geminiApiKey,
         models: this.availableLLMModels,
         current: this.currentLLMModel,
         wordGeneration: this.currentWordGenerationModel,
@@ -405,12 +431,16 @@ export class SettingsPanel extends LitElement {
       });
     } catch (error) {
       console.error('Failed to load LLM settings:', error);
+      this.availableLLMProviders = ['ollama'];
+      this.currentLLMProvider = 'ollama';
+      this.geminiApiKey = '';
       this.availableLLMModels = [];
       this.currentLLMModel = '';
       this.currentWordGenerationModel = '';
       this.currentSentenceGenerationModel = '';
     } finally {
       this.isLoadingLLMModels = false;
+      this.isLoadingProviders = false;
     }
   }
 
@@ -711,11 +741,147 @@ export class SettingsPanel extends LitElement {
     }
   }
 
+  private async changeLLMProvider(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const selectedProvider = select.value as 'ollama' | 'gemini';
+
+    if (!selectedProvider) return;
+
+    try {
+      await window.electronAPI.llm.switchProvider(selectedProvider, this.geminiApiKey || undefined);
+      this.currentLLMProvider = selectedProvider;
+
+      // Reload models for the new provider
+      await this.loadLLMSettings();
+
+      console.log('LLM provider changed to:', this.currentLLMProvider);
+    } catch (error) {
+      console.error('Failed to change LLM provider:', error);
+      // Revert the selection
+      select.value = this.currentLLMProvider;
+      alert(`Failed to switch to ${selectedProvider}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async updateGeminiApiKey(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const apiKey = input.value.trim();
+
+    try {
+      await window.electronAPI.database.setSetting('gemini_api_key', apiKey);
+      this.geminiApiKey = apiKey;
+
+      // If we're currently using Gemini, update the key and refresh
+      if (this.currentLLMProvider === 'gemini') {
+        await window.electronAPI.llm.setGeminiApiKey(apiKey, false);
+        // Reload models to reflect the new API key status
+        await this.loadLLMSettings();
+      }
+
+      console.log('Gemini API key updated');
+    } catch (error) {
+      console.error('Failed to save Gemini API key:', error);
+      // Revert the input value if saving failed
+      input.value = this.geminiApiKey;
+    }
+  }
+
+  private getProviderDisplayName(provider: 'ollama' | 'gemini'): string {
+    switch (provider) {
+      case 'ollama':
+        return 'Ollama (Local)';
+      case 'gemini':
+        return 'Google Gemini (Cloud)';
+      default:
+        return provider;
+    }
+  }
+
+  private getProviderDescription(provider: 'ollama' | 'gemini'): string {
+    switch (provider) {
+      case 'ollama':
+        return 'Run models locally on your machine. Requires Ollama to be installed and running.';
+      case 'gemini':
+        return 'Use Google\'s Gemini API for cloud-based generation. Requires API key and internet connection.';
+      default:
+        return '';
+    }
+  }
+
+  private getLLMModelDescription(modelName: string): string {
+    if (!modelName) return '';
+
+    // Gemini model descriptions
+    if (modelName.includes('gemini')) {
+      if (modelName.includes('2.0-flash-exp')) {
+        return '(Latest experimental, fastest response)';
+      } else if (modelName.includes('1.5-pro')) {
+        return '(High quality, best for complex tasks)';
+      } else if (modelName.includes('1.5-flash-8b')) {
+        return '(Fastest, most cost-effective)';
+      } else if (modelName.includes('1.5-flash')) {
+        return '(Fast, good balance of speed and quality)';
+      } else if (modelName.includes('1.0-pro')) {
+        return '(Legacy model, stable)';
+      }
+      return '(Gemini model)';
+    }
+
+    // Ollama model descriptions (generic)
+    if (modelName.includes('tiny') || modelName.includes('small')) {
+      return '(Fast, lightweight)';
+    } else if (modelName.includes('large') || modelName.includes('big')) {
+      return '(High quality, slower)';
+    }
+
+    return '';
+  }
+
   render() {
     return html`
       <div class="settings-container">
         <div class="settings-section">
           <h3>Language Model (LLM)</h3>
+          
+          ${this.isLoadingProviders ? html`
+            <div class="status-message status-info">
+              Loading available providers...
+            </div>
+          ` : html`
+            <div class="dropdown-row">
+              <div class="dropdown-description">
+                <strong>LLM Provider</strong>
+                <p>${this.getProviderDescription(this.currentLLMProvider)}</p>
+              </div>
+              <select 
+                class="model-select"
+                .value=${this.currentLLMProvider}
+                @change=${this.changeLLMProvider}
+                ?disabled=${this.isLoadingProviders}
+              >
+                ${this.availableLLMProviders.map(provider => html`
+                  <option value=${provider} ?selected=${provider === this.currentLLMProvider}>
+                    ${this.getProviderDisplayName(provider)}
+                  </option>
+                `)}
+              </select>
+            </div>
+
+            <div class="settings-row">
+              <div class="settings-description">
+                <strong>Gemini API Key</strong>
+                <p>Enter your Google Gemini API key to enable cloud-based generation</p>
+              </div>
+              <input 
+                type="password" 
+                class="text-input"
+                .value=${this.geminiApiKey}
+                @blur=${this.updateGeminiApiKey}
+                placeholder="Enter Gemini API key..."
+              />
+            </div>
+          `}
+          
           ${this.isLoadingLLMModels ? html`
             <div class="status-message status-info">
               Loading available models...
@@ -760,8 +926,14 @@ export class SettingsPanel extends LitElement {
             </div>
             
             <div class="model-info">
-              Word generation: ${this.currentWordGenerationModel || 'None selected'}<br>
-              Sentence generation: ${this.currentSentenceGenerationModel || 'None selected'}
+              Provider: ${this.getProviderDisplayName(this.currentLLMProvider)}
+              ${this.currentLLMProvider === 'gemini' && !this.geminiApiKey.trim() ? html`
+                <span style="color: #dc3545;"> (⚠️ API key required)</span>
+              ` : html`
+                <span style="color: #28a745;"> (✓ Ready)</span>
+              `}<br>
+              Word generation: ${this.currentWordGenerationModel || 'None selected'} ${this.getLLMModelDescription(this.currentWordGenerationModel)}<br>
+              Sentence generation: ${this.currentSentenceGenerationModel || 'None selected'} ${this.getLLMModelDescription(this.currentSentenceGenerationModel)}
             </div>
           ` : html`
             <div class="status-message status-error">
