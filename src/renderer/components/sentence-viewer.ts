@@ -492,6 +492,13 @@ export class SentenceViewer extends LitElement {
     }));
   }
 
+  private handleRemoveSentence() {
+    this.dispatchEvent(new CustomEvent('remove-sentence', {
+      bubbles: true,
+      composed: true
+    }));
+  }
+
   private setupKeyboardBindings() {
     // Note: Audio playback and word marking keyboard shortcuts are handled 
     // by the parent learning-mode component to avoid conflicts
@@ -578,6 +585,14 @@ export class SentenceViewer extends LitElement {
           >
             ${this.targetWord.known ? 'Already Known' : 'Mark as Known'} 
             ${!this.targetWord.known ? html`<span class="keyboard-hint">(K)</span>` : ''}
+          </button>
+
+          <button
+            class="btn btn-danger word-action-btn"
+            @click=${this.handleRemoveSentence}
+          >
+            Remove Sentence
+            <span class="keyboard-hint">(Del)</span>
           </button>
           
           <button

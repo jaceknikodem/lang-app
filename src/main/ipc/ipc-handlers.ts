@@ -21,6 +21,7 @@ const CreateWordSchema = z.object({
 });
 
 const WordIdSchema = z.number().int().positive();
+const SentenceIdSchema = z.number().int().positive();
 const StrengthSchema = z.number().int().min(0).max(100);
 const BooleanSchema = z.boolean();
 const LimitSchema = z.number().int().positive().max(1000);
@@ -165,6 +166,16 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     } catch (error) {
       console.error('Error getting sentences by word:', error);
       throw new Error(`Failed to get sentences by word: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DATABASE.DELETE_SENTENCE, async (event, sentenceId) => {
+    try {
+      const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
+      await databaseLayer.deleteSentence(validatedSentenceId);
+    } catch (error) {
+      console.error('Error deleting sentence:', error);
+      throw new Error(`Failed to delete sentence: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
 

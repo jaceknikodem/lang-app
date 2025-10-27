@@ -20,6 +20,7 @@ export interface IPCBridge {
     getRecentStudySessions: (limit?: number) => Promise<Array<{ id: number, wordsStudied: number, whenStudied: Date }>>;
     insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string, contextBefore?: string, contextAfter?: string, contextBeforeTranslation?: string, contextAfterTranslation?: string) => Promise<number>;
     getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
+    deleteSentence: (sentenceId: number) => Promise<void>;
     updateLastStudied: (wordId: number) => Promise<void>;
     getStudyStats: () => Promise<StudyStats>;
     recordStudySession: (wordsStudied: number) => Promise<void>;
@@ -144,6 +145,7 @@ export const IPC_CHANNELS = {
     GET_RECENT_STUDY_SESSIONS: 'database:getRecentStudySessions',
     INSERT_SENTENCE: 'database:insertSentence',
     GET_SENTENCES_BY_WORD: 'database:getSentencesByWord',
+    DELETE_SENTENCE: 'database:deleteSentence',
     UPDATE_LAST_STUDIED: 'database:updateLastStudied',
     GET_STUDY_STATS: 'database:getStudyStats',
     RECORD_STUDY_SESSION: 'database:recordStudySession',

@@ -174,6 +174,8 @@ export const GlobalShortcuts = {
   PREVIOUS: { key: CommonKeys.ARROW_LEFT, description: 'Previous item' },
   MARK_KNOWN: { key: 'k', description: 'Mark word as known' },
   MARK_IGNORED: { key: 'i', description: 'Mark word as ignored' },
+  REMOVE_SENTENCE: { key: CommonKeys.DELETE, description: 'Remove current sentence' },
+  REMOVE_SENTENCE_BACKSPACE: { key: CommonKeys.BACKSPACE, description: 'Remove current sentence' },
   REVEAL_ANSWER: { key: CommonKeys.ENTER, description: 'Reveal answer/Continue' },
   
   // Quiz actions

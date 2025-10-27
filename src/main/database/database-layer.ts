@@ -457,6 +457,24 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
+  /**
+   * Delete a sentence by ID
+   */
+  async deleteSentence(sentenceId: number): Promise<void> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare('DELETE FROM sentences WHERE id = ?');
+      const result = stmt.run(sentenceId);
+      
+      if (result.changes === 0) {
+        throw new Error(`Sentence with ID ${sentenceId} not found`);
+      }
+    } catch (error) {
+      throw new Error(`Failed to delete sentence: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   // Progress tracking operations
 
   /**

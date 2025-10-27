@@ -35,6 +35,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.INSERT_SENTENCE, wordId, sentence, translation, audioPath, contextBefore, contextAfter, contextBeforeTranslation, contextAfterTranslation),
     getSentencesByWord: (wordId: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_SENTENCES_BY_WORD, wordId),
+    deleteSentence: (sentenceId: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.DELETE_SENTENCE, sentenceId),
     updateLastStudied: (wordId: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.UPDATE_LAST_STUDIED, wordId),
     getStudyStats: (language?: string) => 
@@ -213,6 +215,7 @@ declare global {
         getRecentStudySessions: (limit?: number) => Promise<any[]>;
         insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string, contextBefore?: string, contextAfter?: string, contextBeforeTranslation?: string, contextAfterTranslation?: string) => Promise<number>;
         getSentencesByWord: (wordId: number) => Promise<any[]>;
+        deleteSentence: (sentenceId: number) => Promise<void>;
         updateLastStudied: (wordId: number) => Promise<void>;
         getStudyStats: (language?: string) => Promise<any>;
         recordStudySession: (wordsStudied: number) => Promise<void>;

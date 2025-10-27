@@ -446,6 +446,73 @@ export class LearningMode extends LitElement {
     this.handleWordStatusChange(word, false);
   }
 
+  private async handleRemoveCurrentSentence() {
+    if (this.isLoading || this.error || this.showCompletion || this.isProcessing) return;
+
+    const currentWord = this.getCurrentWord();
+    const currentSentence = this.getCurrentSentence();
+
+    if (!currentWord || !currentSentence) return;
+
+    const confirmed = window.confirm('Remove this sentence from the current review session?');
+    if (!confirmed) return;
+
+    this.isProcessing = true;
+
+    try {
+      await window.electronAPI.database.deleteSentence(currentSentence.id);
+
+      const updatedWords = this.wordsWithSentences
+        .map(word => {
+          if (word.id !== currentWord.id) {
+            return word;
+          }
+
+          const remainingSentences = word.sentences.filter(sentence => sentence.id !== currentSentence.id);
+          return {
+            ...word,
+            sentences: remainingSentences
+          };
+        })
+        .filter(word => word.sentences.length > 0);
+
+      this.wordsWithSentences = updatedWords;
+
+      if (updatedWords.length === 0) {
+        this.currentWordIndex = 0;
+        this.currentSentenceIndex = 0;
+
+        if (!this.showCompletion) {
+          await this.handleFinishLearning();
+        }
+        return;
+      }
+
+      let newWordIndex = Math.min(this.currentWordIndex, updatedWords.length - 1);
+      let newSentenceIndex = this.currentSentenceIndex;
+
+      const currentWordStillExists = updatedWords[newWordIndex]?.id === currentWord.id;
+
+      if (currentWordStillExists) {
+        const sentenceCount = updatedWords[newWordIndex].sentences.length;
+        if (newSentenceIndex >= sentenceCount) {
+          newSentenceIndex = Math.max(sentenceCount - 1, 0);
+        }
+      } else {
+        newSentenceIndex = 0;
+      }
+
+      this.currentWordIndex = newWordIndex;
+      this.currentSentenceIndex = newSentenceIndex;
+      this.saveProgressToSession();
+    } catch (error) {
+      console.error('Failed to delete sentence:', error);
+      window.alert('Failed to remove sentence. Please try again.');
+    } finally {
+      this.isProcessing = false;
+    }
+  }
+
   private goToPreviousSentence() {
     if (this.currentSentenceIndex > 0) {
       this.currentSentenceIndex--;
@@ -530,7 +597,10 @@ export class LearningMode extends LitElement {
     // Determine next recommendation based on word strengths
     let nextRecommendation: SessionSummary['nextRecommendation'] = 'take-quiz';
 
-    const averageStrength = this.wordsWithSentences.reduce((sum, w) => sum + w.strength, 0) / this.wordsWithSentences.length;
+    const totalStrength = this.wordsWithSentences.reduce((sum, w) => sum + w.strength, 0);
+    const averageStrength = this.wordsWithSentences.length
+      ? totalStrength / this.wordsWithSentences.length
+      : 0;
 
     if (averageStrength < 50) {
       nextRecommendation = 'continue-learning';
@@ -582,6 +652,18 @@ export class LearningMode extends LitElement {
         action: () => this.handleMarkCurrentWordIgnored(),
         context: 'learning',
         description: 'Mark current word as ignored'
+      },
+      {
+        ...GlobalShortcuts.REMOVE_SENTENCE,
+        action: () => this.handleRemoveCurrentSentence(),
+        context: 'learning',
+        description: 'Remove current sentence'
+      },
+      {
+        ...GlobalShortcuts.REMOVE_SENTENCE_BACKSPACE,
+        action: () => this.handleRemoveCurrentSentence(),
+        context: 'learning',
+        description: 'Remove current sentence'
       },
       // Audio
       {
@@ -800,6 +882,7 @@ export class LearningMode extends LitElement {
           @word-clicked=${this.handleWordClicked}
           @mark-word-known=${this.handleMarkWordKnown}
           @mark-word-ignored=${this.handleMarkWordIgnored}
+          @remove-sentence=${this.handleRemoveCurrentSentence}
         ></sentence-viewer>
 
         <div class="navigation-section">

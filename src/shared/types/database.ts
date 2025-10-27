@@ -34,6 +34,7 @@ export interface DatabaseLayer {
   insertSentence(wordId: number, sentence: string, translation: string, audioPath: string): Promise<number>;
   getSentencesByWord(wordId: number): Promise<Sentence[]>;
   getSentenceById(sentenceId: number): Promise<Sentence | null>;
+  deleteSentence(sentenceId: number): Promise<void>;
   updateSentenceLastShown(sentenceId: number): Promise<void>;
   
   // Progress tracking

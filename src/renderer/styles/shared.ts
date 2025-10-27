@@ -166,6 +166,15 @@ export const sharedStyles = css`
     background: #E6850E;
   }
 
+  .btn-danger {
+    background: var(--error-color);
+    color: white;
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background: var(--error-dark);
+  }
+
   .btn-large {
     padding: var(--spacing-lg) var(--spacing-xl);
     font-size: 16px;

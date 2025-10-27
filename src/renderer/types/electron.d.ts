@@ -20,6 +20,7 @@ declare global {
         getRecentStudySessions: (limit?: number) => Promise<Array<{id: number, wordsStudied: number, whenStudied: Date}>>;
         insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string) => Promise<number>;
         getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
+        deleteSentence: (sentenceId: number) => Promise<void>;
         updateLastStudied: (wordId: number) => Promise<void>;
         getStudyStats: () => Promise<StudyStats>;
         recordStudySession: (wordsStudied: number) => Promise<void>;
