@@ -58,9 +58,6 @@ export class LifecycleManager {
     try {
       console.log('Starting graceful shutdown...');
       
-      // Create backup before shutdown
-      await this.createBackup();
-      
       // Close database connections
       if (this.config.databaseLayer) {
         await this.config.databaseLayer.close();
