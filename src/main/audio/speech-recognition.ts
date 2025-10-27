@@ -462,28 +462,45 @@ export class SpeechRecognitionService {
    * Clean transcription text by removing unwanted tokens and repetitions
    */
   private cleanTranscriptionText(text: string): string {
+    console.log('Starting cleaning process with:', text);
+    
     // Remove bracketed tokens like [Música], [Music], [Applause], etc.
     let cleaned = text.replace(/\[.*?\]/g, '');
+    console.log('After removing brackets:', cleaned);
     
     // Remove extra whitespace
     cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    console.log('After whitespace cleanup:', cleaned);
     
     // Remove non-Latin characters that indicate hallucination (Tamil, Chinese, etc.)
     cleaned = cleaned.replace(/[\u0B80-\u0BFF\u4E00-\u9FFF\u0900-\u097F]/g, '');
+    console.log('After removing non-Latin chars:', cleaned);
     
     // Split into words and validate each word
+    console.log('Words before filtering:', cleaned.split(' '));
     const words = cleaned.split(' ').filter(word => {
       const trimmed = word.trim();
       if (trimmed.length === 0) return false;
       
       // Filter out words with mixed scripts or obvious garbage
-      if (/[^\w\sáéíóúüñ¿¡]/i.test(trimmed)) return false;
+      // Allow letters, numbers, spaces, and Spanish accented characters
+      const hasInvalidChars = /[^\w\sáéíóúüñ¿¡.,;:]/i.test(trimmed);
+      if (hasInvalidChars) {
+        console.log(`Filtering out word with invalid chars: "${trimmed}"`);
+        return false;
+      }
       
-      // Filter out very short fragments that don't make sense
-      if (trimmed.length === 1 && !/[aeiouáéíóú]/i.test(trimmed)) return false;
+      // Filter out very short fragments that don't make sense (but allow common Spanish words like "al", "el", "la", "en")
+      const isSingleInvalidChar = trimmed.length === 1 && !/[aeiouáéíóúy]/i.test(trimmed);
+      if (isSingleInvalidChar) {
+        console.log(`Filtering out single invalid char: "${trimmed}"`);
+        return false;
+      }
       
       return true;
     });
+    
+    console.log('Words after filtering:', words);
     
     // Remove repeated words (sometimes whisper repeats words)
     const filteredWords = [];
