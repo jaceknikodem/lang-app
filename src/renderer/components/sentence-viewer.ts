@@ -2,19 +2,12 @@
  * Sentence viewer component for learning mode
  */
 
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { Word, Sentence, DictionaryEntry } from '../../shared/types/core.js';
-import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
-
-interface WordInSentence {
-  text: string;
-  isTargetWord: boolean;
-  wordData?: Word;
-  dictionaryForm?: string;
-  dictionaryKey?: string;
-}
+import { useKeyboardBindings } from '../utils/keyboard-manager.js';
+import type { TokenizedWord as WordInSentence } from '../utils/sentence-tokenizer.js';
 
 @customElement('sentence-viewer')
 export class SentenceViewer extends LitElement {
@@ -40,6 +33,7 @@ export class SentenceViewer extends LitElement {
   private dictionaryCache: Record<string, DictionaryEntry[] | null> = {};
 
   private dictionaryLookupInFlight = new Set<string>();
+  private dictionaryLookupPromises: Partial<Record<string, Promise<DictionaryEntry[] | null>>> = {};
 
   private keyboardUnsubscribe?: () => void;
 
@@ -359,37 +353,33 @@ export class SentenceViewer extends LitElement {
     }
   }
 
-  private parseSentence() {
+  private parseSentence(): void {
     if (!this.sentence?.sentence) {
       this.parsedWords = [];
       return;
     }
 
-    // Better word parsing - split by spaces and punctuation but handle them properly
     const parts = this.sentence.sentence.split(/(\s+|[.,!?;:])/);
-    
+
     this.parsedWords = parts.map(text => {
-      // If it's just whitespace, keep it as is for proper spacing
       if (/^\s+$/.test(text)) {
         return { text, isTargetWord: false };
       }
-      
-      // If it's punctuation, keep it as is
+
       if (/^[.,!?;:]+$/.test(text)) {
         return { text, isTargetWord: false };
       }
+
       const dictionaryForm = text.trim().replace(/[.,!?;:]/g, '');
       const cleanText = dictionaryForm.toLowerCase();
-      
+
       if (!cleanText) {
         return { text, isTargetWord: false };
       }
 
-      // Check if this is the target word
       const isTargetWord = cleanText === this.targetWord.word.toLowerCase();
-      
-      // Find matching word in allWords
-      const wordData = this.allWords.find(w => 
+
+      const wordData = this.allWords.find(w =>
         w.word.toLowerCase() === cleanText
       );
 
@@ -409,6 +399,11 @@ export class SentenceViewer extends LitElement {
     });
   }
 
+  // Allows async tokenization pipelines to push pre-processed words into the view.
+  public applyTokenizedWords(words: WordInSentence[]): void {
+    this.parsedWords = words;
+  }
+
   private buildDictionaryKey(word: string): string | undefined {
     const trimmed = word.trim();
     if (!trimmed) {
@@ -420,28 +415,49 @@ export class SentenceViewer extends LitElement {
   }
 
   private async ensureDictionaryEntry(word: string, key: string): Promise<void> {
-    if (this.dictionaryLookupInFlight.has(key) || Object.prototype.hasOwnProperty.call(this.dictionaryCache, key)) {
-      return;
+    await this.getDictionaryEntries(word, key);
+  }
+
+  private async getDictionaryEntries(word: string, key?: string): Promise<DictionaryEntry[] | null> {
+    const dictionaryKey = key ?? this.buildDictionaryKey(word);
+
+    if (!dictionaryKey) {
+      return null;
     }
 
-    this.dictionaryLookupInFlight.add(key);
-
-    try {
-      const entries = await window.electronAPI.database.lookupDictionary(word, this.targetWord?.language);
-      const normalizedEntries = Array.isArray(entries) && entries.length > 0 ? entries : null;
-      this.dictionaryCache = {
-        ...this.dictionaryCache,
-        [key]: normalizedEntries
-      };
-    } catch (error) {
-      console.error('Failed to load dictionary entries:', error);
-      this.dictionaryCache = {
-        ...this.dictionaryCache,
-        [key]: null
-      };
-    } finally {
-      this.dictionaryLookupInFlight.delete(key);
+    if (Object.prototype.hasOwnProperty.call(this.dictionaryCache, dictionaryKey)) {
+      return this.dictionaryCache[dictionaryKey] ?? null;
     }
+
+    if (this.dictionaryLookupPromises[dictionaryKey]) {
+      return this.dictionaryLookupPromises[dictionaryKey];
+    }
+
+    const lookupPromise = (async () => {
+      try {
+        this.dictionaryLookupInFlight.add(dictionaryKey);
+        const entries = await window.electronAPI.database.lookupDictionary(word, this.targetWord?.language);
+        const normalizedEntries = Array.isArray(entries) && entries.length > 0 ? entries : null;
+        this.dictionaryCache = {
+          ...this.dictionaryCache,
+          [dictionaryKey]: normalizedEntries
+        };
+        return normalizedEntries;
+      } catch (error) {
+        console.error('Failed to load dictionary entries:', error);
+        this.dictionaryCache = {
+          ...this.dictionaryCache,
+          [dictionaryKey]: null
+        };
+        return null;
+      } finally {
+        this.dictionaryLookupInFlight.delete(dictionaryKey);
+        delete this.dictionaryLookupPromises[dictionaryKey];
+      }
+    })();
+
+    this.dictionaryLookupPromises[dictionaryKey] = lookupPromise;
+    return lookupPromise;
   }
 
   private formatDictionaryTooltip(entries: DictionaryEntry[]): string {
@@ -671,14 +687,15 @@ export class SentenceViewer extends LitElement {
               }
               
               // For actual words, render with full styling
+              const tooltipText = this.getWordTooltip(wordInfo);
               return html`
                 <span
                   class="word-in-sentence ${this.getWordClass(wordInfo)}"
                   @click=${() => this.handleWordClick(wordInfo)}
-                  title=${this.getWordTooltip(wordInfo)}
+                  aria-label=${tooltipText || nothing}
                 >
                   ${wordInfo.text}
-                  ${this.getWordTooltip(wordInfo) ? html`<div class="tooltip">${this.getWordTooltip(wordInfo)}</div>` : ''}
+                  ${tooltipText ? html`<div class="tooltip">${tooltipText}</div>` : nothing}
                 </span>
               `;
             })}
