@@ -6,6 +6,8 @@ import { Page, ElectronApplication } from 'playwright';
 import * as path from 'path';
 import * as fs from 'fs';
 
+process.env.E2E_FORCE_LOCAL_SERVICES = '1';
+
 export interface TestAppOptions {
   testDataDir?: string;
   mockLLMFailure?: boolean;

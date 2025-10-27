@@ -17,7 +17,13 @@ export class AudioService {
 
   constructor(audioGenerator?: AudioGenerator, database?: DatabaseLayer) {
     this.database = database;
-    this.audioGenerator = audioGenerator || this.createDefaultAudioGenerator(database);
+    if (audioGenerator) {
+      this.audioGenerator = audioGenerator;
+    } else if (this.shouldForceSystemTTS()) {
+      this.audioGenerator = new TTSAudioGenerator(undefined, database);
+    } else {
+      this.audioGenerator = this.createDefaultAudioGenerator(database);
+    }
     this.audioRecorder = new AudioRecorder();
     this.speechRecognition = new SpeechRecognitionService();
   }
@@ -26,6 +32,10 @@ export class AudioService {
    * Create default audio generator based on available settings
    */
   private createDefaultAudioGenerator(database?: DatabaseLayer): AudioGenerator {
+    if (this.shouldForceSystemTTS()) {
+      return new TTSAudioGenerator(undefined, database);
+    }
+
     // Try to get ElevenLabs API key from database settings asynchronously
     if (database) {
       // Check for ElevenLabs settings in the background and switch if available
@@ -40,6 +50,10 @@ export class AudioService {
    * Check for ElevenLabs settings and switch if available
    */
   private async checkAndSwitchToElevenLabs(database: DatabaseLayer): Promise<void> {
+    if (this.shouldForceSystemTTS()) {
+      return;
+    }
+
     try {
       const model = await database.getSetting('elevenlabs_model');
       
@@ -66,6 +80,11 @@ export class AudioService {
    * Switch to ElevenLabs TTS if API key is provided
    */
   async switchToElevenLabs(apiKey: string): Promise<void> {
+    if (this.shouldForceSystemTTS()) {
+      await this.switchToSystemTTS();
+      return;
+    }
+
     try {
       // Get model from database if available
       let model = 'eleven_flash_v2_5'; // Default to flash model
@@ -428,6 +447,13 @@ export class AudioService {
    */
   isSpeechRecognitionReady(): boolean {
     return this.speechRecognition.isServiceInitialized();
+  }
+
+  /**
+   * Determine if the system TTS should be forced (used for automated environments)
+   */
+  private shouldForceSystemTTS(): boolean {
+    return process.env.E2E_FORCE_LOCAL_SERVICES === '1';
   }
 
   /**

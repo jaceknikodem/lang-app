@@ -10,6 +10,7 @@ import { LLMClient, ContentGenerator, LLMFactory, LLMProvider } from './llm/inde
 import { AudioService } from './audio/audio-service.js';
 import { SRSService } from './srs/srs-service.js';
 import { LifecycleManager, UpdateManager } from './lifecycle/index.js';
+import { LLM_CONFIG } from '../shared/constants/index.js';
 
 let mainWindow: BrowserWindow;
 let databaseLayer: SQLiteDatabaseLayer | undefined;
@@ -19,6 +20,8 @@ let audioService: AudioService | undefined;
 let srsService: SRSService | undefined;
 let lifecycleManager: LifecycleManager | undefined;
 let updateManager: UpdateManager | undefined;
+
+const forceLocalServices = process.env.E2E_FORCE_LOCAL_SERVICES === '1';
 
 async function initializeServices(): Promise<void> {
   try {
@@ -53,29 +56,51 @@ async function initializeServices(): Promise<void> {
 
     // Determine initial LLM provider from persisted settings
     let initialProvider: LLMProvider = 'ollama';
-    try {
-      const storedProvider = await databaseLayer.getSetting('llm_provider');
-      if (storedProvider === 'gemini' || storedProvider === 'ollama') {
-        initialProvider = storedProvider as LLMProvider;
+    if (!forceLocalServices) {
+      try {
+        const storedProvider = await databaseLayer.getSetting('llm_provider');
+        if (storedProvider === 'gemini' || storedProvider === 'ollama') {
+          initialProvider = storedProvider as LLMProvider;
+        }
+      } catch (e) {
+        console.warn('Could not read llm_provider setting, defaulting to ollama');
       }
-    } catch (e) {
-      console.warn('Could not read llm_provider setting, defaulting to ollama');
+    } else {
+      try {
+        await databaseLayer.setSetting('llm_provider', 'ollama');
+      } catch (e) {
+        console.warn('Failed to persist forced ollama provider for tests:', e);
+      }
     }
 
     // Get Gemini API key if needed
     let geminiApiKey = '';
-    try {
-      const storedKey = await databaseLayer.getSetting('gemini_api_key');
-      geminiApiKey = storedKey || '';
-    } catch (e) {
-      console.warn('Could not read gemini_api_key setting');
+    if (!forceLocalServices) {
+      try {
+        const storedKey = await databaseLayer.getSetting('gemini_api_key');
+        geminiApiKey = storedKey || '';
+      } catch (e) {
+        console.warn('Could not read gemini_api_key setting');
+      }
     }
 
     // Initialize LLM client based on persisted provider
-    if (initialProvider === 'gemini') {
+    if (!forceLocalServices && initialProvider === 'gemini') {
       llmClient = LLMFactory.createGeminiClient(geminiApiKey);
     } else {
-      llmClient = LLMFactory.createOllamaClient();
+      llmClient = LLMFactory.createOllamaClient(
+        forceLocalServices ? {
+          model: LLM_CONFIG.DEFAULT_MODEL,
+          wordGenerationModel: LLM_CONFIG.DEFAULT_WORD_GENERATION_MODEL,
+          sentenceGenerationModel: LLM_CONFIG.DEFAULT_SENTENCE_GENERATION_MODEL
+        } : undefined
+      );
+
+      if (forceLocalServices) {
+        llmClient.setModel(LLM_CONFIG.DEFAULT_MODEL);
+        llmClient.setWordGenerationModel(LLM_CONFIG.DEFAULT_WORD_GENERATION_MODEL);
+        llmClient.setSentenceGenerationModel(LLM_CONFIG.DEFAULT_SENTENCE_GENERATION_MODEL);
+      }
     }
     
     // Inject database layer into LLM client for duplicate checking
@@ -83,8 +108,8 @@ async function initializeServices(): Promise<void> {
     
     // Initialize content generator with LLM client and provider config
     contentGenerator = new ContentGenerator(llmClient, {
-      llmProvider: initialProvider,
-      geminiApiKey
+      llmProvider: forceLocalServices ? 'ollama' : initialProvider,
+      geminiApiKey: forceLocalServices ? '' : geminiApiKey
     });
     
     // Initialize the content generator (including frequency word manager)
@@ -130,8 +155,8 @@ async function setupSecurity(): Promise<void> {
       return;
     }
 
-    // Allow Gemini API requests
-    if (url.hostname === 'generativelanguage.googleapis.com') {
+    // Allow Gemini API requests unless tests force local-only services
+    if (!forceLocalServices && url.hostname === 'generativelanguage.googleapis.com') {
       callback({ cancel: false });
       return;
     }
