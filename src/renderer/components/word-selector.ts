@@ -7,6 +7,7 @@ import { customElement, state, property } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
+import { useKeyboardBindings, CommonKeys } from '../utils/keyboard-manager.js';
 import { GeneratedWord } from '../../shared/types/core.js';
 
 interface SelectableWord extends GeneratedWord {
@@ -33,6 +34,8 @@ export class WordSelector extends LitElement {
 
   @state()
   private error = '';
+
+  private keyboardUnsubscribe?: () => void;
 
   static styles = [
     sharedStyles,
@@ -302,6 +305,14 @@ export class WordSelector extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.initializeWords();
+    this.setupKeyboardBindings();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this.keyboardUnsubscribe) {
+      this.keyboardUnsubscribe();
+    }
   }
 
   private initializeWords() {
@@ -347,6 +358,30 @@ export class WordSelector extends LitElement {
       word.selected = false;
     });
     this.requestUpdate();
+  }
+
+  private setupKeyboardBindings() {
+    const bindings = [
+      {
+        key: CommonKeys.ENTER,
+        action: () => {
+          if (this.isProcessing) {
+            return;
+          }
+
+          const hasSelection = this.getSelectedWords().length > 0 || this.getKnownWords().length > 0;
+          if (!hasSelection) {
+            return;
+          }
+
+          return this.handleStartLearning();
+        },
+        context: 'word-selection',
+        description: 'Start learning with selected words'
+      }
+    ];
+
+    this.keyboardUnsubscribe = useKeyboardBindings(bindings);
   }
 
   private getSelectedWords(): GeneratedWord[] {
@@ -530,6 +565,11 @@ export class WordSelector extends LitElement {
 
     const selectedCount = this.selectableWords.filter(w => w.selected && !w.markedAsKnown).length;
     const knownCount = this.selectableWords.filter(w => w.markedAsKnown).length;
+    const learnButtonLabel = selectedCount > 0
+      ? `Learn (${selectedCount} ${selectedCount === 1 ? 'word' : 'words'})`
+      : knownCount > 0
+        ? `Save (${knownCount} known)`
+        : 'Start Learning';
 
     return html`
       <div class="word-selector-container">
@@ -565,7 +605,7 @@ export class WordSelector extends LitElement {
                 @click=${this.handleStartLearning}
                 ?disabled=${selectedCount === 0 && knownCount === 0}
               >
-                ${selectedCount > 0 ? `Learn (${selectedCount} words)` : knownCount > 0 ? `Save (${knownCount} known)` : 'Start Learning'}
+                ${learnButtonLabel}
               </button>
               <button class="btn btn-small btn-secondary" @click=${this.selectAll}>
                 Select All
