@@ -261,6 +261,15 @@ export class SettingsPanel extends LitElement {
   @state()
   private speechRecognitionReady = false;
 
+  @state()
+  private availableLLMModels: string[] = [];
+
+  @state()
+  private currentLLMModel = '';
+
+  @state()
+  private isLoadingLLMModels = false;
+
 
 
 
@@ -280,6 +289,9 @@ export class SettingsPanel extends LitElement {
 
       // Load speech recognition settings
       await this.loadSpeechRecognitionSettings();
+
+      // Load LLM settings
+      await this.loadLLMSettings();
     } catch (error) {
       console.error('Failed to load settings:', error);
     }
@@ -306,6 +318,29 @@ export class SettingsPanel extends LitElement {
     } catch (error) {
       console.error('Failed to load speech recognition settings:', error);
       this.speechRecognitionReady = false;
+    }
+  }
+
+  private async loadLLMSettings() {
+    this.isLoadingLLMModels = true;
+    
+    try {
+      // Get available LLM models
+      this.availableLLMModels = await window.electronAPI.llm.getAvailableModels();
+      
+      // Get current LLM model
+      this.currentLLMModel = await window.electronAPI.llm.getCurrentModel();
+      
+      console.log('LLM settings loaded:', {
+        models: this.availableLLMModels,
+        current: this.currentLLMModel
+      });
+    } catch (error) {
+      console.error('Failed to load LLM settings:', error);
+      this.availableLLMModels = [];
+      this.currentLLMModel = '';
+    } finally {
+      this.isLoadingLLMModels = false;
     }
   }
 
@@ -446,6 +481,24 @@ export class SettingsPanel extends LitElement {
     return '';
   }
 
+  private async changeLLMModel(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const selectedModel = select.value;
+    
+    if (!selectedModel) return;
+    
+    try {
+      await window.electronAPI.llm.setModel(selectedModel);
+      this.currentLLMModel = selectedModel;
+      
+      console.log('LLM model changed to:', this.currentLLMModel);
+    } catch (error) {
+      console.error('Failed to change LLM model:', error);
+      // Revert the selection
+      select.value = this.currentLLMModel;
+    }
+  }
+
 
 
 
@@ -455,7 +508,40 @@ export class SettingsPanel extends LitElement {
       <div class="settings-container">
         <h2>Settings</h2>
 
-
+        <div class="settings-section">
+          <h3>Language Model (LLM)</h3>
+          ${this.isLoadingLLMModels ? html`
+            <div class="status-message status-info">
+              Loading available models...
+            </div>
+          ` : this.availableLLMModels.length > 0 ? html`
+            <div class="dropdown-row">
+              <div class="dropdown-description">
+                <strong>Ollama Model</strong>
+                <p>Choose the language model for generating vocabulary words and sentences</p>
+              </div>
+              <select 
+                class="model-select"
+                .value=${this.currentLLMModel}
+                @change=${this.changeLLMModel}
+                ?disabled=${this.isLoadingLLMModels}
+              >
+                ${this.availableLLMModels.map(model => html`
+                  <option value=${model} ?selected=${model === this.currentLLMModel}>
+                    ${model}
+                  </option>
+                `)}
+              </select>
+            </div>
+            <div class="model-info">
+              Current model: ${this.currentLLMModel || 'None selected'}
+            </div>
+          ` : html`
+            <div class="status-message status-error">
+              No LLM models available. Please ensure Ollama is running and has models installed.
+            </div>
+          `}
+        </div>
 
         <div class="settings-section">
           <h3>Speech Recognition</h3>
