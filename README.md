@@ -1,6 +1,6 @@
 # Local Language Learning App
 
-A privacy-first desktop language learning application that operates entirely offline. The app helps users learn vocabulary through contextual sentences rather than isolated words, focusing on spoken-style comprehension and natural language patterns.
+A vocabulary coach that teaches *words in context*, *incorporating the words you already know*, incl. listening/speaking practice, *fully offline* (on your device, no accounts).
 
 ## Features
 
@@ -47,33 +47,13 @@ A privacy-first desktop language learning application that operates entirely off
 └── build/                   # Build configuration and assets
 ```
 
-## Development Commands
-
-```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Package for distribution
-npm run dist
-
-# Run tests
-npm test
-
-# Run E2E tests
-npm run test:e2e
-```
-
 ## Prerequisites
 
 - **Node.js**: Version 18+ for Electron compatibility
 - **macOS**: Required for system TTS integration (`say` command)
 - **Homebrew**: Package manager for installing dependencies
+- **Ollama**: Local language model for inference
+- **Whisper**: Speech recognition model for audio input
 
 ### Required Dependencies
 
@@ -117,26 +97,11 @@ ollama serve
 
 You can verify Ollama is running by visiting `http://localhost:11434` in your browser.
 
-## Getting Started
-
-1. Clone the repository
-2. Install dependencies: `npm install`
-3. Ensure Ollama is running locally
-4. Start development: `npm run dev`
-
 ## Architecture
 
-The application follows a secure Electron architecture with:
+The application follows a Electron architecture with:
 
 - **Main Process**: Handles all system interactions (database, LLM, TTS)
 - **Renderer Process**: Sandboxed UI layer with Lit components
 - **IPC Bridge**: Secure communication between main and renderer processes
 - **Local-first**: No external network dependencies except local Ollama instance
-
-## Security
-
-- Renderer process runs in sandbox mode
-- All cross-process data validated with Zod schemas
-- No external network access except localhost Ollama
-- Audio files limited to designated directory
-- All user data remains on local device

@@ -153,12 +153,20 @@ export class QuizMode extends LitElement {
         box-shadow: var(--shadow-medium);
       }
 
+      .question-text-container {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-md);
+        margin-bottom: var(--spacing-sm);
+      }
+
       .question-text {
-        font-size: 28px;
+        font-size: 20px;
         font-weight: 500;
         color: var(--text-primary);
-        margin-bottom: var(--spacing-sm);
-        line-height: 1.3;
+        line-height: 1.4;
+        flex: 1;
+        text-align: left;
       }
 
       .question-translation {
@@ -181,14 +189,16 @@ export class QuizMode extends LitElement {
         color: white;
         border: none;
         border-radius: var(--border-radius);
-        padding: var(--spacing-sm) var(--spacing-md);
-        font-size: 14px;
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: 16px;
         cursor: pointer;
         transition: all 0.2s ease;
         display: flex;
         align-items: center;
-        gap: var(--spacing-sm);
-        margin: 0 auto var(--spacing-sm);
+        justify-content: center;
+        min-width: 40px;
+        height: 40px;
+        flex-shrink: 0;
       }
 
       .audio-button:hover {
@@ -876,8 +886,15 @@ export class QuizMode extends LitElement {
           justify-content: center;
         }
 
+        .question-text-container {
+          flex-direction: column;
+          align-items: center;
+          gap: var(--spacing-sm);
+        }
+
         .question-text {
-          font-size: 24px;
+          font-size: 18px;
+          text-align: center;
         }
 
         .answer-buttons {
@@ -1455,11 +1472,18 @@ export class QuizMode extends LitElement {
               </div>
             ` : ''}
             
-            <div class="question-text ${this.audioOnlyMode ? 'hidden' : ''}">${displayText}</div>
+            <div class="question-text-container ${this.audioOnlyMode ? 'hidden' : ''}">
+              <div class="question-text">${displayText}</div>
+              <button class="audio-button" @click=${this.playAudio}>
+                🔊
+              </button>
+            </div>
             
-            <button class="audio-button" @click=${this.playAudio}>
-              🔊 ${this.audioOnlyMode ? 'Play Audio (Listen Carefully!)' : 'Play Audio'}
-            </button>
+            ${!this.audioOnlyMode ? '' : html`
+              <button class="audio-button" @click=${this.playAudio} style="margin: 0 auto var(--spacing-sm);">
+                🔊
+              </button>
+            `}
 
             <div class="question-translation ${this.audioOnlyMode ? 'hidden' : ''}">
               Do you know what ${questionWord} means in this context?
