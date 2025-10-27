@@ -29,6 +29,7 @@ Language learners who prioritize privacy, prefer audio-based learning, and want 
 - **Adaptive Intelligence**: Automatic difficulty adjustment based on your performance
 - **Zero Typing**: Pure click-based interaction for distraction-free learning
 - **Persistent Progress**: SQLite database maintains all learning state locally
+- **Dual Model Support**: Choose separate small/big models for optimal performance (word generation vs sentence generation)
 
 ## Technology Stack
 
@@ -123,6 +124,24 @@ ollama serve
 ```
 
 You can verify Ollama is running by visiting `http://localhost:11434` in your browser.
+
+### Model Selection for Optimal Performance
+
+The app supports using separate models for different tasks to optimize performance:
+
+- **Small Model (Word Generation)**: Fast, lightweight model for generating vocabulary words and simple translations
+- **Big Model (Sentence Generation)**: More capable model for creating complex sentences with context
+
+**Recommended Setup:**
+```bash
+# For word generation (fast, lightweight)
+ollama pull granite4:tiny-h
+
+# For sentence generation (better quality)
+ollama pull llama3.2:3b
+```
+
+Configure these in the app's Settings panel under "Language Model (LLM)" section. See [MODEL_SELECTION.md](MODEL_SELECTION.md) for detailed configuration guide.
 
 ## Architecture
 
