@@ -151,44 +151,14 @@ export class GeminiClient implements LLMClient {
   }
 
   async getAvailableModels(): Promise<string[]> {
-    // Return comprehensive list of Gemini models (official supported models)
-    const geminiModels = [
+    // Return fixed list of supported Gemini models
+    return [
       'gemini-2.5-pro',
       'gemini-2.5-flash',
       'gemini-2.5-flash-lite',
       'gemini-2.0-flash',
       'gemini-2.0-flash-lite'
     ];
-
-    // If we have an API key, try to fetch the actual available models
-    if (this.config.apiKey && this.config.apiKey.trim() !== '') {
-      try {
-        const response = await fetch(`${this.baseUrl}?key=${this.config.apiKey}`, {
-          method: 'GET',
-          signal: AbortSignal.timeout(5000)
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.models && Array.isArray(data.models)) {
-            const apiModels = data.models
-              .map((model: any) => model.name?.replace('models/', '') || '')
-              .filter(Boolean)
-              .filter((name: string) => name.startsWith('gemini'));
-            
-            // Return API models if we got any, otherwise fall back to our list
-            if (apiModels.length > 0) {
-              return apiModels;
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching available models from API:', error);
-      }
-    }
-
-    // Return our comprehensive list as fallback
-    return geminiModels;
   }
 
   setModel(model: string): void {

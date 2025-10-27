@@ -85,7 +85,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setGeminiApiKey: (apiKey: string, switchToGemini?: boolean) => 
       ipcRenderer.invoke(IPC_CHANNELS.LLM.SET_GEMINI_API_KEY, apiKey, switchToGemini),
     getAvailableProviders: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_AVAILABLE_PROVIDERS)
+      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_AVAILABLE_PROVIDERS),
+    getModelsForProvider: (provider: 'ollama' | 'gemini') => 
+      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_MODELS_FOR_PROVIDER, provider)
   },
 
   // Audio operations
@@ -237,6 +239,7 @@ declare global {
         switchProvider: (provider: 'ollama' | 'gemini', geminiApiKey?: string) => Promise<void>;
         setGeminiApiKey: (apiKey: string, switchToGemini?: boolean) => Promise<void>;
         getAvailableProviders: () => Promise<Array<'ollama' | 'gemini'>>;
+        getModelsForProvider: (provider: 'ollama' | 'gemini') => Promise<string[]>;
       };
       audio: {
         generateAudio: (text: string, language?: string, word?: string) => Promise<string>;

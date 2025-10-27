@@ -505,6 +505,32 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       throw new Error(`Failed to get available providers: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
+
+  ipcMain.handle(IPC_CHANNELS.LLM.GET_MODELS_FOR_PROVIDER, async (event, provider) => {
+    try {
+      const validatedProvider = z.enum(['ollama', 'gemini']).parse(provider);
+      
+      if (validatedProvider === 'ollama') {
+        // Create a temporary Ollama client to get models
+        const ollamaClient = LLMFactory.createOllamaClient();
+        return await ollamaClient.getAvailableModels();
+      } else if (validatedProvider === 'gemini') {
+        // Create a temporary Gemini client to get models
+        let apiKey = '';
+        if (databaseLayer) {
+          const storedApiKey = await databaseLayer.getSetting('gemini_api_key');
+          apiKey = storedApiKey || '';
+        }
+        const geminiClient = LLMFactory.createGeminiClient(apiKey);
+        return await geminiClient.getAvailableModels();
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('Error getting models for provider:', error);
+      throw new Error(`Failed to get models for provider: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
 }
 
 /**

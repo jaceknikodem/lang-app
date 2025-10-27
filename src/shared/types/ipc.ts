@@ -17,7 +17,7 @@ export interface IPCBridge {
     getAllWords: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
     getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
     getWordsWithSentencesOrderedByStrength: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
-    getRecentStudySessions: (limit?: number) => Promise<Array<{id: number, wordsStudied: number, whenStudied: Date}>>;
+    getRecentStudySessions: (limit?: number) => Promise<Array<{ id: number, wordsStudied: number, whenStudied: Date }>>;
     insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string, contextBefore?: string, contextAfter?: string, contextBeforeTranslation?: string, contextAfterTranslation?: string) => Promise<number>;
     getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
     updateLastStudied: (wordId: number) => Promise<void>;
@@ -28,7 +28,7 @@ export interface IPCBridge {
     getCurrentLanguage: () => Promise<string>;
     setCurrentLanguage: (language: string) => Promise<void>;
     getAvailableLanguages: () => Promise<string[]>;
-    getLanguageStats: () => Promise<Array<{language: string, totalWords: number, studiedWords: number}>>;
+    getLanguageStats: () => Promise<Array<{ language: string, totalWords: number, studiedWords: number }>>;
   };
 
   // SRS operations
@@ -54,7 +54,7 @@ export interface IPCBridge {
     getOverdueWords: (language?: string) => Promise<Word[]>;
     initializeExistingWords: (language?: string) => Promise<number>;
   };
-  
+
   // LLM operations
   llm: {
     generateWords: (topic: string | undefined, language: string) => Promise<GeneratedWord[]>;
@@ -72,6 +72,7 @@ export interface IPCBridge {
     switchProvider: (provider: 'ollama' | 'gemini', geminiApiKey?: string) => Promise<void>;
     setGeminiApiKey: (apiKey: string, switchToGemini?: boolean) => Promise<void>;
     getAvailableProviders: () => Promise<Array<'ollama' | 'gemini'>>;
+    getModelsForProvider: (provider: 'ollama' | 'gemini') => Promise<string[]>;
   };
 
   // Frequency word management
@@ -84,7 +85,7 @@ export interface IPCBridge {
     }>;
     getAvailableLanguages: () => Promise<string[]>;
   };
-  
+
   // Audio operations
   audio: {
     generateAudio: (text: string, language?: string, word?: string) => Promise<string>;
@@ -168,7 +169,8 @@ export const IPC_CHANNELS = {
     GET_CURRENT_PROVIDER: 'llm:getCurrentProvider',
     SWITCH_PROVIDER: 'llm:switchProvider',
     SET_GEMINI_API_KEY: 'llm:setGeminiApiKey',
-    GET_AVAILABLE_PROVIDERS: 'llm:getAvailableProviders'
+    GET_AVAILABLE_PROVIDERS: 'llm:getAvailableProviders',
+    GET_MODELS_FOR_PROVIDER: 'llm:getModelsForProvider'
   },
   AUDIO: {
     GENERATE_AUDIO: 'audio:generateAudio',

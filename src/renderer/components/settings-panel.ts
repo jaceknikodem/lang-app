@@ -412,8 +412,8 @@ export class SettingsPanel extends LitElement {
       const geminiKey = await window.electronAPI.database.getSetting('gemini_api_key');
       this.geminiApiKey = geminiKey || '';
 
-      // Get available LLM models
-      this.availableLLMModels = await window.electronAPI.llm.getAvailableModels();
+      // Get available LLM models for the current provider
+      this.availableLLMModels = await window.electronAPI.llm.getModelsForProvider(this.currentLLMProvider);
 
       // Get current LLM models
       this.currentLLMModel = await window.electronAPI.llm.getCurrentModel();
@@ -748,10 +748,17 @@ export class SettingsPanel extends LitElement {
     if (!selectedProvider) return;
 
     try {
-      await window.electronAPI.llm.switchProvider(selectedProvider, this.geminiApiKey || undefined);
+      // Update the UI immediately to show the new provider's models
       this.currentLLMProvider = selectedProvider;
+      this.isLoadingLLMModels = true;
+      
+      // Get models for the new provider immediately
+      this.availableLLMModels = await window.electronAPI.llm.getModelsForProvider(selectedProvider);
+      
+      // Switch the actual provider
+      await window.electronAPI.llm.switchProvider(selectedProvider, this.geminiApiKey || undefined);
 
-      // Reload models for the new provider
+      // Reload all settings to get the current model selections
       await this.loadLLMSettings();
 
       console.log('LLM provider changed to:', this.currentLLMProvider);
@@ -760,6 +767,8 @@ export class SettingsPanel extends LitElement {
       // Revert the selection
       select.value = this.currentLLMProvider;
       alert(`Failed to switch to ${selectedProvider}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      this.isLoadingLLMModels = false;
     }
   }
 
