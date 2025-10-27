@@ -352,38 +352,6 @@ export class SessionComplete extends LitElement {
             </div>
           </div>
         ` : ''}
-
-        <div class="recommendation">
-          <h3 class="recommendation-title">What's Next?</h3>
-          <p class="recommendation-text">${this.getRecommendationText()}</p>
-          
-          <div class="action-buttons">
-            <button 
-              class="action-button primary"
-              @click=${this.handleRecommendedAction}
-              ?disabled=${this.isLoading}
-            >
-              ${this.sessionSummary.nextRecommendation === 'take-quiz' ? 'Take Quiz' :
-                this.sessionSummary.nextRecommendation === 'continue-learning' ? 'Continue Learning' :
-                this.sessionSummary.nextRecommendation === 'practice-weak' ? 'Practice Weak Words' :
-                'New Topic'}
-            </button>
-            
-            <button 
-              class="action-button"
-              @click=${this.handleViewProgress}
-            >
-              View Progress
-            </button>
-            
-            <button 
-              class="action-button"
-              @click=${this.handleNewSession}
-            >
-              New Session
-            </button>
-          </div>
-        </div>
       </div>
     `;
   }
