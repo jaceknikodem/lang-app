@@ -1,24 +1,50 @@
 # Local Language Learning App
 
-A vocabulary coach that teaches *words in context*, *incorporating the words you already know*, incl. listening/speaking practice, *fully offline* (on your device, no accounts).
+A privacy-first desktop language learning application that operates entirely offline. The app helps users learn vocabulary through contextual sentences rather than isolated words, focusing on spoken-style comprehension and natural language patterns.
 
-## Features
+**Core Philosophy**: Learn vocabulary in context, not isolation. Every word is presented within natural sentences with full audio support, creating an immersive learning experience that stays completely on your device.
 
-- **Local-first architecture**: No external dependencies, all data stays on device
-- **Contextual learning**: Vocabulary presented in natural sentences with translations
-- **Audio-based learning**: System TTS for every sentence to improve listening skills
-- **Adaptive difficulty**: Automatic prioritization of weakest vocabulary based on user performance
-- **Click-only interaction**: No typing required, all interactions via buttons and clicks
-- **Persistent progress**: SQLite-based storage maintains learning state across sessions
+## Target Users
+
+Language learners who prioritize privacy, prefer audio-based learning, and want focused vocabulary building through contextual understanding rather than rote memorization. Perfect for learners who want to:
+
+- Study completely offline without accounts or data sharing
+- Focus on listening comprehension and natural speech patterns
+- Learn vocabulary through meaningful context rather than flashcards
+- Have an adaptive system that focuses on their weakest areas
+
+## Core Learning Flow
+
+1. **Optional Topic Selection**: Choose specific topics for targeted vocabulary building
+2. **LLM-Generated Content**: AI creates word lists with contextual sentences in your target language
+3. **Interactive Review**: Listen to sentences, mark word familiarity, and build understanding
+4. **Adaptive Quizzing**: System prioritizes your weakest vocabulary for focused practice
+5. **Bidirectional Testing**: Quiz modes work both ways (foreign→English and English→foreign)
+
+## Key Features
+
+- **Privacy-First**: Complete offline operation, no accounts, no data collection
+- **Contextual Learning**: Every word presented in natural, meaningful sentences
+- **Audio-Centric**: System TTS for pronunciation and listening comprehension
+- **Adaptive Intelligence**: Automatic difficulty adjustment based on your performance
+- **Zero Typing**: Pure click-based interaction for distraction-free learning
+- **Persistent Progress**: SQLite database maintains all learning state locally
 
 ## Technology Stack
 
+### Core Technologies
 - **Runtime**: Electron (Node.js desktop app framework)
 - **Language**: TypeScript for type safety and better developer experience
 - **Frontend**: Lit web components for reactive UI without heavy framework overhead
 - **Database**: SQLite for local data persistence
 - **LLM Integration**: Ollama HTTP client for local language model access
 - **Audio**: macOS system TTS (`say` command) for speech generation
+
+### Key Dependencies
+- **Database**: `sqlite3` or `better-sqlite3` for SQLite operations
+- **Validation**: `zod` for runtime type checking of LLM responses
+- **Build**: `electron-builder` for cross-platform packaging
+- **Testing**: `playwright` for E2E testing of Electron app
 
 ## Project Structure
 
@@ -100,9 +126,35 @@ You can verify Ollama is running by visiting `http://localhost:11434` in your br
 
 ## Architecture
 
-The application follows a Electron architecture with:
-
+### Process Architecture
 - **Main Process**: Handles all system interactions (database, LLM, TTS)
-- **Renderer Process**: Sandboxed UI layer with Lit components
+- **Renderer Process**: Sandboxed UI layer with Lit components  
 - **IPC Bridge**: Secure communication between main and renderer processes
 - **Local-first**: No external network dependencies except local Ollama instance
+
+### Component Architecture
+
+#### Main Process Components
+- **DatabaseLayer**: SQLite CRUD operations, schema management
+- **LLMClient**: Ollama HTTP client, prompt generation
+- **AudioGenerator**: TTS integration, file caching
+- **IPCBridge**: Secure API exposure to renderer
+
+#### Renderer Components
+- **app-root**: Main application shell and routing
+- **learning-mode**: Sentence review and word interaction
+- **quiz-mode**: Assessment interface with bidirectional quizzing
+- **topic-selector**: Optional topic input for vocabulary generation
+- **progress-summary**: Study statistics and progress tracking
+
+### Data Flow Patterns
+1. **UI → IPC → Main Process**: All user actions flow through secure IPC
+2. **Database-first**: All state changes immediately persisted to SQLite
+3. **Component isolation**: Each Lit component manages its own reactive state
+4. **Error boundaries**: Each major component handles its own error states
+
+### Security Boundaries
+- **Renderer sandbox**: No direct filesystem or system access
+- **IPC validation**: All cross-process data validated with Zod schemas
+- **Local-only**: No external network access except localhost Ollama
+- **File restrictions**: Audio files limited to designated directory
