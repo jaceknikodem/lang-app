@@ -112,7 +112,6 @@ export class ContentGenerator {
         generatedWords.push({
           word: wordEntry.word,
           translation: translation,
-          frequency: 'high', // Words from frequency lists are considered high frequency
           frequencyPosition,
           frequencyTier
         });
@@ -327,7 +326,7 @@ export class ContentGenerator {
 
     return words.filter(word => {
       // Check required fields
-      if (!word.word || !word.translation || !word.frequency) {
+      if (!word.word || !word.translation) {
         console.warn('Skipping invalid word entry:', word);
         return false;
       }
@@ -344,11 +343,7 @@ export class ContentGenerator {
         return false;
       }
 
-      // Check frequency value
-      if (!['high', 'medium', 'low'].includes(word.frequency)) {
-        console.warn('Skipping word with invalid frequency:', word.frequency);
-        return false;
-      }
+
 
       return true;
     });

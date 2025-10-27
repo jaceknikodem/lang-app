@@ -18,8 +18,7 @@ class MockOllamaClient {
         for (let i = 1; i <= count; i++) {
             words.push({
                 word: topic ? `${topic}_word_${i}` : `general_word_${i}`,
-                translation: topic ? `${topic} word ${i}` : `general word ${i}`,
-                frequency: i <= 3 ? 'high' : i <= 7 ? 'medium' : 'low'
+                translation: topic ? `${topic} word ${i}` : `general word ${i}`
             });
         }
         return words;
@@ -68,7 +67,6 @@ describe('ContentGenerator', () => {
             // Check that first word has expected structure (regardless of which one it is)
             expect(words[0].word).toMatch(/^general_word_\d+$/);
             expect(words[0].translation).toMatch(/^general word \d+$/);
-            expect(['high', 'medium', 'low']).toContain(words[0].frequency);
         });
 
         test('should generate multiple words for specific topic', async () => {
@@ -89,7 +87,6 @@ describe('ContentGenerator', () => {
             // Check that first word has expected structure (regardless of which one it is)
             expect(words[0].word).toMatch(/^food_word_\d+$/);
             expect(words[0].translation).toMatch(/^food word \d+$/);
-            expect(['high', 'medium', 'low']).toContain(words[0].frequency);
         });
 
         test('should handle empty topic string as general vocabulary', async () => {

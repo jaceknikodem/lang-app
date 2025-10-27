@@ -10,8 +10,7 @@ import { z } from 'zod';
 // Zod schemas for response validation with coercion and fallbacks
 const GeneratedWordSchema = z.object({
   word: z.string().min(1, "Word cannot be empty").trim(),
-  translation: z.string().min(1, "Translation cannot be empty").trim(),
-  frequency: z.enum(['high', 'medium', 'low']).default('medium')
+  translation: z.string().min(1, "Translation cannot be empty").trim()
 });
 
 const GeneratedSentenceSchema = z.object({
@@ -26,17 +25,10 @@ const GeneratedSentenceSchema = z.object({
 // Fallback schemas for when LLM returns unexpected formats
 const LooseWordSchema = z.object({
   word: z.string().transform(s => s.trim()).pipe(z.string().min(1)),
-  translation: z.string().transform(s => s.trim()).pipe(z.string().min(1)),
-  frequency: z.string().optional().transform(f => {
-    if (!f) return 'medium';
-    const lower = f.toLowerCase();
-    if (['high', 'medium', 'low'].includes(lower)) return lower as 'high' | 'medium' | 'low';
-    return 'medium';
-  })
+  translation: z.string().transform(s => s.trim()).pipe(z.string().min(1))
 }).transform(obj => ({
   word: obj.word,
-  translation: obj.translation,
-  frequency: obj.frequency
+  translation: obj.translation
 }));
 
 const LooseSentenceSchema = z.object({
@@ -70,10 +62,7 @@ const WordGenerationResponseSchema = z.union([
   z.array(z.record(z.any())).transform(arr =>
     arr.filter(item => item.word && item.translation).map(item => ({
       word: String(item.word).trim(),
-      translation: String(item.translation).trim(),
-      frequency: (['high', 'medium', 'low'].includes(String(item.frequency)?.toLowerCase())
-        ? String(item.frequency).toLowerCase()
-        : 'medium') as 'high' | 'medium' | 'low'
+      translation: String(item.translation).trim()
     }))
   )
 ]);
@@ -374,13 +363,13 @@ export class OllamaClient implements LLMClient {
       const knownWords = allWords
         .filter((word: any) => word.language === language && word.known === true)
         .map((word: any) => word.word);
-      
+
       // Limit to 50 words and randomize selection if more than 50
       if (knownWords.length > 50) {
         const shuffled = [...knownWords].sort(() => Math.random() - 0.5);
         return shuffled.slice(0, 50);
       }
-      
+
       return knownWords;
     } catch (error) {
       console.error('Failed to get known words for sentence generation:', error);
@@ -390,7 +379,7 @@ export class OllamaClient implements LLMClient {
 
   private createTopicWordsPrompt(topic: string, language: string, count: number, existingWords: string[] = []): string {
     const examples = Array.from({ length: count }, (_, i) =>
-      `  {"word": "${language.toLowerCase()}_word${i + 1}", "translation": "english_translation${i + 1}", "frequency": "${i % 3 === 0 ? 'high' : i % 3 === 1 ? 'medium' : 'low'}"}`
+      `  {"word": "${language.toLowerCase()}_word${i + 1}", "translation": "english_translation${i + 1}"}`
     ).join(',\n');
 
     const baseInstructions = `CRITICAL: You must return exactly ${count} words in a JSON array. No more, no less.
@@ -417,8 +406,7 @@ Rules:
 2. Each word must be different and unique
 3. All words should relate to "${topic}"
 4. Include nouns, verbs, and adjectives
-5. Use frequency values: "high", "medium", or "low"
-6. CRITICAL: Use only canonical dictionary forms:
+5. CRITICAL: Use only canonical dictionary forms:
    - Verbs: infinitive form (e.g., "robić" not "robimy", "do" not "does")
    - Nouns: singular form (e.g., "cat" not "cats", "dom" not "domy")
    - Adjectives: base form (e.g., "good" not "better", "dobry" not "dobrzy")
@@ -439,20 +427,19 @@ Rules:
 2. Each word must be different and unique
 3. Focus on essential everyday vocabulary
 4. Include nouns, verbs, and adjectives
-5. Use frequency values: "high", "medium", or "low"
-6. CRITICAL: Use only canonical dictionary forms:
+5. CRITICAL: Use only canonical dictionary forms:
    - Verbs: infinitive form (e.g., "robić" not "robimy", "do" not "does")
    - Nouns: singular form (e.g., "cat" not "cats", "dom" not "domy")
    - Adjectives: base form (e.g., "good" not "better", "dobry" not "dobrzy")
-7. Do NOT use any words from the exclusion list above
-8. Return ONLY the JSON array, nothing else`;
+6. Do NOT use any words from the exclusion list above
+7. Return ONLY the JSON array, nothing else`;
     }
   }
 
   private createSentencesPrompt(word: string, language: string, count: number, knownWords: string[] = [], useContextSentences: boolean = false): string {
     let examples: string;
     let contextInstructions = '';
-    
+
     if (useContextSentences) {
       examples = Array.from({ length: count }, (_, i) =>
         `  {
@@ -464,7 +451,7 @@ Rules:
     "contextAfterTranslation": "english_context_after${i + 1}"
   }`
       ).join(',\n');
-      
+
       contextInstructions = `
 10. Include contextBefore and contextAfter sentences that provide meaningful context
 11. The context sentences should form a natural conversation or narrative flow

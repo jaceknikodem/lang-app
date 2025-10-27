@@ -276,9 +276,9 @@ export function countAudioFiles(testDataDir: string): number {
  */
 export const mockLLMResponses = {
   words: [
-    { word: 'hola', translation: 'hello', frequency: 'high' },
-    { word: 'adiós', translation: 'goodbye', frequency: 'high' },
-    { word: 'gracias', translation: 'thank you', frequency: 'high' }
+    { word: 'hola', translation: 'hello' },
+    { word: 'adiós', translation: 'goodbye' },
+    { word: 'gracias', translation: 'thank you' }
   ],
   sentences: [
     { sentence: 'Hola, ¿cómo estás?', translation: 'Hello, how are you?' },

@@ -33,7 +33,7 @@ describe('Duplicate Checking Simple Integration', () => {
         ok: true,
         json: () => Promise.resolve({
           response: JSON.stringify([
-            { word: 'test', translation: 'test', frequency: 'high' }
+            { word: 'test', translation: 'test' }
           ])
         })
       } as Response);
@@ -66,8 +66,8 @@ describe('Duplicate Checking Simple Integration', () => {
         ok: true,
         json: () => Promise.resolve({
           response: JSON.stringify([
-            { word: 'existing', translation: 'existing', frequency: 'high' }, // Should be filtered
-            { word: 'new', translation: 'new', frequency: 'high' }
+            { word: 'existing', translation: 'existing' }, // Should be filtered
+            { word: 'new', translation: 'new' }
           ])
         })
       } as Response);
@@ -94,7 +94,7 @@ describe('Duplicate Checking Simple Integration', () => {
         ok: true,
         json: () => Promise.resolve({
           response: JSON.stringify([
-            { word: 'test', translation: 'test', frequency: 'high' }
+            { word: 'test', translation: 'test' }
           ])
         })
       } as Response);
@@ -138,7 +138,7 @@ describe('Duplicate Checking Simple Integration', () => {
           ok: true,
           json: () => Promise.resolve({
             response: JSON.stringify([
-              { word: 'new', translation: 'new', frequency: 'high' }
+              { word: 'new', translation: 'new' }
             ])
           })
         } as Response);
@@ -176,7 +176,7 @@ describe('Duplicate Checking Simple Integration', () => {
           ok: true,
           json: () => Promise.resolve({
             response: JSON.stringify([
-              { word: 'new', translation: 'new', frequency: 'high' }
+              { word: 'new', translation: 'new' }
             ])
           })
         } as Response);

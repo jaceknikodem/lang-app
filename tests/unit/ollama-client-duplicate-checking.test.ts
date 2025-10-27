@@ -144,9 +144,9 @@ describe('OllamaClient Duplicate Checking', () => {
         ok: true,
         json: () => Promise.resolve({
           response: JSON.stringify([
-            { word: 'comida', translation: 'food', frequency: 'high' },
-            { word: 'hola', translation: 'hello', frequency: 'high' }, // This should be filtered as duplicate
-            { word: 'delicioso', translation: 'delicious', frequency: 'medium' }
+            { word: 'comida', translation: 'food' },
+            { word: 'hola', translation: 'hello' }, // This should be filtered as duplicate
+            { word: 'delicioso', translation: 'delicious' }
           ])
         })
       } as Response;
@@ -208,9 +208,9 @@ describe('OllamaClient Duplicate Checking', () => {
         ok: true,
         json: () => Promise.resolve({
           response: JSON.stringify([
-            { word: 'hola', translation: 'hello', frequency: 'high' },
-            { word: 'casa', translation: 'house', frequency: 'high' },
-            { word: 'perro', translation: 'dog', frequency: 'medium' }
+            { word: 'hola', translation: 'hello' },
+            { word: 'casa', translation: 'house' },
+            { word: 'perro', translation: 'dog' }
           ])
         })
       } as Response;
@@ -250,9 +250,9 @@ describe('OllamaClient Duplicate Checking', () => {
         ok: true,
         json: () => Promise.resolve({
           response: JSON.stringify([
-            { word: 'test1', translation: 'test1', frequency: 'high' },
-            { word: 'test2', translation: 'test2', frequency: 'medium' },
-            { word: 'test3', translation: 'test3', frequency: 'low' }
+            { word: 'test1', translation: 'test1' },
+            { word: 'test2', translation: 'test2' },
+            { word: 'test3', translation: 'test3' }
           ])
         })
       } as Response;
@@ -274,13 +274,13 @@ describe('OllamaClient Duplicate Checking', () => {
       const mockWords = [
         { id: 1, word: 'test1', language: 'Spanish', known: true, ignored: false },
         { id: 2, word: 'test2', language: 'Spanish', known: false, ignored: true },
-        { id: 3, word: 'other', language: 'Spanish', known: false, ignored: false }
+        { id: 3, word: 'test3', language: 'Spanish', known: false, ignored: false }
       ];
 
       mockDatabaseLayer.getAllWords = jest.fn().mockResolvedValue(mockWords);
       ollamaClient.setDatabaseLayer(mockDatabaseLayer);
 
-      // This should throw an error because too many words are duplicates
+      // This should throw an error because all words are duplicates
       await expect(ollamaClient.generateTopicWords('food', 'Spanish', 3))
         .rejects.toThrow('Insufficient new words generated');
     });
