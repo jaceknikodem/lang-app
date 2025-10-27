@@ -296,6 +296,12 @@ export class SettingsPanel extends LitElement {
   private currentLLMModel = '';
 
   @state()
+  private currentWordGenerationModel = '';
+
+  @state()
+  private currentSentenceGenerationModel = '';
+
+  @state()
   private isLoadingLLMModels = false;
 
 
@@ -386,17 +392,23 @@ export class SettingsPanel extends LitElement {
       // Get available LLM models
       this.availableLLMModels = await window.electronAPI.llm.getAvailableModels();
 
-      // Get current LLM model
+      // Get current LLM models
       this.currentLLMModel = await window.electronAPI.llm.getCurrentModel();
+      this.currentWordGenerationModel = await window.electronAPI.llm.getWordGenerationModel();
+      this.currentSentenceGenerationModel = await window.electronAPI.llm.getSentenceGenerationModel();
 
       console.log('LLM settings loaded:', {
         models: this.availableLLMModels,
-        current: this.currentLLMModel
+        current: this.currentLLMModel,
+        wordGeneration: this.currentWordGenerationModel,
+        sentenceGeneration: this.currentSentenceGenerationModel
       });
     } catch (error) {
       console.error('Failed to load LLM settings:', error);
       this.availableLLMModels = [];
       this.currentLLMModel = '';
+      this.currentWordGenerationModel = '';
+      this.currentSentenceGenerationModel = '';
     } finally {
       this.isLoadingLLMModels = false;
     }
@@ -597,6 +609,42 @@ export class SettingsPanel extends LitElement {
     }
   }
 
+  private async changeWordGenerationModel(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const selectedModel = select.value;
+
+    if (!selectedModel) return;
+
+    try {
+      await window.electronAPI.llm.setWordGenerationModel(selectedModel);
+      this.currentWordGenerationModel = selectedModel;
+
+      console.log('Word generation model changed to:', this.currentWordGenerationModel);
+    } catch (error) {
+      console.error('Failed to change word generation model:', error);
+      // Revert the selection
+      select.value = this.currentWordGenerationModel;
+    }
+  }
+
+  private async changeSentenceGenerationModel(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const selectedModel = select.value;
+
+    if (!selectedModel) return;
+
+    try {
+      await window.electronAPI.llm.setSentenceGenerationModel(selectedModel);
+      this.currentSentenceGenerationModel = selectedModel;
+
+      console.log('Sentence generation model changed to:', this.currentSentenceGenerationModel);
+    } catch (error) {
+      console.error('Failed to change sentence generation model:', error);
+      // Revert the selection
+      select.value = this.currentSentenceGenerationModel;
+    }
+  }
+
 
 
   private capitalizeLanguage(language: string): string {
@@ -675,24 +723,45 @@ export class SettingsPanel extends LitElement {
           ` : this.availableLLMModels.length > 0 ? html`
             <div class="dropdown-row">
               <div class="dropdown-description">
-                <strong>Ollama Model</strong>
-                <p>Choose the language model for generating vocabulary words and sentences</p>
+                <strong>Word Generation Model (Small)</strong>
+                <p>Choose a small, fast model for generating vocabulary words and translations</p>
               </div>
               <select 
                 class="model-select"
-                .value=${this.currentLLMModel}
-                @change=${this.changeLLMModel}
+                .value=${this.currentWordGenerationModel}
+                @change=${this.changeWordGenerationModel}
                 ?disabled=${this.isLoadingLLMModels}
               >
                 ${this.availableLLMModels.map(model => html`
-                  <option value=${model} ?selected=${model === this.currentLLMModel}>
+                  <option value=${model} ?selected=${model === this.currentWordGenerationModel}>
                     ${model}
                   </option>
                 `)}
               </select>
             </div>
+            
+            <div class="dropdown-row">
+              <div class="dropdown-description">
+                <strong>Sentence Generation Model (Big)</strong>
+                <p>Choose a larger, more capable model for generating complex sentences and context</p>
+              </div>
+              <select 
+                class="model-select"
+                .value=${this.currentSentenceGenerationModel}
+                @change=${this.changeSentenceGenerationModel}
+                ?disabled=${this.isLoadingLLMModels}
+              >
+                ${this.availableLLMModels.map(model => html`
+                  <option value=${model} ?selected=${model === this.currentSentenceGenerationModel}>
+                    ${model}
+                  </option>
+                `)}
+              </select>
+            </div>
+            
             <div class="model-info">
-              Current model: ${this.currentLLMModel || 'None selected'}
+              Word generation: ${this.currentWordGenerationModel || 'None selected'}<br>
+              Sentence generation: ${this.currentSentenceGenerationModel || 'None selected'}
             </div>
           ` : html`
             <div class="status-message status-error">

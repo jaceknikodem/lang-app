@@ -23,8 +23,10 @@ export const APP_CONFIG = {
 export const LLM_CONFIG = {
   DEFAULT_BASE_URL: 'http://localhost:11434',
   DEFAULT_MODEL: 'granite4:tiny-h',
-  DEFAULT_TIMEOUT: 60000, // Increased to 60 seconds for better reliability
-  MAX_RETRIES: 3
+  DEFAULT_WORD_GENERATION_MODEL: 'granite4:tiny-h', // Small model for word generation
+  DEFAULT_SENTENCE_GENERATION_MODEL: 'gpt-oss:20b', // Big model for sentence generation (can be changed to larger model)
+  DEFAULT_TIMEOUT: 80000, // Increased to 60 seconds for better reliability
+  MAX_RETRIES: 2
 } as const;
 
 export const AUDIO_CONFIG = {

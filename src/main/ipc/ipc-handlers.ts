@@ -375,6 +375,44 @@ function setupLLMHandlers(llmClient: OllamaClient, contentGenerator: ContentGene
     }
   });
 
+  ipcMain.handle(IPC_CHANNELS.LLM.SET_WORD_GENERATION_MODEL, async (event, model) => {
+    try {
+      const validatedModel = z.string().min(1).parse(model);
+      llmClient.setWordGenerationModel(validatedModel);
+    } catch (error) {
+      console.error('Error setting word generation model:', error);
+      throw new Error(`Failed to set word generation model: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.LLM.SET_SENTENCE_GENERATION_MODEL, async (event, model) => {
+    try {
+      const validatedModel = z.string().min(1).parse(model);
+      llmClient.setSentenceGenerationModel(validatedModel);
+    } catch (error) {
+      console.error('Error setting sentence generation model:', error);
+      throw new Error(`Failed to set sentence generation model: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.LLM.GET_WORD_GENERATION_MODEL, async (event) => {
+    try {
+      return llmClient.getWordGenerationModel();
+    } catch (error) {
+      console.error('Error getting word generation model:', error);
+      throw new Error(`Failed to get word generation model: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.LLM.GET_SENTENCE_GENERATION_MODEL, async (event) => {
+    try {
+      return llmClient.getSentenceGenerationModel();
+    } catch (error) {
+      console.error('Error getting sentence generation model:', error);
+      throw new Error(`Failed to get sentence generation model: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
   // Frequency word management handlers
   ipcMain.handle(IPC_CHANNELS.FREQUENCY.GET_PROGRESS, async (event, language) => {
     try {

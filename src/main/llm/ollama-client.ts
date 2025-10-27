@@ -113,6 +113,8 @@ export class OllamaClient implements LLMClient {
     this.config = {
       baseUrl: config.baseUrl || LLM_CONFIG.DEFAULT_BASE_URL,
       model: config.model || LLM_CONFIG.DEFAULT_MODEL,
+      wordGenerationModel: config.wordGenerationModel || LLM_CONFIG.DEFAULT_WORD_GENERATION_MODEL,
+      sentenceGenerationModel: config.sentenceGenerationModel || LLM_CONFIG.DEFAULT_SENTENCE_GENERATION_MODEL,
       timeout: config.timeout || LLM_CONFIG.DEFAULT_TIMEOUT,
       maxRetries: config.maxRetries || LLM_CONFIG.MAX_RETRIES
     };
@@ -169,6 +171,22 @@ export class OllamaClient implements LLMClient {
     return this.config.model;
   }
 
+  setWordGenerationModel(model: string): void {
+    this.config.wordGenerationModel = model;
+  }
+
+  setSentenceGenerationModel(model: string): void {
+    this.config.sentenceGenerationModel = model;
+  }
+
+  getWordGenerationModel(): string {
+    return this.config.wordGenerationModel || this.config.model;
+  }
+
+  getSentenceGenerationModel(): string {
+    return this.config.sentenceGenerationModel || this.config.model;
+  }
+
   async generateTopicWords(topic: string, language: string, count: number): Promise<GeneratedWord[]> {
     // Get existing words to check for duplicates
     const existingWords = await this.getExistingWords(language);
@@ -177,7 +195,7 @@ export class OllamaClient implements LLMClient {
     const prompt = this.createTopicWordsPrompt(topic, language, count, existingWords);
 
     try {
-      const response = await this.makeRequest(prompt);
+      const response = await this.makeRequest(prompt, this.getWordGenerationModel());
 
       // Debug: Log the response structure
       console.log('Response type:', typeof response);
@@ -245,7 +263,7 @@ export class OllamaClient implements LLMClient {
     const prompt = this.createSentencesPrompt(word, language, count, knownWords, useContextSentences);
 
     try {
-      const response = await this.makeRequest(prompt);
+      const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
 
       // Debug: Log the response structure
       console.log('Sentence response type:', typeof response);
@@ -284,10 +302,10 @@ export class OllamaClient implements LLMClient {
     }
   }
 
-  async generateResponse(prompt: string): Promise<string> {
+  async generateResponse(prompt: string, model?: string): Promise<string> {
     try {
       const requestBody: OllamaRequest = {
-        model: this.config.model,
+        model: model || this.config.model,
         prompt,
         stream: false
       };
@@ -491,9 +509,10 @@ Rules:
 9. Return ONLY the JSON array, nothing else${contextInstructions}`;
   }
 
-  private async makeRequest(prompt: string): Promise<any> {
+  private async makeRequest(prompt: string, model?: string): Promise<any> {
+    const selectedModel = model || this.config.model;
     const requestBody: OllamaRequest = {
-      model: this.config.model,
+      model: selectedModel,
       prompt,
       stream: false
       // Removed format: 'json' as it forces single objects instead of arrays
@@ -501,7 +520,7 @@ Rules:
 
     // DEBUG: Print the full prompt being sent to Ollama
     console.log('=== OLLAMA PROMPT DEBUG ===');
-    console.log('Model:', this.config.model);
+    console.log('Model:', selectedModel);
     console.log('Full Prompt:');
     console.log(prompt);
     console.log('=== END PROMPT DEBUG ===');

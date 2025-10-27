@@ -68,7 +68,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setModel: (model: string) => 
       ipcRenderer.invoke(IPC_CHANNELS.LLM.SET_MODEL, model),
     getCurrentModel: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_CURRENT_MODEL)
+      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_CURRENT_MODEL),
+    setWordGenerationModel: (model: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.LLM.SET_WORD_GENERATION_MODEL, model),
+    setSentenceGenerationModel: (model: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.LLM.SET_SENTENCE_GENERATION_MODEL, model),
+    getWordGenerationModel: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_WORD_GENERATION_MODEL),
+    getSentenceGenerationModel: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_SENTENCE_GENERATION_MODEL)
   },
 
   // Audio operations
@@ -211,6 +219,10 @@ declare global {
         getAvailableModels: () => Promise<string[]>;
         setModel: (model: string) => Promise<void>;
         getCurrentModel: () => Promise<string>;
+        setWordGenerationModel: (model: string) => Promise<void>;
+        setSentenceGenerationModel: (model: string) => Promise<void>;
+        getWordGenerationModel: () => Promise<string>;
+        getSentenceGenerationModel: () => Promise<string>;
       };
       audio: {
         generateAudio: (text: string, language?: string, word?: string) => Promise<string>;

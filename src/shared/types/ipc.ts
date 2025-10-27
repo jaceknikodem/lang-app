@@ -63,6 +63,10 @@ export interface IPCBridge {
     getAvailableModels: () => Promise<string[]>;
     setModel: (model: string) => Promise<void>;
     getCurrentModel: () => Promise<string>;
+    setWordGenerationModel: (model: string) => Promise<void>;
+    setSentenceGenerationModel: (model: string) => Promise<void>;
+    getWordGenerationModel: () => Promise<string>;
+    getSentenceGenerationModel: () => Promise<string>;
   };
 
   // Frequency word management
@@ -150,7 +154,11 @@ export const IPC_CHANNELS = {
     IS_AVAILABLE: 'llm:isAvailable',
     GET_AVAILABLE_MODELS: 'llm:getAvailableModels',
     SET_MODEL: 'llm:setModel',
-    GET_CURRENT_MODEL: 'llm:getCurrentModel'
+    GET_CURRENT_MODEL: 'llm:getCurrentModel',
+    SET_WORD_GENERATION_MODEL: 'llm:setWordGenerationModel',
+    SET_SENTENCE_GENERATION_MODEL: 'llm:setSentenceGenerationModel',
+    GET_WORD_GENERATION_MODEL: 'llm:getWordGenerationModel',
+    GET_SENTENCE_GENERATION_MODEL: 'llm:getSentenceGenerationModel'
   },
   AUDIO: {
     GENERATE_AUDIO: 'audio:generateAudio',

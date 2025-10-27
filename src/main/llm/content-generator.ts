@@ -187,7 +187,9 @@ export class ContentGenerator {
     const prompt = `Translate the ${language} word "${word}" to English. Respond with only the English translation, no additional text.`;
     
     try {
-      const response = await this.llmClient.generateResponse(prompt);
+      // Use the word generation model for simple translations
+      const wordModel = this.llmClient.getWordGenerationModel();
+      const response = await this.llmClient.generateResponse(prompt, wordModel);
       return response.trim();
     } catch (error) {
       throw new Error(`Failed to translate word "${word}": ${error instanceof Error ? error.message : 'Unknown error'}`);
