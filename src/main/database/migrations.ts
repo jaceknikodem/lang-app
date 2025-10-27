@@ -146,6 +146,23 @@ export class MigrationManager {
           // SQLite doesn't support DROP COLUMN, so we'd need to recreate the table
           // For now, we'll leave the columns as they won't hurt anything
         ]
+      },
+      {
+        version: 6,
+        name: 'add_dictionary_table',
+        up: [
+          `CREATE TABLE IF NOT EXISTS dict (
+            word TEXT,
+            pos TEXT,
+            glosses TEXT,
+            lang TEXT
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_word_lang ON dict(word, lang)`
+        ],
+        down: [
+          `DROP INDEX IF EXISTS idx_word_lang`,
+          `DROP TABLE IF EXISTS dict`
+        ]
       }
     ];
   }

@@ -3,8 +3,10 @@
  */
 
 import Database from 'better-sqlite3';
+import path from 'path';
+import { promises as fsPromises } from 'fs';
 import { DatabaseLayer, DatabaseConfig } from '../../shared/types/database.js';
-import { Word, Sentence, StudyStats, CreateWordRequest } from '../../shared/types/core.js';
+import { Word, Sentence, StudyStats, CreateWordRequest, DictionaryEntry } from '../../shared/types/core.js';
 import { DatabaseConnection } from './connection.js';
 import { MigrationManager } from './migrations.js';
 
@@ -26,6 +28,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // Initialize and run migrations
       this.migrationManager = new MigrationManager(db);
       await this.migrationManager.migrate();
+
+      // Populate dictionary data from bundled files
+      try {
+        await this.populateDictionaryFromFiles();
+      } catch (dictError) {
+        console.warn('Dictionary population skipped due to error:', dictError);
+      }
       
       console.log('Database initialized successfully');
     } catch (error) {
@@ -739,6 +748,40 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
+  /**
+   * Lookup dictionary entries for a word in the specified language
+   */
+  async lookupDictionary(word: string, language?: string): Promise<DictionaryEntry[]> {
+    const db = this.getDb();
+
+    try {
+      const currentLanguage = language || await this.getCurrentLanguage();
+
+      const stmt = db.prepare(`
+        SELECT word, pos, glosses, lang
+        FROM dict
+        WHERE LOWER(word) = LOWER(?) AND lang = ?
+        ORDER BY pos ASC, word ASC
+      `);
+
+      const rows = stmt.all(word, currentLanguage) as Array<{
+        word: string;
+        pos: string;
+        glosses: string;
+        lang: string;
+      }>;
+
+      return rows.map(row => ({
+        word: row.word,
+        pos: row.pos,
+        glosses: this.parseGlossesField(row.glosses),
+        lang: row.lang
+      }));
+    } catch (error) {
+      throw new Error(`Failed to lookup dictionary entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   // SRS-specific operations
 
   /**
@@ -917,6 +960,124 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
+  /**
+   * Load dictionary entries from JSONL files in the dicts directory
+   */
+  private async populateDictionaryFromFiles(): Promise<void> {
+    const dictDir = path.join(process.cwd(), 'dicts');
+    let files: string[];
+
+    try {
+      files = await fsPromises.readdir(dictDir);
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      if (err?.code !== 'ENOENT') {
+        console.warn('Failed to access dictionary directory:', error);
+      } else {
+        console.warn('Dictionary directory not found, skipping dictionary population');
+      }
+      return;
+    }
+
+    const jsonlFiles = files.filter(file => file.endsWith('_dict.jsonl'));
+    if (jsonlFiles.length === 0) {
+      return;
+    }
+
+    const db = this.getDb();
+    const deleteStmt = db.prepare('DELETE FROM dict WHERE lang = ?');
+    const insertStmt = db.prepare('INSERT INTO dict (word, pos, glosses, lang) VALUES (?, ?, ?, ?)');
+
+    for (const file of jsonlFiles) {
+      const language = file.replace('_dict.jsonl', '');
+      const filePath = path.join(dictDir, file);
+
+      try {
+        const entries = await this.parseDictionaryFile(filePath, language);
+
+        const transaction = db.transaction((dictionaryEntries: Array<{ word: string; pos: string; glosses: string; lang: string }>) => {
+          deleteStmt.run(language);
+          for (const entry of dictionaryEntries) {
+            insertStmt.run(entry.word, entry.pos, entry.glosses, entry.lang);
+          }
+        });
+
+        transaction(entries);
+        console.log(`Dictionary populated for ${language} (${entries.length} entries)`);
+      } catch (error) {
+        console.warn(`Failed to import dictionary for ${language}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Parse a JSONL dictionary file into database-ready rows
+   */
+  private async parseDictionaryFile(
+    filePath: string,
+    language: string
+  ): Promise<Array<{ word: string; pos: string; glosses: string; lang: string }>> {
+    let rawContents: string;
+
+    try {
+      rawContents = await fsPromises.readFile(filePath, 'utf-8');
+    } catch (error) {
+      throw new Error(`Unable to read dictionary file ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+
+    const lines = rawContents.split('\n');
+    const entries: Array<{ word: string; pos: string; glosses: string; lang: string }> = [];
+    const seen = new Set<string>();
+
+    lines.forEach((line, index) => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(trimmed) as {
+          word?: unknown;
+          pos?: unknown;
+          glosses?: unknown;
+        };
+
+        const word = typeof parsed.word === 'string' ? parsed.word.trim() : '';
+        if (!word) {
+          return;
+        }
+
+        const pos = typeof parsed.pos === 'string' ? parsed.pos.trim() : '';
+
+        let glossesArray: string[] = [];
+        if (Array.isArray(parsed.glosses)) {
+          glossesArray = parsed.glosses
+            .map(gloss => String(gloss).trim())
+            .filter(Boolean);
+        } else if (parsed.glosses) {
+          glossesArray = [String(parsed.glosses).trim()].filter(Boolean);
+        }
+
+        const dedupeKey = `${word.toLowerCase()}|${pos.toLowerCase()}|${glossesArray.join('|').toLowerCase()}|${language}`;
+        if (seen.has(dedupeKey)) {
+          return;
+        }
+
+        seen.add(dedupeKey);
+        entries.push({
+          word,
+          pos,
+          glosses: JSON.stringify(glossesArray),
+          lang: language
+        });
+      } catch (error) {
+        console.warn(`Failed to parse dictionary entry in ${path.basename(filePath)} at line ${index + 1}:`, error);
+      }
+    });
+
+    return entries;
+  }
+
   // Helper methods for mapping database rows to objects and utilities
 
   private shuffleArray<T>(array: T[]): T[] {
@@ -962,5 +1123,27 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       contextBeforeTranslation: row.context_before_translation || undefined,
       contextAfterTranslation: row.context_after_translation || undefined
     };
+  }
+
+  private parseGlossesField(glosses: string): string[] {
+    if (!glosses) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(glosses);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map(item => String(item).trim())
+          .filter(Boolean);
+      }
+    } catch {
+      // Ignore JSON parsing errors and fall back to string parsing
+    }
+
+    return glosses
+      .split(/[;,]/)
+      .map(part => part.trim())
+      .filter(Boolean);
   }
 }

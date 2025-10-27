@@ -2,7 +2,7 @@
  * IPC bridge interfaces for secure communication between main and renderer processes
  */
 
-import { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest } from './core.js';
+import { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest, DictionaryEntry } from './core.js';
 import { RecordingOptions, RecordingSession, TranscriptionOptions, TranscriptionResult, TranscriptionComparison } from './audio.js';
 
 export interface IPCBridge {
@@ -30,6 +30,7 @@ export interface IPCBridge {
     setCurrentLanguage: (language: string) => Promise<void>;
     getAvailableLanguages: () => Promise<string[]>;
     getLanguageStats: () => Promise<Array<{ language: string, totalWords: number, studiedWords: number }>>;
+    lookupDictionary: (word: string, language?: string) => Promise<DictionaryEntry[]>;
   };
 
   // SRS operations
@@ -154,7 +155,8 @@ export const IPC_CHANNELS = {
     GET_CURRENT_LANGUAGE: 'database:getCurrentLanguage',
     SET_CURRENT_LANGUAGE: 'database:setCurrentLanguage',
     GET_AVAILABLE_LANGUAGES: 'database:getAvailableLanguages',
-    GET_LANGUAGE_STATS: 'database:getLanguageStats'
+    GET_LANGUAGE_STATS: 'database:getLanguageStats',
+    LOOKUP_DICTIONARY: 'database:lookupDictionary'
   },
   LLM: {
     GENERATE_WORDS: 'llm:generateWords',

@@ -54,7 +54,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getAvailableLanguages: () => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_AVAILABLE_LANGUAGES),
     getLanguageStats: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_LANGUAGE_STATS)
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_LANGUAGE_STATS),
+    lookupDictionary: (word: string, language?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.LOOKUP_DICTIONARY, word, language)
   },
 
   // LLM operations
@@ -225,6 +227,12 @@ declare global {
         setCurrentLanguage: (language: string) => Promise<void>;
         getAvailableLanguages: () => Promise<string[]>;
         getLanguageStats: () => Promise<Array<{language: string, totalWords: number, studiedWords: number}>>;
+        lookupDictionary: (word: string, language?: string) => Promise<Array<{
+          word: string;
+          pos: string;
+          glosses: string[];
+          lang: string;
+        }>>;
       };
       llm: {
         generateWords: (topic: string | undefined, language: string) => Promise<any[]>;

@@ -5,13 +5,15 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
-import { Word, Sentence } from '../../shared/types/core.js';
+import { Word, Sentence, DictionaryEntry } from '../../shared/types/core.js';
 import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 
 interface WordInSentence {
   text: string;
   isTargetWord: boolean;
   wordData?: Word;
+  dictionaryForm?: string;
+  dictionaryKey?: string;
 }
 
 @customElement('sentence-viewer')
@@ -33,6 +35,11 @@ export class SentenceViewer extends LitElement {
 
   @state()
   private autoplayEnabled = false;
+
+  @state()
+  private dictionaryCache: Record<string, DictionaryEntry[] | null> = {};
+
+  private dictionaryLookupInFlight = new Set<string>();
 
   private keyboardUnsubscribe?: () => void;
 
@@ -371,9 +378,8 @@ export class SentenceViewer extends LitElement {
       if (/^[.,!?;:]+$/.test(text)) {
         return { text, isTargetWord: false };
       }
-      
-      // For actual words, clean them for comparison but keep original text for display
-      const cleanText = text.trim().toLowerCase().replace(/[.,!?;:]/g, '');
+      const dictionaryForm = text.trim().replace(/[.,!?;:]/g, '');
+      const cleanText = dictionaryForm.toLowerCase();
       
       if (!cleanText) {
         return { text, isTargetWord: false };
@@ -387,12 +393,75 @@ export class SentenceViewer extends LitElement {
         w.word.toLowerCase() === cleanText
       );
 
+      const dictionaryKey = this.buildDictionaryKey(dictionaryForm);
+
+      if (!wordData && !isTargetWord && dictionaryKey) {
+        void this.ensureDictionaryEntry(dictionaryForm, dictionaryKey);
+      }
+
       return {
         text,
         isTargetWord,
-        wordData
+        wordData,
+        dictionaryForm,
+        dictionaryKey
       };
     });
+  }
+
+  private buildDictionaryKey(word: string): string | undefined {
+    const trimmed = word.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+
+    const language = this.targetWord?.language?.toLowerCase() || 'unknown';
+    return `${language}|${trimmed.toLowerCase()}`;
+  }
+
+  private async ensureDictionaryEntry(word: string, key: string): Promise<void> {
+    if (this.dictionaryLookupInFlight.has(key) || Object.prototype.hasOwnProperty.call(this.dictionaryCache, key)) {
+      return;
+    }
+
+    this.dictionaryLookupInFlight.add(key);
+
+    try {
+      const entries = await window.electronAPI.database.lookupDictionary(word, this.targetWord?.language);
+      const normalizedEntries = Array.isArray(entries) && entries.length > 0 ? entries : null;
+      this.dictionaryCache = {
+        ...this.dictionaryCache,
+        [key]: normalizedEntries
+      };
+    } catch (error) {
+      console.error('Failed to load dictionary entries:', error);
+      this.dictionaryCache = {
+        ...this.dictionaryCache,
+        [key]: null
+      };
+    } finally {
+      this.dictionaryLookupInFlight.delete(key);
+    }
+  }
+
+  private formatDictionaryTooltip(entries: DictionaryEntry[]): string {
+    if (!entries.length) {
+      return '';
+    }
+
+    const language = entries[0]?.lang || this.targetWord?.language || '';
+    const content = entries
+      .map(entry => {
+        const glossText = entry.glosses.join(', ');
+        if (entry.pos && glossText) {
+          return `${entry.pos}: ${glossText}`;
+        }
+        return glossText || entry.pos || '';
+      })
+      .filter(Boolean)
+      .join(' • ');
+
+    return content ? content : '';
   }
 
   private getWordClass(wordInfo: WordInSentence): string {
@@ -431,13 +500,33 @@ export class SentenceViewer extends LitElement {
     }
     
     if (wordInfo.isTargetWord) {
-      return `Target word`;
+      return 'Target word';
     }
 
     const word = wordInfo.wordData;
     
     if (!word) {
-      return '';
+      if (!wordInfo.dictionaryKey) {
+        return '';
+      }
+
+      if (this.dictionaryLookupInFlight.has(wordInfo.dictionaryKey)) {
+        return 'Looking up dictionary…';
+      }
+
+      const cachedEntries = this.dictionaryCache[wordInfo.dictionaryKey];
+
+      if (cachedEntries === undefined) {
+        // Trigger lookup if somehow missing (should already be queued)
+        void this.ensureDictionaryEntry(wordInfo.dictionaryForm ?? '', wordInfo.dictionaryKey);
+        return 'Looking up dictionary…';
+      }
+
+      if (!cachedEntries || cachedEntries.length === 0) {
+        return '';
+      }
+
+      return this.formatDictionaryTooltip(cachedEntries);
     }
     
     if (word.ignored) {

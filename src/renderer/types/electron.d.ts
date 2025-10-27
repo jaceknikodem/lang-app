@@ -2,7 +2,7 @@
  * Type declarations for Electron API exposed to renderer process
  */
 
-import { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest } from '../../shared/types/core.js';
+import { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest, DictionaryEntry } from '../../shared/types/core.js';
 
 declare global {
   interface Window {
@@ -28,6 +28,7 @@ declare global {
         setCurrentLanguage: (language: string) => Promise<void>;
         getAvailableLanguages: () => Promise<string[]>;
         getLanguageStats: () => Promise<Array<{language: string, totalWords: number, studiedWords: number}>>;
+        lookupDictionary: (word: string, language?: string) => Promise<DictionaryEntry[]>;
       };
       llm: {
         generateWords: (topic: string | undefined, language: string) => Promise<GeneratedWord[]>;

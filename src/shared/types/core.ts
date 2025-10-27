@@ -20,6 +20,13 @@ export interface Word {
   nextDue: Date;          // When word is next due for review
 }
 
+export interface DictionaryEntry {
+  word: string;
+  pos: string;
+  glosses: string[];
+  lang: string;
+}
+
 export interface Sentence {
   id: number;
   wordId: number;

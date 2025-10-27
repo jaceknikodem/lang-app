@@ -29,6 +29,7 @@ const LanguageSchema = z.string().min(2).max(10);
 const TextSchema = z.string().min(1).max(1000);
 const TopicSchema = z.string().min(1).max(200);
 const AudioPathSchema = z.string().min(1).max(500);
+const DictionaryWordSchema = z.string().min(1).max(100);
 
 /**
  * Set up all IPC handlers with proper validation and error handling
@@ -306,6 +307,17 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     } catch (error) {
       console.error('Error getting language stats:', error);
       throw new Error(`Failed to get language stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DATABASE.LOOKUP_DICTIONARY, async (event, word, language) => {
+    try {
+      const validatedWord = DictionaryWordSchema.parse(word);
+      const validatedLanguage = language ? LanguageSchema.parse(language) : undefined;
+      return await databaseLayer.lookupDictionary(validatedWord, validatedLanguage);
+    } catch (error) {
+      console.error('Error looking up dictionary entry:', error);
+      throw new Error(`Failed to lookup dictionary entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
 }

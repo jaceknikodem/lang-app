@@ -2,7 +2,7 @@
  * Database layer interfaces and types
  */
 
-import { Word, Sentence, StudyStats, CreateWordRequest } from './core.js';
+import { Word, Sentence, StudyStats, CreateWordRequest, DictionaryEntry } from './core.js';
 
 export interface DatabaseLayer {
   // Word management
@@ -54,6 +54,7 @@ export interface DatabaseLayer {
   setCurrentLanguage(language: string): Promise<void>;
   getAvailableLanguages(): Promise<string[]>;
   getLanguageStats(): Promise<Array<{language: string, totalWords: number, studiedWords: number}>>;
+  lookupDictionary(word: string, language?: string): Promise<DictionaryEntry[]>;
   
   // Database lifecycle
   initialize(): Promise<void>;
