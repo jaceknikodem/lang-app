@@ -19,13 +19,13 @@ describe('GeminiClient', () => {
   describe('constructor', () => {
     it('should create client with API key', () => {
       expect(client).toBeInstanceOf(GeminiClient);
-      expect(client.getCurrentModel()).toBe('gemini-1.5-flash');
+      expect(client.getCurrentModel()).toBe('gemini-2.5-flash');
     });
 
     it('should create client with empty API key', () => {
       const emptyClient = new GeminiClient('');
       expect(emptyClient).toBeInstanceOf(GeminiClient);
-      expect(emptyClient.getCurrentModel()).toBe('gemini-1.5-flash');
+      expect(emptyClient.getCurrentModel()).toBe('gemini-2.5-flash');
     });
 
     it('should use custom configuration', () => {
@@ -70,29 +70,15 @@ describe('GeminiClient', () => {
   });
 
   describe('getAvailableModels', () => {
-    it('should return default models when API call fails', async () => {
-      (fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
-
+    it('should return predefined model list', async () => {
       const models = await client.getAvailableModels();
-      expect(models).toEqual(['gemini-1.5-flash', 'gemini-1.5-pro']);
-    });
-
-    it('should parse models from API response', async () => {
-      const mockResponse = {
-        models: [
-          { name: 'models/gemini-1.5-flash' },
-          { name: 'models/gemini-1.5-pro' },
-          { name: 'models/gemini-1.0-pro' }
-        ]
-      };
-
-      (fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse)
-      });
-
-      const models = await client.getAvailableModels();
-      expect(models).toEqual(['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro']);
+      expect(models).toEqual([
+        'gemini-2.5-pro',
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-lite'
+      ]);
     });
   });
 
@@ -112,10 +98,10 @@ describe('GeminiClient', () => {
       expect(client.getSentenceGenerationModel()).toBe('gemini-1.5-pro');
     });
 
-    it('should fallback to main model when specialized models not set', () => {
+    it('should use defaults for specialized models when not provided', () => {
       const testClient = new GeminiClient(mockApiKey, { model: 'gemini-1.5-pro' });
-      expect(testClient.getWordGenerationModel()).toBe('gemini-1.5-flash'); // Uses default word model
-      expect(testClient.getSentenceGenerationModel()).toBe('gemini-1.5-pro'); // Uses default sentence model
+      expect(testClient.getWordGenerationModel()).toBe('gemini-2.5-flash-lite'); // Uses default word model
+      expect(testClient.getSentenceGenerationModel()).toBe('gemini-2.5-flash'); // Uses default sentence model
     });
   });
 
@@ -162,19 +148,17 @@ describe('GeminiClient', () => {
         text: () => Promise.resolve('Invalid API key')
       });
 
-      await expect(client.generateResponse('Test prompt')).rejects.toThrow('HTTP 400: Bad Request - Invalid API key');
+      await expect(client.generateResponse('Test prompt')).rejects.toThrow('Failed to generate response: HTTP 400: Bad Request - Invalid API key');
     });
 
     it('should handle timeout', async () => {
       const timeoutClient = new GeminiClient(mockApiKey, { timeout: 100 });
-      
-      (fetch as jest.Mock).mockImplementationOnce(() => 
-        new Promise((resolve, reject) => {
-          setTimeout(() => reject(new Error('AbortError')), 200);
-        })
-      );
 
-      await expect(timeoutClient.generateResponse('Test prompt')).rejects.toThrow('Failed to generate response');
+      const abortError = new Error('Aborted');
+      abortError.name = 'AbortError';
+      (fetch as jest.Mock).mockRejectedValueOnce(abortError);
+
+      await expect(timeoutClient.generateResponse('Test prompt')).rejects.toThrow('Request timeout');
     });
   });
 

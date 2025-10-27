@@ -16,6 +16,9 @@ describe('Core Types', () => {
       known: false,
       ignored: false,
       createdAt: new Date(),
+      intervalDays: 1,
+      easeFactor: 2.5,
+      nextDue: new Date(),
     };
 
     expect(word.id).toBe(1);

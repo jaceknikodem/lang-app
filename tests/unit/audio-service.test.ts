@@ -18,7 +18,21 @@ describe('Audio Service', () => {
   describe('generateAudio', () => {
     it('should validate input parameters', async () => {
       await expect(audioService.generateAudio('', 'english')).rejects.toThrow('Text must be a non-empty string');
-      await expect(audioService.generateAudio('hello', '')).rejects.toThrow('Language must be specified');
+    });
+
+    it('should allow missing language and use defaults', async () => {
+      const mockGenerator = {
+        generateAudio: jest.fn().mockResolvedValue('audio/hello.aiff'),
+        playAudio: jest.fn().mockResolvedValue(undefined),
+        stopAudio: jest.fn(),
+        audioExists: jest.fn().mockResolvedValue(true)
+      };
+
+      const service = new AudioService(mockGenerator);
+      const result = await service.generateAudio('hello', '');
+
+      expect(result).toBe('audio/hello.aiff');
+      expect(mockGenerator.generateAudio).toHaveBeenCalledWith('hello', undefined, undefined);
     });
 
     it('should handle text trimming', async () => {
@@ -30,13 +44,14 @@ describe('Audio Service', () => {
       const mockGenerator = {
         generateAudio: jest.fn().mockResolvedValue('audio/hello_world.aiff'),
         playAudio: jest.fn().mockResolvedValue(undefined),
+        stopAudio: jest.fn(),
         audioExists: jest.fn().mockResolvedValue(true)
       };
       
       const service = new AudioService(mockGenerator);
       await service.generateAudio(text, language);
       
-      expect(mockGenerator.generateAudio).toHaveBeenCalledWith('hello world', 'english');
+      expect(mockGenerator.generateAudio).toHaveBeenCalledWith('hello world', 'english', undefined);
     });
   });
 
@@ -54,6 +69,7 @@ describe('Audio Service', () => {
           .mockResolvedValueOnce('audio/hello.aiff')
           .mockResolvedValueOnce('audio/world.aiff'),
         playAudio: jest.fn().mockResolvedValue(undefined),
+        stopAudio: jest.fn(),
         audioExists: jest.fn().mockResolvedValue(true)
       };
       
