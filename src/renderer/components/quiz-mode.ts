@@ -69,6 +69,9 @@ export class QuizMode extends LitElement {
   @state()
   private speechRecognitionReady = false;
 
+  @state()
+  private audioOnlyMode = false;
+
   private sessionStartTime = Date.now();
 
   static styles = [
@@ -533,6 +536,80 @@ export class QuizMode extends LitElement {
 
       .close-recorder-button:hover {
         background: var(--text-primary);
+      }
+
+      .audio-only-toggle {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        margin-bottom: var(--spacing-md);
+        justify-content: center;
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
+
+      .audio-only-switch {
+        position: relative;
+        width: 50px;
+        height: 24px;
+        background: var(--border-color);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+
+      .audio-only-switch.active {
+        background: var(--primary-color);
+      }
+
+      .audio-only-slider {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 20px;
+        height: 20px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
+
+      .audio-only-switch.active .audio-only-slider {
+        transform: translateX(26px);
+      }
+
+      .quiz-header .audio-only-switch.active .audio-only-slider {
+        transform: translateX(18px);
+      }
+
+      .audio-only-label {
+        font-weight: 500;
+        user-select: none;
+      }
+
+      .question-text.hidden {
+        opacity: 0.1;
+        filter: blur(8px);
+        pointer-events: none;
+        user-select: none;
+      }
+
+      .question-translation.hidden {
+        opacity: 0.1;
+        filter: blur(8px);
+        pointer-events: none;
+        user-select: none;
+      }
+
+      .audio-only-hint {
+        background: var(--primary-light);
+        color: var(--primary-dark);
+        padding: var(--spacing-sm);
+        border-radius: var(--border-radius);
+        font-size: 14px;
+        text-align: center;
+        margin-bottom: var(--spacing-sm);
+        border: 1px solid var(--primary-color);
       }
 
       .transcription-results {
@@ -1040,6 +1117,10 @@ export class QuizMode extends LitElement {
     this.isTranscribing = false;
   }
 
+  private toggleAudioOnlyMode() {
+    this.audioOnlyMode = !this.audioOnlyMode;
+  }
+
   private async handleRecordingCompleted(event: CustomEvent<{ recording: RecordingResult; autoStopped?: boolean }>) {
     this.currentRecording = event.detail.recording;
     const autoStopped = event.detail.autoStopped || false;
@@ -1221,6 +1302,18 @@ export class QuizMode extends LitElement {
             </div>
           </div>
 
+          <div class="audio-only-toggle">
+            <span class="audio-only-label">Audio Only Mode</span>
+            <div 
+              class="audio-only-switch ${this.audioOnlyMode ? 'active' : ''}"
+              @click=${this.toggleAudioOnlyMode}
+              title="Hide text and rely only on audio for quiz questions"
+            >
+              <div class="audio-only-slider"></div>
+            </div>
+            <span style="font-size: 12px; color: var(--text-secondary);">🎧</span>
+          </div>
+
           <button 
             class="start-button"
             @click=${this.startQuiz}
@@ -1259,6 +1352,17 @@ export class QuizMode extends LitElement {
               <div class="progress-fill" style="width: ${progress}%"></div>
             </div>
             <span>Score: ${this.quizSession.score}</span>
+            <div class="audio-only-toggle" style="margin-bottom: 0;">
+              <span class="audio-only-label" style="font-size: 12px;">Audio Only</span>
+              <div 
+                class="audio-only-switch ${this.audioOnlyMode ? 'active' : ''}"
+                @click=${this.toggleAudioOnlyMode}
+                title="Toggle audio only mode"
+                style="width: 40px; height: 20px;"
+              >
+                <div class="audio-only-slider" style="width: 16px; height: 16px; top: 2px; left: 2px;"></div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1266,15 +1370,22 @@ export class QuizMode extends LitElement {
           <div class="question-container">
             <div class="direction-indicator">
               ${this.direction === 'foreign-to-english' ? 'Foreign → English' : 'English → Foreign'}
+              ${this.audioOnlyMode ? ' • Audio Only Mode' : ''}
             </div>
             
-            <div class="question-text">${displayText}</div>
+            ${this.audioOnlyMode ? html`
+              <div class="audio-only-hint">
+                🎧 Listen carefully to the audio and answer based on what you hear
+              </div>
+            ` : ''}
+            
+            <div class="question-text ${this.audioOnlyMode ? 'hidden' : ''}">${displayText}</div>
             
             <button class="audio-button" @click=${this.playAudio}>
-              🔊 Play Audio
+              🔊 ${this.audioOnlyMode ? 'Play Audio (Listen Carefully!)' : 'Play Audio'}
             </button>
 
-            <div class="question-translation">
+            <div class="question-translation ${this.audioOnlyMode ? 'hidden' : ''}">
               Do you know what ${questionWord} means in this context?
             </div>
 
