@@ -83,8 +83,8 @@ export async function setupWordsForTesting(page: Page, topic: string = 'test', w
   const topicInput = page.locator('topic-selector input[type="text"]');
   await topicInput.fill(topic);
   
-  // Handle both "Generate General Words" and "Generate Topic Words" buttons
-  const generateButton = page.locator('topic-selector button:has-text("Generate General Words"), topic-selector button:has-text("Generate Topic Words")').first();
+  // Handle both "Generate" and "Generate Topic Words" buttons
+  const generateButton = page.locator('topic-selector button:has-text("Generate"), topic-selector button:has-text("Generate Topic Words")').first();
   await generateButton.click();
   
   // Wait for word generation or error

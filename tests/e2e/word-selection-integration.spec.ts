@@ -60,7 +60,7 @@ test.describe('Word Selection Integration Test', () => {
     await expect(page.locator('topic-selector')).toBeVisible({ timeout: 30000 });
     
     // Step 2: Generate words with no topic
-    const generateButton = page.locator('topic-selector button:has-text("Generate General Words")');
+    const generateButton = page.locator('topic-selector button:has-text("Generate")');
     await expect(generateButton).toBeEnabled({ timeout: 30000 });
     await generateButton.click();
     
@@ -115,7 +115,7 @@ test.describe('Word Selection Integration Test', () => {
     // This test verifies that words are stored and retrieved with consistent language
     
     // Generate and process a word
-    const generateButton = page.locator('topic-selector button:has-text("Generate General Words")');
+    const generateButton = page.locator('topic-selector button:has-text("Generate")');
     await expect(generateButton).toBeEnabled({ timeout: 30000 });
     await generateButton.click();
     

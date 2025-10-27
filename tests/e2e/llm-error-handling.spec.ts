@@ -15,7 +15,7 @@ test.describe('LLM Error Handling', () => {
     }
   });
 
-  test('should handle "Generate General Words" button with LLM service unavailable', async () => {
+  test('should handle "Generate" button with LLM service unavailable', async () => {
     // Launch app without mocking - this will test real LLM unavailability
     session = await launchTestApp();
     const { page } = session;
@@ -27,8 +27,8 @@ test.describe('LLM Error Handling', () => {
       await page.waitForSelector('topic-selector', { timeout: 10000 });
     }
 
-    // Click "Generate General Words" button (no topic input)
-    const generateButton = page.locator('topic-selector button:has-text("Generate General Words")');
+    // Click "Generate" button (no topic input)
+    const generateButton = page.locator('topic-selector button:has-text("Generate")');
     await expect(generateButton).toBeVisible();
     await generateButton.click();
 

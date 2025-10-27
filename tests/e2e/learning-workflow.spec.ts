@@ -190,7 +190,7 @@ test.describe('Complete Learning Workflow', () => {
     await startLearningButton.click();
     
     // Try generating words without topic
-    const generateButton = page.locator('topic-selector button:has-text("Generate General Words")');
+    const generateButton = page.locator('topic-selector button:has-text("Generate")');
     await generateButton.click();
     
     // Should still generate words (high-frequency words)

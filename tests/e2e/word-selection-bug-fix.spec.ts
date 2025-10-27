@@ -47,7 +47,7 @@ test.describe('Word Selection Bug Fix', () => {
     await expect(page.locator('topic-selector')).toBeVisible({ timeout: 30000 });
     
     // 2. Generate words with no topic
-    const generateButton = page.locator('topic-selector button:has-text("Generate General Words")');
+    const generateButton = page.locator('topic-selector button:has-text("Generate")');
     await expect(generateButton).toBeEnabled({ timeout: 30000 });
     await generateButton.click();
     

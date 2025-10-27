@@ -69,6 +69,12 @@ export class TopicSelector extends LitElement {
         gap: var(--spacing-sm);
       }
 
+      .input-row {
+        display: flex;
+        gap: var(--spacing-md);
+        align-items: flex-end;
+      }
+
       .input-label {
         font-size: 16px;
         font-weight: 500;
@@ -76,7 +82,8 @@ export class TopicSelector extends LitElement {
       }
 
       .topic-input {
-        width: 100%;
+        flex: 3;
+        min-width: 300px;
         padding: var(--spacing-md);
         border: 2px solid var(--border-color);
         border-radius: var(--border-radius);
@@ -115,7 +122,14 @@ export class TopicSelector extends LitElement {
       }
 
       .generate-btn {
-        min-width: 160px;
+        min-width: 120px;
+        white-space: nowrap;
+      }
+
+      .generate-btn.inline {
+        flex: 0 0 auto;
+        min-width: 100px;
+        padding: var(--spacing-md) var(--spacing-lg);
       }
 
       .skip-btn {
@@ -145,12 +159,26 @@ export class TopicSelector extends LitElement {
       }
 
       @media (max-width: 768px) {
+        .input-row {
+          flex-direction: column;
+          gap: var(--spacing-sm);
+        }
+
+        .topic-input {
+          width: 100%;
+          min-width: unset;
+        }
+
+        .generate-btn.inline {
+          width: 100%;
+          min-width: unset;
+        }
+
         .action-buttons {
           flex-direction: column;
           width: 100%;
         }
 
-        .generate-btn,
         .skip-btn {
           width: 100%;
         }
@@ -253,16 +281,32 @@ export class TopicSelector extends LitElement {
             <label class="input-label" for="topic-input">
               Topic/prompt (Optional)
             </label>
-            <input
-              id="topic-input"
-              class="topic-input"
-              type="text"
-              .value=${this.topic}
-              @input=${this.handleTopicChange}
-              @keypress=${this.handleKeyPress}
-              placeholder="e.g., travel, food, business, family..."
-              ?disabled=${this.isGenerating}
-            />
+            <div class="input-row">
+              <input
+                id="topic-input"
+                class="topic-input"
+                type="text"
+                .value=${this.topic}
+                @input=${this.handleTopicChange}
+                @keypress=${this.handleKeyPress}
+                placeholder="e.g., travel, food, business, family..."
+                ?disabled=${this.isGenerating}
+              />
+              ${this.isGenerating ? html`
+                <div class="loading-state">
+                  <div class="spinner"></div>
+                  Generating...
+                </div>
+              ` : html`
+                <button
+                  class="btn btn-primary generate-btn inline"
+                  @click=${this.handleGenerateWords}
+                  ?disabled=${this.isGenerating}
+                >
+                  Generate
+                </button>
+              `}
+            </div>
           </div>
         </div>
 
@@ -272,34 +316,7 @@ export class TopicSelector extends LitElement {
           </div>
         ` : ''}
 
-        <div class="action-section">
-          ${this.isGenerating ? html`
-            <div class="loading-state">
-              <div class="spinner"></div>
-              Generating vocabulary words...
-            </div>
-          ` : html`
-            <div class="action-buttons">
-              <button
-                class="btn btn-primary btn-large generate-btn"
-                @click=${this.handleGenerateWords}
-                ?disabled=${this.isGenerating}
-              >
-                ${this.topic.trim() ? 'Generate Topic Words' : 'Generate General Words'}
-              </button>
-              
-              ${this.topic.trim() ? html`
-                <button
-                  class="btn btn-secondary btn-large skip-btn"
-                  @click=${this.handleSkipTopic}
-                  ?disabled=${this.isGenerating}
-                >
-                  Skip Topic
-                </button>
-              ` : ''}
-            </div>
-          `}
-        </div>
+
       </div>
     `;
   }

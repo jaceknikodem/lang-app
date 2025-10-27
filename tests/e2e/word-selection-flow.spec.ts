@@ -54,7 +54,7 @@ test.describe('Word Selection Flow', () => {
     await page.waitForTimeout(2000);
     
     // Step 2: Generate words with no topic (general vocabulary)
-    const generateButton = page.locator('topic-selector button:has-text("Generate General Words")');
+    const generateButton = page.locator('topic-selector button:has-text("Generate")');
     await expect(generateButton).toBeVisible();
     
     // Ensure button is enabled (model loaded)
@@ -136,7 +136,7 @@ test.describe('Word Selection Flow', () => {
     await expect(languageSelect).toHaveValue('Spanish');
     
     // Generate words
-    const generateButton = page.locator('topic-selector button:has-text("Generate General Words")');
+    const generateButton = page.locator('topic-selector button:has-text("Generate")');
     await expect(generateButton).toBeEnabled({ timeout: 30000 });
     await generateButton.click();
     
@@ -170,7 +170,7 @@ test.describe('Word Selection Flow', () => {
     await expect(page.locator('topic-selector')).toBeVisible();
     
     // Generate words
-    const generateButton = page.locator('topic-selector button:has-text("Generate General Words")');
+    const generateButton = page.locator('topic-selector button:has-text("Generate")');
     await expect(generateButton).toBeEnabled({ timeout: 30000 });
     await generateButton.click();
     
@@ -207,7 +207,7 @@ test.describe('Word Selection Flow', () => {
     await expect(page.locator('topic-selector')).toBeVisible();
     
     // Generate words
-    const generateButton = page.locator('topic-selector button:has-text("Generate General Words")');
+    const generateButton = page.locator('topic-selector button:has-text("Generate")');
     await expect(generateButton).toBeEnabled({ timeout: 30000 });
     await generateButton.click();
     
@@ -256,7 +256,7 @@ test.describe('Word Selection Flow', () => {
     const startLearningButton = page.locator('nav button:has-text("Start Learning")');
     await startLearningButton.click();
     
-    const generateButton = page.locator('topic-selector button:has-text("Generate General Words")');
+    const generateButton = page.locator('topic-selector button:has-text("Generate")');
     await generateButton.click();
     
     await page.waitForSelector('word-selector', { timeout: 30000 });
