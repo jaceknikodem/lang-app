@@ -468,15 +468,8 @@ export class SpeechRecognitionService {
     // Remove extra whitespace
     cleaned = cleaned.replace(/\s+/g, ' ').trim();
     
-    // Remove common whisper artifacts
-    cleaned = cleaned.replace(/\b(música|music|applause|laughter|silence|gracias|thank you)\b/gi, '');
-    
     // Remove non-Latin characters that indicate hallucination (Tamil, Chinese, etc.)
     cleaned = cleaned.replace(/[\u0B80-\u0BFF\u4E00-\u9FFF\u0900-\u097F]/g, '');
-    
-    // Remove words that are clearly not Spanish/English (common hallucinations)
-    const badWords = /\b(seiten|怎麼|பட|cus|te\s+cus|lo\s+de\s+la\s+怎麼)\b/gi;
-    cleaned = cleaned.replace(badWords, '');
     
     // Split into words and validate each word
     const words = cleaned.split(' ').filter(word => {

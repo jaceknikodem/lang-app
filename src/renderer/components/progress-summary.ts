@@ -64,15 +64,15 @@ export class ProgressSummary extends LitElement {
       .progress-container {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-xl);
+        gap: var(--spacing-lg);
       }
 
       .progress-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
         grid-template-rows: auto auto;
-        gap: var(--spacing-xl);
-        margin-top: var(--spacing-xl);
+        gap: var(--spacing-lg);
+        margin-top: var(--spacing-lg);
       }
 
       .progress-section {
@@ -86,14 +86,14 @@ export class ProgressSummary extends LitElement {
       }
 
       .progress-title {
-        font-size: 28px;
+        font-size: 20px;
         font-weight: 600;
         color: var(--text-primary);
         margin: 0 0 var(--spacing-sm) 0;
       }
 
       .progress-subtitle {
-        font-size: 16px;
+        font-size: 14px;
         color: var(--text-secondary);
         margin: 0;
       }

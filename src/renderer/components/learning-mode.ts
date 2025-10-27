@@ -63,7 +63,7 @@ export class LearningMode extends LitElement {
       .learning-container {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-lg);
+        gap: var(--spacing-md);
       }
 
       .learning-header {
@@ -71,14 +71,14 @@ export class LearningMode extends LitElement {
       }
 
       .learning-title {
-        font-size: 28px;
+        font-size: 20px;
         font-weight: 600;
         color: var(--text-primary);
-        margin: 0 0 var(--spacing-sm) 0;
+        margin: 0 0 var(--spacing-xs) 0;
       }
 
       .learning-subtitle {
-        font-size: 16px;
+        font-size: 14px;
         color: var(--text-secondary);
         margin: 0;
       }
@@ -94,13 +94,13 @@ export class LearningMode extends LitElement {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: var(--spacing-sm);
+        margin-bottom: var(--spacing-xs);
         flex-wrap: wrap;
         gap: var(--spacing-sm);
       }
 
       .progress-text {
-        font-size: 14px;
+        font-size: 12px;
         color: var(--text-secondary);
       }
 
@@ -110,15 +110,15 @@ export class LearningMode extends LitElement {
       }
 
       .sentence-counter {
-        font-size: 12px;
+        font-size: 10px;
         color: var(--text-tertiary);
       }
 
       .progress-bar {
         width: 100%;
-        height: 8px;
+        height: 4px;
         background: var(--border-color);
-        border-radius: 4px;
+        border-radius: 2px;
         overflow: hidden;
       }
 
@@ -153,6 +153,7 @@ export class LearningMode extends LitElement {
         border-radius: var(--border-radius);
         border: 1px solid #ffcdd2;
         text-align: center;
+        font-size: 14px;
       }
 
       .loading-container {
@@ -161,38 +162,39 @@ export class LearningMode extends LitElement {
         align-items: center;
         justify-content: center;
         gap: var(--spacing-md);
-        padding: var(--spacing-xl);
+        padding: var(--spacing-lg);
       }
 
       .empty-state {
         text-align: center;
-        padding: var(--spacing-xl);
+        padding: var(--spacing-lg);
         color: var(--text-secondary);
       }
 
       .empty-state h3 {
         color: var(--text-primary);
         margin-bottom: var(--spacing-md);
+        font-size: 18px;
       }
 
       .completion-state {
         text-align: center;
-        padding: var(--spacing-xl);
+        padding: var(--spacing-lg);
         background: var(--success-color);
         color: white;
         border-radius: var(--border-radius);
       }
 
       .completion-state h3 {
-        margin: 0 0 var(--spacing-md) 0;
-        font-size: 24px;
+        margin: 0 0 var(--spacing-sm) 0;
+        font-size: 18px;
       }
 
       .completion-actions {
         display: flex;
         justify-content: center;
         gap: var(--spacing-md);
-        margin-top: var(--spacing-lg);
+        margin-top: var(--spacing-md);
         flex-wrap: wrap;
       }
 

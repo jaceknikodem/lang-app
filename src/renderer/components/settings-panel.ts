@@ -16,28 +16,29 @@ export class SettingsPanel extends LitElement {
       .settings-container {
         max-width: 600px;
         margin: 0 auto;
-        padding: 2rem;
+        padding: var(--spacing-lg);
       }
 
       .settings-section {
-        margin-bottom: 2rem;
-        padding: 1.5rem;
-        border: 1px solid #e0e0e0;
-        border-radius: 8px;
-        background: #fafafa;
+        margin-bottom: var(--spacing-lg);
+        padding: var(--spacing-lg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        background: var(--background-secondary);
       }
 
       .settings-section h3 {
         margin-top: 0;
-        color: #333;
-        font-size: 1.2rem;
+        color: var(--text-primary);
+        font-size: 16px;
+        font-weight: 600;
       }
 
       .settings-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 1rem;
+        margin-bottom: var(--spacing-md);
       }
 
       .settings-row:last-child {
@@ -46,55 +47,56 @@ export class SettingsPanel extends LitElement {
 
       .settings-description {
         flex: 1;
-        margin-right: 1rem;
+        margin-right: var(--spacing-md);
       }
 
       .settings-description p {
         margin: 0;
-        color: #666;
-        font-size: 0.9rem;
+        color: var(--text-secondary);
+        font-size: 12px;
       }
 
       .action-button {
-        padding: 0.5rem 1rem;
-        background: #007acc;
+        padding: var(--spacing-md) var(--spacing-lg);
+        background: var(--primary-color);
         color: white;
         border: none;
-        border-radius: 4px;
+        border-radius: var(--border-radius-small);
         cursor: pointer;
-        font-size: 0.9rem;
-        min-width: 120px;
+        font-size: 12px;
+        min-width: 100px;
+        transition: all 0.2s ease;
       }
 
       .action-button:hover {
-        background: #005a9e;
+        background: var(--primary-hover);
       }
 
       .action-button:disabled {
-        background: #ccc;
+        background: var(--text-tertiary);
         cursor: not-allowed;
       }
 
       .action-button.danger {
-        background: #dc3545;
+        background: var(--error-color);
         color: white;
       }
 
       .action-button.danger:hover:not(:disabled) {
-        background: #c82333;
+        background: var(--error-dark);
       }
 
       .status-message {
-        margin-top: 0.5rem;
-        padding: 0.5rem;
-        border-radius: 4px;
-        font-size: 0.9rem;
+        margin-top: var(--spacing-sm);
+        padding: var(--spacing-sm);
+        border-radius: var(--border-radius-small);
+        font-size: 12px;
       }
 
       .status-success {
-        background: #d4edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
+        background: var(--success-light);
+        color: var(--success-dark);
+        border: 1px solid var(--success-color);
       }
 
       .status-error {

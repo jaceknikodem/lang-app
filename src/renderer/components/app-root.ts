@@ -59,7 +59,7 @@ export class AppRoot extends LitElement {
         height: 100%;
         max-width: 1000px;
         margin: 0 auto;
-        padding: var(--spacing-lg);
+        padding: var(--spacing-md);
         box-sizing: border-box;
       }
 
@@ -67,13 +67,13 @@ export class AppRoot extends LitElement {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: var(--spacing-xl);
-        padding-bottom: var(--spacing-md);
-        border-bottom: 2px solid var(--border-color);
+        margin-bottom: var(--spacing-lg);
+        padding-bottom: var(--spacing-sm);
+        border-bottom: 1px solid var(--border-color);
       }
 
       .app-title {
-        font-size: 28px;
+        font-size: 22px;
         font-weight: 700;
         color: var(--text-primary);
         margin: 0;
@@ -135,13 +135,13 @@ export class AppRoot extends LitElement {
       }
 
       .nav-button {
-        padding: var(--spacing-xs) var(--spacing-md);
-        border: 2px solid var(--primary-color);
+        padding: var(--spacing-sm) var(--spacing-md);
+        border: 1px solid var(--primary-color);
         background: var(--background-primary);
         color: var(--primary-color);
         border-radius: var(--border-radius-small);
         cursor: pointer;
-        font-size: 14px;
+        font-size: 12px;
         font-weight: 500;
         transition: all 0.2s ease;
       }
@@ -206,22 +206,22 @@ export class AppRoot extends LitElement {
 
       .session-restore {
         background: var(--primary-light);
-        border: 2px solid var(--primary-color);
+        border: 1px solid var(--primary-color);
         border-radius: var(--border-radius);
         padding: var(--spacing-lg);
-        margin-bottom: var(--spacing-lg);
+        margin-bottom: var(--spacing-md);
         text-align: center;
       }
 
       .session-restore-title {
-        font-size: 18px;
+        font-size: 16px;
         font-weight: 600;
         color: var(--primary-color);
         margin: 0 0 var(--spacing-sm) 0;
       }
 
       .session-restore-description {
-        font-size: 14px;
+        font-size: 12px;
         color: var(--text-secondary);
         margin: 0 0 var(--spacing-md) 0;
       }
@@ -234,12 +234,12 @@ export class AppRoot extends LitElement {
       }
 
       .session-restore-button {
-        padding: var(--spacing-sm) var(--spacing-lg);
-        border: 2px solid var(--primary-color);
+        padding: var(--spacing-md) var(--spacing-lg);
+        border: 1px solid var(--primary-color);
         background: var(--primary-color);
         color: white;
         border-radius: var(--border-radius);
-        font-size: 14px;
+        font-size: 12px;
         font-weight: 500;
         cursor: pointer;
         transition: all 0.2s ease;
@@ -262,7 +262,7 @@ export class AppRoot extends LitElement {
 
       @media (max-width: 768px) {
         .app-container {
-          padding: var(--spacing-md);
+          padding: var(--spacing-sm);
         }
         
         .app-header {

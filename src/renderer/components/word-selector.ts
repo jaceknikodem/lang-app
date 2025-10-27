@@ -46,7 +46,7 @@ export class WordSelector extends LitElement {
       .word-selector-container {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-lg);
+        gap: var(--spacing-md);
       }
 
       .header-section {
@@ -54,14 +54,14 @@ export class WordSelector extends LitElement {
       }
 
       .header-title {
-        font-size: 24px;
+        font-size: 20px;
         font-weight: 600;
         color: var(--text-primary);
         margin: 0 0 var(--spacing-sm) 0;
       }
 
       .header-subtitle {
-        font-size: 16px;
+        font-size: 14px;
         color: var(--text-secondary);
         margin: 0;
       }
@@ -72,17 +72,17 @@ export class WordSelector extends LitElement {
         border-radius: var(--border-radius);
         border: 1px solid var(--primary-color);
         text-align: center;
-        margin-bottom: var(--spacing-md);
+        margin-bottom: var(--spacing-sm);
       }
 
       .topic-label {
-        font-size: 14px;
+        font-size: 12px;
         color: var(--text-secondary);
         margin: 0 0 var(--spacing-xs) 0;
       }
 
       .topic-name {
-        font-size: 18px;
+        font-size: 16px;
         font-weight: 600;
         color: var(--primary-color);
         margin: 0;

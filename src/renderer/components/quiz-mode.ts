@@ -101,11 +101,11 @@ export class QuizMode extends LitElement {
         align-items: center;
         margin-bottom: var(--spacing-sm);
         padding-bottom: var(--spacing-xs);
-        border-bottom: 2px solid var(--border-color);
+        border-bottom: 1px solid var(--border-color);
       }
 
       .quiz-title {
-        font-size: 24px;
+        font-size: 18px;
         font-weight: 600;
         color: var(--text-primary);
         margin: 0;
@@ -114,16 +114,16 @@ export class QuizMode extends LitElement {
       .quiz-progress {
         display: flex;
         align-items: center;
-        gap: var(--spacing-md);
-        font-size: 16px;
+        gap: var(--spacing-sm);
+        font-size: 14px;
         color: var(--text-secondary);
       }
 
       .progress-bar {
-        width: 200px;
-        height: 8px;
+        width: 150px;
+        height: 4px;
         background: var(--background-secondary);
-        border-radius: 4px;
+        border-radius: 2px;
         overflow: hidden;
       }
 
@@ -141,16 +141,16 @@ export class QuizMode extends LitElement {
         align-items: center;
         text-align: center;
         gap: var(--spacing-sm);
-        padding-top: var(--spacing-md);
+        padding-top: var(--spacing-sm);
       }
 
       .question-container {
         background: var(--background-secondary);
         border-radius: var(--border-radius);
-        padding: var(--spacing-md);
+        padding: var(--spacing-lg);
         width: 100%;
         max-width: 600px;
-        box-shadow: var(--shadow-medium);
+        box-shadow: var(--shadow-light);
       }
 
       .question-text-container {
@@ -161,7 +161,7 @@ export class QuizMode extends LitElement {
       }
 
       .question-text {
-        font-size: 20px;
+        font-size: 18px;
         font-weight: 500;
         color: var(--text-primary);
         line-height: 1.4;
@@ -170,14 +170,14 @@ export class QuizMode extends LitElement {
       }
 
       .question-translation {
-        font-size: 18px;
+        font-size: 16px;
         color: var(--text-secondary);
         margin-bottom: var(--spacing-sm);
         font-style: italic;
       }
 
       .direction-indicator {
-        font-size: 14px;
+        font-size: 12px;
         color: var(--text-secondary);
         margin-bottom: var(--spacing-xs);
         text-transform: uppercase;
@@ -189,15 +189,15 @@ export class QuizMode extends LitElement {
         color: white;
         border: none;
         border-radius: var(--border-radius);
-        padding: var(--spacing-xs) var(--spacing-sm);
-        font-size: 16px;
+        padding: var(--spacing-sm);
+        font-size: 14px;
         cursor: pointer;
         transition: all 0.2s ease;
         display: flex;
         align-items: center;
         justify-content: center;
-        min-width: 40px;
-        height: 40px;
+        min-width: 32px;
+        height: 32px;
         flex-shrink: 0;
       }
 

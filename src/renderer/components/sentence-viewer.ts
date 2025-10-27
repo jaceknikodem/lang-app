@@ -52,7 +52,7 @@ export class SentenceViewer extends LitElement {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: var(--spacing-md);
+        margin-bottom: var(--spacing-sm);
         flex-wrap: wrap;
         gap: var(--spacing-sm);
       }
@@ -64,20 +64,20 @@ export class SentenceViewer extends LitElement {
       }
 
       .target-word {
-        font-size: 18px;
+        font-size: 16px;
         font-weight: 700;
         color: var(--primary-color);
       }
 
       .word-separator {
-        font-size: 18px;
+        font-size: 16px;
         font-weight: 700;
         color: var(--text-primary);
         margin: 0 var(--spacing-sm);
       }
 
       .word-translation {
-        font-size: 18px;
+        font-size: 16px;
         color: var(--text-primary);
         font-weight: 400;
       }
@@ -92,7 +92,7 @@ export class SentenceViewer extends LitElement {
         border: none;
         border-radius: var(--border-radius-small);
         cursor: pointer;
-        font-size: 14px;
+        font-size: 12px;
         transition: all 0.2s ease;
       }
 
@@ -111,19 +111,19 @@ export class SentenceViewer extends LitElement {
       }
 
       .sentence-content {
-        margin-bottom: var(--spacing-lg);
+        margin-bottom: var(--spacing-md);
       }
 
       .context-section {
-        margin-bottom: var(--spacing-md);
+        margin-bottom: var(--spacing-sm);
         padding: var(--spacing-md);
         background: var(--background-secondary);
         border-radius: var(--border-radius-small);
-        border-left: 3px solid var(--primary-color);
+        border-left: 2px solid var(--primary-color);
       }
 
       .context-label {
-        font-size: 12px;
+        font-size: 10px;
         font-weight: 600;
         color: var(--primary-color);
         text-transform: uppercase;
@@ -132,30 +132,30 @@ export class SentenceViewer extends LitElement {
       }
 
       .context-text {
-        font-size: 16px;
-        line-height: 1.5;
+        font-size: 14px;
+        line-height: 1.4;
         color: var(--text-primary);
         margin-bottom: var(--spacing-xs);
       }
 
       .context-translation {
-        font-size: 14px;
+        font-size: 12px;
         color: var(--text-secondary);
         font-style: italic;
       }
 
       .sentence-text {
-        font-size: 20px;
-        line-height: 1.6;
-        margin-bottom: var(--spacing-md);
+        font-size: 18px;
+        line-height: 1.5;
+        margin-bottom: var(--spacing-sm);
         color: var(--text-primary);
       }
 
       .sentence-translation {
-        font-size: 16px;
+        font-size: 14px;
         color: var(--text-secondary);
         font-style: italic;
-        line-height: 1.5;
+        line-height: 1.4;
       }
 
       .word-in-sentence {
@@ -203,12 +203,12 @@ export class SentenceViewer extends LitElement {
         display: flex;
         justify-content: center;
         gap: var(--spacing-md);
-        margin-top: var(--spacing-lg);
+        margin-top: var(--spacing-md);
         flex-wrap: wrap;
       }
 
       .word-action-btn {
-        min-width: 120px;
+        min-width: 100px;
       }
 
       .tooltip {
@@ -253,7 +253,7 @@ export class SentenceViewer extends LitElement {
         }
 
         .sentence-text {
-          font-size: 18px;
+          font-size: 16px;
         }
 
         .word-actions {

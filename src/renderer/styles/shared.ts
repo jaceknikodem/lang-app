@@ -26,15 +26,15 @@ export const sharedStyles = css`
     --background-primary: #ffffff;
     --background-secondary: #f5f5f5;
     --border-color: #e0e0e0;
-    --shadow-light: 0 2px 10px rgba(0,0,0,0.1);
-    --shadow-medium: 0 4px 20px rgba(0,0,0,0.15);
-    --border-radius: 8px;
-    --border-radius-small: 4px;
-    --spacing-xs: 4px;
-    --spacing-sm: 8px;
-    --spacing-md: 16px;
-    --spacing-lg: 24px;
-    --spacing-xl: 32px;
+    --shadow-light: 0 1px 4px rgba(0,0,0,0.1);
+    --shadow-medium: 0 2px 8px rgba(0,0,0,0.15);
+    --border-radius: 6px;
+    --border-radius-small: 3px;
+    --spacing-xs: 2px;
+    --spacing-sm: 4px;
+    --spacing-md: 8px;
+    --spacing-lg: 12px;
+    --spacing-xl: 16px;
   }
 
   /* Typography */
@@ -109,17 +109,17 @@ export const sharedStyles = css`
 
   /* Button styles */
   .btn {
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--spacing-md) var(--spacing-lg);
     border: none;
     border-radius: var(--border-radius-small);
     cursor: pointer;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 500;
     transition: all 0.2s ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: var(--spacing-xs);
+    gap: var(--spacing-sm);
     text-decoration: none;
     box-sizing: border-box;
   }
@@ -167,13 +167,13 @@ export const sharedStyles = css`
   }
 
   .btn-large {
-    padding: var(--spacing-md) var(--spacing-lg);
-    font-size: 18px;
+    padding: var(--spacing-lg) var(--spacing-xl);
+    font-size: 16px;
   }
 
   .btn-small {
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: 14px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 12px;
   }
 
   /* Card styles */
@@ -187,7 +187,7 @@ export const sharedStyles = css`
 
   .card-header {
     margin-bottom: var(--spacing-md);
-    padding-bottom: var(--spacing-md);
+    padding-bottom: var(--spacing-sm);
     border-bottom: 1px solid var(--border-color);
   }
 
@@ -206,10 +206,10 @@ export const sharedStyles = css`
 
   /* Input styles */
   .input {
-    padding: var(--spacing-sm) var(--spacing-md);
-    border: 2px solid var(--border-color);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border: 1px solid var(--border-color);
     border-radius: var(--border-radius-small);
-    font-size: 16px;
+    font-size: 14px;
     transition: border-color 0.2s ease;
     box-sizing: border-box;
   }
@@ -276,7 +276,7 @@ export const sharedStyles = css`
   @media (max-width: 768px) {
     .btn {
       padding: var(--spacing-md);
-      font-size: 14px;
+      font-size: 12px;
     }
     
     .card {

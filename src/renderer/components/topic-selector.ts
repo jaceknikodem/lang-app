@@ -36,7 +36,7 @@ export class TopicSelector extends LitElement {
       .topic-container {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-lg);
+        gap: var(--spacing-md);
       }
 
       .intro-section {
@@ -44,16 +44,16 @@ export class TopicSelector extends LitElement {
       }
 
       .intro-title {
-        font-size: 24px;
+        font-size: 20px;
         font-weight: 600;
         color: var(--text-primary);
-        margin: 0 0 var(--spacing-md) 0;
+        margin: 0 0 var(--spacing-sm) 0;
       }
 
       .intro-text {
-        font-size: 16px;
+        font-size: 14px;
         color: var(--text-secondary);
-        line-height: 1.5;
+        line-height: 1.4;
         margin: 0;
       }
 
@@ -76,7 +76,7 @@ export class TopicSelector extends LitElement {
       }
 
       .input-label {
-        font-size: 16px;
+        font-size: 14px;
         font-weight: 500;
         color: var(--text-primary);
       }
@@ -85,9 +85,9 @@ export class TopicSelector extends LitElement {
         flex: 3;
         min-width: 300px;
         padding: var(--spacing-md);
-        border: 2px solid var(--border-color);
+        border: 1px solid var(--border-color);
         border-radius: var(--border-radius);
-        font-size: 16px;
+        font-size: 14px;
         transition: border-color 0.2s ease;
         box-sizing: border-box;
       }
@@ -102,7 +102,7 @@ export class TopicSelector extends LitElement {
       }
 
       .help-text {
-        font-size: 14px;
+        font-size: 12px;
         color: var(--text-secondary);
         margin: 0;
       }
@@ -128,7 +128,7 @@ export class TopicSelector extends LitElement {
 
       .generate-btn.inline {
         flex: 0 0 auto;
-        min-width: 100px;
+        min-width: 80px;
         padding: var(--spacing-md) var(--spacing-lg);
       }
 
