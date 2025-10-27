@@ -26,7 +26,7 @@ export class ContentGenerator {
   constructor(llmClient?: LLMClient, config?: Partial<ContentGeneratorConfig>) {
     this.config = {
       defaultLanguage: config?.defaultLanguage || 'Spanish',
-      defaultWordCount: config?.defaultWordCount || 5,
+      defaultWordCount: config?.defaultWordCount || 10,
       defaultSentenceCount: config?.defaultSentenceCount || 3,
       retryAttempts: config?.retryAttempts || 2,
       retryDelay: config?.retryDelay || 1000,

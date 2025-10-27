@@ -51,14 +51,41 @@ async function initializeServices(): Promise<void> {
       autoDownload: false
     });
 
-    // Initialize LLM client (default to Ollama)
-    llmClient = LLMFactory.createOllamaClient();
+    // Determine initial LLM provider from persisted settings
+    let initialProvider: LLMProvider = 'ollama';
+    try {
+      const storedProvider = await databaseLayer.getSetting('llm_provider');
+      if (storedProvider === 'gemini' || storedProvider === 'ollama') {
+        initialProvider = storedProvider as LLMProvider;
+      }
+    } catch (e) {
+      console.warn('Could not read llm_provider setting, defaulting to ollama');
+    }
+
+    // Get Gemini API key if needed
+    let geminiApiKey = '';
+    try {
+      const storedKey = await databaseLayer.getSetting('gemini_api_key');
+      geminiApiKey = storedKey || '';
+    } catch (e) {
+      console.warn('Could not read gemini_api_key setting');
+    }
+
+    // Initialize LLM client based on persisted provider
+    if (initialProvider === 'gemini') {
+      llmClient = LLMFactory.createGeminiClient(geminiApiKey);
+    } else {
+      llmClient = LLMFactory.createOllamaClient();
+    }
     
     // Inject database layer into LLM client for duplicate checking
     llmClient.setDatabaseLayer(databaseLayer);
     
-    // Initialize content generator with LLM client
-    contentGenerator = new ContentGenerator(llmClient);
+    // Initialize content generator with LLM client and provider config
+    contentGenerator = new ContentGenerator(llmClient, {
+      llmProvider: initialProvider,
+      geminiApiKey
+    });
     
     // Initialize the content generator (including frequency word manager)
     await contentGenerator.initialize();

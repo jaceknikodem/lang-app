@@ -462,6 +462,11 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       // Switch provider in content generator
       contentGenerator.switchProvider(validatedProvider, validatedApiKey);
 
+      // Persist selected provider so it survives app restarts
+      if (databaseLayer) {
+        await databaseLayer.setSetting('llm_provider', validatedProvider);
+      }
+
       // Update the main process llmClient reference
       const newClient = contentGenerator.getCurrentClient();
       if (newClient && databaseLayer) {
