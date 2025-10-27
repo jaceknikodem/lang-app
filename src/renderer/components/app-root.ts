@@ -248,6 +248,7 @@ export class AppRoot extends LitElement {
       .session-restore-button:hover {
         background: var(--primary-dark);
         border-color: var(--primary-dark);
+        color: white;
       }
 
       .session-restore-button.secondary {
@@ -423,20 +424,20 @@ export class AppRoot extends LitElement {
   private async handleLanguageDropdownChange(event: Event) {
     const select = event.target as HTMLSelectElement;
     const selectedLanguage = select.value;
-    
+
     if (!selectedLanguage || selectedLanguage === this.currentLanguage) return;
-    
+
     try {
       await window.electronAPI.database.setCurrentLanguage(selectedLanguage);
       this.currentLanguage = selectedLanguage;
-      
+
       // Dispatch event to notify other components (like settings panel)
       this.dispatchEvent(new CustomEvent('language-changed', {
         detail: { language: selectedLanguage },
         bubbles: true,
         composed: true
       }));
-      
+
       console.log('Language changed to:', this.currentLanguage);
     } catch (error) {
       console.error('Failed to change language:', error);

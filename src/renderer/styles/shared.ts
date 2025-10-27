@@ -9,10 +9,17 @@ export const sharedStyles = css`
   :host {
     --primary-color: #007AFF;
     --primary-hover: #0056CC;
+    --primary-dark: #0056CC;
     --primary-light: #f0f8ff;
     --success-color: #34C759;
+    --success-light: #e8f5e8;
+    --success-dark: #28A745;
     --warning-color: #FF9500;
+    --warning-light: #fff3e0;
+    --warning-dark: #E6850E;
     --error-color: #FF3B30;
+    --error-light: #ffebee;
+    --error-dark: #D32F2F;
     --text-primary: #000000;
     --text-secondary: #666666;
     --text-tertiary: #999999;

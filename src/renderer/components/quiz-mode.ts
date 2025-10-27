@@ -190,6 +190,7 @@ export class QuizMode extends LitElement {
 
       .audio-button:hover {
         background: var(--primary-dark);
+        color: white;
         transform: translateY(-1px);
       }
 
@@ -275,6 +276,7 @@ export class QuizMode extends LitElement {
 
       .next-button:hover {
         background: var(--primary-dark);
+        color: white;
       }
 
       .quiz-complete {
@@ -394,6 +396,7 @@ export class QuizMode extends LitElement {
 
       .action-button.primary:hover {
         background: var(--primary-dark);
+        color: white;
       }
 
       .setup-container {
@@ -475,6 +478,7 @@ export class QuizMode extends LitElement {
 
       .start-button:hover {
         background: var(--primary-dark);
+        color: white;
         transform: translateY(-1px);
       }
 
@@ -536,6 +540,7 @@ export class QuizMode extends LitElement {
 
       .close-recorder-button:hover {
         background: var(--text-primary);
+        color: white;
       }
 
       .audio-only-toggle {

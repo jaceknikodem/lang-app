@@ -198,6 +198,7 @@ export class SessionComplete extends LitElement {
 
       .action-button.primary:hover {
         background: var(--primary-dark);
+        color: white;
       }
 
       @media (max-width: 768px) {
