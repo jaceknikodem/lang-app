@@ -292,24 +292,7 @@ export class TopicSelector extends LitElement {
         context: 'topic-selection',
         description: 'Generate words for topic'
       },
-      {
-        key: 'g',
-        action: () => this.handleGenerateWords(),
-        context: 'topic-selection',
-        description: 'Generate words for topic'
-      },
-      {
-        key: 's',
-        action: () => this.handleSkipTopic(),
-        context: 'topic-selection',
-        description: 'Skip topic and generate general vocabulary'
-      },
-      {
-        key: 'c',
-        action: () => this.clearTopic(),
-        context: 'topic-selection',
-        description: 'Clear topic input'
-      }
+
     ];
 
     this.keyboardUnsubscribe = useKeyboardBindings(bindings);
@@ -352,9 +335,9 @@ export class TopicSelector extends LitElement {
                   class="btn btn-primary generate-btn inline"
                   @click=${this.handleGenerateWords}
                   ?disabled=${this.isGenerating}
-                  title="Generate words (Enter or G)"
+                  title="Generate words (Enter)"
                 >
-                  Generate <span class="keyboard-hint">(G)</span>
+                  Generate <span class="keyboard-hint">(Enter)</span>
                 </button>
               `}
             </div>
