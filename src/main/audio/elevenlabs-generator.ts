@@ -147,8 +147,6 @@ export class ElevenLabsAudioGenerator implements AudioGenerator {
       } catch (error) {
         console.warn('Failed to stop audio process (ElevenLabs):', error);
       }
-    } else {
-      console.log('No audio process to stop (ElevenLabs)');
     }
   }
 

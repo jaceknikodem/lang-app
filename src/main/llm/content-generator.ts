@@ -331,7 +331,7 @@ export class ContentGenerator {
           withAudio: supplementalSentences.filter(sentence => Boolean(sentence.audioUrl)).length
         });
 
-        if (supplementalSentences.length > 3) {
+        if (supplementalSentences.length >= 3) {
           const shuffled = this.shuffleArray(supplementalSentences);
           const trimmed = shuffled.slice(0, sentenceCount);
           console.log('[ContentGenerator] Using Tatoeba sentences only', {

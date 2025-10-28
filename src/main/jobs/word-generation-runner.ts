@@ -70,7 +70,6 @@ export class WordGenerationRunner {
           } catch (summaryError) {
             console.warn('[WordGenerationRunner] Unable to retrieve queue summary:', summaryError);
           }
-          console.log('[WordGenerationRunner] No pending jobs. Waiting before next poll...');
           await this.delay(this.pollIntervalMs);
           continue;
         }
