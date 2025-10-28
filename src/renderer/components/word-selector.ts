@@ -432,6 +432,12 @@ export class WordSelector extends LitElement {
       // Set the current language in database to match the words being inserted
       await window.electronAPI.database.setCurrentLanguage(this.language);
       console.log('Set current language to:', this.language);
+      sessionManager.setActiveLanguage(this.language);
+      this.dispatchEvent(new CustomEvent('language-changed', {
+        detail: { language: this.language },
+        bubbles: true,
+        composed: true
+      }));
 
       // Process known words first (simpler - no sentences needed)
       let processedKnown = 0;

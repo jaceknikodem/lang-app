@@ -7,6 +7,7 @@ import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { Word, StudyStats } from '../../shared/types/core.js';
+import { sessionManager } from '../utils/session-manager.js';
 
 interface WordCategoryStats {
   known: number;           // strength > STRONG_THRESHOLD
@@ -416,6 +417,12 @@ export class ProgressSummary extends LitElement {
     try {
       await window.electronAPI.database.setCurrentLanguage(selectedLanguage);
       this.currentLanguage = selectedLanguage;
+      sessionManager.setActiveLanguage(selectedLanguage);
+      this.dispatchEvent(new CustomEvent('language-changed', {
+        detail: { language: selectedLanguage },
+        bubbles: true,
+        composed: true
+      }));
       
       // Reload progress data for the new language
       await this.loadProgressData();

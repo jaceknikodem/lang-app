@@ -299,6 +299,11 @@ export class AppRoot extends LitElement {
         console.warn('LLM check failed (this is OK):', error);
       }
 
+      // Load current language
+      console.log('Loading current language...');
+      await this.loadCurrentLanguage();
+      console.log('Current language loaded');
+
       // Load saved session
       console.log('Loading session...');
       await this.loadSession();
@@ -308,11 +313,6 @@ export class AppRoot extends LitElement {
       console.log('Checking existing words...');
       await this.checkExistingWords();
       console.log('Existing words check complete');
-
-      // Load current language
-      console.log('Loading current language...');
-      await this.loadCurrentLanguage();
-      console.log('Current language loaded');
 
       console.log('Ensuring learning session...');
       await this.ensureLearningSession();
@@ -339,7 +339,11 @@ export class AppRoot extends LitElement {
   private async checkExistingWords() {
     try {
       console.log('Calling database.getAllWords...');
-      const allWords = await window.electronAPI.database.getAllWords(true, false);
+      const allWords = await window.electronAPI.database.getAllWords(
+        true,
+        false,
+        this.currentLanguage || undefined
+      );
       console.log('Database call successful, words found:', allWords.length);
       this.hasExistingWords = allWords.length > 0;
       if (this.hasExistingWords === false && router.isCurrentMode('learning')) {
@@ -359,6 +363,9 @@ export class AppRoot extends LitElement {
       console.error('Failed to load current language:', error);
       this.currentLanguage = 'spanish'; // Default fallback
     }
+
+    const languageToUse = this.currentLanguage || 'spanish';
+    sessionManager.setActiveLanguage(languageToUse);
   }
 
   private async ensureLearningSession() {
@@ -400,10 +407,24 @@ export class AppRoot extends LitElement {
   // Method to refresh current language (can be called when language changes)
   async refreshCurrentLanguage() {
     await this.loadCurrentLanguage();
+    this.sessionState = sessionManager.getCurrentSession();
+    await this.checkExistingWords();
+    await this.ensureLearningSession();
+    this.requestUpdate();
   }
 
   private handleLanguageChanged = async (event: Event) => {
-    const customEvent = event as CustomEvent;
+    if (event.target === this) {
+      return;
+    }
+
+    const customEvent = event as CustomEvent<{ language?: string }>;
+    const newLanguage = customEvent.detail?.language;
+
+    if (newLanguage && newLanguage === this.currentLanguage) {
+      return;
+    }
+
     console.log('Language changed event received:', customEvent.detail);
     await this.refreshCurrentLanguage();
   };
@@ -417,6 +438,12 @@ export class AppRoot extends LitElement {
     try {
       await window.electronAPI.database.setCurrentLanguage(selectedLanguage);
       this.currentLanguage = selectedLanguage;
+
+      sessionManager.setActiveLanguage(selectedLanguage);
+      this.sessionState = sessionManager.getCurrentSession();
+      await this.checkExistingWords();
+      await this.ensureLearningSession();
+      this.requestUpdate();
 
       // Dispatch event to notify other components (like settings panel)
       this.dispatchEvent(new CustomEvent('language-changed', {

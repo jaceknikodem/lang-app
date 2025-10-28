@@ -29,10 +29,25 @@ export interface SessionState {
 }
 
 const SESSION_STORAGE_KEY = 'language-learning-session';
+const SESSION_STORAGE_VERSION = 2;
+const LEGACY_LANGUAGE_KEY = '__legacy__';
+
+type PersistedSessionState = Omit<SessionState, 'lastActivity'> & {
+  lastActivity: string;
+};
+
+interface SessionStoragePayload {
+  version: number;
+  activeLanguage?: string;
+  sessions: Record<string, PersistedSessionState>;
+}
 
 export class SessionManager {
   private static instance: SessionManager;
   private currentSession: SessionState | null = null;
+  private sessionsByLanguage: Record<string, SessionState> = {};
+  private activeLanguage: string | null = null;
+  private storageLoaded = false;
 
   private constructor() {}
 
@@ -44,21 +59,57 @@ export class SessionManager {
   }
 
   /**
+   * Set the active language for session storage
+   */
+  setActiveLanguage(language: string): void {
+    if (!language) {
+      return;
+    }
+
+    this.ensureStorageLoaded();
+
+    const normalizedLanguage = language.trim();
+    if (!normalizedLanguage) {
+      return;
+    }
+
+    if (this.activeLanguage === normalizedLanguage) {
+      return;
+    }
+
+    if (!this.sessionsByLanguage[normalizedLanguage]) {
+      const legacySession = this.sessionsByLanguage[LEGACY_LANGUAGE_KEY];
+
+      if (legacySession) {
+        this.sessionsByLanguage[normalizedLanguage] = legacySession;
+        delete this.sessionsByLanguage[LEGACY_LANGUAGE_KEY];
+      } else {
+        this.sessionsByLanguage[normalizedLanguage] = this.createDefaultSession();
+      }
+    }
+
+    this.activeLanguage = normalizedLanguage;
+    this.currentSession = this.sessionsByLanguage[normalizedLanguage];
+    this.persistSessions();
+  }
+
+  /**
    * Save current session state to localStorage
    */
   saveSession(sessionState: Partial<SessionState>): void {
     try {
       const currentSession = this.getCurrentSession();
-      
       const updatedSession: SessionState = {
         ...currentSession,
         ...sessionState,
         lastActivity: new Date()
       };
 
+      const languageKey = this.getActiveLanguageKey();
+      this.sessionsByLanguage[languageKey] = updatedSession;
       this.currentSession = updatedSession;
-      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(updatedSession));
-      
+      this.persistSessions();
+
       console.log('Session saved:', updatedSession.currentMode);
     } catch (error) {
       console.error('Failed to save session:', error);
@@ -69,11 +120,19 @@ export class SessionManager {
    * Get current session or create a default one
    */
   getCurrentSession(): SessionState {
-    if (!this.currentSession) {
-      const stored = this.loadSessionFromStorage();
-      this.currentSession = stored ?? this.createDefaultSession();
+    this.ensureStorageLoaded();
+
+    const languageKey = this.getActiveLanguageKey();
+    let session = this.sessionsByLanguage[languageKey];
+
+    if (!session) {
+      session = this.createDefaultSession();
+      this.sessionsByLanguage[languageKey] = session;
+      this.persistSessions();
     }
-    return this.currentSession;
+
+    this.currentSession = session;
+    return session;
   }
 
   /**
@@ -81,8 +140,14 @@ export class SessionManager {
    */
   clearSession(): void {
     try {
-      localStorage.removeItem(SESSION_STORAGE_KEY);
-      this.currentSession = null;
+      this.ensureStorageLoaded();
+
+      const languageKey = this.getActiveLanguageKey();
+      const defaultSession = this.createDefaultSession();
+      this.sessionsByLanguage[languageKey] = defaultSession;
+      this.currentSession = defaultSession;
+
+      this.persistSessions();
       console.log('Session cleared');
     } catch (error) {
       console.error('Failed to clear session:', error);
@@ -176,15 +241,21 @@ export class SessionManager {
       return;
     }
 
-    const updatedSession = { ...session };
+    const updatedSession: SessionState = {
+      ...session,
+      learningSession: undefined,
+      learningProgress: undefined,
+      lastActivity: new Date()
+    };
     delete updatedSession.learningSession;
     delete updatedSession.learningProgress;
+
+    const languageKey = this.getActiveLanguageKey();
+    this.sessionsByLanguage[languageKey] = updatedSession;
     this.currentSession = updatedSession;
+
     try {
-      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
-        ...updatedSession,
-        lastActivity: updatedSession.lastActivity.toISOString()
-      }));
+      this.persistSessions();
     } catch (error) {
       console.error('Failed to clear learning session:', error);
     }
@@ -250,35 +321,113 @@ export class SessionManager {
     };
   }
 
-  /**
-   * Attempt to load a previously stored session from localStorage
-   */
-  private loadSessionFromStorage(): SessionState | null {
+  private getActiveLanguageKey(): string {
+    if (this.activeLanguage && this.activeLanguage.trim().length > 0) {
+      return this.activeLanguage;
+    }
+    return LEGACY_LANGUAGE_KEY;
+  }
+
+  private ensureStorageLoaded(): void {
+    if (this.storageLoaded) {
+      return;
+    }
+
+    this.storageLoaded = true;
+
+    if (typeof localStorage === 'undefined') {
+      return;
+    }
+
     try {
       const raw = localStorage.getItem(SESSION_STORAGE_KEY);
       if (!raw) {
-        return null;
+        return;
       }
 
-      const parsed = JSON.parse(raw) as Partial<SessionState> & { lastActivity?: string };
-      if (!parsed) {
-        return null;
+      const parsed = JSON.parse(raw) as SessionStoragePayload | (Partial<SessionState> & { lastActivity?: string });
+
+      if (parsed && typeof parsed === 'object' && 'version' in parsed && parsed.version === SESSION_STORAGE_VERSION) {
+        const payload = parsed as SessionStoragePayload;
+
+        const sessionEntries = Object.entries(payload.sessions ?? {});
+        for (const [language, sessionData] of sessionEntries) {
+          this.sessionsByLanguage[language] = this.hydrateSession(sessionData);
+        }
+
+        const storedActiveLanguage = typeof payload.activeLanguage === 'string' ? payload.activeLanguage : undefined;
+        if (storedActiveLanguage) {
+          if (!this.sessionsByLanguage[storedActiveLanguage]) {
+            this.sessionsByLanguage[storedActiveLanguage] = this.createDefaultSession();
+          }
+          this.activeLanguage = storedActiveLanguage;
+          this.currentSession = this.sessionsByLanguage[storedActiveLanguage];
+        } else if (this.sessionsByLanguage[LEGACY_LANGUAGE_KEY]) {
+          this.currentSession = this.sessionsByLanguage[LEGACY_LANGUAGE_KEY];
+        } else if (sessionEntries.length > 0) {
+          const [firstLanguage] = sessionEntries[0];
+          if (firstLanguage !== LEGACY_LANGUAGE_KEY) {
+            this.activeLanguage = firstLanguage;
+          }
+          this.currentSession = this.sessionsByLanguage[firstLanguage];
+        }
+        return;
       }
 
-      const hydrated: SessionState = {
-        currentMode: parsed.currentMode ?? 'topic-selection',
-        quizDirection: parsed.quizDirection ?? 'foreign-to-english',
-        selectedTopic: parsed.selectedTopic,
-        learningProgress: parsed.learningProgress,
-        quizProgress: parsed.quizProgress,
-        learningSession: parsed.learningSession,
-        lastActivity: parsed.lastActivity ? new Date(parsed.lastActivity) : new Date()
-      };
-
-      return hydrated;
+      if (parsed && typeof parsed === 'object') {
+        const legacySession = this.hydrateSession(
+          parsed as Partial<Omit<SessionState, 'lastActivity'>> & { lastActivity?: string }
+        );
+        this.sessionsByLanguage[LEGACY_LANGUAGE_KEY] = legacySession;
+        this.currentSession = legacySession;
+      }
     } catch (error) {
       console.error('Failed to load session from storage:', error);
-      return null;
+    }
+  }
+
+  private hydrateSession(
+    sessionData: Partial<Omit<SessionState, 'lastActivity'>> & { lastActivity?: string | Date }
+  ): SessionState {
+    return {
+      currentMode: sessionData.currentMode ?? 'topic-selection',
+      quizDirection: sessionData.quizDirection ?? 'foreign-to-english',
+      selectedTopic: sessionData.selectedTopic,
+      learningProgress: sessionData.learningProgress,
+      quizProgress: sessionData.quizProgress,
+      learningSession: sessionData.learningSession,
+      lastActivity: sessionData.lastActivity ? new Date(sessionData.lastActivity) : new Date()
+    };
+  }
+
+  private persistSessions(): void {
+    if (typeof localStorage === 'undefined') {
+      return;
+    }
+
+    try {
+      const sessions: Record<string, PersistedSessionState> = {};
+
+      for (const [language, session] of Object.entries(this.sessionsByLanguage)) {
+        if (language === LEGACY_LANGUAGE_KEY && this.activeLanguage) {
+          continue;
+        }
+
+        sessions[language] = {
+          ...session,
+          lastActivity: session.lastActivity.toISOString()
+        };
+      }
+
+      const payload: SessionStoragePayload = {
+        version: SESSION_STORAGE_VERSION,
+        activeLanguage: this.activeLanguage ?? undefined,
+        sessions
+      };
+
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+      console.error('Failed to persist session:', error);
     }
   }
 }

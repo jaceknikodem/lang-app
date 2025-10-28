@@ -67,13 +67,6 @@ export class WordGenerationRunner {
         if (!job) {
           try {
             const summary = await this.database.getWordGenerationQueueSummary();
-            console.log('[WordGenerationRunner] No queued jobs found. Queue summary snapshot:', {
-              queued: summary.queued,
-              processing: summary.processing,
-              failed: summary.failed,
-              processingWords: summary.processingWords.map(word => word.wordId),
-              queuedWords: summary.queuedWords.map(word => word.wordId)
-            });
           } catch (summaryError) {
             console.warn('[WordGenerationRunner] Unable to retrieve queue summary:', summaryError);
           }
