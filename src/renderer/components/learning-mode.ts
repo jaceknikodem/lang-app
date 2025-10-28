@@ -675,42 +675,9 @@ export class LearningMode extends LitElement {
         console.error('Unable to fetch word after job completion:', error);
       }
 
-      void this.reloadWordsFromDatabase();
     } else if (update.processingStatus === 'failed') {
       this.failureMessageExpiresAt = Date.now() + 10000;
       this.showInfo('Sentence generation failed for a word. Please retry from the queue.', 'error');
-    }
-  }
-
-  private async reloadWordsFromDatabase(): Promise<void> {
-    if (this.isReloadingFromQueue) {
-      return;
-    }
-
-    this.isReloadingFromQueue = true;
-
-    if (this.isLoading) {
-      this.isReloadingFromQueue = false;
-      window.setTimeout(() => void this.reloadWordsFromDatabase(), 500);
-      return;
-    }
-
-    try {
-      await this.loadAllWords();
-
-      const routeData = router.getRouteData<{ specificWords?: Word[] }>();
-      const hasSpecificWords = Boolean(routeData?.specificWords && routeData.specificWords.length > 0);
-
-      if (!hasSpecificWords) {
-        await this.maybeAppendNewWordsToSession();
-        await this.loadSelectedWords();
-      }
-
-      await this.loadWordsAndSentences();
-    } catch (error) {
-      console.error('Failed to reload learning content after queue update:', error);
-    } finally {
-      this.isReloadingFromQueue = false;
     }
   }
 
