@@ -3,6 +3,13 @@
  */
 
 
+export interface LearningSessionState {
+  id: string;
+  wordIds: number[];
+  maxSentences: number;
+  createdAt: string;
+  completed: boolean;
+}
 
 export interface SessionState {
   currentMode: 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'progress' | 'settings';
@@ -17,6 +24,7 @@ export interface SessionState {
     score: number;
     totalQuestions: number;
   };
+  learningSession?: LearningSessionState;
   lastActivity: Date;
 }
 
@@ -62,7 +70,8 @@ export class SessionManager {
    */
   getCurrentSession(): SessionState {
     if (!this.currentSession) {
-      this.currentSession = this.createDefaultSession();
+      const stored = this.loadSessionFromStorage();
+      this.currentSession = stored ?? this.createDefaultSession();
     }
     return this.currentSession;
   }
@@ -80,6 +89,106 @@ export class SessionManager {
     }
   }
 
+
+  /**
+   * Get the current learning session state if available
+   */
+  getLearningSession(): LearningSessionState | undefined {
+    return this.getCurrentSession().learningSession;
+  }
+
+  /**
+   * Start a brand new learning session with a predefined set of words
+   */
+  startNewLearningSession(wordIds: number[], maxSentences: number): void {
+    const newSession: LearningSessionState = {
+      id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      wordIds,
+      maxSentences,
+      createdAt: new Date().toISOString(),
+      completed: false
+    };
+
+    this.saveSession({
+      learningSession: newSession,
+      learningProgress: {
+        currentWordIndex: 0,
+        currentSentenceIndex: 0
+      }
+    });
+  }
+
+  /**
+   * Append new words to the active learning session (preserves original order)
+   */
+  appendWordsToLearningSession(wordIds: number[]): void {
+    if (!wordIds.length) {
+      return;
+    }
+
+    const session = this.getCurrentSession();
+    if (!session.learningSession) {
+      this.startNewLearningSession(wordIds, wordIds.length);
+      return;
+    }
+
+    const existingIds = new Set(session.learningSession.wordIds);
+    const mergedWordIds = [...session.learningSession.wordIds];
+
+    for (const id of wordIds) {
+      if (!existingIds.has(id)) {
+        mergedWordIds.push(id);
+        existingIds.add(id);
+      }
+    }
+
+    this.saveSession({
+      learningSession: {
+        ...session.learningSession,
+        wordIds: mergedWordIds
+      }
+    });
+  }
+
+  /**
+   * Mark the active learning session as completed without wiping other state
+   */
+  markLearningSessionComplete(): void {
+    const session = this.getCurrentSession();
+    if (!session.learningSession) {
+      return;
+    }
+
+    this.saveSession({
+      learningSession: {
+        ...session.learningSession,
+        completed: true
+      }
+    });
+  }
+
+  /**
+   * Clear only the learning session metadata while keeping other state intact
+   */
+  clearLearningSession(): void {
+    const session = this.getCurrentSession();
+    if (!session.learningSession) {
+      return;
+    }
+
+    const updatedSession = { ...session };
+    delete updatedSession.learningSession;
+    delete updatedSession.learningProgress;
+    this.currentSession = updatedSession;
+    try {
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
+        ...updatedSession,
+        lastActivity: updatedSession.lastActivity.toISOString()
+      }));
+    } catch (error) {
+      console.error('Failed to clear learning session:', error);
+    }
+  }
 
 
   /**
@@ -139,6 +248,38 @@ export class SessionManager {
       quizDirection: 'foreign-to-english',
       lastActivity: new Date()
     };
+  }
+
+  /**
+   * Attempt to load a previously stored session from localStorage
+   */
+  private loadSessionFromStorage(): SessionState | null {
+    try {
+      const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+      if (!raw) {
+        return null;
+      }
+
+      const parsed = JSON.parse(raw) as Partial<SessionState> & { lastActivity?: string };
+      if (!parsed) {
+        return null;
+      }
+
+      const hydrated: SessionState = {
+        currentMode: parsed.currentMode ?? 'topic-selection',
+        quizDirection: parsed.quizDirection ?? 'foreign-to-english',
+        selectedTopic: parsed.selectedTopic,
+        learningProgress: parsed.learningProgress,
+        quizProgress: parsed.quizProgress,
+        learningSession: parsed.learningSession,
+        lastActivity: parsed.lastActivity ? new Date(parsed.lastActivity) : new Date()
+      };
+
+      return hydrated;
+    } catch (error) {
+      console.error('Failed to load session from storage:', error);
+      return null;
+    }
   }
 }
 

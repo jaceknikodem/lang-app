@@ -6,7 +6,6 @@ import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
-import { sessionManager } from '../utils/session-manager.js';
 import { Word, StudyStats } from '../../shared/types/core.js';
 
 export interface SessionSummary {
@@ -282,9 +281,10 @@ export class SessionComplete extends LitElement {
   }
 
   private handleNewSession() {
-    // Clear current session and start fresh
-    sessionManager.clearSession();
-    router.goToTopicSelection();
+    this.dispatchEvent(new CustomEvent('start-new-learning-session', {
+      bubbles: true,
+      composed: true
+    }));
   }
 
   render() {
@@ -328,11 +328,6 @@ export class SessionComplete extends LitElement {
 
           ${this.studyStats ? html`
             <div class="stat-item">
-              <div class="stat-value">${this.studyStats.totalWords}</div>
-              <div class="stat-label">Total Words</div>
-            </div>
-
-            <div class="stat-item">
               <div class="stat-value">${Math.round(this.studyStats.averageStrength)}%</div>
               <div class="stat-label">Avg Strength</div>
             </div>
@@ -352,6 +347,32 @@ export class SessionComplete extends LitElement {
             </div>
           </div>
         ` : ''}
+
+        <div class="recommendation">
+          <h3 class="recommendation-title">${isQuiz ? 'Next Steps' : 'Ready for more?'}</h3>
+          <p class="recommendation-text">
+            ${isQuiz
+              ? this.getRecommendationText()
+              : `Congrats! You studied ${this.sessionSummary.wordsStudied} ${this.sessionSummary.wordsStudied === 1 ? 'word' : 'words'}. Would you like to start another session?`}
+          </p>
+          <div class="action-buttons">
+            ${!isQuiz ? html`
+              <button
+                class="action-button primary"
+                @click=${this.handleNewSession}
+                ?disabled=${this.isLoading}
+              >
+                Start another session
+              </button>
+            ` : ''}
+            <button
+              class="action-button"
+              @click=${this.handleViewProgress}
+            >
+              View progress
+            </button>
+          </div>
+        </div>
       </div>
     `;
   }

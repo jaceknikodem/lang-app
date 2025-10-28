@@ -314,6 +314,10 @@ export class AppRoot extends LitElement {
       await this.loadCurrentLanguage();
       console.log('Current language loaded');
 
+      console.log('Ensuring learning session...');
+      await this.ensureLearningSession();
+      console.log('Learning session ready');
+
       console.log('App initialization complete');
       this.isLoading = false;
     } catch (error) {
@@ -324,7 +328,7 @@ export class AppRoot extends LitElement {
 
   private async loadSession() {
     try {
-      // Always start with a fresh session - no restoration needed
+      // Load persisted session state (includes learning session metadata)
       this.sessionState = sessionManager.getCurrentSession();
     } catch (error) {
       console.error('Failed to load session:', error);
@@ -354,6 +358,42 @@ export class AppRoot extends LitElement {
     } catch (error) {
       console.error('Failed to load current language:', error);
       this.currentLanguage = 'spanish'; // Default fallback
+    }
+  }
+
+  private async ensureLearningSession() {
+    try {
+      const existingSession = sessionManager.getLearningSession();
+      if (existingSession && existingSession.wordIds.length > 0 && !existingSession.completed) {
+        return;
+      }
+
+      if (this.hasExistingWords === false) {
+        return;
+      }
+
+      const language = this.currentLanguage || (await window.electronAPI.database.getCurrentLanguage());
+      const candidates = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(true, false, language);
+
+      const sessionWordIds: number[] = [];
+      for (const word of candidates) {
+        const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
+        if (!sentences.length) {
+          continue;
+        }
+
+        sessionWordIds.push(word.id);
+        if (sessionWordIds.length >= 20) {
+          break;
+        }
+      }
+
+      if (sessionWordIds.length) {
+        sessionManager.startNewLearningSession(sessionWordIds, Math.min(20, sessionWordIds.length));
+        console.log(`Initialized learning session with ${sessionWordIds.length} words`);
+      }
+    } catch (error) {
+      console.error('Failed to ensure learning session:', error);
     }
   }
 

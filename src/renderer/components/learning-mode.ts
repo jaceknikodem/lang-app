@@ -318,6 +318,14 @@ export class LearningMode extends LitElement {
     
     // Load words from database first
     await this.loadSelectedWords();
+
+    const initialRouteData = router.getRouteData<{ specificWords?: Word[] }>();
+    if (!initialRouteData?.specificWords?.length) {
+      const appended = await this.maybeAppendNewWordsToSession();
+      if (appended) {
+        await this.loadSelectedWords();
+      }
+    }
     
     // Load words and sentences before restoring session progress
     await this.loadWordsAndSentences();
@@ -370,21 +378,105 @@ export class LearningMode extends LitElement {
   private async loadSelectedWords() {
     try {
       // Check if specific words were passed via router (from word selection)
-      const routeData = router.getRouteData();
+      const routeData = router.getRouteData<{ specificWords?: Word[] }>();
       if (routeData?.specificWords && routeData.specificWords.length > 0) {
-        this.selectedWords = routeData.specificWords;
+        const limitedWords: Word[] = [];
+        const seenIds = new Set<number>();
+
+        for (const word of routeData.specificWords) {
+          if (seenIds.has(word.id)) {
+            continue;
+          }
+
+          const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
+          if (!sentences.length) {
+            continue;
+          }
+
+          limitedWords.push(word);
+          seenIds.add(word.id);
+
+          if (limitedWords.length >= 20) {
+            break;
+          }
+        }
+
+        this.selectedWords = limitedWords;
+        if (limitedWords.length > 0) {
+          sessionManager.startNewLearningSession(
+            limitedWords.map(word => word.id),
+            Math.min(20, limitedWords.length)
+          );
+        }
         console.log('Using specific words from current session:', this.selectedWords.length);
         return;
       }
 
+      const activeSession = sessionManager.getLearningSession();
+      if (activeSession?.wordIds?.length) {
+        const orderedWordIds = activeSession.wordIds;
+        const loadedWords: Word[] = [];
+
+        for (const wordId of orderedWordIds) {
+          const word = await window.electronAPI.database.getWordById(wordId);
+          if (word) {
+            loadedWords.push(word);
+          }
+        }
+
+        if (loadedWords.length > 0) {
+          this.selectedWords = loadedWords;
+          console.log('Loaded words from persisted learning session:', this.selectedWords.length);
+          return;
+        }
+      }
+
       // Fallback: Get words that have sentences available for learning, ordered by strength (weakest first)
       // This handles cases like "Continue Learning" or "Practice Weak Words"
-      this.selectedWords = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(true, false);
-      console.log('Loaded words with sentences for learning (ordered by strength):', this.selectedWords.length);
+      const wordsOrdered = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(true, false, this.currentLanguage ?? undefined);
+      const sessionWordIds: number[] = [];
+      const selectableWords: Word[] = [];
+
+      for (const word of wordsOrdered) {
+        const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
+        if (!sentences.length) {
+          continue;
+        }
+
+        selectableWords.push(word);
+        sessionWordIds.push(word.id);
+
+        if (sessionWordIds.length >= 20) {
+          break;
+        }
+      }
+
+      this.selectedWords = selectableWords;
+      if (sessionWordIds.length) {
+        sessionManager.startNewLearningSession(sessionWordIds, Math.min(20, sessionWordIds.length));
+      }
+      console.log('Loaded words with sentences for learning session:', this.selectedWords.length);
     } catch (error) {
       console.error('Failed to load words:', error);
       this.error = 'Failed to load words from database.';
     }
+  }
+
+  private prepareSentencesForWord(word: Word, sentences: Sentence[]): Sentence[] {
+    if (!sentences.length) {
+      return [];
+    }
+
+    let orderedSentences = sentences;
+    if ((word.strength ?? 0) < 50) {
+      orderedSentences = [...sentences].sort((a, b) => {
+        const at = a.lastShown ? a.lastShown.getTime() : 0;
+        const bt = b.lastShown ? b.lastShown.getTime() : 0;
+        return at - bt;
+      });
+    }
+
+    return orderedSentences.slice(0, 1);
   }
 
   private async loadWordsAndSentences() {
@@ -404,24 +496,15 @@ export class LearningMode extends LitElement {
         // Get sentences for this word
         const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
 
-        // For weaker words, order sentences by least recently viewed first
-        let orderedSentences = sentences;
-        if ((word.strength ?? 0) < 50) {
-          orderedSentences = [...sentences].sort((a, b) => {
-            const at = a.lastShown ? a.lastShown.getTime() : 0;
-            const bt = b.lastShown ? b.lastShown.getTime() : 0;
-            return at - bt; // oldest (or never shown) first
-          });
-        }
-
-        if (sentences.length === 0) {
+        if (!sentences.length) {
           console.warn(`No sentences found for word: ${word.word}`);
         }
 
         // Keep sentences in their original order for consistent review
+        const limitedSentences = this.prepareSentencesForWord(word, sentences);
         wordsWithSentences.push({
           ...word,
-          sentences: orderedSentences
+          sentences: limitedSentences
         });
       }
 
@@ -445,6 +528,55 @@ export class LearningMode extends LitElement {
     } finally {
       this.isLoading = false;
     }
+  }
+
+  private async maybeAppendNewWordsToSession(): Promise<boolean> {
+    const activeSession = sessionManager.getLearningSession();
+    if (!activeSession) {
+      return false;
+    }
+
+    try {
+      const sessionCreatedAt = new Date(activeSession.createdAt);
+      const wordsOrdered = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(
+        true,
+        false,
+        this.currentLanguage ?? undefined
+      );
+
+      const existingWordIds = new Set(activeSession.wordIds);
+      const wordsToAppend: number[] = [];
+
+      for (const word of wordsOrdered) {
+        if (existingWordIds.has(word.id)) {
+          continue;
+        }
+
+        if (word.createdAt <= sessionCreatedAt) {
+          continue;
+        }
+
+        const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
+        if (!sentences.length) {
+          continue;
+        }
+
+        wordsToAppend.push(word.id);
+
+        if (wordsToAppend.length >= 10) {
+          break;
+        }
+      }
+
+      if (wordsToAppend.length) {
+        sessionManager.appendWordsToLearningSession(wordsToAppend);
+        return true;
+      }
+    } catch (error) {
+      console.error('Failed to append new words to learning session:', error);
+    }
+
+    return false;
   }
 
   private startJobMonitoring(): void {
@@ -508,6 +640,34 @@ export class LearningMode extends LitElement {
         const word = await window.electronAPI.database.getWordById(update.wordId);
         if (word) {
           this.allWords = [...this.allWords.filter(existing => existing.id !== word.id), word];
+
+          const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
+          const preparedSentences = this.prepareSentencesForWord(word, sentences);
+
+          if (!preparedSentences.length) {
+            console.warn(`Word ${word.word} has no sentences ready after job completion.`);
+            return;
+          }
+
+          const existingWordIndex = this.wordsWithSentences.findIndex(w => w.id === word.id);
+
+          if (existingWordIndex !== -1) {
+            this.wordsWithSentences = this.wordsWithSentences.map((existing, index) =>
+              index === existingWordIndex
+                ? { ...word, sentences: preparedSentences }
+                : existing
+            );
+            this.selectedWords = this.selectedWords.map(existing =>
+              existing.id === word.id ? word : existing
+            );
+          } else {
+            sessionManager.appendWordsToLearningSession([word.id]);
+            this.selectedWords = [...this.selectedWords, word];
+            this.wordsWithSentences = [
+              ...this.wordsWithSentences,
+              { ...word, sentences: preparedSentences }
+            ];
+          }
         } else {
           await this.loadAllWords();
         }
@@ -542,6 +702,7 @@ export class LearningMode extends LitElement {
       const hasSpecificWords = Boolean(routeData?.specificWords && routeData.specificWords.length > 0);
 
       if (!hasSpecificWords) {
+        await this.maybeAppendNewWordsToSession();
         await this.loadSelectedWords();
       }
 
@@ -857,8 +1018,8 @@ export class LearningMode extends LitElement {
       // Record study session in database
       await window.electronAPI.database.recordStudySession(this.selectedWords.length);
 
-      // Clear session progress since we're completing
-      sessionManager.clearSession();
+      // Mark the learning session as complete but keep history until a new session starts
+      sessionManager.markLearningSessionComplete();
 
     } catch (error) {
       console.error('Failed to record learning session:', error);
@@ -1060,6 +1221,46 @@ export class LearningMode extends LitElement {
     this.currentSentenceIndex = sIndex;
   }
 
+  private async handleStartNewSession(): Promise<void> {
+    if (this.isLoading) {
+      return;
+    }
+
+    this.showCompletion = false;
+    this.sessionSummary = null;
+    this.error = '';
+    this.currentWordIndex = 0;
+    this.currentSentenceIndex = 0;
+    this.lastRecordedSentenceId = null;
+
+    try {
+      this.isLoading = true;
+      router.goToLearning();
+      sessionManager.clearLearningSession();
+
+      await this.loadAllWords();
+      await this.loadSelectedWords();
+
+      const routeData = router.getRouteData<{ specificWords?: Word[] }>();
+      if (!routeData?.specificWords?.length) {
+        const appended = await this.maybeAppendNewWordsToSession();
+        if (appended) {
+          await this.loadSelectedWords();
+        }
+      }
+
+      await this.loadWordsAndSentences();
+      this.restoreSessionProgress();
+      this.sessionStartTime = Date.now();
+      this.saveProgressToSession();
+    } catch (error) {
+      console.error('Failed to start new learning session:', error);
+      this.error = 'Failed to start a new learning session. Please try again.';
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
   private async handleWordAddedFromSentence(event: CustomEvent<{ wordId: number; word: string; translation: string }>): Promise<void> {
     const { wordId, word } = event.detail;
     await this.refreshQueueSummary();
@@ -1228,7 +1429,10 @@ export class LearningMode extends LitElement {
     if (this.showCompletion && this.sessionSummary) {
       return html`
         <div class="learning-container">
-          <session-complete .sessionSummary=${this.sessionSummary}></session-complete>
+          <session-complete
+            .sessionSummary=${this.sessionSummary}
+            @start-new-learning-session=${this.handleStartNewSession}
+          ></session-complete>
         </div>
       `;
     }
