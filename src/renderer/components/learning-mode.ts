@@ -51,7 +51,13 @@ export class LearningMode extends LitElement {
   private sessionSummary: SessionSummary | null = null;
 
   @state()
-  private queueSummary: { queued: number; processing: number; failed: number } = { queued: 0, processing: 0, failed: 0 };
+  private queueSummary: {
+    queued: number;
+    processing: number;
+    failed: number;
+    queuedWords: Array<{ wordId: number; word: string; status: 'queued' | 'processing' | 'completed' | 'failed'; language: string; topic?: string }>;
+    processingWords: Array<{ wordId: number; word: string; status: 'queued' | 'processing' | 'completed' | 'failed'; language: string; topic?: string }>;
+  } = { queued: 0, processing: 0, failed: 0, queuedWords: [], processingWords: [] };
 
   @state()
   private infoMessage = '';
@@ -1080,20 +1086,43 @@ export class LearningMode extends LitElement {
   }
 
   private renderQueueStatus() {
-    const { queued, processing, failed } = this.queueSummary;
+    const { queued, processing, failed, processingWords, queuedWords } = this.queueSummary;
     const pending = queued + processing;
 
     if (pending === 0 && failed === 0) {
       return null;
     }
 
+    const formatWordList = (words: Array<{ word: string }>, max = 3) => {
+      if (!words.length) {
+        return '';
+      }
+      const names = words.map(item => `“${item.word}”`);
+      if (names.length <= max) {
+        return names.join(', ');
+      }
+      return `${names.slice(0, max).join(', ')} + ${names.length - max} more`;
+    };
+
+    const processingList = processingWords?.length ? formatWordList(processingWords) : '';
+    const queuedList = queuedWords?.length ? formatWordList(queuedWords) : '';
+
+    const processingText = processing > 0 && processingList
+      ? `Running: ${processingList}`
+      : '';
+
+    const queuedText = queued > 0 && queuedList
+      ? `Queued: ${queuedList}`
+      : '';
+
+    const detailText = [processingText, queuedText].filter(Boolean).join(' • ');
+
     return html`
       <div class="queue-status">
         ${pending > 0 ? html`
           <span>
-            Generating sentences for ${pending} ${pending === 1 ? 'word' : 'words'}
-            ${processing ? ` (${processing} running)` : ''}
-            ${queued ? ` (${queued} queued)` : ''}
+            Generating sentences for ${pending} ${pending === 1 ? 'word' : 'words'}.
+            ${detailText ? html`<span>${detailText}</span>` : ''}
           </span>
         ` : ''}
         ${failed > 0 ? html`

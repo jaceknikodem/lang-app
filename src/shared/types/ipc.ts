@@ -3,7 +3,7 @@
  */
 
 import { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest, DictionaryEntry } from './core.js';
-import { WordProcessingStatus } from './database.js';
+import { JobWordInfo, WordProcessingStatus } from './database.js';
 import { RecordingOptions, RecordingSession, TranscriptionOptions, TranscriptionResult, TranscriptionComparison } from './audio.js';
 
 export interface IPCBridge {
@@ -101,7 +101,13 @@ export interface IPCBridge {
       }
     ) => Promise<void>;
     getWordStatus: (wordId: number) => Promise<{ processingStatus: WordProcessingStatus; sentenceCount: number } | null>;
-    getQueueSummary: () => Promise<{ queued: number; processing: number; failed: number }>;
+    getQueueSummary: () => Promise<{
+      queued: number;
+      processing: number;
+      failed: number;
+      queuedWords: JobWordInfo[];
+      processingWords: JobWordInfo[];
+    }>;
     onWordUpdated: (
       callback: (payload: { wordId: number; processingStatus: WordProcessingStatus; sentenceCount: number }) => void
     ) => () => void;

@@ -21,6 +21,14 @@ export interface WordGenerationJob {
   startedAt?: Date;
 }
 
+export interface JobWordInfo {
+  wordId: number;
+  word: string;
+  status: WordGenerationJobStatus;
+  language: string;
+  topic?: string;
+}
+
 export interface DatabaseLayer {
   // Word management
   insertWord(word: CreateWordRequest): Promise<number>;
@@ -97,7 +105,13 @@ export interface DatabaseLayer {
   lookupDictionary(word: string, language?: string): Promise<DictionaryEntry[]>;
   updateWordProcessingStatus(wordId: number, status: WordProcessingStatus): Promise<void>;
   getWordProcessingInfo(wordId: number): Promise<{ processingStatus: WordProcessingStatus; sentenceCount: number } | null>;
-  getWordGenerationQueueSummary(): Promise<{ queued: number; processing: number; failed: number }>;
+  getWordGenerationQueueSummary(): Promise<{
+    queued: number;
+    processing: number;
+    failed: number;
+    queuedWords: JobWordInfo[];
+    processingWords: JobWordInfo[];
+  }>;
 
   // Word generation queue
   enqueueWordGeneration(wordId: number, language: string, topic?: string, desiredSentenceCount?: number): Promise<void>;

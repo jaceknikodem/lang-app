@@ -5,7 +5,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import { promises as fsPromises } from 'fs';
-import { DatabaseLayer, DatabaseConfig, WordGenerationJob, WordGenerationJobStatus, WordProcessingStatus } from '../../shared/types/database.js';
+import { DatabaseLayer, DatabaseConfig, JobWordInfo, WordGenerationJob, WordGenerationJobStatus, WordProcessingStatus } from '../../shared/types/database.js';
 import { Word, Sentence, StudyStats, CreateWordRequest, DictionaryEntry } from '../../shared/types/core.js';
 import { DatabaseConnection } from './connection.js';
 import { MigrationManager } from './migrations.js';
@@ -854,7 +854,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
-  async getWordGenerationQueueSummary(): Promise<{ queued: number; processing: number; failed: number }> {
+  async getWordGenerationQueueSummary(): Promise<{
+    queued: number;
+    processing: number;
+    failed: number;
+    queuedWords: JobWordInfo[];
+    processingWords: JobWordInfo[];
+  }> {
     const db = this.getDb();
 
     try {
@@ -864,15 +870,53 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         GROUP BY status
       `).all() as Array<{ status: string; total: number }>;
 
-      return rows.reduce(
+      const summary = rows.reduce(
         (acc, row) => {
           if (row.status === 'queued') acc.queued += row.total;
           if (row.status === 'processing') acc.processing += row.total;
           if (row.status === 'failed') acc.failed += row.total;
           return acc;
         },
-        { queued: 0, processing: 0, failed: 0 }
+        {
+          queued: 0,
+          processing: 0,
+          failed: 0,
+          queuedWords: [] as JobWordInfo[],
+          processingWords: [] as JobWordInfo[]
+        }
       );
+
+      const jobWordRows = db.prepare(`
+        SELECT 
+          q.word_id as wordId,
+          q.status as status,
+          q.language as language,
+          q.topic as topic,
+          w.word as word
+        FROM word_generation_queue q
+        INNER JOIN words w ON w.id = q.word_id
+        WHERE q.status IN ('queued', 'processing')
+        ORDER BY 
+          CASE q.status WHEN 'processing' THEN 0 ELSE 1 END,
+          q.updated_at ASC
+      `).all() as Array<{ wordId: number; status: string; language: string; topic: string | null; word: string }>;
+
+      for (const job of jobWordRows) {
+        const info: JobWordInfo = {
+          wordId: job.wordId,
+          word: job.word,
+          status: job.status as WordGenerationJobStatus,
+          language: job.language,
+          topic: job.topic ?? undefined
+        };
+        if (job.status === 'processing') {
+          summary.processingWords.push(info);
+        } else if (job.status === 'queued') {
+          summary.queuedWords.push(info);
+        }
+      }
+
+      return summary;
     } catch (error) {
       throw new Error(`Failed to get queue summary: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }

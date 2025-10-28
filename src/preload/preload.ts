@@ -338,7 +338,25 @@ declare global {
           processingStatus: 'queued' | 'processing' | 'ready' | 'failed';
           sentenceCount: number;
         } | null>;
-        getQueueSummary: () => Promise<{ queued: number; processing: number; failed: number }>;
+        getQueueSummary: () => Promise<{
+          queued: number;
+          processing: number;
+          failed: number;
+          queuedWords: Array<{
+            wordId: number;
+            word: string;
+            status: 'queued' | 'processing' | 'completed' | 'failed';
+            language: string;
+            topic?: string;
+          }>;
+          processingWords: Array<{
+            wordId: number;
+            word: string;
+            status: 'queued' | 'processing' | 'completed' | 'failed';
+            language: string;
+            topic?: string;
+          }>;
+        }>;
         onWordUpdated: (
           callback: (payload: { wordId: number; processingStatus: 'queued' | 'processing' | 'ready' | 'failed'; sentenceCount: number }) => void
         ) => () => void;

@@ -650,22 +650,15 @@ export class SentenceViewer extends LitElement {
     try {
       const entries = await this.getDictionaryEntries(normalized, wordInfo.dictionaryKey);
       if (entries && entries.length > 0) {
-        suggestedTranslation = entries[0].glosses?.[0] ?? '';
+        const firstEntry = entries[0];
+        const gloss = Array.isArray(firstEntry.glosses) ? firstEntry.glosses[0] : '';
+        suggestedTranslation = gloss ?? '';
       }
     } catch (error) {
       console.warn('Dictionary lookup failed for', normalized, error);
     }
 
-    const translationPrompt = window.prompt(
-      `Add "${normalized}" to your learning queue.\nProvide an English translation:`,
-      suggestedTranslation
-    );
-
-    if (translationPrompt === null) {
-      return;
-    }
-
-    const translation = translationPrompt.trim() || suggestedTranslation || normalized;
+    const translation = (suggestedTranslation || normalized).trim();
 
     try {
       const audioPath = await window.electronAPI.audio.generateAudio(
