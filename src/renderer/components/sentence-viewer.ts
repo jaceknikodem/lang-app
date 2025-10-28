@@ -127,6 +127,19 @@ export class SentenceViewer extends LitElement {
         line-height: 1;
       }
 
+      .last-seen {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        background: var(--background-secondary);
+        border-radius: var(--border-radius-small);
+        padding: 2px 6px;
+        line-height: 1;
+      }
+
       .word-strength-value {
         color: var(--primary-color);
       }
@@ -399,6 +412,29 @@ export class SentenceViewer extends LitElement {
     });
   }
 
+  private formatTimeAgo(date?: Date): string {
+    if (!date) {
+      return 'never';
+    }
+    const now = Date.now();
+    const diffMs = now - date.getTime();
+    const sec = Math.floor(diffMs / 1000);
+    if (sec < 10) return 'just now';
+    if (sec < 60) return `${sec} second${sec === 1 ? '' : 's'} ago`;
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min} minute${min === 1 ? '' : 's'} ago`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr} hour${hr === 1 ? '' : 's'} ago`;
+    const day = Math.floor(hr / 24);
+    if (day < 7) return `${day} day${day === 1 ? '' : 's'} ago`;
+    const week = Math.floor(day / 7);
+    if (week < 5) return `${week} week${week === 1 ? '' : 's'} ago`;
+    const month = Math.floor(day / 30);
+    if (month < 12) return `${month} month${month === 1 ? '' : 's'} ago`;
+    const year = Math.floor(day / 365);
+    return `${year} year${year === 1 ? '' : 's'} ago`;
+  }
+
   // Allows async tokenization pipelines to push pre-processed words into the view.
   public applyTokenizedWords(words: WordInSentence[]): void {
     this.parsedWords = words;
@@ -643,6 +679,7 @@ export class SentenceViewer extends LitElement {
 
   render() {
     const wordStrength = Math.round(this.targetWord?.strength ?? 0);
+    const lastSeenText = this.formatTimeAgo(this.sentence?.lastShown);
 
     return html`
       <div class="sentence-container">
@@ -654,6 +691,10 @@ export class SentenceViewer extends LitElement {
             <span class="word-separator">•</span>
             <span class="word-strength" title="Current spaced repetition strength">
               Strength <span class="word-strength-value">${wordStrength}</span>
+            </span>
+            <span class="word-separator">•</span>
+            <span class="last-seen" title=${this.sentence?.lastShown ? this.sentence.lastShown.toLocaleString() : 'Never viewed'}>
+              Last seen ${lastSeenText}
             </span>
           </div>
           

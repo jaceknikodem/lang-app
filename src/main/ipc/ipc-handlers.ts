@@ -180,6 +180,16 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     }
   });
 
+  ipcMain.handle(IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_LAST_SHOWN, async (event, sentenceId) => {
+    try {
+      const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
+      return await databaseLayer.updateSentenceLastShown(validatedSentenceId);
+    } catch (error) {
+      console.error('Error updating sentence last shown:', error);
+      throw new Error(`Failed to update sentence last shown: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.DATABASE.UPDATE_LAST_STUDIED, async (event, wordId) => {
     try {
       const validatedWordId = WordIdSchema.parse(wordId);

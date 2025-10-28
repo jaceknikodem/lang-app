@@ -52,6 +52,7 @@ export class LearningMode extends LitElement {
 
   private sessionStartTime = Date.now();
   private keyboardUnsubscribe?: () => void;
+  private lastRecordedSentenceId: number | null = null;
 
   static styles = [
     sharedStyles,
@@ -305,6 +306,16 @@ export class LearningMode extends LitElement {
         // Get sentences for this word
         const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
 
+        // For weaker words, order sentences by least recently viewed first
+        let orderedSentences = sentences;
+        if ((word.strength ?? 0) < 50) {
+          orderedSentences = [...sentences].sort((a, b) => {
+            const at = a.lastShown ? a.lastShown.getTime() : 0;
+            const bt = b.lastShown ? b.lastShown.getTime() : 0;
+            return at - bt; // oldest (or never shown) first
+          });
+        }
+
         if (sentences.length === 0) {
           console.warn(`No sentences found for word: ${word.word}`);
         }
@@ -312,7 +323,7 @@ export class LearningMode extends LitElement {
         // Keep sentences in their original order for consistent review
         wordsWithSentences.push({
           ...word,
-          sentences: sentences
+          sentences: orderedSentences
         });
       }
 
@@ -335,6 +346,37 @@ export class LearningMode extends LitElement {
       this.error = 'Failed to load learning content. Please try again.';
     } finally {
       this.isLoading = false;
+    }
+  }
+
+  protected updated(changed: Map<string, unknown>) {
+    // When the visible sentence changes, record last viewed time
+    if (
+      changed.has('currentWordIndex') ||
+      changed.has('currentSentenceIndex') ||
+      changed.has('wordsWithSentences')
+    ) {
+      const currentSentence = this.getCurrentSentence();
+      if (currentSentence && currentSentence.id !== this.lastRecordedSentenceId) {
+        this.lastRecordedSentenceId = currentSentence.id;
+        // Optimistically update local state so UI shows "just now"
+        const wIndex = this.currentWordIndex;
+        const sIndex = this.currentSentenceIndex;
+        if (this.wordsWithSentences[wIndex]?.sentences[sIndex]) {
+          const updatedWords = this.wordsWithSentences.map((w, wi) => {
+            if (wi !== wIndex) return w;
+            const updatedSentences = w.sentences.map((s, si) =>
+              si === sIndex ? { ...s, lastShown: new Date() } : s
+            );
+            return { ...w, sentences: updatedSentences };
+          });
+          this.wordsWithSentences = updatedWords;
+        }
+        // Fire and forget; no need to block UI
+        window.electronAPI.database
+          .updateSentenceLastShown(currentSentence.id)
+          .catch(err => console.warn('Failed to update sentence last_shown:', err));
+      }
     }
   }
 
@@ -840,7 +882,7 @@ export class LearningMode extends LitElement {
           </div>
           <div style="text-align: center; margin-top: var(--spacing-lg);">
             <button class="btn btn-primary" @click=${this.handleBackToSelection}>
-              Back to Selection
+              Back
             </button>
           </div>
         </div>
@@ -854,7 +896,7 @@ export class LearningMode extends LitElement {
             <h3>No Learning Content Available</h3>
             <p>No sentences were found for the selected words.</p>
             <button class="btn btn-primary" @click=${this.handleBackToSelection}>
-              Back to Selection
+              Back
             </button>
           </div>
         </div>
@@ -943,7 +985,7 @@ export class LearningMode extends LitElement {
 
           <div class="nav-info">
             <button class="btn btn-secondary" @click=${this.handleBackToSelection}>
-              Back to Selection
+              Back
             </button>
           </div>
 
