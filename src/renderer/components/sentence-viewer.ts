@@ -46,6 +46,13 @@ export class SentenceViewer extends LitElement {
 
   private keyboardUnsubscribe?: () => void;
 
+  private truncate(text: string, max: number): string {
+    if (!text) return '';
+    const chars = Array.from(text);
+    if (chars.length <= max) return text;
+    return chars.slice(0, max).join('') + '…';
+  }
+
   static styles = [
     sharedStyles,
     css`
@@ -920,7 +927,9 @@ export class SentenceViewer extends LitElement {
           <div class="target-word-info">
             <span class="target-word">${this.targetWord.word}</span>
             <span class="word-separator">•</span>
-            <span class="word-translation">${this.targetWord.translation}</span>
+            <span class="word-translation" title=${this.targetWord.translation}>
+              ${this.truncate(this.targetWord.translation, 40)}
+            </span>
             <span class="word-separator">•</span>
             <span class="word-strength" title="Current spaced repetition strength">
               Strength <span class="word-strength-value">${wordStrength}</span>
