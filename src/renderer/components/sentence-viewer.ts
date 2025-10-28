@@ -8,6 +8,7 @@ import { sharedStyles } from '../styles/shared.js';
 import { Word, Sentence, DictionaryEntry } from '../../shared/types/core.js';
 import { splitSentenceIntoParts } from '../../shared/utils/sentence.js';
 import { useKeyboardBindings } from '../utils/keyboard-manager.js';
+import { tokenizeSentenceWithDictionary } from '../utils/sentence-tokenizer.js';
 import type { TokenizedWord as WordInSentence } from '../utils/sentence-tokenizer.js';
 
 @customElement('sentence-viewer')
@@ -39,6 +40,7 @@ export class SentenceViewer extends LitElement {
   @state()
   private dictionaryCache: Record<string, DictionaryEntry[] | null> = {};
 
+  private tokenizationRequestId = 0;
   private dictionaryLookupInFlight = new Set<string>();
   private dictionaryLookupPromises: Partial<Record<string, Promise<DictionaryEntry[] | null>>> = {};
 
@@ -320,7 +322,7 @@ export class SentenceViewer extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback();
-    this.parseSentence();
+    void this.parseSentence();
     await this.loadAutoplaySettings();
     this.setupKeyboardBindings();
     
@@ -337,7 +339,7 @@ export class SentenceViewer extends LitElement {
 
   updated(changedProperties: Map<string, any>) {
     if (changedProperties.has('sentence') || changedProperties.has('allWords')) {
-      this.parseSentence();
+      void this.parseSentence();
     }
     
     // Auto-play audio when sentence changes (if enabled)
@@ -383,7 +385,9 @@ export class SentenceViewer extends LitElement {
     }
   }
 
-  private parseSentence(): void {
+  private async parseSentence(): Promise<void> {
+    const requestId = ++this.tokenizationRequestId;
+
     if (!this.sentence?.sentence) {
       this.parsedWords = [];
       return;
@@ -391,7 +395,7 @@ export class SentenceViewer extends LitElement {
 
     const parts = this.sentence.sentenceParts ?? splitSentenceIntoParts(this.sentence.sentence);
 
-    this.parsedWords = parts.map(text => {
+    const baseWords: WordInSentence[] = parts.map(text => {
       if (/^\s+$/.test(text)) {
         return { text, isTargetWord: false };
       }
@@ -427,6 +431,48 @@ export class SentenceViewer extends LitElement {
         dictionaryKey
       };
     });
+
+    this.parsedWords = baseWords;
+    await this.enhanceSentenceWithDictionary(requestId);
+  }
+
+  private async enhanceSentenceWithDictionary(requestId: number): Promise<void> {
+    if (!this.sentence?.sentence || !this.targetWord) {
+      return;
+    }
+
+    try {
+      const cacheMap = new Map<string, DictionaryEntry[] | null>(
+        Object.entries(this.dictionaryCache)
+      );
+
+      const { words, cache } = await tokenizeSentenceWithDictionary(
+        {
+          sentence: this.sentence.sentence,
+          targetWord: this.targetWord,
+          allWords: this.allWords,
+          lookupDictionary: async (word, language) => {
+            const dictionaryKey = this.buildDictionaryKey(word, language);
+            const entries = await this.getDictionaryEntries(word, dictionaryKey, language);
+            return entries ?? [];
+          },
+          language: this.targetWord?.language,
+          cache: cacheMap
+        },
+        { maxPhraseWords: 3 }
+      );
+
+      if (requestId !== this.tokenizationRequestId) {
+        return;
+      }
+
+      this.dictionaryCache = Object.fromEntries(cache.entries()) as Record<string, DictionaryEntry[] | null>;
+      this.parsedWords = words;
+    } catch (error) {
+      if (requestId === this.tokenizationRequestId) {
+        console.error('Failed to apply dictionary-based tokenization:', error);
+      }
+    }
   }
 
   private formatTimeAgo(date?: Date): string {
@@ -454,16 +500,19 @@ export class SentenceViewer extends LitElement {
 
   // Allows async tokenization pipelines to push pre-processed words into the view.
   public applyTokenizedWords(words: WordInSentence[]): void {
+    this.tokenizationRequestId += 1;
     this.parsedWords = words;
   }
 
-  private buildDictionaryKey(word: string): string | undefined {
+  private buildDictionaryKey(word: string, languageOverride?: string): string | undefined {
     const trimmed = word.trim();
     if (!trimmed) {
       return undefined;
     }
 
-    const language = this.targetWord?.language?.toLowerCase() || 'unknown';
+    const language = languageOverride?.toLowerCase()
+      || this.targetWord?.language?.toLowerCase()
+      || 'unknown';
     return `${language}|${trimmed.toLowerCase()}`;
   }
 
@@ -471,8 +520,8 @@ export class SentenceViewer extends LitElement {
     await this.getDictionaryEntries(word, key);
   }
 
-  private async getDictionaryEntries(word: string, key?: string): Promise<DictionaryEntry[] | null> {
-    const dictionaryKey = key ?? this.buildDictionaryKey(word);
+  private async getDictionaryEntries(word: string, key?: string, languageOverride?: string): Promise<DictionaryEntry[] | null> {
+    const dictionaryKey = key ?? this.buildDictionaryKey(word, languageOverride);
 
     if (!dictionaryKey) {
       return null;
@@ -489,7 +538,10 @@ export class SentenceViewer extends LitElement {
     const lookupPromise = (async () => {
       try {
         this.dictionaryLookupInFlight.add(dictionaryKey);
-        const entries = await window.electronAPI.database.lookupDictionary(word, this.targetWord?.language);
+        const entries = await window.electronAPI.database.lookupDictionary(
+          word,
+          languageOverride ?? this.targetWord?.language
+        );
         const normalizedEntries = Array.isArray(entries) && entries.length > 0 ? entries : null;
         this.dictionaryCache = {
           ...this.dictionaryCache,
@@ -679,7 +731,7 @@ export class SentenceViewer extends LitElement {
       const newWord = await window.electronAPI.database.getWordById(wordId);
       if (newWord) {
         this.allWords = [...this.allWords, newWord];
-        this.parseSentence();
+        void this.parseSentence();
       }
 
       this.dispatchEvent(new CustomEvent('word-added-from-sentence', {
