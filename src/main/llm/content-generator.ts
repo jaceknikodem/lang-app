@@ -2,11 +2,22 @@
  * Content generation workflows using LLM client
  */
 
+import { lookup } from 'node:dns/promises';
 import { GeneratedWord, GeneratedSentence } from '../../shared/types/core.js';
 import { LLMClient, LLMError } from '../../shared/types/llm.js';
 import { DatabaseLayer } from '../../shared/types/database.js';
 import { LLMFactory, LLMFactoryConfig, LLMProvider } from './llm-factory.js';
 import { FrequencyWordManager } from './frequency-word-manager.js';
+
+const TATOEBA_API_URL = 'https://tatoeba.org/en/api_v0/search';
+const TATOEBA_TARGET_LANGUAGE = 'eng';
+const TATOEBA_LANGUAGE_CODES: Record<string, string> = {
+  italian: 'ita',
+  spanish: 'spa',
+  portuguese: 'por',
+  polish: 'pol',
+  indonesian: 'ind'
+};
 
 export interface ContentGeneratorConfig {
   defaultLanguage: string;
@@ -305,7 +316,46 @@ export class ContentGenerator {
     }
 
     try {
-      // Validate LLM availability
+      // Prefer supplemental sentences when Tatoeba has plenty of coverage
+      let supplementalSentences: GeneratedSentence[] = [];
+      try {
+        const tatoebaExamples = await this.fetchTatoebaExamples(word.trim(), targetLanguage, sentenceCount);
+        supplementalSentences = this.validateGeneratedSentences(tatoebaExamples, word);
+
+        console.log('[ContentGenerator] Tatoeba lookup', {
+          word,
+          language: targetLanguage,
+          requested: sentenceCount,
+          received: tatoebaExamples.length,
+          valid: supplementalSentences.length,
+          withAudio: supplementalSentences.filter(sentence => Boolean(sentence.audioUrl)).length
+        });
+
+        if (supplementalSentences.length > 3) {
+          const shuffled = this.shuffleArray(supplementalSentences);
+          const trimmed = shuffled.slice(0, sentenceCount);
+          console.log('[ContentGenerator] Using Tatoeba sentences only', {
+            word,
+            language: targetLanguage,
+            usingCount: trimmed.length,
+            withAudio: trimmed.filter(sentence => Boolean(sentence.audioUrl)).length
+          });
+          return trimmed.length ? trimmed : shuffled;
+        }
+
+        console.log('[ContentGenerator] Insufficient Tatoeba coverage, will fall back to LLM', {
+          word,
+          language: targetLanguage,
+          valid: supplementalSentences.length,
+          withAudio: supplementalSentences.filter(sentence => Boolean(sentence.audioUrl)).length
+        });
+
+        supplementalSentences = supplementalSentences.slice(0, sentenceCount);
+      } catch (supplementError) {
+        console.warn('Failed to fetch Tatoeba examples:', supplementError);
+      }
+
+      // Validate LLM availability (only needed if Tatoeba did not satisfy the request)
       const isAvailable = await this.llmClient.isAvailable();
       if (!isAvailable) {
         const providerName = this.getCurrentProvider();
@@ -334,15 +384,17 @@ export class ContentGenerator {
         `generate sentences for word: ${word}`
       );
 
-      // Validate and filter results
-      const validSentences = this.validateGeneratedSentences(sentences, word);
+      // Validate and filter LLM results
+      const generatedSentences = this.validateGeneratedSentences(sentences, word);
 
-      if (validSentences.length === 0) {
+      const combinedSentences = this.combineSentenceSources(generatedSentences, supplementalSentences);
+
+      if (combinedSentences.length === 0) {
         throw new Error(`No valid sentences were generated for word: ${word}. Please try again.`);
       }
 
-      // Shuffle the sentences to ensure variety in presentation order
-      return this.shuffleArray(validSentences);
+      // Return combined sentences (LLM results shuffled, Tatoeba examples appended)
+      return combinedSentences;
 
     } catch (error) {
       throw this.handleContentGenerationError(error, 'sentence generation');
@@ -482,6 +534,121 @@ export class ContentGenerator {
 
       return true;
     });
+  }
+
+  /**
+   * Combine LLM-generated sentences with supplemental sources (e.g., Tatoeba)
+   * while preserving ordering expectations.
+   */
+  private combineSentenceSources(
+    generated: GeneratedSentence[],
+    supplemental: GeneratedSentence[]
+  ): GeneratedSentence[] {
+    const primary = this.shuffleArray(generated);
+    if (!supplemental.length) {
+      return primary;
+    }
+
+    const seen = new Set(primary.map(sentence => this.normalizeSentenceKey(sentence.sentence)).filter(Boolean));
+    const uniqueSupplemental = supplemental.filter(sentence => {
+      const key = this.normalizeSentenceKey(sentence.sentence);
+      if (!key || seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+
+    if (!uniqueSupplemental.length) {
+      return primary;
+    }
+
+    return [...primary, ...uniqueSupplemental];
+  }
+
+  private normalizeSentenceKey(sentence: string): string | undefined {
+    if (!sentence) {
+      return undefined;
+    }
+    return sentence.trim().toLowerCase();
+  }
+
+  /**
+   * Fetch example sentences from Tatoeba when network connectivity is available.
+   */
+  private async fetchTatoebaExamples(
+    query: string,
+    language: string,
+    limit: number
+  ): Promise<GeneratedSentence[]> {
+    const sourceLang = this.getTatoebaLanguageCode(language);
+    if (!sourceLang) {
+      console.log('[ContentGenerator] Tatoeba lookup skipped due to unsupported language', { language });
+      return [];
+    }
+
+    if (!(await this.isOnline())) {
+      console.log('[ContentGenerator] Tatoeba lookup skipped because offline');
+      return [];
+    }
+
+    const fetchLimit = Math.max(4, Math.max(1, limit));
+
+    const params = new URLSearchParams({
+      from: sourceLang,
+      to: TATOEBA_TARGET_LANGUAGE,
+      query,
+      has_audio: 'yes',
+      native: 'yes',
+      sort: 'relevance',
+      unapproved: 'no',
+      word_count_min: '3',
+      limit: String(fetchLimit)
+    });
+
+    const response = await fetch(`${TATOEBA_API_URL}?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`Tatoeba API request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json() as { results?: any[] };
+    const results = Array.isArray(data?.results) ? data.results.slice(0, fetchLimit) : [];
+
+    return results
+      .map((item): GeneratedSentence => {
+        const sentenceText = typeof item?.text === 'string' ? item.text : '';
+        const translationText =
+          typeof item?.translations?.[0]?.[0]?.text === 'string'
+            ? item.translations[0][0].text
+            : '';
+        const audioId = item?.audios?.[0]?.id;
+        const audioUrl = audioId ? `https://tatoeba.org/en/audio/download/${audioId}` : undefined;
+
+        return {
+          sentence: sentenceText,
+          translation: translationText,
+          audioUrl
+        };
+      })
+      .filter(sentence => sentence.sentence.trim().length > 0 && sentence.translation.trim().length > 0);
+  }
+
+  private getTatoebaLanguageCode(language: string): string | undefined {
+    if (!language) {
+      return undefined;
+    }
+
+    const normalized = language.trim().toLowerCase();
+    return TATOEBA_LANGUAGE_CODES[normalized];
+  }
+
+  private async isOnline(): Promise<boolean> {
+    try {
+      await lookup('tatoeba.org');
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**

@@ -65,9 +65,29 @@ export class WordGenerationRunner {
         const job = await this.database.getNextWordGenerationJob();
 
         if (!job) {
+          try {
+            const summary = await this.database.getWordGenerationQueueSummary();
+            console.log('[WordGenerationRunner] No queued jobs found. Queue summary snapshot:', {
+              queued: summary.queued,
+              processing: summary.processing,
+              failed: summary.failed,
+              processingWords: summary.processingWords.map(word => word.wordId),
+              queuedWords: summary.queuedWords.map(word => word.wordId)
+            });
+          } catch (summaryError) {
+            console.warn('[WordGenerationRunner] Unable to retrieve queue summary:', summaryError);
+          }
+          console.log('[WordGenerationRunner] No pending jobs. Waiting before next poll...');
           await this.delay(this.pollIntervalMs);
           continue;
         }
+
+        console.log('[WordGenerationRunner] Found job', {
+          jobId: job.id,
+          wordId: job.wordId,
+          attempts: job.attempts,
+          desiredSentenceCount: job.desiredSentenceCount
+        });
 
         await this.handleJob(job);
       } catch (error) {
@@ -87,6 +107,7 @@ export class WordGenerationRunner {
 
       const word = await this.database.getWordById(job.wordId);
       if (!word) {
+        console.warn('[WordGenerationRunner] Word not found for job', { jobId: job.id, wordId: job.wordId });
         await this.database.completeWordGenerationJob(job.id);
         await this.database.updateWordProcessingStatus(job.wordId, 'ready');
         await this.emitWordUpdate(job.wordId);
@@ -94,6 +115,14 @@ export class WordGenerationRunner {
       }
 
       const language = job.language || word.language;
+      console.log('[WordGenerationRunner] Processing job', {
+        jobId: job.id,
+        wordId: word.id,
+        word: word.word,
+        language,
+        attemptNumber
+      });
+
       await this.ensureSentenceAudio(word.id, language, word.word);
 
       const desiredCount = job.desiredSentenceCount ?? this.defaultSentenceCount;
@@ -101,8 +130,19 @@ export class WordGenerationRunner {
       const normalizedExisting = new Set(existingSentences.map(sentence => this.normalizeSentence(sentence.sentence)));
       let totalSentences = existingSentences.length;
 
+      console.log('[WordGenerationRunner] Sentence status', {
+        wordId: word.id,
+        existingSentences: totalSentences,
+        desiredCount
+      });
+
       if (totalSentences < desiredCount) {
         const needed = desiredCount - totalSentences;
+        console.log('[WordGenerationRunner] Requesting additional sentences', {
+          word: word.word,
+          language,
+          needed
+        });
         const generatedSentences = await this.contentGenerator.generateWordSentences(
           word.word,
           language,
@@ -117,7 +157,27 @@ export class WordGenerationRunner {
             continue;
           }
 
-          const audioPath = await this.audioService.generateSentenceAudio(sentence.sentence, language, word.word);
+          let audioPath: string;
+          if (sentence.audioUrl) {
+            console.log('Attempting to download external audio for sentence', {
+              word: word.word,
+              language,
+              audioUrl: sentence.audioUrl
+            });
+            try {
+              audioPath = await this.audioService.downloadSentenceAudioFromUrl(
+                sentence.audioUrl,
+                sentence.sentence,
+                language,
+                word.word
+              );
+            } catch (downloadError) {
+              console.warn('Failed to download external sentence audio, falling back to TTS:', downloadError);
+              audioPath = await this.audioService.generateSentenceAudio(sentence.sentence, language, word.word);
+            }
+          } else {
+            audioPath = await this.audioService.generateSentenceAudio(sentence.sentence, language, word.word);
+          }
           const sentenceParts = splitSentenceIntoParts(sentence.sentence);
           await this.database.insertSentence(
             word.id,
@@ -133,6 +193,11 @@ export class WordGenerationRunner {
 
           normalizedExisting.add(normalizedSentence);
           totalSentences += 1;
+          console.log('[WordGenerationRunner] Stored sentence for word', {
+            wordId: word.id,
+            sentencePreview: sentence.sentence.slice(0, 80),
+            totalSentences
+          });
 
           if (totalSentences >= desiredCount) {
             break;
@@ -146,9 +211,15 @@ export class WordGenerationRunner {
         throw new Error(`Sentence generation incomplete. Have ${sentenceTotal}, wanted ${desiredCount}.`);
       }
 
+      console.log('[WordGenerationRunner] Sentence generation complete', {
+        wordId: word.id,
+        sentenceCount: processingInfo.sentenceCount
+      });
+
       await this.database.updateWordProcessingStatus(word.id, 'ready');
       await this.database.completeWordGenerationJob(job.id);
       await this.emitWordUpdate(word.id);
+      console.log('[WordGenerationRunner] Job completed', { jobId: job.id, wordId: word.id });
     } catch (error) {
       console.error(`WordGenerationRunner failed for job ${job.id} (attempt ${attemptNumber}):`, error);
       await this.handleJobFailure(job, attemptNumber, error as Error);
@@ -177,6 +248,12 @@ export class WordGenerationRunner {
       if (sentence.audioPath) {
         continue;
       }
+
+      console.log('[WordGenerationRunner] Backfilling audio for existing sentence', {
+        sentenceId: sentence.id,
+        wordId,
+        language
+      });
 
       try {
         const audioPath = await this.audioService.generateSentenceAudio(sentence.sentence, language, wordText);

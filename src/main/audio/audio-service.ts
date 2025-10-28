@@ -1,11 +1,12 @@
 import { promises as fsPromises } from 'fs';
-import { join, parse } from 'path';
+import { join, parse, extname } from 'path';
 import { TTSAudioGenerator } from './audio-generator';
 import { ElevenLabsAudioGenerator } from './elevenlabs-generator';
 import { AudioGenerator, AudioError } from '../../shared/types/audio';
 import { DatabaseLayer } from '../../shared/types/database';
 import { AudioRecorder, RecordingSession, RecordingOptions } from './audio-recorder';
 import { SpeechRecognitionService, TranscriptionOptions, TranscriptionResult } from './speech-recognition';
+import { sanitizeFilename } from '../../shared/utils/sanitizeFilename';
 
 /**
  * Audio service that coordinates audio generation and playback
@@ -268,6 +269,58 @@ export class AudioService {
   }
 
   /**
+   * Download external audio (e.g., from Tatoeba) and store it alongside generated audio.
+   * Returns the local file path to the downloaded audio.
+   */
+  async downloadSentenceAudioFromUrl(
+    url: string,
+    sentence: string,
+    language?: string,
+    word?: string
+  ): Promise<string> {
+    if (!url || !sentence) {
+      throw new Error('Audio URL and sentence text are required to download external audio.');
+    }
+
+    let targetLanguage = language;
+    if (!targetLanguage && this.database) {
+      try {
+        targetLanguage = await this.database.getCurrentLanguage();
+      } catch (error) {
+        console.warn('Failed to determine language for external audio, using default "unknown"');
+      }
+    }
+    targetLanguage = (targetLanguage || 'unknown').toLowerCase();
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`External audio request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    if (arrayBuffer.byteLength === 0) {
+      throw new Error('External audio download succeeded but returned an empty file.');
+    }
+
+    const extension = this.resolveExternalAudioExtension(response.headers.get('content-type'), url);
+    const audioPath = this.buildExternalAudioPath(sentence, targetLanguage, word, extension);
+
+    if (await this.audioExists(audioPath)) {
+      return audioPath;
+    }
+
+    const audioDir = parse(audioPath).dir;
+    await fsPromises.mkdir(audioDir, { recursive: true });
+    await fsPromises.writeFile(audioPath, Buffer.from(arrayBuffer));
+
+    if (!await this.audioExists(audioPath)) {
+      throw new Error(`External audio saved but file not found: ${audioPath}`);
+    }
+
+    return audioPath;
+  }
+
+  /**
    * Batch generate audio for multiple texts
    * Returns array of paths in same order as input
    */
@@ -479,6 +532,53 @@ export class AudioService {
    */
   isSpeechRecognitionReady(): boolean {
     return this.speechRecognition.isServiceInitialized();
+  }
+
+  private buildExternalAudioPath(sentence: string, language: string, word: string | undefined, extension: string): string {
+    const baseDirectory = join(process.cwd(), 'audio');
+    const safeLanguage = sanitizeFilename(language || 'unknown');
+    const safeSentence = sanitizeFilename(sentence || 'sentence');
+    const safeWord = word ? sanitizeFilename(word) : undefined;
+    const ext = extension.startsWith('.') ? extension : `.${extension}`;
+
+    if (safeWord) {
+      return join(baseDirectory, safeLanguage, safeWord, `${safeSentence}${ext}`);
+    }
+
+    return join(baseDirectory, safeLanguage, `${safeSentence}${ext}`);
+  }
+
+  private resolveExternalAudioExtension(contentType: string | null | undefined, url: string): string {
+    if (contentType) {
+      const normalized = contentType.toLowerCase();
+      if (normalized.includes('mpeg') || normalized.includes('mp3')) {
+        return '.mp3';
+      }
+      if (normalized.includes('wav')) {
+        return '.wav';
+      }
+      if (normalized.includes('ogg')) {
+        return '.ogg';
+      }
+      if (normalized.includes('aac')) {
+        return '.aac';
+      }
+      if (normalized.includes('flac')) {
+        return '.flac';
+      }
+    }
+
+    try {
+      const urlPathname = new URL(url).pathname;
+      const urlExtension = extname(urlPathname);
+      if (urlExtension) {
+        return urlExtension;
+      }
+    } catch {
+      // Ignore URL parsing errors and fall back to default
+    }
+
+    return '.mp3';
   }
 
   /**

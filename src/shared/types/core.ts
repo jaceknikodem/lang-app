@@ -79,6 +79,7 @@ export interface GeneratedSentence {
   contextAfter?: string;  // Optional sentence after for context
   contextBeforeTranslation?: string; // Translation of context before
   contextAfterTranslation?: string;  // Translation of context after
+  audioUrl?: string; // Optional external audio source URL
 }
 
 export interface CreateWordRequest {

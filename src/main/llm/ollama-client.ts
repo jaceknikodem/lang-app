@@ -525,13 +525,6 @@ Rules:
       // Removed format: 'json' as it forces single objects instead of arrays
     };
 
-    // DEBUG: Print the full prompt being sent to Ollama
-    console.log('=== OLLAMA PROMPT DEBUG ===');
-    console.log('Model:', selectedModel);
-    console.log('Full Prompt:');
-    console.log(prompt);
-    console.log('=== END PROMPT DEBUG ===');
-
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= this.config.maxRetries!; attempt++) {
