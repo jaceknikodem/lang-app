@@ -17,6 +17,9 @@ export class SentenceViewer extends LitElement {
   @property({ type: Object })
   targetWord!: Word;
 
+  @property({ type: Object })
+  displayLastSeen?: Date;
+
   @property({ type: Array })
   allWords: Word[] = [];
 
@@ -861,7 +864,8 @@ export class SentenceViewer extends LitElement {
 
   render() {
     const wordStrength = Math.round(this.targetWord?.strength ?? 0);
-    const lastSeenText = this.formatTimeAgo(this.sentence?.lastShown);
+    const lastSeenSource = this.displayLastSeen ?? this.sentence?.lastShown;
+    const lastSeenText = this.formatTimeAgo(lastSeenSource);
 
     return html`
       <div class="sentence-container">

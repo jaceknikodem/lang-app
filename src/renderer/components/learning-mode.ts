@@ -65,6 +65,9 @@ export class LearningMode extends LitElement {
   @state()
   private infoMessageType: 'info' | 'success' | 'error' = 'info';
 
+  @state()
+  private failureMessageExpiresAt: number | null = null;
+
   private sessionStartTime = Date.now();
   private keyboardUnsubscribe?: () => void;
   private lastRecordedSentenceId: number | null = null;
@@ -72,6 +75,8 @@ export class LearningMode extends LitElement {
   private jobListenerCleanup?: () => void;
   private infoTimeoutId: number | undefined;
   private isReloadingFromQueue = false;
+  private currentSentenceDisplayLastSeen?: Date;
+  private lastSeenClearFrame: number | null = null;
 
   static styles = [
     sharedStyles,
@@ -316,6 +321,10 @@ export class LearningMode extends LitElement {
 
     this.stopJobMonitoring();
     this.clearInfoTimeout();
+    if (this.lastSeenClearFrame !== null) {
+      cancelAnimationFrame(this.lastSeenClearFrame);
+      this.lastSeenClearFrame = null;
+    }
   }
 
   private async loadAllWords() {
@@ -445,6 +454,14 @@ export class LearningMode extends LitElement {
     try {
       const summary = await window.electronAPI.jobs.getQueueSummary();
       this.queueSummary = summary;
+
+      if (summary.failed > 0) {
+        if (this.failureMessageExpiresAt === null || Date.now() > this.failureMessageExpiresAt) {
+          this.failureMessageExpiresAt = Date.now() + 10000;
+        }
+      } else {
+        this.failureMessageExpiresAt = null;
+      }
     } catch (error) {
       console.warn('Failed to refresh queue summary:', error);
     }
@@ -457,18 +474,17 @@ export class LearningMode extends LitElement {
       try {
         const word = await window.electronAPI.database.getWordById(update.wordId);
         if (word) {
-          this.showInfo(`"${word.word}" is ready for review.`, 'success');
           this.allWords = [...this.allWords.filter(existing => existing.id !== word.id), word];
         } else {
-          this.showInfo('A queued word is ready for review.', 'success');
+          await this.loadAllWords();
         }
       } catch (error) {
         console.error('Unable to fetch word after job completion:', error);
-        this.showInfo('A queued word is ready for review.', 'success');
       }
 
       void this.reloadWordsFromDatabase();
     } else if (update.processingStatus === 'failed') {
+      this.failureMessageExpiresAt = Date.now() + 10000;
       this.showInfo('Sentence generation failed for a word. Please retry from the queue.', 'error');
     }
   }
@@ -532,22 +548,33 @@ export class LearningMode extends LitElement {
       if (currentSentence && currentSentence.id !== this.lastRecordedSentenceId) {
         this.lastRecordedSentenceId = currentSentence.id;
         // Optimistically update local state so UI shows "just now"
-        const wIndex = this.currentWordIndex;
-        const sIndex = this.currentSentenceIndex;
-        if (this.wordsWithSentences[wIndex]?.sentences[sIndex]) {
-          const updatedWords = this.wordsWithSentences.map((w, wi) => {
-            if (wi !== wIndex) return w;
-            const updatedSentences = w.sentences.map((s, si) =>
-              si === sIndex ? { ...s, lastShown: new Date() } : s
-            );
-            return { ...w, sentences: updatedSentences };
-          });
-          this.wordsWithSentences = updatedWords;
+      const wIndex = this.currentWordIndex;
+      const sIndex = this.currentSentenceIndex;
+      if (this.wordsWithSentences[wIndex]?.sentences[sIndex]) {
+        const previousLastShown = this.wordsWithSentences[wIndex].sentences[sIndex].lastShown;
+        this.currentSentenceDisplayLastSeen = previousLastShown ? new Date(previousLastShown) : undefined;
+        const updatedWords = this.wordsWithSentences.map((w, wi) => {
+          if (wi !== wIndex) return w;
+          const updatedSentences = w.sentences.map((s, si) =>
+            si === sIndex ? { ...s, lastShown: new Date() } : s
+          );
+          return { ...w, sentences: updatedSentences };
+        });
+        this.wordsWithSentences = updatedWords;
+
+        if (this.lastSeenClearFrame !== null) {
+          cancelAnimationFrame(this.lastSeenClearFrame);
         }
-        // Fire and forget; no need to block UI
-        window.electronAPI.database
-          .updateSentenceLastShown(currentSentence.id)
-          .catch(err => console.warn('Failed to update sentence last_shown:', err));
+        this.lastSeenClearFrame = requestAnimationFrame(() => {
+          this.currentSentenceDisplayLastSeen = undefined;
+          this.lastSeenClearFrame = null;
+          this.requestUpdate();
+        });
+      }
+      // Fire and forget; no need to block UI
+      window.electronAPI.database
+        .updateSentenceLastShown(currentSentence.id)
+        .catch(err => console.warn('Failed to update sentence last_shown:', err));
       }
     }
   }
@@ -1002,7 +1029,6 @@ export class LearningMode extends LitElement {
 
   private async handleWordAddedFromSentence(event: CustomEvent<{ wordId: number; word: string; translation: string }>): Promise<void> {
     const { wordId, word } = event.detail;
-    this.showInfo(`Queued "${word}" for review.`, 'success');
     await this.refreshQueueSummary();
 
     try {
@@ -1086,10 +1112,10 @@ export class LearningMode extends LitElement {
   }
 
   private renderQueueStatus() {
-    const { queued, processing, failed, processingWords, queuedWords } = this.queueSummary;
+    const { queued, processing, processingWords, queuedWords } = this.queueSummary;
     const pending = queued + processing;
 
-    if (pending === 0 && failed === 0) {
+    if (pending === 0) {
       return null;
     }
 
@@ -1107,29 +1133,17 @@ export class LearningMode extends LitElement {
     const processingList = processingWords?.length ? formatWordList(processingWords) : '';
     const queuedList = queuedWords?.length ? formatWordList(queuedWords) : '';
 
-    const processingText = processing > 0 && processingList
-      ? `Running: ${processingList}`
-      : '';
-
-    const queuedText = queued > 0 && queuedList
-      ? `Queued: ${queuedList}`
-      : '';
-
-    const detailText = [processingText, queuedText].filter(Boolean).join(' • ');
+    const detailParts = [
+      processing > 0 && processingList ? `Running: ${processingList}` : '',
+      queued > 0 && queuedList ? `Queued: ${queuedList}` : ''
+    ].filter(Boolean);
 
     return html`
       <div class="queue-status">
-        ${pending > 0 ? html`
-          <span>
-            Generating sentences for ${pending} ${pending === 1 ? 'word' : 'words'}.
-            ${detailText ? html`<span>${detailText}</span>` : ''}
-          </span>
-        ` : ''}
-        ${failed > 0 ? html`
-          <span class="queue-warning">
-            ${failed} ${failed === 1 ? 'job has' : 'jobs have'} errors
-          </span>
-        ` : ''}
+        <span>
+          Generating sentences for ${pending} ${pending === 1 ? 'word' : 'words'}.
+          ${detailParts.length ? html`<span>${detailParts.join(' • ')}</span>` : ''}
+        </span>
       </div>
     `;
   }
@@ -1249,6 +1263,7 @@ export class LearningMode extends LitElement {
           .sentence=${currentSentence}
           .targetWord=${currentWord}
           .allWords=${this.allWords}
+          .displayLastSeen=${this.currentSentenceDisplayLastSeen}
           @word-clicked=${this.handleWordClicked}
           @mark-word-known=${this.handleMarkWordKnown}
           @mark-word-ignored=${this.handleMarkWordIgnored}
