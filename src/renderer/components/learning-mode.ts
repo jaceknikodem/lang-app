@@ -1126,13 +1126,6 @@ export class LearningMode extends LitElement {
         context: 'learning',
         description: 'Go to last sentence'
       },
-      // Back to selection
-      {
-        ...GlobalShortcuts.ESCAPE,
-        action: () => this.handleBackToSelection(),
-        context: 'learning',
-        description: 'Back to topic selection'
-      }
     ];
 
     this.keyboardUnsubscribe = useKeyboardBindings(bindings);
@@ -1341,10 +1334,6 @@ export class LearningMode extends LitElement {
     }
   }
 
-  private handleBackToSelection() {
-    router.goToTopicSelection();
-  }
-
   private renderQueueStatus() {
     const { queued, processing, failed, processingWords, queuedWords } = this.queueSummary;
     const pending = queued + processing - failed;
@@ -1404,11 +1393,6 @@ export class LearningMode extends LitElement {
           <div class="error-message">
             ${this.error}
           </div>
-          <div style="text-align: center; margin-top: var(--spacing-lg);">
-            <button class="btn btn-primary" @click=${this.handleBackToSelection}>
-              Back
-            </button>
-          </div>
         </div>
       `;
     }
@@ -1419,9 +1403,6 @@ export class LearningMode extends LitElement {
           <div class="empty-state">
             <h3>No Learning Content Available</h3>
             <p>No sentences were found for the selected words.</p>
-            <button class="btn btn-primary" @click=${this.handleBackToSelection}>
-              Back
-            </button>
           </div>
         </div>
       `;
@@ -1455,9 +1436,6 @@ export class LearningMode extends LitElement {
             <div class="completion-actions">
               <button class="btn btn-primary btn-large" @click=${this.handleFinishLearning}>
                 Finish Session
-              </button>
-              <button class="btn btn-secondary" @click=${this.handleBackToSelection}>
-                Select New Words
               </button>
             </div>
           </div>
@@ -1522,12 +1500,6 @@ export class LearningMode extends LitElement {
           >
             ← Previous <span class="keyboard-hint">(←)</span>
           </button>
-
-          <div class="nav-info">
-            <button class="btn btn-secondary" @click=${this.handleBackToSelection}>
-              Back
-            </button>
-          </div>
 
           <button
             class="btn btn-primary nav-button"
