@@ -6,6 +6,7 @@ import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { Word, Sentence, DictionaryEntry } from '../../shared/types/core.js';
+import { splitSentenceIntoParts } from '../../shared/utils/sentence.js';
 import { useKeyboardBindings } from '../utils/keyboard-manager.js';
 import type { TokenizedWord as WordInSentence } from '../utils/sentence-tokenizer.js';
 
@@ -388,7 +389,7 @@ export class SentenceViewer extends LitElement {
       return;
     }
 
-    const parts = this.sentence.sentence.split(/(\s+|[.,!?;:])/);
+    const parts = this.sentence.sentenceParts ?? splitSentenceIntoParts(this.sentence.sentence);
 
     this.parsedWords = parts.map(text => {
       if (/^\s+$/.test(text)) {

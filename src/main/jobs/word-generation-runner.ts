@@ -1,6 +1,7 @@
 import { DatabaseLayer, WordGenerationJob, WordProcessingStatus } from '../../shared/types/database.js';
 import { ContentGenerator } from '../llm/content-generator.js';
 import { AudioService } from '../audio/audio-service.js';
+import { splitSentenceIntoParts } from '../../shared/utils/sentence.js';
 
 export interface WordGenerationRunnerOptions {
   database: DatabaseLayer;
@@ -117,6 +118,7 @@ export class WordGenerationRunner {
           }
 
           const audioPath = await this.audioService.generateSentenceAudio(sentence.sentence, language, word.word);
+          const sentenceParts = splitSentenceIntoParts(sentence.sentence);
           await this.database.insertSentence(
             word.id,
             sentence.sentence,
@@ -125,7 +127,8 @@ export class WordGenerationRunner {
             sentence.contextBefore,
             sentence.contextAfter,
             sentence.contextBeforeTranslation,
-            sentence.contextAfterTranslation
+            sentence.contextAfterTranslation,
+            sentenceParts
           );
 
           normalizedExisting.add(normalizedSentence);

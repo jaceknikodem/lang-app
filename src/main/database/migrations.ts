@@ -213,6 +213,16 @@ export class MigrationManager {
           `DROP TABLE IF EXISTS word_generation_queue`
           // processing_status and sentence_count columns remain in words table on rollback
         ]
+      },
+      {
+        version: 9,
+        name: 'add_sentence_parts_column',
+        up: [
+          `ALTER TABLE sentences ADD COLUMN sentence_parts TEXT`
+        ],
+        down: [
+          // SQLite cannot drop columns; leaving sentence_parts in place on rollback.
+        ]
       }
     ];
   }

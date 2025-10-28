@@ -136,7 +136,7 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.INSERT_SENTENCE, async (event, wordId, sentence, translation, audioPath, contextBefore, contextAfter, contextBeforeTranslation, contextAfterTranslation) => {
+  ipcMain.handle(IPC_CHANNELS.DATABASE.INSERT_SENTENCE, async (event, wordId, sentence, translation, audioPath, contextBefore, contextAfter, contextBeforeTranslation, contextAfterTranslation, sentenceParts) => {
     try {
       const validatedWordId = WordIdSchema.parse(wordId);
       const validatedSentence = TextSchema.parse(sentence);
@@ -146,6 +146,7 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       const validatedContextAfter = contextAfter ? TextSchema.parse(contextAfter) : undefined;
       const validatedContextBeforeTranslation = contextBeforeTranslation ? TextSchema.parse(contextBeforeTranslation) : undefined;
       const validatedContextAfterTranslation = contextAfterTranslation ? TextSchema.parse(contextAfterTranslation) : undefined;
+      const validatedSentenceParts = sentenceParts ? z.array(z.string()).parse(sentenceParts) : undefined;
 
       return await databaseLayer.insertSentence(
         validatedWordId,
@@ -155,7 +156,8 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
         validatedContextBefore,
         validatedContextAfter,
         validatedContextBeforeTranslation,
-        validatedContextAfterTranslation
+        validatedContextAfterTranslation,
+        validatedSentenceParts
       );
     } catch (error) {
       console.error('Error inserting sentence:', error);

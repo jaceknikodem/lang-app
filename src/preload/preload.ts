@@ -31,8 +31,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES_ORDERED_BY_STRENGTH, includeKnown, includeIgnored, language),
     getRecentStudySessions: (limit?: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_RECENT_STUDY_SESSIONS, limit),
-    insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string, contextBefore?: string, contextAfter?: string, contextBeforeTranslation?: string, contextAfterTranslation?: string) => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.INSERT_SENTENCE, wordId, sentence, translation, audioPath, contextBefore, contextAfter, contextBeforeTranslation, contextAfterTranslation),
+    insertSentence: (
+      wordId: number,
+      sentence: string,
+      translation: string,
+      audioPath: string,
+      contextBefore?: string,
+      contextAfter?: string,
+      contextBeforeTranslation?: string,
+      contextAfterTranslation?: string,
+      sentenceParts?: string[]
+    ) => 
+      ipcRenderer.invoke(
+        IPC_CHANNELS.DATABASE.INSERT_SENTENCE,
+        wordId,
+        sentence,
+        translation,
+        audioPath,
+        contextBefore,
+        contextAfter,
+        contextBeforeTranslation,
+        contextAfterTranslation,
+        sentenceParts
+      ),
     getSentencesByWord: (wordId: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_SENTENCES_BY_WORD, wordId),
     deleteSentence: (sentenceId: number) =>

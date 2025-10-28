@@ -19,7 +19,17 @@ export interface IPCBridge {
     getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
     getWordsWithSentencesOrderedByStrength: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
     getRecentStudySessions: (limit?: number) => Promise<Array<{ id: number, wordsStudied: number, whenStudied: Date }>>;
-    insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string, contextBefore?: string, contextAfter?: string, contextBeforeTranslation?: string, contextAfterTranslation?: string) => Promise<number>;
+    insertSentence: (
+      wordId: number,
+      sentence: string,
+      translation: string,
+      audioPath: string,
+      contextBefore?: string,
+      contextAfter?: string,
+      contextBeforeTranslation?: string,
+      contextAfterTranslation?: string,
+      sentenceParts?: string[]
+    ) => Promise<number>;
     getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
     deleteSentence: (sentenceId: number) => Promise<void>;
     updateSentenceLastShown: (sentenceId: number) => Promise<void>;

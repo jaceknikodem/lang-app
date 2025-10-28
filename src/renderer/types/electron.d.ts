@@ -26,7 +26,8 @@ declare global {
           contextBefore?: string,
           contextAfter?: string,
           contextBeforeTranslation?: string,
-          contextAfterTranslation?: string
+          contextAfterTranslation?: string,
+          sentenceParts?: string[]
         ) => Promise<number>;
         getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
         deleteSentence: (sentenceId: number) => Promise<void>;

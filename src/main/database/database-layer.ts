@@ -9,6 +9,7 @@ import { DatabaseLayer, DatabaseConfig, JobWordInfo, WordGenerationJob, WordGene
 import { Word, Sentence, StudyStats, CreateWordRequest, DictionaryEntry } from '../../shared/types/core.js';
 import { DatabaseConnection } from './connection.js';
 import { MigrationManager } from './migrations.js';
+import { splitSentenceIntoParts, serializeSentenceParts, parseSentenceParts } from '../../shared/utils/sentence.js';
 
 export class SQLiteDatabaseLayer implements DatabaseLayer {
   private connection: DatabaseConnection;
@@ -28,6 +29,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // Initialize and run migrations
       this.migrationManager = new MigrationManager(db);
       await this.migrationManager.migrate();
+
+      // Ensure sentence parts are populated for existing records
+      this.backfillSentenceParts();
 
       // Populate dictionary data from bundled files
       try {
@@ -376,17 +380,22 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     contextBefore?: string,
     contextAfter?: string,
     contextBeforeTranslation?: string,
-    contextAfterTranslation?: string
+    contextAfterTranslation?: string,
+    sentenceParts?: string[]
   ): Promise<number> {
     const db = this.getDb();
     
     try {
+      const parts = sentenceParts ?? splitSentenceIntoParts(sentence);
+      const serializedParts = serializeSentenceParts(parts);
+
       const stmt = db.prepare(`
         INSERT INTO sentences (
           word_id, sentence, translation, audio_path,
-          context_before, context_after, context_before_translation, context_after_translation
+          context_before, context_after, context_before_translation, context_after_translation,
+          sentence_parts
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       const result = stmt.run(
@@ -397,7 +406,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         contextBefore || null,
         contextAfter || null,
         contextBeforeTranslation || null,
-        contextAfterTranslation || null
+        contextAfterTranslation || null,
+        serializedParts
       );
 
       db.prepare(`
@@ -1413,6 +1423,48 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     return shuffled;
   }
 
+  private backfillSentenceParts(): void {
+    const db = this.getDb();
+
+    try {
+      const rows = db.prepare(`
+        SELECT id, sentence 
+        FROM sentences 
+        WHERE sentence_parts IS NULL OR sentence_parts = ''
+      `).all() as Array<{ id: number; sentence: string }>;
+
+      if (!rows.length) {
+        return;
+      }
+
+      const updates = rows
+        .map(row => {
+          const parts = splitSentenceIntoParts(row.sentence);
+          const serialized = serializeSentenceParts(parts);
+          if (!serialized) {
+            return null;
+          }
+          return { id: row.id, serialized };
+        })
+        .filter((entry): entry is { id: number; serialized: string } => entry !== null);
+
+      if (!updates.length) {
+        return;
+      }
+
+      const updateStmt = db.prepare('UPDATE sentences SET sentence_parts = ? WHERE id = ?');
+      const updateTransaction = db.transaction((items: Array<{ id: number; serialized: string }>) => {
+        for (const item of items) {
+          updateStmt.run(item.serialized, item.id);
+        }
+      });
+
+      updateTransaction(updates);
+    } catch (error) {
+      console.warn('Failed to backfill sentence parts:', error);
+    }
+  }
+
   private mapRowToWord(row: any): Word {
     return {
       id: row.id,
@@ -1445,6 +1497,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       id: row.id,
       wordId: row.word_id,
       sentence: row.sentence,
+      sentenceParts: parseSentenceParts(row.sentence_parts),
       translation: row.translation,
       audioPath: row.audio_path || '',
       createdAt: new Date(row.created_at),

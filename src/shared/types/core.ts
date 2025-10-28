@@ -39,6 +39,7 @@ export interface Sentence {
   id: number;
   wordId: number;
   sentence: string;
+  sentenceParts?: string[];
   translation: string;
   audioPath: string;
   createdAt: Date;
