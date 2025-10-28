@@ -1346,10 +1346,10 @@ export class LearningMode extends LitElement {
   }
 
   private renderQueueStatus() {
-    const { queued, processing, processingWords, queuedWords } = this.queueSummary;
-    const pending = queued + processing;
+    const { queued, processing, failed, processingWords, queuedWords } = this.queueSummary;
+    const pending = queued + processing - failed;
 
-    if (pending === 0) {
+    if (pending <= 0) {
       return null;
     }
 
@@ -1364,7 +1364,9 @@ export class LearningMode extends LitElement {
       return `${names.slice(0, max).join(', ')} + ${names.length - max} more`;
     };
 
-    const processingList = processingWords?.length ? formatWordList(processingWords) : '';
+    const runningWords = processingWords?.filter(w => w.status === 'processing');
+
+    const processingList = runningWords?.length ? formatWordList(runningWords) : '';
     const queuedList = queuedWords?.length ? formatWordList(queuedWords) : '';
 
     const detailParts = [
@@ -1376,7 +1378,7 @@ export class LearningMode extends LitElement {
       <div class="queue-status">
         <span>
           Generating sentences for ${pending} ${pending === 1 ? 'word' : 'words'}.
-          ${detailParts.length ? html`<span>${detailParts.join(' • ')}</span>` : ''}
+          ${detailParts.length ? html`<span> ${detailParts.join(' • ')}</span>` : ''}
         </span>
       </div>
     `;

@@ -911,6 +911,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         FROM word_generation_queue q
         INNER JOIN words w ON w.id = q.word_id
         WHERE q.status IN ('queued', 'processing')
+          AND w.processing_status != 'failed'
           ${language ? 'AND q.language = ?' : ''}
         ORDER BY 
           CASE q.status WHEN 'processing' THEN 0 ELSE 1 END,
