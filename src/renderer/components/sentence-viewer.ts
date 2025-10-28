@@ -664,16 +664,10 @@ export class SentenceViewer extends LitElement {
     const translation = (suggestedTranslation || normalized).trim();
 
     try {
-      const audioPath = await window.electronAPI.audio.generateAudio(
-        normalized,
-        this.targetWord.language
-      );
-
       const wordId = await window.electronAPI.database.insertWord({
         word: normalized,
         language: this.targetWord.language,
-        translation,
-        audioPath
+        translation
       });
 
       await window.electronAPI.jobs.enqueueWordGeneration(wordId, {

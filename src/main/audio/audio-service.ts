@@ -260,14 +260,6 @@ export class AudioService {
   }
 
   /**
-   * Generate audio for a word and return the path
-   * Convenience method for word-specific audio generation
-   */
-  async generateWordAudio(word: string, language?: string): Promise<string> {
-    return this.generateAudio(word, language);
-  }
-
-  /**
    * Generate audio for a sentence and return the path
    * Convenience method for sentence-specific audio generation
    */

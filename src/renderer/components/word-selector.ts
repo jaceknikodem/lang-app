@@ -442,18 +442,11 @@ export class WordSelector extends LitElement {
         console.log(`Processing known word ${i + 1}/${knownWords.length}: ${word.word}`);
 
         try {
-          // Generate audio for the word
-          const wordAudioPath = await window.electronAPI.audio.generateAudio(
-            word.word,
-            this.language
-          );
-
           // Insert word into database
           const wordId = await window.electronAPI.database.insertWord({
             word: word.word,
             language: this.language,
-            translation: word.translation,
-            audioPath: wordAudioPath
+            translation: word.translation
           });
 
           // Mark as known immediately
@@ -474,21 +467,12 @@ export class WordSelector extends LitElement {
         console.log(`Processing word ${i + 1}/${selectedWords.length}: ${word.word}`);
 
         try {
-          // Generate audio for the word
-          console.log('Generating audio for word:', word.word);
-          const wordAudioPath = await window.electronAPI.audio.generateAudio(
-            word.word,
-            this.language
-          );
-          console.log('Word audio generated:', wordAudioPath);
-
           // Insert word into database
           console.log('Inserting word into database:', word.word);
           const wordId = await window.electronAPI.database.insertWord({
             word: word.word,
             language: this.language,
-            translation: word.translation,
-            audioPath: wordAudioPath
+            translation: word.translation
           });
           console.log('Word inserted with ID:', wordId);
           await window.electronAPI.jobs.enqueueWordGeneration(wordId, {
