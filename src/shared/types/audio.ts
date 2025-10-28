@@ -9,6 +9,13 @@ export interface AudioGenerator {
   audioExists(audioPath: string): Promise<boolean>;
 }
 
+export interface RegenerateAudioOptions {
+  text: string;
+  language?: string;
+  word?: string;
+  existingPath?: string;
+}
+
 export interface AudioConfig {
   audioDirectory: string;
   ttsCommand: string;

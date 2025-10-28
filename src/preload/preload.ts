@@ -39,6 +39,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.DELETE_SENTENCE, sentenceId),
     updateSentenceLastShown: (sentenceId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_LAST_SHOWN, sentenceId),
+    updateSentenceAudioPath: (sentenceId: number, audioPath: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_AUDIO_PATH, sentenceId, audioPath),
     updateLastStudied: (wordId: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.UPDATE_LAST_STUDIED, wordId),
     getStudyStats: (language?: string) => 
@@ -106,6 +108,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.STOP_AUDIO),
     audioExists: (audioPath: string) => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.AUDIO_EXISTS, audioPath),
+    regenerateAudio: (options: { text: string; language?: string; word?: string; existingPath?: string }) =>
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.REGENERATE_AUDIO, options),
     startRecording: (options?: any) => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.START_RECORDING, options),
     stopRecording: () => 
@@ -221,6 +225,7 @@ declare global {
         getSentencesByWord: (wordId: number) => Promise<any[]>;
         deleteSentence: (sentenceId: number) => Promise<void>;
         updateSentenceLastShown: (sentenceId: number) => Promise<void>;
+        updateSentenceAudioPath: (sentenceId: number, audioPath: string) => Promise<void>;
         updateLastStudied: (wordId: number) => Promise<void>;
         getStudyStats: (language?: string) => Promise<any>;
         recordStudySession: (wordsStudied: number) => Promise<void>;
@@ -260,6 +265,7 @@ declare global {
         playAudio: (audioPath: string) => Promise<void>;
         stopAudio: () => Promise<void>;
         audioExists: (audioPath: string) => Promise<boolean>;
+        regenerateAudio: (options: { text: string; language?: string; word?: string; existingPath?: string }) => Promise<{ audioPath: string }>;
         startRecording: (options?: any) => Promise<any>;
         stopRecording: () => Promise<any>;
         cancelRecording: () => Promise<void>;

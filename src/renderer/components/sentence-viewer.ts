@@ -24,6 +24,9 @@ export class SentenceViewer extends LitElement {
   private isPlayingAudio = false;
 
   @state()
+  private isRegeneratingAudio = false;
+
+  @state()
   private parsedWords: WordInSentence[] = [];
 
   @state()
@@ -112,6 +115,16 @@ export class SentenceViewer extends LitElement {
       .audio-icon {
         width: 16px;
         height: 16px;
+      }
+
+      .audio-button.secondary {
+        background: var(--background-secondary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+      }
+
+      .audio-button.secondary:hover:not(:disabled) {
+        background: #e9e9e9;
       }
 
       .word-strength {
@@ -645,6 +658,95 @@ export class SentenceViewer extends LitElement {
     }
   }
 
+  private async handleRecreateAudio() {
+    if (this.isRegeneratingAudio || !this.sentence?.sentence) {
+      return;
+    }
+
+    this.isRegeneratingAudio = true;
+    console.info('Recreate audio: start');
+    try {
+      // Ensure no audio is playing
+      try {
+        await window.electronAPI.audio.stopAudio();
+        this.isPlayingAudio = false;
+      } catch (e) {
+        console.warn('Stop audio before regenerate failed (non-fatal):', e);
+      }
+
+      const oldPath = this.sentence.audioPath;
+      const language = this.targetWord?.language;
+      const word = this.targetWord?.word;
+
+      console.info('Recreate audio: invoking regenerateAudio', { oldPath });
+
+      let regeneratedPath: string | undefined;
+
+      if (typeof window.electronAPI.audio.regenerateAudio === 'function') {
+        const result = await window.electronAPI.audio.regenerateAudio({
+          text: this.sentence.sentence,
+          language,
+          word,
+          existingPath: oldPath
+        });
+        regeneratedPath = result?.audioPath;
+      } else {
+        console.warn('Recreate audio: regenerateAudio not available, using fallback flow');
+        const fallbackLanguage = language || this.targetWord?.language;
+        if (!fallbackLanguage) {
+          throw new Error('Unable to determine language for audio generation');
+        }
+
+        const fallbackWord = `${word || this.targetWord?.word || 'sentence'}-regen-${Date.now()}`;
+
+        // Generate new audio under a temporary scoped word to avoid clashes
+        regeneratedPath = await window.electronAPI.audio.generateAudio(
+          this.sentence.sentence,
+          fallbackLanguage,
+          fallbackWord
+        );
+
+        if (oldPath && oldPath !== regeneratedPath) {
+          await window.electronAPI.database.updateSentenceAudioPath(this.sentence.id, regeneratedPath);
+          console.info('Recreate audio (fallback): DB audio_path updated for sentence', this.sentence.id);
+
+          try {
+            await window.electronAPI.audio.deleteRecording(oldPath);
+          } catch (deleteError) {
+            console.warn('Recreate audio (fallback): failed to delete previous audio', deleteError);
+          }
+        }
+      }
+
+      if (!regeneratedPath) {
+        throw new Error('Audio regeneration returned an empty path');
+      }
+
+      if (typeof window.electronAPI.audio.regenerateAudio === 'function' && (!oldPath || regeneratedPath !== oldPath)) {
+        await window.electronAPI.database.updateSentenceAudioPath(this.sentence.id, regeneratedPath);
+        console.info('Recreate audio: DB audio_path updated for sentence', this.sentence.id);
+      }
+
+      console.info('Recreate audio: regeneration completed with path', regeneratedPath);
+
+      this.sentence = { ...this.sentence, audioPath: regeneratedPath };
+
+      // Optional event for parent components
+      this.dispatchEvent(new CustomEvent('sentence-audio-regenerated', {
+        detail: { sentenceId: this.sentence.id, audioPath: regeneratedPath },
+        bubbles: true,
+        composed: true
+      }));
+    } catch (error) {
+      console.error('Failed to regenerate audio:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      window.alert(`Failed to recreate audio: ${message}`);
+    } finally {
+      this.isRegeneratingAudio = false;
+      console.info('Recreate audio: end');
+    }
+  }
+
   private handleMarkKnown() {
     this.dispatchEvent(new CustomEvent('mark-word-known', {
       detail: { word: this.targetWord },
@@ -699,16 +801,26 @@ export class SentenceViewer extends LitElement {
           </div>
           
           ${this.sentence.audioPath ? html`
-            <button
-              class="audio-button"
-              @click=${this.handlePlayAudio}
-              ?disabled=${this.isPlayingAudio}
-              title="Play audio (Space)"
-            >
-              <svg class="audio-icon" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-              </svg>
-            </button>
+            <div class="flex gap-sm">
+              <button
+                class="audio-button"
+                @click=${this.handlePlayAudio}
+                ?disabled=${this.isPlayingAudio || this.isRegeneratingAudio}
+                title="Play audio (Space)"
+              >
+                <svg class="audio-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                </svg>
+              </button>
+              <button
+                class="audio-button secondary"
+                @click=${this.handleRecreateAudio}
+                ?disabled=${this.isPlayingAudio || this.isRegeneratingAudio}
+                title="Recreate audio"
+              >
+                ♻
+              </button>
+            </div>
           ` : ''}
         </div>
 

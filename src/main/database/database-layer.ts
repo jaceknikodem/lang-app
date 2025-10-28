@@ -451,6 +451,26 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
+   * Update sentence audio path after successful regeneration
+   */
+  async updateSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void> {
+    const db = this.getDb();
+    try {
+      const stmt = db.prepare(`
+        UPDATE sentences
+        SET audio_path = ?
+        WHERE id = ?
+      `);
+      const result = stmt.run(audioPath, sentenceId);
+      if (result.changes === 0) {
+        throw new Error(`Sentence with ID ${sentenceId} not found`);
+      }
+    } catch (error) {
+      throw new Error(`Failed to update sentence audio path: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Get sentence by ID
    */
   async getSentenceById(sentenceId: number): Promise<Sentence | null> {

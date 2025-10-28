@@ -22,6 +22,7 @@ export interface IPCBridge {
     getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
     deleteSentence: (sentenceId: number) => Promise<void>;
     updateSentenceLastShown: (sentenceId: number) => Promise<void>;
+    updateSentenceAudioPath: (sentenceId: number, audioPath: string) => Promise<void>;
     updateLastStudied: (wordId: number) => Promise<void>;
     getStudyStats: () => Promise<StudyStats>;
     recordStudySession: (wordsStudied: number) => Promise<void>;
@@ -95,6 +96,12 @@ export interface IPCBridge {
     playAudio: (audioPath: string) => Promise<void>;
     stopAudio: () => Promise<void>;
     audioExists: (audioPath: string) => Promise<boolean>;
+    regenerateAudio: (options: {
+      text: string;
+      language?: string;
+      word?: string;
+      existingPath?: string;
+    }) => Promise<{ audioPath: string }>;
     startRecording: (options?: RecordingOptions) => Promise<RecordingSession>;
     stopRecording: () => Promise<RecordingSession | null>;
     cancelRecording: () => Promise<void>;
@@ -149,6 +156,7 @@ export const IPC_CHANNELS = {
     GET_SENTENCES_BY_WORD: 'database:getSentencesByWord',
     DELETE_SENTENCE: 'database:deleteSentence',
     UPDATE_SENTENCE_LAST_SHOWN: 'database:updateSentenceLastShown',
+    UPDATE_SENTENCE_AUDIO_PATH: 'database:updateSentenceAudioPath',
     UPDATE_LAST_STUDIED: 'database:updateLastStudied',
     GET_STUDY_STATS: 'database:getStudyStats',
     RECORD_STUDY_SESSION: 'database:recordStudySession',
@@ -183,6 +191,7 @@ export const IPC_CHANNELS = {
     PLAY_AUDIO: 'audio:playAudio',
     STOP_AUDIO: 'audio:stopAudio',
     AUDIO_EXISTS: 'audio:audioExists',
+    REGENERATE_AUDIO: 'audio:regenerateAudio',
     START_RECORDING: 'audio:startRecording',
     STOP_RECORDING: 'audio:stopRecording',
     CANCEL_RECORDING: 'audio:cancelRecording',

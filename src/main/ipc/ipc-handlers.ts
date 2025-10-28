@@ -190,6 +190,17 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     }
   });
 
+  ipcMain.handle(IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_AUDIO_PATH, async (event, sentenceId, audioPath) => {
+    try {
+      const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
+      const validatedAudioPath = AudioPathSchema.parse(audioPath);
+      return await databaseLayer.updateSentenceAudioPath(validatedSentenceId, validatedAudioPath);
+    } catch (error) {
+      console.error('Error updating sentence audio path:', error);
+      throw new Error(`Failed to update sentence audio path: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.DATABASE.UPDATE_LAST_STUDIED, async (event, wordId) => {
     try {
       const validatedWordId = WordIdSchema.parse(wordId);
@@ -614,6 +625,29 @@ function setupAudioHandlers(audioService: AudioService): void {
     } catch (error) {
       console.error('Error checking audio existence:', error);
       return false;
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.REGENERATE_AUDIO, async (event, payload) => {
+    try {
+      const validatedPayload = z.object({
+        text: TextSchema,
+        language: LanguageSchema.optional(),
+        word: TextSchema.optional(),
+        existingPath: AudioPathSchema.optional()
+      }).parse(payload ?? {});
+
+      const audioPath = await audioService.regenerateAudio(
+        validatedPayload.text,
+        validatedPayload.language,
+        validatedPayload.word,
+        validatedPayload.existingPath
+      );
+
+      return { audioPath };
+    } catch (error) {
+      console.error('Error regenerating audio:', error);
+      throw new Error(`Failed to regenerate audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
 

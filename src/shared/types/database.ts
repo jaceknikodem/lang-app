@@ -49,6 +49,7 @@ export interface DatabaseLayer {
   getSentenceById(sentenceId: number): Promise<Sentence | null>;
   deleteSentence(sentenceId: number): Promise<void>;
   updateSentenceLastShown(sentenceId: number): Promise<void>;
+  updateSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void>;
   
   // Progress tracking
   updateLastStudied(wordId: number): Promise<void>;

@@ -1,3 +1,5 @@
+import { promises as fsPromises } from 'fs';
+import { join, parse } from 'path';
 import { TTSAudioGenerator } from './audio-generator';
 import { ElevenLabsAudioGenerator } from './elevenlabs-generator';
 import { AudioGenerator, AudioError } from '../../shared/types/audio';
@@ -216,6 +218,44 @@ export class AudioService {
       // If there's an error checking existence, assume file doesn't exist
       console.warn(`Error checking audio file existence: ${error instanceof Error ? error.message : 'Unknown error'}`);
       return false;
+    }
+  }
+
+  /**
+   * Regenerate audio while ensuring the original file is only replaced on success.
+   */
+  async regenerateAudio(text: string, language?: string, word?: string, existingPath?: string): Promise<string> {
+    let backupPath: string | null = null;
+    try {
+      if (existingPath && await this.audioExists(existingPath)) {
+        const parsed = parse(existingPath);
+        backupPath = join(parsed.dir, `${parsed.name}.bak${parsed.ext}`);
+        // Remove any stale backup
+        await fsPromises.unlink(backupPath).catch(() => {});
+        await fsPromises.rename(existingPath, backupPath);
+      }
+
+      const newPath = await this.generateAudio(text, language, word);
+
+      if (backupPath) {
+        await fsPromises.unlink(backupPath).catch(() => {});
+      }
+
+      return newPath;
+    } catch (error) {
+      if (backupPath && existingPath) {
+        try {
+          const newExists = await this.audioExists(existingPath);
+          if (!newExists) {
+            await fsPromises.rename(backupPath, existingPath);
+          } else {
+            await fsPromises.unlink(backupPath).catch(() => {});
+          }
+        } catch (restoreError) {
+          console.error('Failed to restore previous audio backup:', restoreError);
+        }
+      }
+      throw error;
     }
   }
 

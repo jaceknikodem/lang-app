@@ -802,6 +802,32 @@ export class LearningMode extends LitElement {
     void this.incrementStrengthForWord(wordId);
   }
 
+  private handleSentenceAudioRegenerated(event: CustomEvent<{ sentenceId: number; audioPath: string }>) {
+    const { sentenceId, audioPath } = event.detail || ({} as any);
+    if (!sentenceId || !audioPath) return;
+
+    // Update the audioPath inside our wordsWithSentences structure so
+    // parent-level keyboard shortcuts use the fresh path too
+    const wIndex = this.currentWordIndex;
+    const sIndex = this.currentSentenceIndex;
+    const currentWord = this.wordsWithSentences[wIndex];
+    if (!currentWord) return;
+
+    const targetIndex = currentWord.sentences.findIndex(s => s.id === sentenceId);
+    if (targetIndex === -1) return;
+
+    const updatedSentences = currentWord.sentences.map((s, idx) =>
+      idx === targetIndex ? { ...s, audioPath } : s
+    );
+    const updatedWords = this.wordsWithSentences.map((w, idx) =>
+      idx === wIndex ? { ...w, sentences: updatedSentences } : w
+    );
+    this.wordsWithSentences = updatedWords;
+
+    // Ensure our current pointer stays in sync
+    this.currentSentenceIndex = sIndex;
+  }
+
   private async incrementStrengthForWord(wordId: number): Promise<void> {
     const word = this.wordsWithSentences.find(w => w.id === wordId);
     if (!word) {
@@ -972,6 +998,7 @@ export class LearningMode extends LitElement {
           @mark-word-ignored=${this.handleMarkWordIgnored}
           @remove-sentence=${this.handleRemoveCurrentSentence}
           @sentence-audio-played=${this.handleSentenceAudioPlayed}
+          @sentence-audio-regenerated=${this.handleSentenceAudioRegenerated}
         ></sentence-viewer>
 
         <div class="navigation-section">
