@@ -854,7 +854,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
-  async getWordGenerationQueueSummary(): Promise<{
+  async getWordGenerationQueueSummary(language?: string): Promise<{
     queued: number;
     processing: number;
     failed: number;
@@ -864,11 +864,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
 
     try {
-      const rows = db.prepare(`
+      const statusQuery = `
         SELECT status, COUNT(*) as total
         FROM word_generation_queue
+        ${language ? 'WHERE language = ?' : ''}
         GROUP BY status
-      `).all() as Array<{ status: string; total: number }>;
+      `;
+
+      const rows = (language
+        ? db.prepare(statusQuery).all(language)
+        : db.prepare(statusQuery).all()) as Array<{ status: string; total: number }>;
 
       const summary = rows.reduce(
         (acc, row) => {
@@ -886,7 +891,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         }
       );
 
-      const jobWordRows = db.prepare(`
+      const jobWordQuery = `
         SELECT 
           q.word_id as wordId,
           q.status as status,
@@ -896,10 +901,15 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         FROM word_generation_queue q
         INNER JOIN words w ON w.id = q.word_id
         WHERE q.status IN ('queued', 'processing')
+          ${language ? 'AND q.language = ?' : ''}
         ORDER BY 
           CASE q.status WHEN 'processing' THEN 0 ELSE 1 END,
           q.updated_at ASC
-      `).all() as Array<{ wordId: number; status: string; language: string; topic: string | null; word: string }>;
+      `;
+
+      const jobWordRows = (language
+        ? db.prepare(jobWordQuery).all(language)
+        : db.prepare(jobWordQuery).all()) as Array<{ wordId: number; status: string; language: string; topic: string | null; word: string }>;
 
       for (const job of jobWordRows) {
         const info: JobWordInfo = {

@@ -105,7 +105,7 @@ export interface DatabaseLayer {
   lookupDictionary(word: string, language?: string): Promise<DictionaryEntry[]>;
   updateWordProcessingStatus(wordId: number, status: WordProcessingStatus): Promise<void>;
   getWordProcessingInfo(wordId: number): Promise<{ processingStatus: WordProcessingStatus; sentenceCount: number } | null>;
-  getWordGenerationQueueSummary(): Promise<{
+  getWordGenerationQueueSummary(language?: string): Promise<{
     queued: number;
     processing: number;
     failed: number;

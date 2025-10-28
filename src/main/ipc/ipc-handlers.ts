@@ -1009,9 +1009,10 @@ function setupJobHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.JOBS.GET_QUEUE_SUMMARY, async () => {
+  ipcMain.handle(IPC_CHANNELS.JOBS.GET_QUEUE_SUMMARY, async (_event, language) => {
     try {
-      return await databaseLayer.getWordGenerationQueueSummary();
+      const validatedLanguage = language ? LanguageSchema.parse(language) : undefined;
+      return await databaseLayer.getWordGenerationQueueSummary(validatedLanguage);
     } catch (error) {
       console.error('Error getting queue summary:', error);
       throw new Error(`Failed to get queue summary: ${error instanceof Error ? error.message : 'Unknown error'}`);

@@ -58,7 +58,7 @@ declare global {
           processingStatus: 'queued' | 'processing' | 'ready' | 'failed';
           sentenceCount: number;
         } | null>;
-        getQueueSummary: () => Promise<{
+        getQueueSummary: (language?: string) => Promise<{
           queued: number;
           processing: number;
           failed: number;

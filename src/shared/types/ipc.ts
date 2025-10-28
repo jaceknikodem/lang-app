@@ -101,7 +101,7 @@ export interface IPCBridge {
       }
     ) => Promise<void>;
     getWordStatus: (wordId: number) => Promise<{ processingStatus: WordProcessingStatus; sentenceCount: number } | null>;
-    getQueueSummary: () => Promise<{
+    getQueueSummary: (language?: string) => Promise<{
       queued: number;
       processing: number;
       failed: number;

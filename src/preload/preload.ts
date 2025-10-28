@@ -187,8 +187,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ) => ipcRenderer.invoke(IPC_CHANNELS.JOBS.ENQUEUE_WORD_GENERATION, wordId, options),
     getWordStatus: (wordId: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.JOBS.GET_WORD_STATUS, wordId),
-    getQueueSummary: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.JOBS.GET_QUEUE_SUMMARY),
+    getQueueSummary: (language?: string) => 
+      ipcRenderer.invoke(IPC_CHANNELS.JOBS.GET_QUEUE_SUMMARY, language),
     onWordUpdated: (
       callback: (payload: { wordId: number; processingStatus: 'queued' | 'processing' | 'ready' | 'failed'; sentenceCount: number }) => void
     ) => {
@@ -338,7 +338,7 @@ declare global {
           processingStatus: 'queued' | 'processing' | 'ready' | 'failed';
           sentenceCount: number;
         } | null>;
-        getQueueSummary: () => Promise<{
+        getQueueSummary: (language?: string) => Promise<{
           queued: number;
           processing: number;
           failed: number;

@@ -60,6 +60,9 @@ export class LearningMode extends LitElement {
   } = { queued: 0, processing: 0, failed: 0, queuedWords: [], processingWords: [] };
 
   @state()
+  private currentLanguage: string | null = null;
+
+  @state()
   private infoMessage = '';
 
   @state()
@@ -77,6 +80,17 @@ export class LearningMode extends LitElement {
   private isReloadingFromQueue = false;
   private currentSentenceDisplayLastSeen?: Date;
   private lastSeenClearFrame: number | null = null;
+  private handleExternalLanguageChange = (event: Event) => {
+    const detail = (event as CustomEvent<{ language?: string }>).detail;
+    const newLanguage = detail?.language;
+
+    if (!newLanguage || newLanguage === this.currentLanguage) {
+      return;
+    }
+
+    this.currentLanguage = newLanguage;
+    void this.refreshQueueSummary();
+  };
 
   static styles = [
     sharedStyles,
@@ -292,6 +306,9 @@ export class LearningMode extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback();
+    document.addEventListener('language-changed', this.handleExternalLanguageChange);
+    
+    await this.loadCurrentLanguage();
     
     // Setup keyboard bindings
     this.setupKeyboardBindings();
@@ -324,6 +341,18 @@ export class LearningMode extends LitElement {
     if (this.lastSeenClearFrame !== null) {
       cancelAnimationFrame(this.lastSeenClearFrame);
       this.lastSeenClearFrame = null;
+    }
+    document.removeEventListener('language-changed', this.handleExternalLanguageChange);
+  }
+
+  private async loadCurrentLanguage(): Promise<void> {
+    try {
+      this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+    } catch (error) {
+      console.error('Failed to load current language for learning mode:', error);
+      if (!this.currentLanguage) {
+        this.currentLanguage = 'spanish';
+      }
     }
   }
 
@@ -452,7 +481,11 @@ export class LearningMode extends LitElement {
     }
 
     try {
-      const summary = await window.electronAPI.jobs.getQueueSummary();
+      if (!this.currentLanguage) {
+        await this.loadCurrentLanguage();
+      }
+
+      const summary = await window.electronAPI.jobs.getQueueSummary(this.currentLanguage ?? undefined);
       this.queueSummary = summary;
 
       if (summary.failed > 0) {
