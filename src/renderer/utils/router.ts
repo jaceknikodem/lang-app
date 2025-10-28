@@ -10,7 +10,7 @@ export interface RouteState {
 }
 
 export class Router {
-  private currentRoute: RouteState = { mode: 'topic-selection' };
+  private currentRoute: RouteState = { mode: 'learning' };
   private listeners: Set<(route: RouteState) => void> = new Set();
 
   getCurrentRoute(): RouteState {

@@ -19,7 +19,7 @@ import './settings-panel.js';
 @customElement('app-root')
 export class AppRoot extends LitElement {
   @state()
-  private currentRoute: RouteState = { mode: 'topic-selection' };
+  private currentRoute: RouteState = { mode: 'learning' };
 
   @state()
   private appState: AppState = {
@@ -34,7 +34,7 @@ export class AppRoot extends LitElement {
   private sessionState: SessionState | null = null;
 
   @state()
-  private hasExistingWords = false;
+  private hasExistingWords: boolean | null = null;
 
   @state()
   private currentLanguage = '';
@@ -338,6 +338,9 @@ export class AppRoot extends LitElement {
       const allWords = await window.electronAPI.database.getAllWords(true, false);
       console.log('Database call successful, words found:', allWords.length);
       this.hasExistingWords = allWords.length > 0;
+      if (this.hasExistingWords === false && router.isCurrentMode('learning')) {
+        router.goToTopicSelection();
+      }
       console.log('Found existing words:', allWords.length);
     } catch (error) {
       console.error('Failed to check existing words:', error);
@@ -539,7 +542,7 @@ export class AppRoot extends LitElement {
             <button 
               class="nav-button ${router.isCurrentMode('learning') ? 'active' : ''}"
               @click=${() => this.handleNavigation('learning')}
-              ?disabled=${!this.hasExistingWords}
+              ?disabled=${this.hasExistingWords === false}
               title="Review existing words (Ctrl+2)"
             >
               Review

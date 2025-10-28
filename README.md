@@ -4,6 +4,23 @@ A privacy-first desktop language learning application that operates entirely off
 
 **Core Philosophy**: Learn vocabulary in context, not isolation. Every word is presented within natural sentences with full audio support, creating an immersive learning experience that stays completely on your device.
 
+## Core Benefits
+
+- Casual review plus quiz mode with an advanced repetition system that adapts as you go
+- Learn every word inside rich sentences with optional supporting context
+- Prompt with any topic or let the app teach you the most frequent vocabulary
+- Fully cached experience so you can study completely offline
+- Multi-lingual content generation tailored to your target language
+- Generate fresh sentences that prioritize words you already know
+- Instant pop-ups that unpack a word’s meaning without leaving the flow
+- Async content generation keeps the interface responsive and smooth
+- Regenerate audio on demand whenever you need a new pronunciation
+- Add any word to your learning set the moment it catches your attention
+- Mark vocabulary as ignored or already known to focus future sessions
+- Customize generation with local models, Google Gemini, or ElevenLabs voices
+- Local backups keep your progress safe and portable
+- No account, email, or sign-up—your software, on your hardware
+
 ## Target Users
 
 Language learners who prioritize privacy, prefer audio-based learning, and want focused vocabulary building through contextual understanding rather than rote memorization. Perfect for learners who want to:

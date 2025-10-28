@@ -8,19 +8,13 @@ import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { Word, StudyStats } from '../../shared/types/core.js';
 
-interface WordProgress {
-  word: Word;
-  progressPercent: number;
-  statusLabel: string;
-  statusClass: string;
-}
-
 interface WordCategoryStats {
   known: number;           // strength > STRONG_THRESHOLD
   learningStrong: number;  // strength WEAK_THRESHOLD to STRONG_THRESHOLD
   learningWeak: number;    // strength < WEAK_THRESHOLD
   new: number;             // never studied (lastStudied is null)
 }
+
 
 @customElement('progress-summary')
 export class ProgressSummary extends LitElement {
@@ -33,9 +27,6 @@ export class ProgressSummary extends LitElement {
 
   @state()
   private wordCategoryStats: WordCategoryStats | null = null;
-
-  @state()
-  private recentWords: WordProgress[] = [];
 
   @state()
   private recentSessions: Array<{ id: number, wordsStudied: number, whenStudied: Date }> = [];
@@ -69,8 +60,7 @@ export class ProgressSummary extends LitElement {
 
       .progress-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        grid-template-rows: auto auto;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         gap: var(--spacing-lg);
         margin-top: var(--spacing-lg);
       }
@@ -179,122 +169,6 @@ export class ProgressSummary extends LitElement {
 
       .section-icon {
         font-size: 24px;
-      }
-
-      .words-grid {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: var(--spacing-sm);
-        max-height: 400px;
-        overflow-y: auto;
-      }
-
-      .word-progress-card {
-        background: var(--background-primary);
-        border: 1px solid var(--border-color);
-        border-radius: var(--border-radius);
-        padding: var(--spacing-md);
-        transition: all 0.2s ease;
-      }
-
-      .word-progress-card:hover {
-        box-shadow: var(--shadow-light);
-        border-color: var(--primary-color);
-      }
-
-      .word-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: var(--spacing-sm);
-      }
-
-      .word-info {
-        flex: 1;
-      }
-
-      .word-foreign {
-        font-size: 18px;
-        font-weight: 600;
-        color: var(--text-primary);
-        margin: 0 0 var(--spacing-xs) 0;
-      }
-
-      .word-translation {
-        font-size: 14px;
-        color: var(--text-secondary);
-        margin: 0;
-      }
-
-      .word-status {
-        padding: 4px 8px;
-        border-radius: 12px;
-        font-size: 12px;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-
-      .status-learning {
-        background: var(--warning-light);
-        color: var(--warning-dark);
-      }
-
-      .status-known {
-        background: var(--success-light);
-        color: var(--success-dark);
-      }
-
-      .status-weak {
-        background: var(--error-light);
-        color: var(--error-dark);
-      }
-
-      .status-strong {
-        background: var(--primary-light);
-        color: var(--primary-dark);
-      }
-
-      .progress-bar-container {
-        margin-top: var(--spacing-sm);
-      }
-
-      .progress-bar-label {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: var(--spacing-xs);
-        font-size: 12px;
-        color: var(--text-secondary);
-      }
-
-      .progress-bar {
-        width: 100%;
-        height: 8px;
-        background: var(--border-color);
-        border-radius: 4px;
-        overflow: hidden;
-      }
-
-      .progress-fill {
-        height: 100%;
-        transition: width 0.3s ease;
-      }
-
-      .progress-fill.learning {
-        background: var(--warning-color);
-      }
-
-      .progress-fill.known {
-        background: var(--success-color);
-      }
-
-      .progress-fill.weak {
-        background: var(--error-color);
-      }
-
-      .progress-fill.strong {
-        background: var(--primary-color);
       }
 
       .sessions-list {
@@ -438,11 +312,6 @@ export class ProgressSummary extends LitElement {
           grid-template-columns: repeat(2, 1fr);
         }
 
-        .words-grid {
-          max-height: none;
-          overflow-y: visible;
-        }
-
         .sessions-list {
           max-height: none;
           overflow-y: visible;
@@ -484,17 +353,6 @@ export class ProgressSummary extends LitElement {
       const allWords = await window.electronAPI.database.getAllWords(true, false, this.currentLanguage);
       this.wordCategoryStats = this.calculateWordCategoryStats(allWords);
 
-      // Load recent words with progress for current language
-      this.recentWords = allWords
-        .filter(word => word.lastStudied) // Only words that have been studied
-        .sort((a, b) => {
-          const dateA = a.lastStudied ? new Date(a.lastStudied).getTime() : 0;
-          const dateB = b.lastStudied ? new Date(b.lastStudied).getTime() : 0;
-          return dateB - dateA; // Most recent first
-        })
-        .slice(0, 12) // Show top 12 recent words
-        .map(word => this.createWordProgress(word));
-
       // Load recent study sessions
       this.recentSessions = await window.electronAPI.database.getRecentStudySessions(5);
 
@@ -527,38 +385,6 @@ export class ProgressSummary extends LitElement {
     });
 
     return stats;
-  }
-
-  private createWordProgress(word: Word): WordProgress {
-    const strength = word.strength;
-    let statusLabel: string;
-    let statusClass: string;
-    let progressPercent: number;
-
-    if (word.known) {
-      statusLabel = 'Known';
-      statusClass = 'known';
-      progressPercent = 100; // Known words always show 100% but don't display strength number
-    } else if (strength >= ProgressSummary.STRONG_THRESHOLD) {
-      statusLabel = 'Strong';
-      statusClass = 'strong';
-      progressPercent = strength;
-    } else if (strength >= ProgressSummary.WEAK_THRESHOLD) {
-      statusLabel = 'Learning';
-      statusClass = 'learning';
-      progressPercent = strength;
-    } else {
-      statusLabel = 'Weak';
-      statusClass = 'weak';
-      progressPercent = strength;
-    }
-
-    return {
-      word,
-      progressPercent,
-      statusLabel,
-      statusClass
-    };
   }
 
   private formatDate(date: Date): string {
@@ -720,54 +546,6 @@ export class ProgressSummary extends LitElement {
             </div>
           </div>
 
-          <!-- Top Right: Recent Words -->
-          ${this.recentWords.length > 0 ? html`
-            <div class="progress-section">
-              <h3 class="section-title">
-                <span class="section-icon">📚</span>
-                Recent Words
-              </h3>
-              <div class="words-grid">
-                ${this.recentWords.slice(0, 6).map(wordProgress => html`
-                  <div class="word-progress-card">
-                    <div class="word-header">
-                      <div class="word-info">
-                        <h4 class="word-foreign">${wordProgress.word.word}</h4>
-                        <p class="word-translation">${wordProgress.word.translation}</p>
-                      </div>
-                      <span class="word-status status-${wordProgress.statusClass}">
-                        ${wordProgress.statusLabel}
-                      </span>
-                    </div>
-                    ${wordProgress.word.known ? html`` : html`
-                      <div class="progress-bar-container">
-                        <div class="progress-bar-label">
-                          <span>Strength</span>
-                          <span>${wordProgress.progressPercent}%</span>
-                        </div>
-                        <div class="progress-bar">
-                          <div 
-                            class="progress-fill ${wordProgress.statusClass}"
-                            style="width: ${wordProgress.progressPercent}%"
-                          ></div>
-                        </div>
-                      </div>
-                    `}
-                  </div>
-                `)}
-              </div>
-            </div>
-          ` : html`
-            <div class="progress-section">
-              <h3 class="section-title">
-                <span class="section-icon">📚</span>
-                Recent Words
-              </h3>
-              <div class="empty-state">
-                <p>No words studied yet</p>
-              </div>
-            </div>
-          `}
         </div>
       </div>
     `;
