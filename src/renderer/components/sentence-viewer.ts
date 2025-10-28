@@ -612,8 +612,7 @@ export class SentenceViewer extends LitElement {
     }
     
     if (!wordInfo.wordData && !wordInfo.isTargetWord) {
-      // This is a new word - we could add it to the database
-      console.log('Clicked on unknown word:', wordInfo.text);
+      await this.addWordFromSentence(wordInfo);
       return;
     }
 
@@ -622,8 +621,96 @@ export class SentenceViewer extends LitElement {
     // Emit event for parent to handle word status change
     this.dispatchEvent(new CustomEvent('word-clicked', {
       detail: { word, wordText: wordInfo.text.trim() },
-      bubbles: true
+      bubbles: true,
+      composed: true
     }));
+  }
+
+  private async addWordFromSentence(wordInfo: WordInSentence): Promise<void> {
+    const rawWord = wordInfo.dictionaryForm?.trim() || wordInfo.text.trim();
+    if (!rawWord) {
+      return;
+    }
+
+    const normalized = rawWord.replace(/\s+/g, ' ');
+    const alreadyTracked = this.allWords.some(existing =>
+      existing.word.toLowerCase() === normalized.toLowerCase()
+    );
+
+    if (alreadyTracked) {
+      this.dispatchEvent(new CustomEvent('word-addition-skipped', {
+        detail: { word: normalized },
+        bubbles: true,
+        composed: true
+      }));
+      return;
+    }
+
+    let suggestedTranslation = '';
+    try {
+      const entries = await this.getDictionaryEntries(normalized, wordInfo.dictionaryKey);
+      if (entries && entries.length > 0) {
+        suggestedTranslation = entries[0].glosses?.[0] ?? '';
+      }
+    } catch (error) {
+      console.warn('Dictionary lookup failed for', normalized, error);
+    }
+
+    const translationPrompt = window.prompt(
+      `Add "${normalized}" to your learning queue.\nProvide an English translation:`,
+      suggestedTranslation
+    );
+
+    if (translationPrompt === null) {
+      return;
+    }
+
+    const translation = translationPrompt.trim() || suggestedTranslation || normalized;
+
+    try {
+      const audioPath = await window.electronAPI.audio.generateAudio(
+        normalized,
+        this.targetWord.language
+      );
+
+      const wordId = await window.electronAPI.database.insertWord({
+        word: normalized,
+        language: this.targetWord.language,
+        translation,
+        audioPath
+      });
+
+      await window.electronAPI.jobs.enqueueWordGeneration(wordId, {
+        language: this.targetWord.language,
+        desiredSentenceCount: 3
+      });
+
+      const newWord = await window.electronAPI.database.getWordById(wordId);
+      if (newWord) {
+        this.allWords = [...this.allWords, newWord];
+        this.parseSentence();
+      }
+
+      this.dispatchEvent(new CustomEvent('word-added-from-sentence', {
+        detail: {
+          wordId,
+          word: normalized,
+          translation
+        },
+        bubbles: true,
+        composed: true
+      }));
+    } catch (error) {
+      console.error('Failed to add word from sentence:', error);
+      this.dispatchEvent(new CustomEvent('word-addition-error', {
+        detail: {
+          word: normalized,
+          message: error instanceof Error ? error.message : 'Unknown error while adding word.'
+        },
+        bubbles: true,
+        composed: true
+      }));
+    }
   }
 
   private async handlePlayAudio() {

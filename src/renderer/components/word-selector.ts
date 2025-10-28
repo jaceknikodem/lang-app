@@ -35,6 +35,9 @@ export class WordSelector extends LitElement {
   @state()
   private error = '';
 
+  @state()
+  private statusMessage = '';
+
   private keyboardUnsubscribe?: () => void;
 
   static styles = [
@@ -275,6 +278,15 @@ export class WordSelector extends LitElement {
         text-align: center;
       }
 
+      .success-message {
+        color: var(--success-color);
+        background: #e8f5e9;
+        padding: var(--spacing-md);
+        border-radius: var(--border-radius);
+        border: 1px solid #c8e6c9;
+        text-align: center;
+      }
+
       .empty-state {
         text-align: center;
         color: var(--text-secondary);
@@ -412,6 +424,7 @@ export class WordSelector extends LitElement {
 
     this.isProcessing = true;
     this.error = '';
+    this.statusMessage = '';
 
     try {
       console.log('Processing', selectedWords.length, 'selected words and', knownWords.length, 'known words...');
@@ -421,6 +434,9 @@ export class WordSelector extends LitElement {
       console.log('Set current language to:', this.language);
 
       // Process known words first (simpler - no sentences needed)
+      let processedKnown = 0;
+      const failedWords: string[] = [];
+
       for (let i = 0; i < knownWords.length; i++) {
         const word = knownWords[i];
         console.log(`Processing known word ${i + 1}/${knownWords.length}: ${word.word}`);
@@ -443,14 +459,15 @@ export class WordSelector extends LitElement {
           // Mark as known immediately
           await window.electronAPI.database.markWordKnown(wordId, true);
           console.log('Known word processed:', word.word);
+          processedKnown++;
         } catch (wordError) {
           console.error(`Failed to process known word ${word.word}:`, wordError);
-          // Continue processing other words instead of stopping
+          failedWords.push(word.word);
         }
       }
 
-      // Store selected words in database and generate sentences
-      const storedWords = [];
+      // Store selected words in database and enqueue jobs for asynchronous processing
+      let queuedCount = 0;
 
       for (let i = 0; i < selectedWords.length; i++) {
         const word = selectedWords[i];
@@ -474,75 +491,48 @@ export class WordSelector extends LitElement {
             audioPath: wordAudioPath
           });
           console.log('Word inserted with ID:', wordId);
-
-          // Generate sentences for the word
-          console.log('Generating sentences for word:', word.word);
-          const sentences = await window.electronAPI.llm.generateSentences(
-            word.word,
-            this.language,
-            this.topic
-          );
-          console.log('Generated', sentences.length, 'sentences for', word.word);
-
-          // Store sentences in database with audio generation
-          for (let j = 0; j < sentences.length; j++) {
-            const sentence = sentences[j];
-            console.log(`Processing sentence ${j + 1}/${sentences.length} for ${word.word}`);
-
-            // Generate audio for the sentence
-            const audioPath = await window.electronAPI.audio.generateAudio(
-              sentence.sentence,
-              this.language,
-              word.word
-            );
-
-            await window.electronAPI.database.insertSentence(
-              wordId,
-              sentence.sentence,
-              sentence.translation,
-              audioPath,
-              sentence.contextBefore,
-              sentence.contextAfter,
-              sentence.contextBeforeTranslation,
-              sentence.contextAfterTranslation
-            );
-          }
-
-          // Get the complete word data
-          const completeWord = await window.electronAPI.database.getWordById(wordId);
-          if (completeWord) {
-            storedWords.push(completeWord);
-            console.log('Word processing complete:', word.word);
-          } else {
-            console.warn('Failed to retrieve complete word data for:', word.word);
-          }
+          await window.electronAPI.jobs.enqueueWordGeneration(wordId, {
+            language: this.language,
+            topic: this.topic,
+            desiredSentenceCount: 3
+          });
+          queuedCount++;
+          console.log('Enqueued word for asynchronous processing:', word.word);
         } catch (wordError) {
           console.error(`Failed to process word ${word.word}:`, wordError);
-          throw wordError; // Re-throw to stop processing
+          failedWords.push(word.word);
         }
       }
-
-      console.log('All words processed successfully. Stored', storedWords.length, 'words for learning and', knownWords.length, 'known words.');
 
       // Update session with topic
       if (this.topic) {
         sessionManager.updateSelectedTopic(this.topic);
       }
 
-      if (storedWords.length > 0) {
-        console.log('Navigating to learning mode...');
-
-        // Small delay to ensure database operations are fully committed
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        // Navigate to learning mode with the specific words that were just processed
-        router.goToLearning(storedWords);
-      } else {
-        // All words were marked as known, go back to topic selection
-        console.log('All words marked as known, returning to topic selection...');
-        router.goToTopicSelection();
+      if (queuedCount === 0 && processedKnown === 0) {
+        throw new Error(failedWords.length ? `Failed to process: ${failedWords.join(', ')}` : 'No words were processed. Please try again.');
       }
 
+      const messageParts: string[] = [];
+      if (queuedCount > 0) {
+        messageParts.push(`${queuedCount} ${queuedCount === 1 ? 'word' : 'words'} queued for review`);
+      }
+      if (processedKnown > 0) {
+        messageParts.push(`${processedKnown} ${processedKnown === 1 ? 'word' : 'words'} saved as known`);
+      }
+      this.statusMessage = `${messageParts.join(' • ')}${queuedCount > 0 ? '. Sentences will appear in Review soon.' : '.'}`;
+
+      if (failedWords.length > 0) {
+        this.error = `Unable to process: ${failedWords.join(', ')}`;
+      }
+
+      if (queuedCount > 0) {
+        // Small delay to ensure database operations are fully committed
+        await new Promise(resolve => setTimeout(resolve, 100));
+        router.goToLearning();
+      } else {
+        router.goToTopicSelection();
+      }
     } catch (error) {
       console.error('Failed to process selected words:', error);
       this.error = error instanceof Error ? error.message : 'Failed to process selected words. Please try again.';
@@ -658,6 +648,12 @@ export class WordSelector extends LitElement {
         ${this.error ? html`
           <div class="error-message">
             ${this.error}
+          </div>
+        ` : ''}
+
+        ${this.statusMessage ? html`
+          <div class="success-message">
+            ${this.statusMessage}
           </div>
         ` : ''}
       </div>

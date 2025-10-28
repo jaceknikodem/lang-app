@@ -4,6 +4,23 @@
 
 import { Word, Sentence, StudyStats, CreateWordRequest, DictionaryEntry } from './core.js';
 
+export type WordProcessingStatus = 'queued' | 'processing' | 'ready' | 'failed';
+export type WordGenerationJobStatus = 'queued' | 'processing' | 'completed' | 'failed';
+
+export interface WordGenerationJob {
+  id: number;
+  wordId: number;
+  language: string;
+  topic?: string;
+  desiredSentenceCount: number;
+  status: WordGenerationJobStatus;
+  attempts: number;
+  lastError?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  startedAt?: Date;
+}
+
 export interface DatabaseLayer {
   // Word management
   insertWord(word: CreateWordRequest): Promise<number>;
@@ -44,7 +61,16 @@ export interface DatabaseLayer {
   }>;
   
   // Sentence management
-  insertSentence(wordId: number, sentence: string, translation: string, audioPath: string): Promise<number>;
+  insertSentence(
+    wordId: number,
+    sentence: string,
+    translation: string,
+    audioPath: string,
+    contextBefore?: string,
+    contextAfter?: string,
+    contextBeforeTranslation?: string,
+    contextAfterTranslation?: string
+  ): Promise<number>;
   getSentencesByWord(wordId: number): Promise<Sentence[]>;
   getSentenceById(sentenceId: number): Promise<Sentence | null>;
   deleteSentence(sentenceId: number): Promise<void>;
@@ -69,7 +95,18 @@ export interface DatabaseLayer {
   getAvailableLanguages(): Promise<string[]>;
   getLanguageStats(): Promise<Array<{language: string, totalWords: number, studiedWords: number}>>;
   lookupDictionary(word: string, language?: string): Promise<DictionaryEntry[]>;
-  
+  updateWordProcessingStatus(wordId: number, status: WordProcessingStatus): Promise<void>;
+  getWordProcessingInfo(wordId: number): Promise<{ processingStatus: WordProcessingStatus; sentenceCount: number } | null>;
+  getWordGenerationQueueSummary(): Promise<{ queued: number; processing: number; failed: number }>;
+
+  // Word generation queue
+  enqueueWordGeneration(wordId: number, language: string, topic?: string, desiredSentenceCount?: number): Promise<void>;
+  getNextWordGenerationJob(): Promise<WordGenerationJob | null>;
+  markWordGenerationJobProcessing(jobId: number): Promise<void>;
+  rescheduleWordGenerationJob(jobId: number, delayMs: number, lastError?: string): Promise<void>;
+  completeWordGenerationJob(jobId: number): Promise<void>;
+  failWordGenerationJob(jobId: number, error: string): Promise<void>;
+
   // Database lifecycle
   initialize(): Promise<void>;
   close(): Promise<void>;

@@ -18,7 +18,16 @@ declare global {
         getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
         getWordsWithSentencesOrderedByStrength: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
         getRecentStudySessions: (limit?: number) => Promise<Array<{id: number, wordsStudied: number, whenStudied: Date}>>;
-        insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string) => Promise<number>;
+        insertSentence: (
+          wordId: number,
+          sentence: string,
+          translation: string,
+          audioPath: string,
+          contextBefore?: string,
+          contextAfter?: string,
+          contextBeforeTranslation?: string,
+          contextAfterTranslation?: string
+        ) => Promise<number>;
         getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
         deleteSentence: (sentenceId: number) => Promise<void>;
         updateLastStudied: (wordId: number) => Promise<void>;
@@ -39,6 +48,20 @@ declare global {
         generateAudio: (text: string, language: string, word?: string) => Promise<string>;
         playAudio: (audioPath: string) => Promise<void>;
         audioExists: (audioPath: string) => Promise<boolean>;
+      };
+      jobs: {
+        enqueueWordGeneration: (
+          wordId: number,
+          options?: { language?: string; topic?: string; desiredSentenceCount?: number }
+        ) => Promise<void>;
+        getWordStatus: (wordId: number) => Promise<{
+          processingStatus: 'queued' | 'processing' | 'ready' | 'failed';
+          sentenceCount: number;
+        } | null>;
+        getQueueSummary: () => Promise<{ queued: number; processing: number; failed: number }>;
+        onWordUpdated: (
+          callback: (payload: { wordId: number; processingStatus: 'queued' | 'processing' | 'ready' | 'failed'; sentenceCount: number }) => void
+        ) => () => void;
       };
       quiz: {
         getWeakestWords: (limit: number) => Promise<Word[]>;

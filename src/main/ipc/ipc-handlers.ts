@@ -58,6 +58,9 @@ export function setupIPCHandlers(
   // SRS handlers
   setupSRSHandlers(srsService);
 
+  // Background job handlers
+  setupJobHandlers(databaseLayer);
+
   // Lifecycle handlers
   if (lifecycleManager && updateManager) {
     setupLifecycleHandlers(lifecycleManager, updateManager);
@@ -961,6 +964,62 @@ function setupSRSHandlers(srsService: SRSService): void {
 }
 
 /**
+ * Set up word generation job queue handlers
+ */
+function setupJobHandlers(databaseLayer: SQLiteDatabaseLayer): void {
+  const EnqueueOptionsSchema = z.object({
+    topic: TopicSchema.optional(),
+    language: LanguageSchema.optional(),
+    desiredSentenceCount: z.number().int().min(1).max(10).optional()
+  }).optional();
+
+  ipcMain.handle(IPC_CHANNELS.JOBS.ENQUEUE_WORD_GENERATION, async (event, wordId, options) => {
+    try {
+      const validatedWordId = WordIdSchema.parse(wordId);
+      const validatedOptions = EnqueueOptionsSchema.parse(options);
+
+      let language = validatedOptions?.language;
+      if (!language) {
+        const word = await databaseLayer.getWordById(validatedWordId);
+        if (!word) {
+          throw new Error(`Word with ID ${validatedWordId} not found`);
+        }
+        language = word.language;
+      }
+
+      await databaseLayer.enqueueWordGeneration(
+        validatedWordId,
+        language,
+        validatedOptions?.topic,
+        validatedOptions?.desiredSentenceCount ?? 3
+      );
+    } catch (error) {
+      console.error('Error enqueueing word generation:', error);
+      throw new Error(`Failed to enqueue word generation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.JOBS.GET_WORD_STATUS, async (event, wordId) => {
+    try {
+      const validatedWordId = WordIdSchema.parse(wordId);
+      return await databaseLayer.getWordProcessingInfo(validatedWordId);
+    } catch (error) {
+      console.error('Error getting word processing status:', error);
+      throw new Error(`Failed to get word status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.JOBS.GET_QUEUE_SUMMARY, async () => {
+    try {
+      return await databaseLayer.getWordGenerationQueueSummary();
+    } catch (error) {
+      console.error('Error getting queue summary:', error);
+      throw new Error(`Failed to get queue summary: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+}
+
+/**
  * Set up lifecycle-related IPC handlers
  */
 function setupLifecycleHandlers(lifecycleManager: LifecycleManager, updateManager: UpdateManager): void {
@@ -1070,6 +1129,10 @@ export function cleanupIPCHandlers(): void {
   });
 
   Object.values(IPC_CHANNELS.SRS).forEach(channel => {
+    ipcMain.removeAllListeners(channel);
+  });
+
+  Object.values(IPC_CHANNELS.JOBS).forEach(channel => {
     ipcMain.removeAllListeners(channel);
   });
 

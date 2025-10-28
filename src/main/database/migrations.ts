@@ -182,6 +182,37 @@ export class MigrationManager {
         down: [
           // SQLite does not support dropping columns; leave them in place on rollback.
         ]
+      },
+      {
+        version: 8,
+        name: 'add_word_generation_queue',
+        up: [
+          `ALTER TABLE words ADD COLUMN processing_status TEXT DEFAULT 'ready'`,
+          `ALTER TABLE words ADD COLUMN sentence_count INTEGER DEFAULT 0`,
+          `UPDATE words SET processing_status = 'ready' WHERE processing_status IS NULL`,
+          `UPDATE words SET sentence_count = (
+            SELECT COUNT(*) FROM sentences WHERE sentences.word_id = words.id
+          )`,
+          `CREATE TABLE IF NOT EXISTS word_generation_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            word_id INTEGER NOT NULL UNIQUE REFERENCES words(id) ON DELETE CASCADE,
+            language TEXT NOT NULL,
+            topic TEXT,
+            desired_sentence_count INTEGER NOT NULL DEFAULT 3,
+            status TEXT NOT NULL DEFAULT 'queued',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            started_at DATETIME
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_word_generation_queue_status ON word_generation_queue(status, updated_at)`
+        ],
+        down: [
+          `DROP INDEX IF EXISTS idx_word_generation_queue_status`,
+          `DROP TABLE IF EXISTS word_generation_queue`
+          // processing_status and sentence_count columns remain in words table on rollback
+        ]
       }
     ];
   }

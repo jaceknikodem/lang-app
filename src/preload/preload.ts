@@ -180,6 +180,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.FREQUENCY.GET_AVAILABLE_LANGUAGES)
   },
 
+  jobs: {
+    enqueueWordGeneration: (
+      wordId: number,
+      options?: { language?: string; topic?: string; desiredSentenceCount?: number }
+    ) => ipcRenderer.invoke(IPC_CHANNELS.JOBS.ENQUEUE_WORD_GENERATION, wordId, options),
+    getWordStatus: (wordId: number) => 
+      ipcRenderer.invoke(IPC_CHANNELS.JOBS.GET_WORD_STATUS, wordId),
+    getQueueSummary: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.JOBS.GET_QUEUE_SUMMARY),
+    onWordUpdated: (
+      callback: (payload: { wordId: number; processingStatus: 'queued' | 'processing' | 'ready' | 'failed'; sentenceCount: number }) => void
+    ) => {
+      const channel = IPC_CHANNELS.JOBS.WORD_UPDATED;
+      const listener = (_event: Electron.IpcRendererEvent, payload: { wordId: number; processingStatus: 'queued' | 'processing' | 'ready' | 'failed'; sentenceCount: number }) => {
+        callback(payload);
+      };
+      ipcRenderer.on(channel, listener);
+      return () => {
+        ipcRenderer.removeListener(channel, listener);
+      };
+    }
+  },
+
   // SRS operations
   srs: {
     processReview: (wordId: number, recall: 0 | 1 | 2 | 3) => 
@@ -305,6 +328,20 @@ declare global {
           percentComplete: number;
         }>;
         getAvailableLanguages: () => Promise<string[]>;
+      };
+      jobs: {
+        enqueueWordGeneration: (
+          wordId: number,
+          options?: { language?: string; topic?: string; desiredSentenceCount?: number }
+        ) => Promise<void>;
+        getWordStatus: (wordId: number) => Promise<{
+          processingStatus: 'queued' | 'processing' | 'ready' | 'failed';
+          sentenceCount: number;
+        } | null>;
+        getQueueSummary: () => Promise<{ queued: number; processing: number; failed: number }>;
+        onWordUpdated: (
+          callback: (payload: { wordId: number; processingStatus: 'queued' | 'processing' | 'ready' | 'failed'; sentenceCount: number }) => void
+        ) => () => void;
       };
       srs: {
         processReview: (wordId: number, recall: 0 | 1 | 2 | 3) => Promise<void>;

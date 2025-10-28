@@ -50,9 +50,22 @@ export class LearningMode extends LitElement {
   @state()
   private sessionSummary: SessionSummary | null = null;
 
+  @state()
+  private queueSummary: { queued: number; processing: number; failed: number } = { queued: 0, processing: 0, failed: 0 };
+
+  @state()
+  private infoMessage = '';
+
+  @state()
+  private infoMessageType: 'info' | 'success' | 'error' = 'info';
+
   private sessionStartTime = Date.now();
   private keyboardUnsubscribe?: () => void;
   private lastRecordedSentenceId: number | null = null;
+  private queueIntervalId: number | undefined;
+  private jobListenerCleanup?: () => void;
+  private infoTimeoutId: number | undefined;
+  private isReloadingFromQueue = false;
 
   static styles = [
     sharedStyles,
@@ -67,6 +80,42 @@ export class LearningMode extends LitElement {
         display: flex;
         flex-direction: column;
         gap: var(--spacing-md);
+      }
+
+      .queue-status {
+        background: var(--background-secondary);
+        padding: var(--spacing-sm);
+        border-radius: var(--border-radius);
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+
+      .queue-status .queue-warning {
+        color: var(--error-color);
+        font-weight: 600;
+        margin-left: var(--spacing-sm);
+      }
+
+      .info-banner {
+        padding: var(--spacing-sm);
+        border-radius: var(--border-radius);
+        font-size: 13px;
+        margin-bottom: var(--spacing-sm);
+      }
+
+      .info-banner.info {
+        background: #e3f2fd;
+        color: #0d47a1;
+      }
+
+      .info-banner.success {
+        background: #e8f5e9;
+        color: #2e7d32;
+      }
+
+      .info-banner.error {
+        background: #ffebee;
+        color: #c62828;
       }
 
       .learning-header {
@@ -247,6 +296,8 @@ export class LearningMode extends LitElement {
     
     // Try to restore learning session from session manager (after words are loaded)
     this.restoreSessionProgress();
+
+    this.startJobMonitoring();
   }
 
   disconnectedCallback() {
@@ -256,6 +307,9 @@ export class LearningMode extends LitElement {
     if (this.keyboardUnsubscribe) {
       this.keyboardUnsubscribe();
     }
+
+    this.stopJobMonitoring();
+    this.clearInfoTimeout();
   }
 
   private async loadAllWords() {
@@ -346,6 +400,118 @@ export class LearningMode extends LitElement {
       this.error = 'Failed to load learning content. Please try again.';
     } finally {
       this.isLoading = false;
+    }
+  }
+
+  private startJobMonitoring(): void {
+    if (!window.electronAPI?.jobs) {
+      return;
+    }
+
+    void this.refreshQueueSummary();
+
+    this.queueIntervalId = window.setInterval(() => {
+      void this.refreshQueueSummary();
+    }, 5000);
+
+    this.jobListenerCleanup = window.electronAPI.jobs.onWordUpdated(update => {
+      void this.handleJobStatusUpdate(update);
+    });
+  }
+
+  private stopJobMonitoring(): void {
+    if (this.queueIntervalId !== undefined) {
+      window.clearInterval(this.queueIntervalId);
+      this.queueIntervalId = undefined;
+    }
+
+    if (this.jobListenerCleanup) {
+      this.jobListenerCleanup();
+      this.jobListenerCleanup = undefined;
+    }
+  }
+
+  private async refreshQueueSummary(): Promise<void> {
+    if (!window.electronAPI?.jobs) {
+      return;
+    }
+
+    try {
+      const summary = await window.electronAPI.jobs.getQueueSummary();
+      this.queueSummary = summary;
+    } catch (error) {
+      console.warn('Failed to refresh queue summary:', error);
+    }
+  }
+
+  private async handleJobStatusUpdate(update: { wordId: number; processingStatus: 'queued' | 'processing' | 'ready' | 'failed'; sentenceCount: number }): Promise<void> {
+    await this.refreshQueueSummary();
+
+    if (update.processingStatus === 'ready') {
+      try {
+        const word = await window.electronAPI.database.getWordById(update.wordId);
+        if (word) {
+          this.showInfo(`"${word.word}" is ready for review.`, 'success');
+          this.allWords = [...this.allWords.filter(existing => existing.id !== word.id), word];
+        } else {
+          this.showInfo('A queued word is ready for review.', 'success');
+        }
+      } catch (error) {
+        console.error('Unable to fetch word after job completion:', error);
+        this.showInfo('A queued word is ready for review.', 'success');
+      }
+
+      void this.reloadWordsFromDatabase();
+    } else if (update.processingStatus === 'failed') {
+      this.showInfo('Sentence generation failed for a word. Please retry from the queue.', 'error');
+    }
+  }
+
+  private async reloadWordsFromDatabase(): Promise<void> {
+    if (this.isReloadingFromQueue) {
+      return;
+    }
+
+    this.isReloadingFromQueue = true;
+
+    if (this.isLoading) {
+      this.isReloadingFromQueue = false;
+      window.setTimeout(() => void this.reloadWordsFromDatabase(), 500);
+      return;
+    }
+
+    try {
+      await this.loadAllWords();
+
+      const routeData = router.getRouteData<{ specificWords?: Word[] }>();
+      const hasSpecificWords = Boolean(routeData?.specificWords && routeData.specificWords.length > 0);
+
+      if (!hasSpecificWords) {
+        await this.loadSelectedWords();
+      }
+
+      await this.loadWordsAndSentences();
+    } catch (error) {
+      console.error('Failed to reload learning content after queue update:', error);
+    } finally {
+      this.isReloadingFromQueue = false;
+    }
+  }
+
+  private showInfo(message: string, type: 'info' | 'success' | 'error' = 'info', duration = 4000): void {
+    this.infoMessage = message;
+    this.infoMessageType = type;
+    this.clearInfoTimeout();
+    this.infoTimeoutId = window.setTimeout(() => {
+      this.infoMessage = '';
+      this.infoTimeoutId = undefined;
+    }, duration);
+  }
+
+  private clearInfoTimeout(): void {
+    if (this.infoTimeoutId !== undefined) {
+      window.clearTimeout(this.infoTimeoutId);
+      this.infoTimeoutId = undefined;
     }
   }
 
@@ -828,6 +994,33 @@ export class LearningMode extends LitElement {
     this.currentSentenceIndex = sIndex;
   }
 
+  private async handleWordAddedFromSentence(event: CustomEvent<{ wordId: number; word: string; translation: string }>): Promise<void> {
+    const { wordId, word } = event.detail;
+    this.showInfo(`Queued "${word}" for review.`, 'success');
+    await this.refreshQueueSummary();
+
+    try {
+      const newWord = await window.electronAPI.database.getWordById(wordId);
+      if (newWord) {
+        this.allWords = [...this.allWords.filter(existing => existing.id !== newWord.id), newWord];
+      } else {
+        await this.loadAllWords();
+      }
+    } catch (error) {
+      console.error('Failed to load newly added word:', error);
+    }
+  }
+
+  private handleWordAdditionError(event: CustomEvent<{ word: string; message: string }>): void {
+    const { word, message } = event.detail;
+    this.showInfo(`Failed to add "${word}": ${message}`, 'error');
+  }
+
+  private handleWordAdditionSkipped(event: CustomEvent<{ word: string }>): void {
+    const { word } = event.detail;
+    this.showInfo(`"${word}" is already in your vocabulary.`, 'info', 3000);
+  }
+
   private async incrementStrengthForWord(wordId: number): Promise<void> {
     const word = this.wordsWithSentences.find(w => w.id === wordId);
     if (!word) {
@@ -884,6 +1077,32 @@ export class LearningMode extends LitElement {
 
   private handleBackToSelection() {
     router.goToTopicSelection();
+  }
+
+  private renderQueueStatus() {
+    const { queued, processing, failed } = this.queueSummary;
+    const pending = queued + processing;
+
+    if (pending === 0 && failed === 0) {
+      return null;
+    }
+
+    return html`
+      <div class="queue-status">
+        ${pending > 0 ? html`
+          <span>
+            Generating sentences for ${pending} ${pending === 1 ? 'word' : 'words'}
+            ${processing ? ` (${processing} running)` : ''}
+            ${queued ? ` (${queued} queued)` : ''}
+          </span>
+        ` : ''}
+        ${failed > 0 ? html`
+          <span class="queue-warning">
+            ${failed} ${failed === 1 ? 'job has' : 'jobs have'} errors
+          </span>
+        ` : ''}
+      </div>
+    `;
   }
 
   render() {
@@ -972,6 +1191,14 @@ export class LearningMode extends LitElement {
           </p>
         </div>
 
+        ${this.renderQueueStatus()}
+
+        ${this.infoMessage ? html`
+          <div class="info-banner ${this.infoMessageType}">
+            ${this.infoMessage}
+          </div>
+        ` : ''}
+
         <div class="progress-section">
           <div class="progress-info">
             <div class="progress-text">
@@ -999,6 +1226,9 @@ export class LearningMode extends LitElement {
           @remove-sentence=${this.handleRemoveCurrentSentence}
           @sentence-audio-played=${this.handleSentenceAudioPlayed}
           @sentence-audio-regenerated=${this.handleSentenceAudioRegenerated}
+          @word-added-from-sentence=${this.handleWordAddedFromSentence}
+          @word-addition-error=${this.handleWordAdditionError}
+          @word-addition-skipped=${this.handleWordAdditionSkipped}
         ></sentence-viewer>
 
         <div class="navigation-section">

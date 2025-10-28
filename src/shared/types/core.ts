@@ -24,6 +24,8 @@ export interface Word {
   fsrsLapses?: number;
   fsrsLastRating?: number;
   fsrsVersion?: string;
+  processingStatus?: 'queued' | 'processing' | 'ready' | 'failed';
+  sentenceCount?: number;
 }
 
 export interface DictionaryEntry {

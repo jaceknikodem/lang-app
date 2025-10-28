@@ -3,6 +3,7 @@
  */
 
 import { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest, DictionaryEntry } from './core.js';
+import { WordProcessingStatus } from './database.js';
 import { RecordingOptions, RecordingSession, TranscriptionOptions, TranscriptionResult, TranscriptionComparison } from './audio.js';
 
 export interface IPCBridge {
@@ -88,6 +89,22 @@ export interface IPCBridge {
       percentComplete: number;
     }>;
     getAvailableLanguages: () => Promise<string[]>;
+  };
+
+  jobs: {
+    enqueueWordGeneration: (
+      wordId: number,
+      options?: {
+        language?: string;
+        topic?: string;
+        desiredSentenceCount?: number;
+      }
+    ) => Promise<void>;
+    getWordStatus: (wordId: number) => Promise<{ processingStatus: WordProcessingStatus; sentenceCount: number } | null>;
+    getQueueSummary: () => Promise<{ queued: number; processing: number; failed: number }>;
+    onWordUpdated: (
+      callback: (payload: { wordId: number; processingStatus: WordProcessingStatus; sentenceCount: number }) => void
+    ) => () => void;
   };
 
   // Audio operations
@@ -236,5 +253,11 @@ export const IPC_CHANNELS = {
     RESET_WORD_PROGRESS: 'srs:resetWordProgress',
     GET_OVERDUE_WORDS: 'srs:getOverdueWords',
     INITIALIZE_EXISTING_WORDS: 'srs:initializeExistingWords'
+  },
+  JOBS: {
+    ENQUEUE_WORD_GENERATION: 'jobs:enqueueWordGeneration',
+    GET_WORD_STATUS: 'jobs:getWordStatus',
+    GET_QUEUE_SUMMARY: 'jobs:getQueueSummary',
+    WORD_UPDATED: 'jobs:word-updated'
   }
 } as const;

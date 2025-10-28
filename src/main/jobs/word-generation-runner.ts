@@ -1,0 +1,216 @@
+import { DatabaseLayer, WordGenerationJob, WordProcessingStatus } from '../../shared/types/database.js';
+import { ContentGenerator } from '../llm/content-generator.js';
+import { AudioService } from '../audio/audio-service.js';
+
+export interface WordGenerationRunnerOptions {
+  database: DatabaseLayer;
+  contentGenerator: ContentGenerator;
+  audioService: AudioService;
+  pollIntervalMs?: number;
+  maxAttempts?: number;
+  retryBackoffMs?: number;
+  desiredSentenceCount?: number;
+  onWordUpdated?: (payload: {
+    wordId: number;
+    processingStatus: WordProcessingStatus;
+    sentenceCount: number;
+  }) => void;
+}
+
+export class WordGenerationRunner {
+  private readonly database: DatabaseLayer;
+  private readonly contentGenerator: ContentGenerator;
+  private readonly audioService: AudioService;
+  private readonly pollIntervalMs: number;
+  private readonly maxAttempts: number;
+  private readonly retryBackoffMs: number;
+  private readonly defaultSentenceCount: number;
+  private readonly onWordUpdated?: WordGenerationRunnerOptions['onWordUpdated'];
+
+  private running = false;
+  private loopPromise: Promise<void> | null = null;
+
+  constructor(options: WordGenerationRunnerOptions) {
+    this.database = options.database;
+    this.contentGenerator = options.contentGenerator;
+    this.audioService = options.audioService;
+    this.pollIntervalMs = options.pollIntervalMs ?? 3000;
+    this.maxAttempts = options.maxAttempts ?? 3;
+    this.retryBackoffMs = options.retryBackoffMs ?? 2000;
+    this.defaultSentenceCount = options.desiredSentenceCount ?? 3;
+    this.onWordUpdated = options.onWordUpdated;
+  }
+
+  start(): void {
+    if (this.running) {
+      return;
+    }
+
+    this.running = true;
+    this.loopPromise = this.runLoop();
+  }
+
+  async stop(): Promise<void> {
+    this.running = false;
+    if (this.loopPromise) {
+      await this.loopPromise;
+      this.loopPromise = null;
+    }
+  }
+
+  private async runLoop(): Promise<void> {
+    while (this.running) {
+      try {
+        const job = await this.database.getNextWordGenerationJob();
+
+        if (!job) {
+          await this.delay(this.pollIntervalMs);
+          continue;
+        }
+
+        await this.handleJob(job);
+      } catch (error) {
+        console.error('WordGenerationRunner loop error:', error);
+        await this.delay(this.pollIntervalMs);
+      }
+    }
+  }
+
+  private async handleJob(job: WordGenerationJob): Promise<void> {
+    const attemptNumber = job.attempts + 1;
+
+    try {
+      await this.database.markWordGenerationJobProcessing(job.id);
+      await this.database.updateWordProcessingStatus(job.wordId, 'processing');
+      await this.emitWordUpdate(job.wordId);
+
+      const word = await this.database.getWordById(job.wordId);
+      if (!word) {
+        await this.database.completeWordGenerationJob(job.id);
+        await this.database.updateWordProcessingStatus(job.wordId, 'ready');
+        await this.emitWordUpdate(job.wordId);
+        return;
+      }
+
+      const language = job.language || word.language;
+      await this.ensureSentenceAudio(word.id, language, word.word);
+
+      const desiredCount = job.desiredSentenceCount ?? this.defaultSentenceCount;
+      const existingSentences = await this.database.getSentencesByWord(word.id);
+      const normalizedExisting = new Set(existingSentences.map(sentence => this.normalizeSentence(sentence.sentence)));
+      let totalSentences = existingSentences.length;
+
+      if (totalSentences < desiredCount) {
+        const needed = desiredCount - totalSentences;
+        const generatedSentences = await this.contentGenerator.generateWordSentences(
+          word.word,
+          language,
+          needed,
+          this.database,
+          job.topic
+        );
+
+        for (const sentence of generatedSentences) {
+          const normalizedSentence = this.normalizeSentence(sentence.sentence);
+          if (!normalizedSentence || normalizedExisting.has(normalizedSentence)) {
+            continue;
+          }
+
+          const audioPath = await this.audioService.generateSentenceAudio(sentence.sentence, language, word.word);
+          await this.database.insertSentence(
+            word.id,
+            sentence.sentence,
+            sentence.translation,
+            audioPath,
+            sentence.contextBefore,
+            sentence.contextAfter,
+            sentence.contextBeforeTranslation,
+            sentence.contextAfterTranslation
+          );
+
+          normalizedExisting.add(normalizedSentence);
+          totalSentences += 1;
+
+          if (totalSentences >= desiredCount) {
+            break;
+          }
+        }
+      }
+
+      const processingInfo = await this.database.getWordProcessingInfo(word.id);
+      if (!processingInfo || processingInfo.sentenceCount < desiredCount) {
+        const sentenceTotal = processingInfo?.sentenceCount ?? 0;
+        throw new Error(`Sentence generation incomplete. Have ${sentenceTotal}, wanted ${desiredCount}.`);
+      }
+
+      await this.database.updateWordProcessingStatus(word.id, 'ready');
+      await this.database.completeWordGenerationJob(job.id);
+      await this.emitWordUpdate(word.id);
+    } catch (error) {
+      console.error(`WordGenerationRunner failed for job ${job.id} (attempt ${attemptNumber}):`, error);
+      await this.handleJobFailure(job, attemptNumber, error as Error);
+    }
+  }
+
+  private async handleJobFailure(job: WordGenerationJob, attemptNumber: number, error: Error): Promise<void> {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+
+    if (attemptNumber < this.maxAttempts) {
+      const delayMs = this.retryBackoffMs * attemptNumber;
+      await this.database.rescheduleWordGenerationJob(job.id, delayMs, message);
+      await this.database.updateWordProcessingStatus(job.wordId, 'queued');
+    } else {
+      await this.database.failWordGenerationJob(job.id, message);
+      await this.database.updateWordProcessingStatus(job.wordId, 'failed');
+    }
+
+    await this.emitWordUpdate(job.wordId);
+  }
+
+  private async ensureSentenceAudio(wordId: number, language: string, wordText: string): Promise<void> {
+    const sentences = await this.database.getSentencesByWord(wordId);
+
+    for (const sentence of sentences) {
+      if (sentence.audioPath) {
+        continue;
+      }
+
+      try {
+        const audioPath = await this.audioService.generateSentenceAudio(sentence.sentence, language, wordText);
+        await this.database.updateSentenceAudioPath(sentence.id, audioPath);
+      } catch (error) {
+        console.warn(`Failed to generate audio for existing sentence ${sentence.id}:`, error);
+      }
+    }
+  }
+
+  private async emitWordUpdate(wordId: number): Promise<void> {
+    if (!this.onWordUpdated) {
+      return;
+    }
+
+    try {
+      const info = await this.database.getWordProcessingInfo(wordId);
+      if (info) {
+        this.onWordUpdated({
+          wordId,
+          processingStatus: info.processingStatus,
+          sentenceCount: info.sentenceCount
+        });
+      }
+    } catch (error) {
+      console.warn(`Failed to emit word update for word ${wordId}:`, error);
+    }
+  }
+
+  private normalizeSentence(sentence: string): string {
+    return sentence
+      .trim()
+      .replace(/\s+/g, ' ')
+      .toLowerCase();
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}

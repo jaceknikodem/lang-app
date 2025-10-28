@@ -5,7 +5,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import { promises as fsPromises } from 'fs';
-import { DatabaseLayer, DatabaseConfig } from '../../shared/types/database.js';
+import { DatabaseLayer, DatabaseConfig, WordGenerationJob, WordGenerationJobStatus, WordProcessingStatus } from '../../shared/types/database.js';
 import { Word, Sentence, StudyStats, CreateWordRequest, DictionaryEntry } from '../../shared/types/core.js';
 import { DatabaseConnection } from './connection.js';
 import { MigrationManager } from './migrations.js';
@@ -399,6 +399,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         contextBeforeTranslation || null,
         contextAfterTranslation || null
       );
+
+      db.prepare(`
+        UPDATE words 
+        SET sentence_count = sentence_count + 1
+        WHERE id = ?
+      `).run(wordId);
       
       return result.lastInsertRowid as number;
     } catch (error) {
@@ -493,11 +499,23 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
+      const sentence = db.prepare('SELECT word_id FROM sentences WHERE id = ?').get(sentenceId) as { word_id: number } | undefined;
       const stmt = db.prepare('DELETE FROM sentences WHERE id = ?');
       const result = stmt.run(sentenceId);
       
       if (result.changes === 0) {
         throw new Error(`Sentence with ID ${sentenceId} not found`);
+      }
+
+      if (sentence?.word_id) {
+        db.prepare(`
+          UPDATE words 
+          SET sentence_count = CASE 
+            WHEN sentence_count > 0 THEN sentence_count - 1 
+            ELSE 0 
+          END
+          WHERE id = ?
+        `).run(sentence.word_id);
       }
     } catch (error) {
       throw new Error(`Failed to delete sentence: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -799,6 +817,181 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       }));
     } catch (error) {
       throw new Error(`Failed to lookup dictionary entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateWordProcessingStatus(wordId: number, status: WordProcessingStatus): Promise<void> {
+    const db = this.getDb();
+
+    try {
+      const stmt = db.prepare(`
+        UPDATE words
+        SET processing_status = ?
+        WHERE id = ?
+      `);
+      stmt.run(status, wordId);
+    } catch (error) {
+      throw new Error(`Failed to update word processing status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getWordProcessingInfo(wordId: number): Promise<{ processingStatus: WordProcessingStatus; sentenceCount: number } | null> {
+    const db = this.getDb();
+
+    try {
+      const stmt = db.prepare(`
+        SELECT processing_status, sentence_count
+        FROM words
+        WHERE id = ?
+      `);
+
+      const row = stmt.get(wordId) as { processing_status: WordProcessingStatus; sentence_count: number } | undefined;
+      return row
+        ? { processingStatus: row.processing_status ?? 'ready', sentenceCount: row.sentence_count ?? 0 }
+        : null;
+    } catch (error) {
+      throw new Error(`Failed to get word processing info: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getWordGenerationQueueSummary(): Promise<{ queued: number; processing: number; failed: number }> {
+    const db = this.getDb();
+
+    try {
+      const rows = db.prepare(`
+        SELECT status, COUNT(*) as total
+        FROM word_generation_queue
+        GROUP BY status
+      `).all() as Array<{ status: string; total: number }>;
+
+      return rows.reduce(
+        (acc, row) => {
+          if (row.status === 'queued') acc.queued += row.total;
+          if (row.status === 'processing') acc.processing += row.total;
+          if (row.status === 'failed') acc.failed += row.total;
+          return acc;
+        },
+        { queued: 0, processing: 0, failed: 0 }
+      );
+    } catch (error) {
+      throw new Error(`Failed to get queue summary: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async enqueueWordGeneration(wordId: number, language: string, topic?: string, desiredSentenceCount: number = 3): Promise<void> {
+    const db = this.getDb();
+
+    try {
+      const stmt = db.prepare(`
+        INSERT INTO word_generation_queue (
+          word_id, language, topic, desired_sentence_count, status, attempts, last_error, created_at, updated_at, started_at
+        )
+        VALUES (?, ?, ?, ?, 'queued', 0, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL)
+        ON CONFLICT(word_id) DO UPDATE SET
+          language = excluded.language,
+          topic = excluded.topic,
+          desired_sentence_count = excluded.desired_sentence_count,
+          status = 'queued',
+          attempts = 0,
+          last_error = NULL,
+          updated_at = CURRENT_TIMESTAMP,
+          started_at = NULL
+      `);
+
+      stmt.run(wordId, language, topic || null, desiredSentenceCount);
+
+      await this.updateWordProcessingStatus(wordId, 'queued');
+    } catch (error) {
+      throw new Error(`Failed to enqueue word generation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getNextWordGenerationJob(): Promise<WordGenerationJob | null> {
+    const db = this.getDb();
+
+    try {
+      const row = db.prepare(`
+        SELECT * FROM word_generation_queue
+        WHERE status = 'queued'
+        ORDER BY updated_at ASC, created_at ASC
+        LIMIT 1
+      `).get() as any | undefined;
+
+      return row ? this.mapRowToWordGenerationJob(row) : null;
+    } catch (error) {
+      throw new Error(`Failed to get next word generation job: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async markWordGenerationJobProcessing(jobId: number): Promise<void> {
+    const db = this.getDb();
+
+    try {
+      const stmt = db.prepare(`
+        UPDATE word_generation_queue
+        SET status = 'processing',
+            attempts = attempts + 1,
+            started_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `);
+      stmt.run(jobId);
+    } catch (error) {
+      throw new Error(`Failed to mark job processing: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async rescheduleWordGenerationJob(jobId: number, delayMs: number, lastError?: string): Promise<void> {
+    const db = this.getDb();
+    const nextAttempt = new Date(Date.now() + delayMs).toISOString();
+
+    try {
+      const stmt = db.prepare(`
+        UPDATE word_generation_queue
+        SET status = 'queued',
+            updated_at = ?,
+            started_at = NULL,
+            last_error = COALESCE(?, last_error)
+        WHERE id = ?
+      `);
+      stmt.run(nextAttempt, lastError || null, jobId);
+    } catch (error) {
+      throw new Error(`Failed to reschedule job: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async completeWordGenerationJob(jobId: number): Promise<void> {
+    const db = this.getDb();
+
+    try {
+      const stmt = db.prepare(`
+        UPDATE word_generation_queue
+        SET status = 'completed',
+            updated_at = CURRENT_TIMESTAMP,
+            started_at = NULL
+        WHERE id = ?
+      `);
+      stmt.run(jobId);
+    } catch (error) {
+      throw new Error(`Failed to complete job: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async failWordGenerationJob(jobId: number, errorMessage: string): Promise<void> {
+    const db = this.getDb();
+
+    try {
+      const stmt = db.prepare(`
+        UPDATE word_generation_queue
+        SET status = 'failed',
+            last_error = ?,
+            updated_at = CURRENT_TIMESTAMP,
+            started_at = NULL
+        WHERE id = ?
+      `);
+      stmt.run(errorMessage, jobId);
+    } catch (error) {
+      throw new Error(`Failed to mark job failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -1187,7 +1380,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       fsrsStability: row.fsrs_stability ?? undefined,
       fsrsLapses: row.fsrs_lapses ?? undefined,
       fsrsLastRating: row.fsrs_last_rating ?? undefined,
-      fsrsVersion: row.fsrs_version ?? undefined
+      fsrsVersion: row.fsrs_version ?? undefined,
+      processingStatus: row.processing_status ?? 'ready',
+      sentenceCount: row.sentence_count ?? 0
     };
   }
 
@@ -1204,6 +1399,22 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       contextAfter: row.context_after || undefined,
       contextBeforeTranslation: row.context_before_translation || undefined,
       contextAfterTranslation: row.context_after_translation || undefined
+    };
+  }
+
+  private mapRowToWordGenerationJob(row: any): WordGenerationJob {
+    return {
+      id: row.id,
+      wordId: row.word_id,
+      language: row.language,
+      topic: row.topic ?? undefined,
+      desiredSentenceCount: row.desired_sentence_count ?? 3,
+      status: row.status as WordGenerationJobStatus,
+      attempts: row.attempts ?? 0,
+      lastError: row.last_error ?? undefined,
+      createdAt: row.created_at ? new Date(row.created_at) : new Date(),
+      updatedAt: row.updated_at ? new Date(row.updated_at) : new Date(),
+      startedAt: row.started_at ? new Date(row.started_at) : undefined
     };
   }
 

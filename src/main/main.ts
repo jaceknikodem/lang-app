@@ -11,6 +11,8 @@ import { AudioService } from './audio/audio-service.js';
 import { SRSService } from './srs/srs-service.js';
 import { LifecycleManager, UpdateManager } from './lifecycle/index.js';
 import { LLM_CONFIG } from '../shared/constants/index.js';
+import { WordGenerationRunner } from './jobs/word-generation-runner.js';
+import { IPC_CHANNELS } from '../shared/types/ipc.js';
 
 let mainWindow: BrowserWindow;
 let databaseLayer: SQLiteDatabaseLayer | undefined;
@@ -20,6 +22,7 @@ let audioService: AudioService | undefined;
 let srsService: SRSService | undefined;
 let lifecycleManager: LifecycleManager | undefined;
 let updateManager: UpdateManager | undefined;
+let wordGenerationRunner: WordGenerationRunner | undefined;
 
 const forceLocalServices = process.env.E2E_FORCE_LOCAL_SERVICES === '1';
 
@@ -130,6 +133,18 @@ async function initializeServices(): Promise<void> {
     // Initialize SRS service
     srsService = new SRSService(databaseLayer);
     console.log('SRS service initialized successfully');
+
+    wordGenerationRunner = new WordGenerationRunner({
+      database: databaseLayer,
+      contentGenerator,
+      audioService,
+      desiredSentenceCount: 3,
+      onWordUpdated: update => {
+        BrowserWindow.getAllWindows().forEach(window => {
+          window.webContents.send(IPC_CHANNELS.JOBS.WORD_UPDATED, update);
+        });
+      }
+    });
 
     // Initialize update manager
     await updateManager.initialize();
@@ -261,6 +276,8 @@ app.whenReady().then(async () => {
 
     // Set up IPC handlers with initialized services
     setupIPCHandlers(databaseLayer!, llmClient!, contentGenerator!, audioService!, srsService!, lifecycleManager!, updateManager!);
+
+    wordGenerationRunner?.start();
     
     // Keep llmClient reference updated when provider switches
     const originalSwitchProvider = contentGenerator!.switchProvider.bind(contentGenerator!);
@@ -303,6 +320,8 @@ app.on('before-quit', async (event) => {
   if (lifecycleManager && !(lifecycleManager as any)['isShuttingDown']) {
     event.preventDefault();
     try {
+      await wordGenerationRunner?.stop();
+
       // Clean up IPC handlers
       cleanupIPCHandlers();
 
