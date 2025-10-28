@@ -141,8 +141,6 @@ export class TTSAudioGenerator implements AudioGenerator {
       } catch (error) {
         console.warn('Failed to stop audio process:', error);
       }
-    } else {
-      console.log('No audio process to stop');
     }
   }
 

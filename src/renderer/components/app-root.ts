@@ -263,6 +263,8 @@ export class AppRoot extends LitElement {
 
     // Initialize current route
     this.currentRoute = router.getCurrentRoute();
+    // Ensure keyboard context is set on initial load
+    this.updateKeyboardContext();
 
     await this.initializeApp();
   }
