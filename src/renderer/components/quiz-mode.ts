@@ -79,6 +79,12 @@ export class QuizMode extends LitElement {
   @state()
   private audioOnlyMode = false;
 
+  @state()
+  private useTextInput = false;
+
+  @state()
+  private textInputValue = '';
+
   private sessionStartTime = Date.now();
   private keyboardUnsubscribe?: () => void;
   private lastAutoplayKey: string | null = null;
@@ -565,6 +571,7 @@ export class QuizMode extends LitElement {
 
       .recording-section {
         margin-top: var(--spacing-md);
+        margin-bottom: var(--spacing-lg);
         padding: var(--spacing-md);
         background: var(--background-primary);
         border-radius: var(--border-radius);
@@ -588,31 +595,6 @@ export class QuizMode extends LitElement {
         letter-spacing: 0.5px;
       }
 
-      .sentence-to-record {
-        font-size: 20px;
-        font-weight: 500;
-        color: var(--text-primary);
-        text-align: center;
-        margin-bottom: var(--spacing-md);
-        padding: var(--spacing-sm);
-        background: var(--background-secondary);
-        border-radius: var(--border-radius);
-        border-left: 4px solid var(--primary-color);
-        line-height: 1.4;
-      }
-
-      .sentence-placeholder {
-        font-size: 16px;
-        color: var(--text-secondary);
-        text-align: center;
-        margin-bottom: var(--spacing-md);
-        padding: var(--spacing-sm);
-        background: var(--background-secondary);
-        border-radius: var(--border-radius);
-        border-left: 4px solid var(--border-color);
-        font-style: italic;
-      }
-
       .close-recorder-button {
         background: var(--text-secondary);
         color: white;
@@ -628,6 +610,96 @@ export class QuizMode extends LitElement {
       .close-recorder-button:hover {
         background: var(--text-primary);
         color: white;
+      }
+
+      .input-mode-toggle {
+        display: flex;
+        gap: var(--spacing-sm);
+        justify-content: center;
+        margin-bottom: var(--spacing-md);
+      }
+
+      .input-mode-button {
+        padding: var(--spacing-xs) var(--spacing-md);
+        border: 2px solid var(--border-color);
+        background: var(--background-primary);
+        color: var(--text-primary);
+        border-radius: var(--border-radius);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .input-mode-button:hover {
+        border-color: var(--primary-color);
+        background: var(--primary-light);
+      }
+
+      .input-mode-button.active {
+        background: var(--primary-color);
+        color: white;
+        border-color: var(--primary-color);
+      }
+
+      .text-input-container {
+        margin-top: var(--spacing-md);
+      }
+
+      .text-input-field {
+        width: 100%;
+        max-width: 500px;
+        padding: var(--spacing-sm) var(--spacing-md);
+        border: 2px solid var(--border-color);
+        border-radius: var(--border-radius);
+        font-size: 16px;
+        font-family: inherit;
+        background: var(--background-primary);
+        color: var(--text-primary);
+        line-height: 1.5;
+        display: block;
+        margin: 0 auto;
+      }
+
+      .text-input-field:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb, 66, 153, 225), 0.1);
+      }
+
+      .text-input-submit {
+        margin-top: var(--spacing-sm);
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--primary-color);
+        color: white;
+        border: none;
+        border-radius: var(--border-radius);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        width: auto;
+        min-width: 120px;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .text-input-submit:hover {
+        background: var(--primary-dark);
+      }
+
+      .text-input-submit:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .text-input-hint {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-top: var(--spacing-xs);
+        text-align: center;
+        font-style: italic;
       }
 
       .audio-only-toggle {
@@ -970,6 +1042,7 @@ export class QuizMode extends LitElement {
 
         .recording-section {
           margin-top: var(--spacing-md);
+          margin-bottom: var(--spacing-lg);
           padding: var(--spacing-md);
         }
 
@@ -1793,11 +1866,92 @@ export class QuizMode extends LitElement {
 
 
 
-  private toggleRecorder() {
+  private async toggleRecorder() {
     this.showRecorder = !this.showRecorder;
     this.currentRecording = null;
     this.transcriptionResult = null;
     this.isTranscribing = false;
+    this.textInputValue = '';
+    
+    // Check if OS dictation is preferred in settings
+    if (this.showRecorder) {
+      try {
+        // Check new setting first, then fall back to legacy setting for backwards compatibility
+        const transcriptionMethod = await window.electronAPI.database.getSetting('transcription_method');
+        if (transcriptionMethod === 'os-dictation') {
+          this.useTextInput = true;
+        } else {
+          // Fall back to legacy setting
+          const useOsDictation = await window.electronAPI.database.getSetting('use_os_dictation');
+          this.useTextInput = useOsDictation === 'true';
+        }
+      } catch (error) {
+        console.error('Failed to load transcription method setting:', error);
+        this.useTextInput = false;
+      }
+    } else {
+      this.useTextInput = false;
+    }
+  }
+
+  private toggleInputMode() {
+    this.useTextInput = !this.useTextInput;
+    if (this.useTextInput) {
+      this.currentRecording = null;
+      this.textInputValue = '';
+    }
+  }
+
+  private handleTextInputSubmit() {
+    if (!this.textInputValue.trim() || !this.currentQuestion) {
+      return;
+    }
+
+    // Directly compare the typed text with the expected sentence
+    this.performTextComparison(this.textInputValue.trim());
+  }
+
+  private async performTextComparison(typedText: string) {
+    if (!this.currentQuestion) {
+      return;
+    }
+
+    this.isTranscribing = true;
+    this.transcriptionResult = null;
+
+    try {
+      // Get the expected sentence based on quiz direction
+      const expectedSentence = this.direction === 'foreign-to-english'
+        ? this.currentQuestion.sentence.sentence
+        : this.currentQuestion.sentence.translation;
+
+      // Compare typed text with expected sentence (same logic as transcription comparison)
+      const comparison = await window.electronAPI.audio.compareTranscription(
+        typedText,
+        expectedSentence
+      );
+
+      console.log('Text comparison:', comparison);
+
+      this.transcriptionResult = {
+        text: typedText,
+        ...comparison
+      };
+
+    } catch (error) {
+      console.error('Text comparison failed:', error);
+      this.transcriptionResult = {
+        text: typedText,
+        similarity: 0,
+        normalizedTranscribed: typedText,
+        normalizedExpected: '',
+        matchingWords: [],
+        missingWords: [],
+        extraWords: []
+      };
+    } finally {
+      this.isTranscribing = false;
+    }
   }
 
   private toggleAudioOnlyMode() {
@@ -2169,29 +2323,60 @@ export class QuizMode extends LitElement {
 
     return html`
       <div class="recording-section">
-        <div class="recording-header">
-          <span class="language-label">${languageLabel}</span>
+        
+        <div class="input-mode-toggle">
+          <button 
+            class="input-mode-button ${!this.useTextInput ? 'active' : ''}"
+            @click=${() => { this.useTextInput = false; }}
+          >
+            🎤 Audio Recording
+          </button>
+          <button 
+            class="input-mode-button ${this.useTextInput ? 'active' : ''}"
+            @click=${() => { this.useTextInput = true; }}
+          >
+            ⌨️ Text Input
+          </button>
         </div>
-        ${isAudioOnly ? html`
-          <div class="sentence-placeholder">
-            Sentence hidden in audio-only mode. Repeat what you hear to practice pronunciation.
+
+        ${this.useTextInput ? html`
+          <div class="text-input-container">
+            <input
+              type="text"
+              class="text-input-field"
+              .value=${this.textInputValue}
+              @input=${(e: Event) => {
+                this.textInputValue = (e.target as HTMLInputElement).value;
+              }}
+              @keydown=${(e: KeyboardEvent) => {
+                // Allow Enter to submit for single-line input
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (this.textInputValue.trim() && !this.isTranscribing) {
+                    this.handleTextInputSubmit();
+                  }
+                }
+              }}
+              placeholder="Type or use macOS dictation (Fn key twice) to input the sentence..."
+              ?disabled=${this.isTranscribing}
+            />
+            <button
+              class="text-input-submit"
+              @click=${this.handleTextInputSubmit}
+              ?disabled=${!this.textInputValue.trim() || this.isTranscribing}
+            >
+              ${this.isTranscribing ? 'Analyzing...' : 'Compare'}
+            </button>
           </div>
         ` : html`
-          <div class="sentence-to-record">
-            "${sentenceToRecord}"
-          </div>
+          <audio-recorder
+            .prompt=${prompt}
+            @recording-completed=${this.handleRecordingCompleted}
+            @recording-cancelled=${this.handleRecordingCancelled}
+          ></audio-recorder>
         `}
-        <audio-recorder
-          .prompt=${prompt}
-          @recording-completed=${this.handleRecordingCompleted}
-          @recording-cancelled=${this.handleRecordingCancelled}
-        ></audio-recorder>
         
         ${this.renderTranscriptionResults()}
-        
-        <button class="close-recorder-button" @click=${this.toggleRecorder}>
-          Close Recorder
-        </button>
       </div>
     `;
   }
@@ -2202,8 +2387,8 @@ export class QuizMode extends LitElement {
         <div class="transcription-results">
           <div class="transcription-loading">
             <div class="spinner"></div>
-            Analyzing your pronunciation...
-            ${!this.speechRecognitionReady ? html`
+            ${this.useTextInput ? 'Analyzing your input...' : 'Analyzing your pronunciation...'}
+            ${!this.useTextInput && !this.speechRecognitionReady ? html`
               <div style="margin-top: var(--spacing-sm); font-size: 14px; color: var(--text-secondary);">
                 First-time setup: This may take 1-2 minutes while speech recognition compiles...
               </div>
@@ -2228,25 +2413,33 @@ export class QuizMode extends LitElement {
     if (similarity >= 0.9) {
       similarityClass = 'excellent';
       feedbackClass = 'excellent';
-      feedbackMessage = 'Excellent pronunciation! 🎉';
+      feedbackMessage = this.useTextInput 
+        ? 'Excellent! Perfect match! 🎉' 
+        : 'Excellent pronunciation! 🎉';
     } else if (similarity >= 0.7) {
       similarityClass = 'good';
       feedbackClass = 'good';
-      feedbackMessage = 'Good pronunciation! Keep it up! 👍';
+      feedbackMessage = this.useTextInput 
+        ? 'Good! Very close match! 👍' 
+        : 'Good pronunciation! Keep it up! 👍';
     } else if (similarity >= 0.5) {
       similarityClass = 'fair';
       feedbackClass = 'fair';
-      feedbackMessage = 'Not bad! Try to match the original more closely. 🤔';
+      feedbackMessage = this.useTextInput 
+        ? 'Not bad! Try to match the original more closely. 🤔' 
+        : 'Not bad! Try to match the original more closely. 🤔';
     } else {
       similarityClass = 'poor';
       feedbackClass = 'poor';
-      feedbackMessage = 'Keep practicing! Listen to the audio again and try to match it. 💪';
+      feedbackMessage = this.useTextInput 
+        ? 'Keep practicing! Compare your input with the expected text. 💪' 
+        : 'Keep practicing! Listen to the audio again and try to match it. 💪';
     }
 
     return html`
       <div class="transcription-results">
         <div class="transcription-header">
-          🎤 Speech Recognition Results
+          ${this.useTextInput ? '📝 Text Input Results' : '🎤 Speech Recognition Results'}
         </div>
 
         <div class="transcription-text">

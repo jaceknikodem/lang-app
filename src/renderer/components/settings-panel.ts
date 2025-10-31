@@ -290,6 +290,9 @@ export class SettingsPanel extends LitElement {
   private speechRecognitionReady = false;
 
   @state()
+  private transcriptionMethod: 'whisper' | 'os-dictation' = 'whisper';
+
+  @state()
   private availableLLMModels: string[] = [];
 
   @state()
@@ -402,6 +405,10 @@ export class SettingsPanel extends LitElement {
 
   private async loadSpeechRecognitionSettings() {
     try {
+      // Load transcription method preference
+      const transcriptionMethodSetting = await window.electronAPI.database.getSetting('transcription_method');
+      this.transcriptionMethod = transcriptionMethodSetting === 'os-dictation' ? 'os-dictation' : 'whisper';
+
       // Check if speech recognition is available
       this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
 
@@ -415,12 +422,14 @@ export class SettingsPanel extends LitElement {
         console.log('Speech recognition settings loaded:', {
           ready: this.speechRecognitionReady,
           models: this.availableSpeechModels,
-          current: this.currentSpeechModel
+          current: this.currentSpeechModel,
+          transcriptionMethod: this.transcriptionMethod
         });
       }
     } catch (error) {
       console.error('Failed to load speech recognition settings:', error);
       this.speechRecognitionReady = false;
+      this.transcriptionMethod = 'whisper';
     }
   }
 
@@ -626,6 +635,47 @@ export class SettingsPanel extends LitElement {
     }
   }
 
+  private async changeTranscriptionMethod(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const selectedValue = select.value;
+    const previous = this.transcriptionMethod;
+    
+    // Determine if it's OS dictation or a Whisper model
+    if (selectedValue === 'os-dictation') {
+      this.transcriptionMethod = 'os-dictation';
+      try {
+        await window.electronAPI.database.setSetting('transcription_method', 'os-dictation');
+        await window.electronAPI.database.setSetting('use_os_dictation', 'true');
+      } catch (error) {
+        console.error('Failed to save transcription method setting:', error);
+        this.transcriptionMethod = previous;
+        select.value = previous === 'os-dictation' ? 'os-dictation' : this.getModelDisplayName(this.currentSpeechModel);
+      }
+    } else {
+      // It's a Whisper model
+      this.transcriptionMethod = 'whisper';
+      try {
+        // The model path should be the full path, so we need to construct it
+        const projectDir = process.cwd ? process.cwd() : '';
+        const modelPath = selectedValue.includes('/') ? selectedValue : `models/${selectedValue}`;
+        
+        await window.electronAPI.audio.setSpeechModel(modelPath);
+        this.currentSpeechModel = await window.electronAPI.audio.getCurrentSpeechModel();
+        
+        // Save the transcription method setting
+        await window.electronAPI.database.setSetting('transcription_method', 'whisper');
+        await window.electronAPI.database.setSetting('use_os_dictation', 'false');
+        
+        console.log('Speech model changed to:', this.currentSpeechModel);
+      } catch (error) {
+        console.error('Failed to change speech model:', error);
+        // Revert the selection
+        select.value = previous === 'os-dictation' ? 'os-dictation' : this.getModelDisplayName(this.currentSpeechModel);
+        this.transcriptionMethod = previous;
+      }
+    }
+  }
+
   private async changeSrsAlgorithm(event: Event) {
     const select = event.target as HTMLSelectElement;
     const selected = select.value === 'fsrs' ? 'fsrs' : 'classic';
@@ -641,26 +691,11 @@ export class SettingsPanel extends LitElement {
     }
   }
 
-  private async changeSpeechModel(event: Event) {
-    const select = event.target as HTMLSelectElement;
-    const selectedModel = select.value;
-
-    if (!selectedModel) return;
-
-    try {
-      // The model path should be the full path, so we need to construct it
-      const projectDir = process.cwd ? process.cwd() : '';
-      const modelPath = selectedModel.includes('/') ? selectedModel : `models/${selectedModel}`;
-
-      await window.electronAPI.audio.setSpeechModel(modelPath);
-      this.currentSpeechModel = await window.electronAPI.audio.getCurrentSpeechModel();
-
-      console.log('Speech model changed to:', this.currentSpeechModel);
-    } catch (error) {
-      console.error('Failed to change speech model:', error);
-      // Revert the selection
-      select.value = this.currentSpeechModel;
+  private getCurrentTranscriptionValue(): string {
+    if (this.transcriptionMethod === 'os-dictation') {
+      return 'os-dictation';
     }
+    return this.getModelDisplayName(this.currentSpeechModel);
   }
 
   private getModelDisplayName(modelPath: string): string {
@@ -1098,31 +1133,48 @@ export class SettingsPanel extends LitElement {
 
         <div class="settings-section">
           <h3>Speech Recognition</h3>
-          ${this.speechRecognitionReady ? html`
-            <div class="dropdown-row">
-              <div class="dropdown-description">
-                <strong>Whisper Model</strong>
-                <p>Choose the speech recognition model for pronunciation practice</p>
+          
+          <div class="dropdown-row">
+            <div class="dropdown-description">
+              <strong>Transcription Method</strong>
+              <p>Choose how to transcribe pronunciation practice</p>
+            </div>
+            <select 
+              class="model-select"
+              .value=${this.getCurrentTranscriptionValue()}
+              @change=${this.changeTranscriptionMethod}
+            >
+              <optgroup label="Local Transcription">
+                ${this.speechRecognitionReady && this.availableSpeechModels.length > 0 ? html`
+                  ${this.availableSpeechModels.map(model => html`
+                    <option value=${model}>
+                      Whisper: ${this.getModelDisplayName(model)}
+                    </option>
+                  `)}
+                ` : html`
+                  <option value="whisper-unavailable" disabled>Whisper (models not found)</option>
+                `}
+              </optgroup>
+              <optgroup label="System Dictation">
+                <option value="os-dictation">OS-Level Dictation (macOS)</option>
+              </optgroup>
+            </select>
+          </div>
+
+          ${this.transcriptionMethod === 'whisper' ? html`
+            ${this.speechRecognitionReady ? html`
+              <div class="model-info">
+                Current model: ${this.getModelDisplayName(this.currentSpeechModel)}
+                ${this.getModelDescription(this.getModelDisplayName(this.currentSpeechModel))}
               </div>
-              <select 
-                class="model-select"
-                .value=${this.getModelDisplayName(this.currentSpeechModel)}
-                @change=${this.changeSpeechModel}
-              >
-                ${this.availableSpeechModels.map(model => html`
-                  <option value=${model} ?selected=${this.getModelDisplayName(this.currentSpeechModel) === model}>
-                    ${this.getModelDisplayName(model)}
-                  </option>
-                `)}
-              </select>
-            </div>
-            <div class="model-info">
-              Current model: ${this.getModelDisplayName(this.currentSpeechModel)}
-              ${this.getModelDescription(this.getModelDisplayName(this.currentSpeechModel))}
-            </div>
+            ` : html`
+              <div class="status-message status-info">
+                Speech recognition is not available. Make sure Whisper models are installed in the models/ folder.
+              </div>
+            `}
           ` : html`
-            <div class="status-message status-info">
-              Speech recognition is not available. Make sure Whisper models are installed in the models/ folder.
+            <div class="model-info">
+              OS-level dictation enabled. Use macOS dictation (Fn key twice) in text input fields for pronunciation practice.
             </div>
           `}
         </div>
