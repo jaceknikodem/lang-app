@@ -1037,6 +1037,109 @@ export class LearningMode extends LitElement {
     }
   }
 
+  private async handleShowOtherSentence() {
+    if (this.isLoading || this.error || this.showCompletion || this.isProcessing) return;
+
+    const currentWord = this.getCurrentWord();
+    const currentSentence = this.getCurrentSentence();
+
+    if (!currentWord || !currentSentence) return;
+
+    const currentSentenceId = currentSentence.id;
+    const oldAudioPath = currentSentence.audioPath;
+
+    this.isProcessing = true;
+
+    try {
+      // Fetch another sentence for the same word
+      // Try to get a different sentence by attempting multiple times if needed
+      let newSentence = await window.electronAPI.quiz.getRandomSentenceForWord(currentWord.id);
+      let attempts = 0;
+      const maxAttempts = 5;
+      
+      // Try to get a different sentence (not guaranteed, but attempt to avoid same sentence)
+      while (newSentence && newSentence.id === currentSentenceId && attempts < maxAttempts) {
+        newSentence = await window.electronAPI.quiz.getRandomSentenceForWord(currentWord.id);
+        attempts++;
+      }
+
+      if (!newSentence) {
+        console.warn('No other sentence found for word:', currentWord.word);
+        this.isProcessing = false;
+        return;
+      }
+
+      // Remove old audio from cache if it exists and is different from new one
+      if (oldAudioPath && oldAudioPath !== newSentence.audioPath && this.audioCache.has(oldAudioPath)) {
+        const oldBlobUrl = this.blobUrlCache.get(oldAudioPath);
+        if (oldBlobUrl) {
+          URL.revokeObjectURL(oldBlobUrl);
+        }
+        this.audioCache.delete(oldAudioPath);
+        this.blobUrlCache.delete(oldAudioPath);
+      }
+
+      // Replace the sentence in wordsWithSentences
+      const updatedWords = this.wordsWithSentences.map(word => {
+        if (word.id !== currentWord.id) {
+          return word;
+        }
+
+        const updatedSentences = word.sentences.map((sentence, index) =>
+          index === this.currentSentenceIndex ? newSentence : sentence
+        );
+
+        return {
+          ...word,
+          sentences: updatedSentences
+        };
+      });
+
+      this.wordsWithSentences = updatedWords;
+
+      // Update session manager with new sentence ID
+      const activeSession = sessionManager.getLearningSession();
+      if (activeSession?.sentenceIds) {
+        const currentGlobalIndex = this.getCurrentSentenceGlobalIndex() - 1;
+        if (currentGlobalIndex >= 0 && currentGlobalIndex < activeSession.sentenceIds.length) {
+          const updatedSentenceIds = [...activeSession.sentenceIds];
+          updatedSentenceIds[currentGlobalIndex] = newSentence.id;
+          
+          // Update audio paths if available
+          let updatedAudioPaths = activeSession.audioPaths || [];
+          if (newSentence.audioPath && currentGlobalIndex < updatedAudioPaths.length) {
+            updatedAudioPaths = [...updatedAudioPaths];
+            updatedAudioPaths[currentGlobalIndex] = newSentence.audioPath;
+          }
+
+          // Update the session
+          sessionManager.startNewLearningSession(
+            activeSession.wordIds,
+            activeSession.maxSentences,
+            updatedSentenceIds,
+            updatedAudioPaths
+          );
+        }
+      }
+
+      // Load new audio if available
+      if (newSentence.audioPath) {
+        await this.ensureCurrentSentenceAudioLoaded();
+      }
+
+      // Save progress
+      this.saveProgressToSession();
+
+      // Force re-render
+      this.requestUpdate();
+    } catch (error) {
+      console.error('Failed to load other sentence:', error);
+      window.alert('Failed to load another sentence. Please try again.');
+    } finally {
+      this.isProcessing = false;
+    }
+  }
+
   private async handleRemoveCurrentSentence() {
     if (this.isLoading || this.error || this.showCompletion || this.isProcessing) return;
 
@@ -1266,6 +1369,12 @@ export class LearningMode extends LitElement {
         action: () => this.handleRemoveCurrentSentence(),
         context: 'learning',
         description: 'Remove current sentence'
+      },
+      {
+        key: 'o',
+        action: () => this.handleShowOtherSentence(),
+        context: 'learning',
+        description: 'Show other sentence'
       },
       // Audio
       {
@@ -1845,6 +1954,7 @@ export class LearningMode extends LitElement {
           @mark-word-known=${this.handleMarkWordKnown}
           @mark-word-ignored=${this.handleMarkWordIgnored}
           @remove-sentence=${this.handleRemoveCurrentSentence}
+          @show-other-sentence=${this.handleShowOtherSentence}
           @sentence-audio-played=${this.handleSentenceAudioPlayed}
           @sentence-audio-regenerated=${this.handleSentenceAudioRegenerated}
           @word-added-from-sentence=${this.handleWordAddedFromSentence}

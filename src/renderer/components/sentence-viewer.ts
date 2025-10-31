@@ -1587,6 +1587,13 @@ export class SentenceViewer extends LitElement {
     }));
   }
 
+  private handleShowOtherSentence() {
+    this.dispatchEvent(new CustomEvent('show-other-sentence', {
+      bubbles: true,
+      composed: true
+    }));
+  }
+
   private handlePrevious() {
     this.dispatchEvent(new CustomEvent('previous-sentence', {
       bubbles: true
@@ -1806,6 +1813,14 @@ export class SentenceViewer extends LitElement {
           >
             ${this.targetWord.ignored ? 'Already Ignored' : 'Ignore'}
             ${!this.targetWord.ignored ? html`<span class="keyboard-hint">(I)</span>` : ''}
+          </button>
+
+          <button
+            class="btn btn-secondary word-action-btn"
+            @click=${this.handleShowOtherSentence}
+            ?disabled=${this.isProcessing}
+          >
+            Other <span class="keyboard-hint">(O)</span>
           </button>
 
           <button
