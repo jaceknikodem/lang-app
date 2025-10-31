@@ -1177,18 +1177,12 @@ export class QuizMode extends LitElement {
       lastStudied: word.lastStudied?.toISOString() ?? 'never'
     });
 
-    this.showResult = true;
-    this.lastResult = {
-      wordId: word.id,
-      correct: recall > 0, // Any non-zero recall counts as correct
-      responseTime: Date.now()
-    };
-
     if (recall > 0) {
       this.quizSession.score++;
     }
 
     // Update word using SRS system and save progress immediately
+    // Do this BEFORE showing the result so the updated strength is displayed
     try {
       console.log(`[Quiz] Calling SRS service to process review...`);
       await window.electronAPI.srs.processReview(word.id, recall);
@@ -1220,6 +1214,7 @@ export class QuizMode extends LitElement {
           nextDue: `${word.nextDue?.toISOString() ?? 'unknown'} → ${updatedWord.nextDue?.toISOString() ?? 'unknown'}`
         });
         
+        // Update the word object before showing the result
         this.currentQuestion.word = updatedWord;
       }
 
@@ -1229,6 +1224,14 @@ export class QuizMode extends LitElement {
     } catch (error) {
       console.error('[Quiz] Error updating word with SRS:', error);
     }
+
+    // Show result AFTER updating the word so the updated strength is displayed
+    this.showResult = true;
+    this.lastResult = {
+      wordId: word.id,
+      correct: recall > 0, // Any non-zero recall counts as correct
+      responseTime: Date.now()
+    };
     
     console.log(`[Quiz] ========== REVIEW COMPLETE ==========\n`);
 
