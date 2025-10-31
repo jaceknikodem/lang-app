@@ -171,6 +171,7 @@ export class QuizMode extends LitElement {
         gap: var(--spacing-sm);
         font-size: 14px;
         color: var(--text-secondary);
+        margin-left: auto;
       }
 
       .progress-bar {
@@ -1143,7 +1144,8 @@ export class QuizMode extends LitElement {
         }
 
         .quiz-progress {
-          justify-content: center;
+          margin-left: 0;
+          justify-content: flex-end;
         }
 
         .question-text-container {
@@ -1572,6 +1574,9 @@ export class QuizMode extends LitElement {
     this.showResult = false;
     this.showAnswer = false;
     this.lastResult = null;
+    this.transcriptionResult = null;
+    this.currentRecording = null;
+    this.isTranscribing = false;
 
     if (this.quizSession.currentQuestionIndex + 1 >= this.quizSession.totalQuestions) {
       // Quiz complete - record the session
@@ -2298,6 +2303,28 @@ export class QuizMode extends LitElement {
         ...comparison
       };
 
+      // If pronunciation score is >= 85%, increase word strength by 5 points
+      if (comparison.similarity >= 0.85 && this.currentQuestion) {
+        const word = this.currentQuestion.word;
+        const currentStrength = word.strength ?? 20;
+        const newStrength = Math.min(100, currentStrength + 5);
+        
+        try {
+          console.log(`[Pronunciation] Good pronunciation detected (${Math.round(comparison.similarity * 100)}%). Increasing word strength: ${currentStrength} → ${newStrength}`);
+          await window.electronAPI.database.updateWordStrength(word.id, newStrength);
+          await window.electronAPI.database.updateLastStudied(word.id);
+          
+          // Refresh the word data to get updated strength
+          const updatedWord = await window.electronAPI.database.getWordById(word.id);
+          if (updatedWord) {
+            this.currentQuestion.word = updatedWord;
+            this.requestUpdate(); // Trigger UI update to show new strength
+          }
+        } catch (error) {
+          console.error('Failed to update word strength after good pronunciation:', error);
+        }
+      }
+
     } catch (error) {
       console.error('Speech recognition failed:', error);
       this.transcriptionResult = {
@@ -2391,7 +2418,6 @@ export class QuizMode extends LitElement {
     return html`
       <div class="quiz-container">
         <div class="quiz-header">
-          <h2 class="quiz-title">Quiz Mode</h2>
           <div class="quiz-progress">
             <span>${this.quizSession.currentQuestionIndex + 1} / ${this.quizSession.totalQuestions}</span>
             <div class="progress-bar">
