@@ -506,13 +506,6 @@ export class AudioRecorder extends LitElement {
     return html`
       <div class="recorder-container ${this.isRecording ? 'recording' : ''}">
         <div class="recorder-prompt">${this.prompt}</div>
-        
-        ${this.recordingOptions.endOnSilence ? html`
-          <div class="silence-info">
-            Recording will stop automatically after ${this.recordingOptions.silence}s of silence
-          </div>
-        ` : ''}
-
         ${this.isRecording ? this.renderRecordingControls() : this.renderIdleControls()}
 
         ${this.lastRecording && !this.isRecording ? this.renderPlaybackSection() : ''}
@@ -572,9 +565,6 @@ export class AudioRecorder extends LitElement {
 
     return html`
       <div class="playback-section">
-        <div class="recording-info">
-          Duration: ${this.formatDuration(this.lastRecording.duration)}
-        </div>
       </div>
     `;
   }

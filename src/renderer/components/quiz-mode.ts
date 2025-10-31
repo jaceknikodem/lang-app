@@ -62,9 +62,8 @@ export class QuizMode extends LitElement {
     similarity: number;
     normalizedTranscribed: string;
     normalizedExpected: string;
-    matchingWords: string[];
-    missingWords: string[];
-    extraWords: string[];
+    expectedWords: Array<{ word: string; similarity: number; matched: boolean }>;
+    transcribedWords: string[];
   } | null = null;
 
   @state()
@@ -862,6 +861,14 @@ export class QuizMode extends LitElement {
         font-size: 16px;
         color: var(--text-primary);
         line-height: 1.4;
+      }
+
+      .color-coded-text {
+        display: inline;
+      }
+
+      .color-coded-text span {
+        margin-right: 4px;
       }
 
       .similarity-score {
@@ -1924,9 +1931,8 @@ export class QuizMode extends LitElement {
         similarity: 0,
         normalizedTranscribed: typedText,
         normalizedExpected: '',
-        matchingWords: [],
-        missingWords: [],
-        extraWords: []
+        expectedWords: [],
+        transcribedWords: []
       };
     } finally {
       this.isTranscribing = false;
@@ -2044,9 +2050,8 @@ export class QuizMode extends LitElement {
         similarity: 0,
         normalizedTranscribed: '',
         normalizedExpected: '',
-        matchingWords: [],
-        missingWords: [],
-        extraWords: []
+        expectedWords: [],
+        transcribedWords: []
       };
     } finally {
       this.isTranscribing = false;
@@ -2154,9 +2159,6 @@ export class QuizMode extends LitElement {
 
         <div class="quiz-content">
           <div class="question-container">
-            <div class="direction-indicator">
-              ${this.direction === 'foreign-to-english' ? 'Foreign → English' : 'English → Foreign'}
-            </div>
             
             ${this.audioOnlyMode ? html`
               <div class="audio-only-controls">
@@ -2213,9 +2215,9 @@ export class QuizMode extends LitElement {
             <button 
               class="answer-button"
               @click=${this.toggleRecorder}
-              title="Practice pronunciation with speech recognition"
+              title=${this.showRecorder ? 'Close pronunciation practice' : 'Practice pronunciation with speech recognition'}
             >
-              🎤 Practice Pronunciation
+              ${this.showRecorder ? '✕ Close Pronunciation' : '🎤 Practice Pronunciation'}
             </button>
           ` : nothing}
         </div>
@@ -2329,7 +2331,8 @@ export class QuizMode extends LitElement {
       return '';
     }
 
-    const similarity = this.transcriptionResult.similarity;
+    const result = this.transcriptionResult;
+    const similarity = result.similarity;
     const similarityPercentage = Math.round(similarity * 100);
 
     // Determine similarity level and feedback
@@ -2363,12 +2366,25 @@ export class QuizMode extends LitElement {
 
         <div class="transcription-text">
           <div class="label">Expected:</div>
-          <div class="text">"${this.transcriptionResult.normalizedExpected}"</div>
+          <div class="text color-coded-text">
+            ${result.expectedWords.map((wordInfo, index) => {
+              // Color code based on similarity: green for matched, yellow for partial, red for missing
+              let color = '#28a745'; // green for matched
+              if (!wordInfo.matched) {
+                color = '#dc3545'; // red for missing/not matched
+              } else if (wordInfo.similarity < 0.9) {
+                color = '#ffc107'; // yellow for partial match
+              }
+              
+              const isLast = index === result.expectedWords.length - 1;
+              return html`<span style="color: ${color}; font-weight: ${wordInfo.matched ? 'normal' : 'bold'};">${wordInfo.word}</span>${!isLast ? ' ' : ''}`;
+            })}
+          </div>
         </div>
 
         <div class="transcription-text">
           <div class="label">You said:</div>
-          <div class="text">"${this.transcriptionResult.text}"</div>
+          <div class="text">"${result.text}"</div>
         </div>
 
         <div class="similarity-score">
@@ -2377,24 +2393,6 @@ export class QuizMode extends LitElement {
             <div class="similarity-fill ${similarityClass}" style="width: ${similarityPercentage}%"></div>
           </div>
           <span class="similarity-percentage">${similarityPercentage}%</span>
-        </div>
-
-        <div class="word-analysis">
-          <div class="word-group matching">
-            <div class="label">Correct</div>
-            <div class="count">${this.transcriptionResult.matchingWords.length}</div>
-            <div class="words">${this.transcriptionResult.matchingWords.join(', ') || 'None'}</div>
-          </div>
-          <div class="word-group missing">
-            <div class="label">Missing</div>
-            <div class="count">${this.transcriptionResult.missingWords.length}</div>
-            <div class="words">${this.transcriptionResult.missingWords.join(', ') || 'None'}</div>
-          </div>
-          <div class="word-group extra">
-            <div class="label">Extra</div>
-            <div class="count">${this.transcriptionResult.extraWords.length}</div>
-            <div class="words">${this.transcriptionResult.extraWords.join(', ') || 'None'}</div>
-          </div>
         </div>
 
         <div class="pronunciation-feedback ${feedbackClass}">

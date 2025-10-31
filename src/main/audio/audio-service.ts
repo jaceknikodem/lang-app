@@ -634,9 +634,8 @@ export class AudioService {
     similarity: number;
     normalizedTranscribed: string;
     normalizedExpected: string;
-    matchingWords: string[];
-    missingWords: string[];
-    extraWords: string[];
+    expectedWords: Array<{ word: string; similarity: number; matched: boolean }>;
+    transcribedWords: string[];
   } {
     return this.speechRecognition.compareTranscription(transcribed, expected);
   }

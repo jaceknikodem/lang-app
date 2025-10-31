@@ -252,7 +252,14 @@ export class SpeechRecognitionService {
         throw new Error(`Failed to transcribe audio via Whisper server: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`);
       }
 
+      // Clean the transcription result: remove punctuation and trim
+      const cleanedResult = transcriptionResult
+        .replace(/[.,!?;:'"()\[\]{}—–-]/g, '') // Remove punctuation
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .trim();
+
       console.log(`Transcription completed: "${transcriptionResult}"`);
+      console.log(`Cleaned transcription: "${cleanedResult}"`);
 
       // Clean up temporary fixed file if it was created
       if (fileToTranscribe && fileToTranscribe !== filePath) {
@@ -260,7 +267,7 @@ export class SpeechRecognitionService {
       }
 
       return {
-        text: transcriptionResult,
+        text: cleanedResult,
         language: whisperLanguageCode
       };
 
@@ -288,16 +295,76 @@ export class SpeechRecognitionService {
   }
 
   /**
-   * Compare transcribed text with expected text
-   * Returns similarity score and analysis
+   * Jaro-Winkler similarity algorithm
+   * Returns a similarity score between 0 and 1
+   */
+  private jaroWinkler(s1: string, s2: string): number {
+    if (s1 === s2) return 1.0;
+    if (s1.length === 0 || s2.length === 0) return 0.0;
+
+    // Jaro distance
+    const matchWindow = Math.floor(Math.max(s1.length, s2.length) / 2) - 1;
+    const s1Matches = new Array(s1.length).fill(false);
+    const s2Matches = new Array(s2.length).fill(false);
+
+    let matches = 0;
+    let transpositions = 0;
+
+    // Find matches
+    for (let i = 0; i < s1.length; i++) {
+      const start = Math.max(0, i - matchWindow);
+      const end = Math.min(i + matchWindow + 1, s2.length);
+
+      for (let j = start; j < end; j++) {
+        if (s2Matches[j] || s1[i] !== s2[j]) continue;
+        s1Matches[i] = true;
+        s2Matches[j] = true;
+        matches++;
+        break;
+      }
+    }
+
+    if (matches === 0) return 0.0;
+
+    // Find transpositions
+    let k = 0;
+    for (let i = 0; i < s1.length; i++) {
+      if (!s1Matches[i]) continue;
+      while (!s2Matches[k]) k++;
+      if (s1[i] !== s2[k]) transpositions++;
+      k++;
+    }
+
+    // Jaro distance
+    const jaro = (
+      matches / s1.length +
+      matches / s2.length +
+      (matches - transpositions / 2) / matches
+    ) / 3.0;
+
+    // Winkler modification: common prefix bonus
+    let prefix = 0;
+    const maxPrefix = Math.min(4, Math.min(s1.length, s2.length));
+    for (let i = 0; i < maxPrefix; i++) {
+      if (s1[i] === s2[i]) prefix++;
+      else break;
+    }
+
+    // Jaro-Winkler similarity
+    const winklerWeight = 0.1;
+    return jaro + (prefix * winklerWeight * (1 - jaro));
+  }
+
+  /**
+   * Compare transcribed text with expected text using Jaro-Winkler similarity
+   * Returns similarity score and word-level analysis for color coding
    */
   compareTranscription(transcribed: string, expected: string): {
     similarity: number;
     normalizedTranscribed: string;
     normalizedExpected: string;
-    matchingWords: string[];
-    missingWords: string[];
-    extraWords: string[];
+    expectedWords: Array<{ word: string; similarity: number; matched: boolean }>;
+    transcribedWords: string[];
   } {
     // Normalize text for comparison
     const normalizeText = (text: string): string => {
@@ -313,40 +380,53 @@ export class SpeechRecognitionService {
 
     // Split into words
     const transcribedWords = normalizedTranscribed.split(' ').filter(w => w.length > 0);
-    const expectedWords = normalizedExpected.split(' ').filter(w => w.length > 0);
+    const expectedWordsList = normalizedExpected.split(' ').filter(w => w.length > 0);
 
-    // Find matching, missing, and extra words
-    const matchingWords: string[] = [];
-    const missingWords: string[] = [];
-    const extraWords: string[] = [];
+    // For each expected word, find best matching transcribed word using Jaro-Winkler
+    const usedTranscribedIndices = new Set<number>();
+    const expectedWordMatches: Array<{ word: string; similarity: number; matched: boolean }> = [];
 
-    // Check for matching and missing words
-    for (const expectedWord of expectedWords) {
-      if (transcribedWords.includes(expectedWord)) {
-        matchingWords.push(expectedWord);
-      } else {
-        missingWords.push(expectedWord);
+    for (const expectedWord of expectedWordsList) {
+      let bestSimilarity = 0;
+      let bestIndex = -1;
+
+      // Find the best matching transcribed word
+      for (let i = 0; i < transcribedWords.length; i++) {
+        if (usedTranscribedIndices.has(i)) continue;
+        
+        const similarity = this.jaroWinkler(expectedWord, transcribedWords[i]);
+        if (similarity > bestSimilarity) {
+          bestSimilarity = similarity;
+          bestIndex = i;
+        }
       }
+
+      // Use threshold: if similarity is above 0.7, consider it a match
+      const threshold = 0.7;
+      const matched = bestSimilarity >= threshold;
+
+      if (matched && bestIndex >= 0) {
+        usedTranscribedIndices.add(bestIndex);
+      }
+
+      expectedWordMatches.push({
+        word: expectedWord,
+        similarity: bestSimilarity,
+        matched
+      });
     }
 
-    // Check for extra words
-    for (const transcribedWord of transcribedWords) {
-      if (!expectedWords.includes(transcribedWord)) {
-        extraWords.push(transcribedWord);
-      }
-    }
-
-    // Calculate similarity score
-    const totalWords = Math.max(expectedWords.length, transcribedWords.length);
-    const similarity = totalWords > 0 ? matchingWords.length / totalWords : 0;
+    // Calculate overall similarity (average of word similarities)
+    const overallSimilarity = expectedWordMatches.length > 0
+      ? expectedWordMatches.reduce((sum, w) => sum + w.similarity, 0) / expectedWordMatches.length
+      : 0;
 
     return {
-      similarity,
+      similarity: overallSimilarity,
       normalizedTranscribed,
       normalizedExpected,
-      matchingWords,
-      missingWords,
-      extraWords
+      expectedWords: expectedWordMatches,
+      transcribedWords
     };
   }
 
