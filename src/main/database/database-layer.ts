@@ -1,15 +1,16 @@
 /**
- * Main database layer implementation
+ * Main database layer implementation using Drizzle ORM
  */
 
-import Database from 'better-sqlite3';
 import path from 'path';
 import { promises as fsPromises } from 'fs';
+import { eq, and, or, desc, asc, sql, lt, lte, gte, count, avg, max, inArray, SQL } from 'drizzle-orm';
 import { DatabaseLayer, DatabaseConfig, JobWordInfo, WordGenerationJob, WordGenerationJobStatus, WordProcessingStatus } from '../../shared/types/database.js';
 import { Word, Sentence, StudyStats, CreateWordRequest, DictionaryEntry } from '../../shared/types/core.js';
 import { DatabaseConnection } from './connection.js';
 import { MigrationManager } from './migrations.js';
 import { splitSentenceIntoParts, serializeSentenceParts, parseSentenceParts } from '../../shared/utils/sentence.js';
+import * as schema from './schema.js';
 
 export class SQLiteDatabaseLayer implements DatabaseLayer {
   private connection: DatabaseConnection;
@@ -25,13 +26,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   async initialize(): Promise<void> {
     try {
       const db = await this.connection.connect();
+      const rawDb = this.connection.getRawDatabase();
       
-      // Initialize and run migrations
-      this.migrationManager = new MigrationManager(db);
+      // Initialize and run migrations (still uses raw database)
+      this.migrationManager = new MigrationManager(rawDb);
       await this.migrationManager.migrate();
 
       // Ensure sentence parts are populated for existing records
-      this.backfillSentenceParts();
+      await this.backfillSentenceParts();
 
       // Populate dictionary data from bundled files
       try {
@@ -54,10 +56,17 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
-   * Get database instance for operations
+   * Get Drizzle database instance for operations
    */
-  private getDb(): Database.Database {
+  private getDb() {
     return this.connection.getDatabase();
+  }
+  
+  /**
+   * Get raw database instance for migrations and direct SQL
+   */
+  private getRawDb() {
+    return this.connection.getRawDatabase();
   }
 
   // Word management operations
@@ -73,23 +82,18 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       
-      const stmt = db.prepare(`
-        INSERT INTO words (
-          word, language, translation, audio_path,
-          strength, interval_days, ease_factor, next_due
-        )
-        VALUES (?, ?, ?, ?, 20, 1, 2.5, ?)
-      `);
+      const result = await db.insert(schema.words).values({
+        word: wordData.word,
+        language: wordData.language,
+        translation: wordData.translation,
+        audioPath: wordData.audioPath || null,
+        strength: 20,
+        intervalDays: 1,
+        easeFactor: 2.5,
+        nextDue: tomorrow.toISOString(),
+      }).returning({ id: schema.words.id });
       
-      const result = stmt.run(
-        wordData.word,
-        wordData.language,
-        wordData.translation,
-        wordData.audioPath || null,
-        tomorrow.toISOString()
-      );
-      
-      return result.lastInsertRowid as number;
+      return result[0].id;
     } catch (error) {
       throw new Error(`Failed to insert word: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -105,15 +109,15 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const clampedStrength = Math.max(0, Math.min(100, strength));
     
     try {
-      const stmt = db.prepare(`
-        UPDATE words 
-        SET strength = ?, last_studied = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `);
+      const result = await db.update(schema.words)
+        .set({ 
+          strength: clampedStrength,
+          lastStudied: sql`CURRENT_TIMESTAMP`
+        })
+        .where(eq(schema.words.id, wordId))
+        .returning({ id: schema.words.id });
       
-      const result = stmt.run(clampedStrength, wordId);
-      
-      if (result.changes === 0) {
+      if (result.length === 0) {
         throw new Error(`Word with ID ${wordId} not found`);
       }
     } catch (error) {
@@ -128,15 +132,15 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      const stmt = db.prepare(`
-        UPDATE words 
-        SET known = ?, last_studied = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `);
+      const result = await db.update(schema.words)
+        .set({ 
+          known,
+          lastStudied: sql`CURRENT_TIMESTAMP`
+        })
+        .where(eq(schema.words.id, wordId))
+        .returning({ id: schema.words.id });
       
-      const result = stmt.run(known ? 1 : 0, wordId);
-      
-      if (result.changes === 0) {
+      if (result.length === 0) {
         throw new Error(`Word with ID ${wordId} not found`);
       }
     } catch (error) {
@@ -151,15 +155,15 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      const stmt = db.prepare(`
-        UPDATE words 
-        SET ignored = ?, last_studied = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `);
+      const result = await db.update(schema.words)
+        .set({ 
+          ignored,
+          lastStudied: sql`CURRENT_TIMESTAMP`
+        })
+        .where(eq(schema.words.id, wordId))
+        .returning({ id: schema.words.id });
       
-      const result = stmt.run(ignored ? 1 : 0, wordId);
-      
-      if (result.changes === 0) {
+      if (result.length === 0) {
         throw new Error(`Word with ID ${wordId} not found`);
       }
     } catch (error) {
@@ -188,16 +192,17 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const remainingLimit = limit - dueWords.length;
       const now = new Date().toISOString();
       
-      const stmt = db.prepare(`
-        SELECT * FROM words 
-        WHERE known = FALSE AND ignored = FALSE AND language = ?
-        AND next_due > ?
-        ORDER BY strength ASC, RANDOM()
-        LIMIT ?
-      `);
+      const result = await db.select().from(schema.words)
+        .where(and(
+          eq(schema.words.known, false),
+          eq(schema.words.ignored, false),
+          eq(schema.words.language, currentLanguage),
+          sql`${schema.words.nextDue} > ${now}`
+        ))
+        .orderBy(asc(schema.words.strength), sql`RANDOM()`)
+        .limit(remainingLimit);
       
-      const rows = stmt.all(currentLanguage, now, remainingLimit) as any[];
-      const additionalWords = rows.map(this.mapRowToWord);
+      const additionalWords = result.map(this.mapRowToWord);
       
       // Combine due words with additional words
       return [...dueWords, ...additionalWords];
@@ -215,22 +220,20 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     try {
       const currentLanguage = language || await this.getCurrentLanguage();
       
-      let query = `
-        SELECT * FROM words 
-        WHERE known = FALSE AND ignored = FALSE 
-        AND strength >= ? AND strength <= ? AND language = ?
-        ORDER BY last_studied ASC NULLS FIRST
-      `;
+      const conditions = and(
+        eq(schema.words.known, false),
+        eq(schema.words.ignored, false),
+        gte(schema.words.strength, minStrength),
+        lte(schema.words.strength, maxStrength),
+        eq(schema.words.language, currentLanguage)
+      );
       
-      if (limit) {
-        query += ' LIMIT ?';
-      }
+      const baseQuery = db.select().from(schema.words)
+        .where(conditions)
+        .orderBy(sql`${schema.words.lastStudied} ASC NULLS FIRST`);
       
-      const stmt = db.prepare(query);
-      const params = limit ? [minStrength, maxStrength, currentLanguage, limit] : [minStrength, maxStrength, currentLanguage];
-      const rows = stmt.all(...params) as any[];
-      
-      return rows.map(this.mapRowToWord);
+      const result = limit ? await baseQuery.limit(limit) : await baseQuery;
+      return result.map(this.mapRowToWord);
     } catch (error) {
       throw new Error(`Failed to get words by strength: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -244,28 +247,44 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     
     try {
       const currentLanguage = language || await this.getCurrentLanguage();
-      let whereConditions: string[] = [`w.language = ?`];
       
+      const conditions = [eq(schema.words.language, currentLanguage)];
       if (!includeKnown) {
-        whereConditions.push('w.known = FALSE');
+        conditions.push(eq(schema.words.known, false));
       }
-      
       if (!includeIgnored) {
-        whereConditions.push('w.ignored = FALSE');
+        conditions.push(eq(schema.words.ignored, false));
       }
       
-      const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
+      const result = await db.selectDistinct({ 
+        id: schema.words.id,
+        word: schema.words.word,
+        language: schema.words.language,
+        translation: schema.words.translation,
+        audioPath: schema.words.audioPath,
+        strength: schema.words.strength,
+        known: schema.words.known,
+        ignored: schema.words.ignored,
+        createdAt: schema.words.createdAt,
+        lastStudied: schema.words.lastStudied,
+        intervalDays: schema.words.intervalDays,
+        easeFactor: schema.words.easeFactor,
+        lastReview: schema.words.lastReview,
+        nextDue: schema.words.nextDue,
+        fsrsDifficulty: schema.words.fsrsDifficulty,
+        fsrsStability: schema.words.fsrsStability,
+        fsrsLapses: schema.words.fsrsLapses,
+        fsrsLastRating: schema.words.fsrsLastRating,
+        fsrsVersion: schema.words.fsrsVersion,
+        processingStatus: schema.words.processingStatus,
+        sentenceCount: schema.words.sentenceCount,
+      })
+        .from(schema.words)
+        .innerJoin(schema.sentences, eq(schema.words.id, schema.sentences.wordId))
+        .where(and(...conditions))
+        .orderBy(asc(schema.words.strength), sql`RANDOM()`);
       
-      const stmt = db.prepare(`
-        SELECT DISTINCT w.* FROM words w
-        INNER JOIN sentences s ON w.id = s.word_id
-        ${whereClause}
-        ORDER BY w.strength ASC, RANDOM()
-      `);
-      
-      const rows = stmt.all(currentLanguage) as any[];
-      const words = rows.map(this.mapRowToWord);
-      
+      const words = result.map(this.mapRowToWord);
       return this.shuffleArray(words);
     } catch (error) {
       throw new Error(`Failed to get words with sentences: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -280,27 +299,44 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     
     try {
       const currentLanguage = language || await this.getCurrentLanguage();
-      let whereConditions: string[] = [`w.language = ?`];
       
+      const conditions = [eq(schema.words.language, currentLanguage)];
       if (!includeKnown) {
-        whereConditions.push('w.known = FALSE');
+        conditions.push(eq(schema.words.known, false));
       }
-      
       if (!includeIgnored) {
-        whereConditions.push('w.ignored = FALSE');
+        conditions.push(eq(schema.words.ignored, false));
       }
       
-      const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
+      const result = await db.selectDistinct({ 
+        id: schema.words.id,
+        word: schema.words.word,
+        language: schema.words.language,
+        translation: schema.words.translation,
+        audioPath: schema.words.audioPath,
+        strength: schema.words.strength,
+        known: schema.words.known,
+        ignored: schema.words.ignored,
+        createdAt: schema.words.createdAt,
+        lastStudied: schema.words.lastStudied,
+        intervalDays: schema.words.intervalDays,
+        easeFactor: schema.words.easeFactor,
+        lastReview: schema.words.lastReview,
+        nextDue: schema.words.nextDue,
+        fsrsDifficulty: schema.words.fsrsDifficulty,
+        fsrsStability: schema.words.fsrsStability,
+        fsrsLapses: schema.words.fsrsLapses,
+        fsrsLastRating: schema.words.fsrsLastRating,
+        fsrsVersion: schema.words.fsrsVersion,
+        processingStatus: schema.words.processingStatus,
+        sentenceCount: schema.words.sentenceCount,
+      })
+        .from(schema.words)
+        .innerJoin(schema.sentences, eq(schema.words.id, schema.sentences.wordId))
+        .where(and(...conditions))
+        .orderBy(asc(schema.words.strength), sql`${schema.words.lastStudied} ASC NULLS FIRST`);
       
-      const stmt = db.prepare(`
-        SELECT DISTINCT w.* FROM words w
-        INNER JOIN sentences s ON w.id = s.word_id
-        ${whereClause}
-        ORDER BY w.strength ASC, w.last_studied ASC NULLS FIRST
-      `);
-      
-      const rows = stmt.all(currentLanguage) as any[];
-      return rows.map(this.mapRowToWord);
+      return result.map(this.mapRowToWord);
     } catch (error) {
       throw new Error(`Failed to get words with sentences ordered by strength: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -314,34 +350,28 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     
     try {
       const currentLanguage = language || await this.getCurrentLanguage();
-      let whereConditions: string[] = [`language = ?`];
       
+      const conditions = [eq(schema.words.language, currentLanguage)];
       if (!includeKnown) {
-        whereConditions.push('known = FALSE');
+        conditions.push(eq(schema.words.known, false));
       }
-      
       if (!includeIgnored) {
-        whereConditions.push('ignored = FALSE');
+        conditions.push(eq(schema.words.ignored, false));
       }
-      
-      const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
       
       // If we're getting words for learning (not including known/ignored), shuffle them
-      const orderClause = (!includeKnown && !includeIgnored) 
-        ? 'ORDER BY strength ASC, RANDOM()'
-        : 'ORDER BY created_at DESC';
+      const shouldShuffle = !includeKnown && !includeIgnored;
       
-      const stmt = db.prepare(`
-        SELECT * FROM words 
-        ${whereClause}
-        ${orderClause}
-      `);
+      const baseQuery = db.select().from(schema.words)
+        .where(and(...conditions));
       
-      const rows = stmt.all(currentLanguage) as any[];
-      const words = rows.map(this.mapRowToWord);
+      const result = shouldShuffle 
+        ? await baseQuery.orderBy(asc(schema.words.strength), sql`RANDOM()`)
+        : await baseQuery.orderBy(desc(schema.words.createdAt));
+      const words = result.map(this.mapRowToWord);
       
       // Additional shuffling for learning words to ensure variety
-      if (!includeKnown && !includeIgnored) {
+      if (shouldShuffle) {
         return this.shuffleArray(words);
       }
       
@@ -358,10 +388,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      const stmt = db.prepare('SELECT * FROM words WHERE id = ?');
-      const row = stmt.get(wordId) as any;
+      const result = await db.select().from(schema.words)
+        .where(eq(schema.words.id, wordId))
+        .limit(1);
       
-      return row ? this.mapRowToWord(row) : null;
+      return result.length > 0 ? this.mapRowToWord(result[0]) : null;
     } catch (error) {
       throw new Error(`Failed to get word by ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -389,34 +420,23 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const parts = sentenceParts ?? splitSentenceIntoParts(sentence);
       const serializedParts = serializeSentenceParts(parts);
 
-      const stmt = db.prepare(`
-        INSERT INTO sentences (
-          word_id, sentence, translation, audio_path,
-          context_before, context_after, context_before_translation, context_after_translation,
-          sentence_parts
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      
-      const result = stmt.run(
-        wordId, 
-        sentence, 
-        translation, 
+      const result = await db.insert(schema.sentences).values({
+        wordId,
+        sentence,
+        translation,
         audioPath,
-        contextBefore || null,
-        contextAfter || null,
-        contextBeforeTranslation || null,
-        contextAfterTranslation || null,
-        serializedParts
-      );
+        contextBefore: contextBefore || null,
+        contextAfter: contextAfter || null,
+        contextBeforeTranslation: contextBeforeTranslation || null,
+        contextAfterTranslation: contextAfterTranslation || null,
+        sentenceParts: serializedParts,
+      }).returning({ id: schema.sentences.id });
 
-      db.prepare(`
-        UPDATE words 
-        SET sentence_count = sentence_count + 1
-        WHERE id = ?
-      `).run(wordId);
+      await db.update(schema.words)
+        .set({ sentenceCount: sql`${schema.words.sentenceCount} + 1` })
+        .where(eq(schema.words.id, wordId));
       
-      return result.lastInsertRowid as number;
+      return result[0].id;
     } catch (error) {
       throw new Error(`Failed to insert sentence: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -429,15 +449,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      const stmt = db.prepare(`
-        SELECT * FROM sentences 
-        WHERE word_id = ?
-        ORDER BY RANDOM()
-      `);
+      const result = await db.select().from(schema.sentences)
+        .where(eq(schema.sentences.wordId, wordId))
+        .orderBy(sql`RANDOM()`);
       
-      const rows = stmt.all(wordId) as any[];
-      
-      return rows.map(this.mapRowToSentence);
+      return result.map(this.mapRowToSentence);
     } catch (error) {
       throw new Error(`Failed to get sentences by word: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -450,15 +466,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      const stmt = db.prepare(`
-        UPDATE sentences 
-        SET last_shown = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `);
+      const result = await db.update(schema.sentences)
+        .set({ lastShown: sql`CURRENT_TIMESTAMP` })
+        .where(eq(schema.sentences.id, sentenceId))
+        .returning({ id: schema.sentences.id });
       
-      const result = stmt.run(sentenceId);
-      
-      if (result.changes === 0) {
+      if (result.length === 0) {
         throw new Error(`Sentence with ID ${sentenceId} not found`);
       }
     } catch (error) {
@@ -472,13 +485,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   async updateSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void> {
     const db = this.getDb();
     try {
-      const stmt = db.prepare(`
-        UPDATE sentences
-        SET audio_path = ?
-        WHERE id = ?
-      `);
-      const result = stmt.run(audioPath, sentenceId);
-      if (result.changes === 0) {
+      const result = await db.update(schema.sentences)
+        .set({ audioPath })
+        .where(eq(schema.sentences.id, sentenceId))
+        .returning({ id: schema.sentences.id });
+      
+      if (result.length === 0) {
         throw new Error(`Sentence with ID ${sentenceId} not found`);
       }
     } catch (error) {
@@ -493,10 +505,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      const stmt = db.prepare('SELECT * FROM sentences WHERE id = ?');
-      const row = stmt.get(sentenceId) as any;
+      const result = await db.select().from(schema.sentences)
+        .where(eq(schema.sentences.id, sentenceId))
+        .limit(1);
       
-      return row ? this.mapRowToSentence(row) : null;
+      return result.length > 0 ? this.mapRowToSentence(result[0]) : null;
     } catch (error) {
       throw new Error(`Failed to get sentence by ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -509,23 +522,23 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      const sentence = db.prepare('SELECT word_id FROM sentences WHERE id = ?').get(sentenceId) as { word_id: number } | undefined;
-      const stmt = db.prepare('DELETE FROM sentences WHERE id = ?');
-      const result = stmt.run(sentenceId);
+      const sentence = await db.select({ wordId: schema.sentences.wordId })
+        .from(schema.sentences)
+        .where(eq(schema.sentences.id, sentenceId))
+        .limit(1);
       
-      if (result.changes === 0) {
+      const result = await db.delete(schema.sentences)
+        .where(eq(schema.sentences.id, sentenceId))
+        .returning({ id: schema.sentences.id });
+      
+      if (result.length === 0) {
         throw new Error(`Sentence with ID ${sentenceId} not found`);
       }
 
-      if (sentence?.word_id) {
-        db.prepare(`
-          UPDATE words 
-          SET sentence_count = CASE 
-            WHEN sentence_count > 0 THEN sentence_count - 1 
-            ELSE 0 
-          END
-          WHERE id = ?
-        `).run(sentence.word_id);
+      if (sentence.length > 0 && sentence[0].wordId) {
+        await db.update(schema.words)
+          .set({ sentenceCount: sql`CASE WHEN ${schema.words.sentenceCount} > 0 THEN ${schema.words.sentenceCount} - 1 ELSE 0 END` })
+          .where(eq(schema.words.id, sentence[0].wordId));
       }
     } catch (error) {
       throw new Error(`Failed to delete sentence: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -541,15 +554,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      const stmt = db.prepare(`
-        UPDATE words 
-        SET last_studied = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `);
+      const result = await db.update(schema.words)
+        .set({ lastStudied: sql`CURRENT_TIMESTAMP` })
+        .where(eq(schema.words.id, wordId))
+        .returning({ id: schema.words.id });
       
-      const result = stmt.run(wordId);
-      
-      if (result.changes === 0) {
+      if (result.length === 0) {
         throw new Error(`Word with ID ${wordId} not found`);
       }
     } catch (error) {
@@ -566,22 +576,24 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     try {
       const currentLanguage = language || await this.getCurrentLanguage();
       
-      const statsStmt = db.prepare(`
-        SELECT 
-          COUNT(*) as totalWords,
-          COUNT(CASE WHEN last_studied IS NOT NULL THEN 1 END) as wordsStudied,
-          AVG(CASE WHEN last_studied IS NOT NULL THEN strength ELSE NULL END) as averageStrength,
-          MAX(last_studied) as lastStudyDate
-        FROM words
-        WHERE ignored = FALSE AND language = ?
-      `);
+      const result = await db.select({
+        totalWords: count(),
+        wordsStudied: sql<number>`COUNT(CASE WHEN ${schema.words.lastStudied} IS NOT NULL THEN 1 END)`,
+        averageStrength: sql<number>`AVG(CASE WHEN ${schema.words.lastStudied} IS NOT NULL THEN ${schema.words.strength} ELSE NULL END)`,
+        lastStudyDate: max(schema.words.lastStudied),
+      })
+        .from(schema.words)
+        .where(and(
+          eq(schema.words.ignored, false),
+          eq(schema.words.language, currentLanguage)
+        ));
       
-      const stats = statsStmt.get(currentLanguage) as any;
+      const stats = result[0];
       
       return {
-        totalWords: stats.totalWords || 0,
-        wordsStudied: stats.wordsStudied || 0,
-        averageStrength: stats.averageStrength || 0,
+        totalWords: Number(stats.totalWords) || 0,
+        wordsStudied: Number(stats.wordsStudied) || 0,
+        averageStrength: Number(stats.averageStrength) || 0,
         lastStudyDate: stats.lastStudyDate ? new Date(stats.lastStudyDate) : undefined
       };
     } catch (error) {
@@ -596,12 +608,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      const stmt = db.prepare(`
-        INSERT INTO progress (words_studied, when_studied)
-        VALUES (?, CURRENT_TIMESTAMP)
-      `);
-      
-      stmt.run(wordsStudied);
+      await db.insert(schema.progress).values({
+        wordsStudied,
+        whenStudied: sql`CURRENT_TIMESTAMP`,
+      });
     } catch (error) {
       throw new Error(`Failed to record study session: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -614,19 +624,19 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      const stmt = db.prepare(`
-        SELECT id, words_studied, when_studied
-        FROM progress
-        ORDER BY when_studied DESC
-        LIMIT ?
-      `);
+      const result = await db.select({
+        id: schema.progress.id,
+        wordsStudied: schema.progress.wordsStudied,
+        whenStudied: schema.progress.whenStudied,
+      })
+        .from(schema.progress)
+        .orderBy(desc(schema.progress.whenStudied))
+        .limit(limit);
       
-      const rows = stmt.all(limit) as any[];
-      
-      return rows.map(row => ({
+      return result.map(row => ({
         id: row.id,
-        wordsStudied: row.words_studied,
-        whenStudied: new Date(row.when_studied)
+        wordsStudied: row.wordsStudied ?? 0,
+        whenStudied: new Date(row.whenStudied)
       }));
     } catch (error) {
       throw new Error(`Failed to get recent study sessions: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -655,16 +665,17 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const remainingLimit = limit - dueWords.length;
       const now = new Date().toISOString();
       
-      const stmt = db.prepare(`
-        SELECT * FROM words 
-        WHERE known = FALSE AND ignored = FALSE AND language = ?
-        AND next_due > ?
-        ORDER BY strength ASC, RANDOM()
-        LIMIT ?
-      `);
+      const result = await db.select().from(schema.words)
+        .where(and(
+          eq(schema.words.known, false),
+          eq(schema.words.ignored, false),
+          eq(schema.words.language, currentLanguage),
+          sql`${schema.words.nextDue} > ${now}`
+        ))
+        .orderBy(asc(schema.words.strength), sql`RANDOM()`)
+        .limit(remainingLimit);
       
-      const rows = stmt.all(currentLanguage, now, remainingLimit) as any[];
-      const additionalWords = rows.map(this.mapRowToWord);
+      const additionalWords = result.map(this.mapRowToWord);
       
       return [...dueWords, ...additionalWords];
     } catch (error) {
@@ -679,16 +690,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      const stmt = db.prepare(`
-        SELECT * FROM sentences 
-        WHERE word_id = ?
-        ORDER BY RANDOM()
-        LIMIT 1
-      `);
+      const result = await db.select().from(schema.sentences)
+        .where(eq(schema.sentences.wordId, wordId))
+        .orderBy(sql`RANDOM()`)
+        .limit(1);
       
-      const row = stmt.get(wordId) as any;
-      
-      return row ? this.mapRowToSentence(row) : null;
+      return result.length > 0 ? this.mapRowToSentence(result[0]) : null;
     } catch (error) {
       throw new Error(`Failed to get random sentence for word: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -703,10 +710,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      const stmt = db.prepare('SELECT value FROM settings WHERE key = ?');
-      const row = stmt.get(key) as any;
+      const result = await db.select({ value: schema.settings.value })
+        .from(schema.settings)
+        .where(eq(schema.settings.key, key))
+        .limit(1);
       
-      return row ? row.value : null;
+      return result.length > 0 ? result[0].value : null;
     } catch (error) {
       throw new Error(`Failed to get setting: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -719,12 +728,17 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      const stmt = db.prepare(`
-        INSERT OR REPLACE INTO settings (key, value, updated_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP)
-      `);
-      
-      stmt.run(key, value);
+      await db.insert(schema.settings).values({
+        key,
+        value,
+        updatedAt: sql`CURRENT_TIMESTAMP`,
+      }).onConflictDoUpdate({
+        target: schema.settings.key,
+        set: {
+          value,
+          updatedAt: sql`CURRENT_TIMESTAMP`,
+        },
+      });
     } catch (error) {
       throw new Error(`Failed to set setting: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -752,15 +766,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      const stmt = db.prepare(`
-        SELECT DISTINCT language 
-        FROM words 
-        ORDER BY language ASC
-      `);
+      const result = await db.selectDistinct({ language: schema.words.language })
+        .from(schema.words)
+        .orderBy(asc(schema.words.language));
       
-      const rows = stmt.all() as any[];
-      
-      return rows.map(row => row.language);
+      return result.map(row => row.language);
     } catch (error) {
       throw new Error(`Failed to get available languages: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -773,23 +783,20 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      const stmt = db.prepare(`
-        SELECT 
-          language,
-          COUNT(*) as totalWords,
-          COUNT(CASE WHEN last_studied IS NOT NULL THEN 1 END) as studiedWords
-        FROM words
-        WHERE ignored = FALSE
-        GROUP BY language
-        ORDER BY language ASC
-      `);
+      const result = await db.select({
+        language: schema.words.language,
+        totalWords: count(),
+        studiedWords: sql<number>`COUNT(CASE WHEN ${schema.words.lastStudied} IS NOT NULL THEN 1 END)`,
+      })
+        .from(schema.words)
+        .where(eq(schema.words.ignored, false))
+        .groupBy(schema.words.language)
+        .orderBy(asc(schema.words.language));
       
-      const rows = stmt.all() as any[];
-      
-      return rows.map(row => ({
+      return result.map(row => ({
         language: row.language,
-        totalWords: row.totalWords || 0,
-        studiedWords: row.studiedWords || 0
+        totalWords: Number(row.totalWords) || 0,
+        studiedWords: Number(row.studiedWords) || 0
       }));
     } catch (error) {
       throw new Error(`Failed to get language stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -805,25 +812,24 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     try {
       const currentLanguage = language || await this.getCurrentLanguage();
 
-      const stmt = db.prepare(`
-        SELECT word, pos, glosses, lang
-        FROM dict
-        WHERE LOWER(word) = LOWER(?) AND lang = ?
-        ORDER BY pos ASC, word ASC
-      `);
+      const result = await db.select({
+        word: schema.dict.word,
+        pos: schema.dict.pos,
+        glosses: schema.dict.glosses,
+        lang: schema.dict.lang,
+      })
+        .from(schema.dict)
+        .where(and(
+          sql`LOWER(${schema.dict.word}) = LOWER(${word})`,
+          eq(schema.dict.lang, currentLanguage)
+        ))
+        .orderBy(asc(schema.dict.pos), asc(schema.dict.word));
 
-      const rows = stmt.all(word, currentLanguage) as Array<{
-        word: string;
-        pos: string;
-        glosses: string;
-        lang: string;
-      }>;
-
-      return rows.map(row => ({
-        word: row.word,
-        pos: row.pos,
-        glosses: this.parseGlossesField(row.glosses),
-        lang: row.lang
+      return result.map(row => ({
+        word: row.word || '',
+        pos: row.pos || '',
+        glosses: this.parseGlossesField(row.glosses || ''),
+        lang: row.lang || ''
       }));
     } catch (error) {
       throw new Error(`Failed to lookup dictionary entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -834,12 +840,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
 
     try {
-      const stmt = db.prepare(`
-        UPDATE words
-        SET processing_status = ?
-        WHERE id = ?
-      `);
-      stmt.run(status, wordId);
+      await db.update(schema.words)
+        .set({ processingStatus: status })
+        .where(eq(schema.words.id, wordId));
     } catch (error) {
       throw new Error(`Failed to update word processing status: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -849,15 +852,19 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
 
     try {
-      const stmt = db.prepare(`
-        SELECT processing_status, sentence_count
-        FROM words
-        WHERE id = ?
-      `);
+      const result = await db.select({
+        processingStatus: schema.words.processingStatus,
+        sentenceCount: schema.words.sentenceCount,
+      })
+        .from(schema.words)
+        .where(eq(schema.words.id, wordId))
+        .limit(1);
 
-      const row = stmt.get(wordId) as { processing_status: WordProcessingStatus; sentence_count: number } | undefined;
-      return row
-        ? { processingStatus: row.processing_status ?? 'ready', sentenceCount: row.sentence_count ?? 0 }
+      return result.length > 0
+        ? { 
+            processingStatus: result[0].processingStatus ?? 'ready', 
+            sentenceCount: result[0].sentenceCount ?? 0 
+          }
         : null;
     } catch (error) {
       throw new Error(`Failed to get word processing info: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -874,22 +881,23 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
 
     try {
-      const statusQuery = `
-        SELECT status, COUNT(*) as total
-        FROM word_generation_queue
-        ${language ? 'WHERE language = ?' : ''}
-        GROUP BY status
-      `;
+      const conditions = language 
+        ? [eq(schema.wordGenerationQueue.language, language)]
+        : [];
 
-      const rows = (language
-        ? db.prepare(statusQuery).all(language)
-        : db.prepare(statusQuery).all()) as Array<{ status: string; total: number }>;
+      const statusRows = await db.select({
+        status: schema.wordGenerationQueue.status,
+        total: count(),
+      })
+        .from(schema.wordGenerationQueue)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .groupBy(schema.wordGenerationQueue.status);
 
-      const summary = rows.reduce(
+      const summary = statusRows.reduce(
         (acc, row) => {
-          if (row.status === 'queued') acc.queued += row.total;
-          if (row.status === 'processing') acc.processing += row.total;
-          if (row.status === 'failed') acc.failed += row.total;
+          if (row.status === 'queued') acc.queued += Number(row.total);
+          if (row.status === 'processing') acc.processing += Number(row.total);
+          if (row.status === 'failed') acc.failed += Number(row.total);
           return acc;
         },
         {
@@ -901,26 +909,29 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         }
       );
 
-      const jobWordQuery = `
-        SELECT 
-          q.word_id as wordId,
-          q.status as status,
-          q.language as language,
-          q.topic as topic,
-          w.word as word
-        FROM word_generation_queue q
-        INNER JOIN words w ON w.id = q.word_id
-        WHERE q.status IN ('queued', 'processing')
-          AND w.processing_status != 'failed'
-          ${language ? 'AND q.language = ?' : ''}
-        ORDER BY 
-          CASE q.status WHEN 'processing' THEN 0 ELSE 1 END,
-          q.updated_at ASC
-      `;
+      const jobWordConditions = [
+        inArray(schema.wordGenerationQueue.status, ['queued', 'processing']),
+        sql`${schema.words.processingStatus} != 'failed'`,
+      ];
 
-      const jobWordRows = (language
-        ? db.prepare(jobWordQuery).all(language)
-        : db.prepare(jobWordQuery).all()) as Array<{ wordId: number; status: string; language: string; topic: string | null; word: string }>;
+      if (language) {
+        jobWordConditions.push(eq(schema.wordGenerationQueue.language, language));
+      }
+
+      const jobWordRows = await db.select({
+        wordId: schema.wordGenerationQueue.wordId,
+        status: schema.wordGenerationQueue.status,
+        language: schema.wordGenerationQueue.language,
+        topic: schema.wordGenerationQueue.topic,
+        word: schema.words.word,
+      })
+        .from(schema.wordGenerationQueue)
+        .innerJoin(schema.words, eq(schema.wordGenerationQueue.wordId, schema.words.id))
+        .where(and(...jobWordConditions))
+        .orderBy(
+          sql`CASE ${schema.wordGenerationQueue.status} WHEN 'processing' THEN 0 ELSE 1 END`,
+          asc(schema.wordGenerationQueue.updatedAt)
+        );
 
       for (const job of jobWordRows) {
         const info: JobWordInfo = {
@@ -947,23 +958,30 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
 
     try {
-      const stmt = db.prepare(`
-        INSERT INTO word_generation_queue (
-          word_id, language, topic, desired_sentence_count, status, attempts, last_error, created_at, updated_at, started_at
-        )
-        VALUES (?, ?, ?, ?, 'queued', 0, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL)
-        ON CONFLICT(word_id) DO UPDATE SET
-          language = excluded.language,
-          topic = excluded.topic,
-          desired_sentence_count = excluded.desired_sentence_count,
-          status = 'queued',
-          attempts = 0,
-          last_error = NULL,
-          updated_at = CURRENT_TIMESTAMP,
-          started_at = NULL
-      `);
-
-      stmt.run(wordId, language, topic || null, desiredSentenceCount);
+      await db.insert(schema.wordGenerationQueue).values({
+        wordId,
+        language,
+        topic: topic || null,
+        desiredSentenceCount,
+        status: 'queued',
+        attempts: 0,
+        lastError: null,
+        createdAt: sql`CURRENT_TIMESTAMP`,
+        updatedAt: sql`CURRENT_TIMESTAMP`,
+        startedAt: null,
+      }).onConflictDoUpdate({
+        target: schema.wordGenerationQueue.wordId,
+        set: {
+          language,
+          topic: topic || null,
+          desiredSentenceCount,
+          status: 'queued',
+          attempts: 0,
+          lastError: null,
+          updatedAt: sql`CURRENT_TIMESTAMP`,
+          startedAt: null,
+        },
+      });
 
       await this.updateWordProcessingStatus(wordId, 'queued');
     } catch (error) {
@@ -975,14 +993,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
 
     try {
-      const row = db.prepare(`
-        SELECT * FROM word_generation_queue
-        WHERE status = 'queued'
-        ORDER BY updated_at ASC, created_at ASC
-        LIMIT 1
-      `).get() as any | undefined;
+      const result = await db.select().from(schema.wordGenerationQueue)
+        .where(eq(schema.wordGenerationQueue.status, 'queued'))
+        .orderBy(asc(schema.wordGenerationQueue.updatedAt), asc(schema.wordGenerationQueue.createdAt))
+        .limit(1);
 
-      return row ? this.mapRowToWordGenerationJob(row) : null;
+      return result.length > 0 ? this.mapRowToWordGenerationJob(result[0]) : null;
     } catch (error) {
       throw new Error(`Failed to get next word generation job: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -992,15 +1008,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
 
     try {
-      const stmt = db.prepare(`
-        UPDATE word_generation_queue
-        SET status = 'processing',
-            attempts = attempts + 1,
-            started_at = CURRENT_TIMESTAMP,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `);
-      stmt.run(jobId);
+      await db.update(schema.wordGenerationQueue)
+        .set({
+          status: 'processing',
+          attempts: sql`${schema.wordGenerationQueue.attempts} + 1`,
+          startedAt: sql`CURRENT_TIMESTAMP`,
+          updatedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(schema.wordGenerationQueue.id, jobId));
     } catch (error) {
       throw new Error(`Failed to mark job processing: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -1011,15 +1026,19 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const nextAttempt = new Date(Date.now() + delayMs).toISOString();
 
     try {
-      const stmt = db.prepare(`
-        UPDATE word_generation_queue
-        SET status = 'queued',
-            updated_at = ?,
-            started_at = NULL,
-            last_error = COALESCE(?, last_error)
-        WHERE id = ?
-      `);
-      stmt.run(nextAttempt, lastError || null, jobId);
+      const updateData: any = {
+        status: 'queued',
+        updatedAt: nextAttempt,
+        startedAt: null,
+      };
+      
+      if (lastError !== undefined) {
+        updateData.lastError = lastError;
+      }
+      
+      await db.update(schema.wordGenerationQueue)
+        .set(updateData)
+        .where(eq(schema.wordGenerationQueue.id, jobId));
     } catch (error) {
       throw new Error(`Failed to reschedule job: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -1029,14 +1048,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
 
     try {
-      const stmt = db.prepare(`
-        UPDATE word_generation_queue
-        SET status = 'completed',
-            updated_at = CURRENT_TIMESTAMP,
-            started_at = NULL
-        WHERE id = ?
-      `);
-      stmt.run(jobId);
+      await db.update(schema.wordGenerationQueue)
+        .set({
+          status: 'completed',
+          updatedAt: sql`CURRENT_TIMESTAMP`,
+          startedAt: null,
+        })
+        .where(eq(schema.wordGenerationQueue.id, jobId));
     } catch (error) {
       throw new Error(`Failed to complete job: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -1046,15 +1064,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
 
     try {
-      const stmt = db.prepare(`
-        UPDATE word_generation_queue
-        SET status = 'failed',
-            last_error = ?,
-            updated_at = CURRENT_TIMESTAMP,
-            started_at = NULL
-        WHERE id = ?
-      `);
-      stmt.run(errorMessage, jobId);
+      await db.update(schema.wordGenerationQueue)
+        .set({
+          status: 'failed',
+          lastError: errorMessage,
+          updatedAt: sql`CURRENT_TIMESTAMP`,
+          startedAt: null,
+        })
+        .where(eq(schema.wordGenerationQueue.id, jobId));
     } catch (error) {
       throw new Error(`Failed to mark job failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -1083,55 +1100,39 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     
     try {
       const nowIso = new Date().toISOString();
-      const updates = [
-        'strength = ?',
-        'interval_days = ?',
-        'ease_factor = ?',
-        'last_review = ?',
-        'next_due = ?',
-        'last_studied = ?'
-      ];
-      const params: Array<number | string | null> = [
-        Math.max(0, Math.min(100, strength)),
+      const updateData: any = {
+        strength: Math.max(0, Math.min(100, strength)),
         intervalDays,
         easeFactor,
-        nowIso,
-        nextDue.toISOString(),
-        nowIso
-      ];
+        lastReview: nowIso,
+        nextDue: nextDue.toISOString(),
+        lastStudied: nowIso,
+      };
       
       if (options) {
         if (options.fsrsDifficulty !== undefined) {
-          updates.push('fsrs_difficulty = ?');
-          params.push(options.fsrsDifficulty);
+          updateData.fsrsDifficulty = options.fsrsDifficulty;
         }
         if (options.fsrsStability !== undefined) {
-          updates.push('fsrs_stability = ?');
-          params.push(options.fsrsStability);
+          updateData.fsrsStability = options.fsrsStability;
         }
         if (options.fsrsLapses !== undefined) {
-          updates.push('fsrs_lapses = ?');
-          params.push(options.fsrsLapses);
+          updateData.fsrsLapses = options.fsrsLapses;
         }
         if (options.fsrsLastRating !== undefined) {
-          updates.push('fsrs_last_rating = ?');
-          params.push(options.fsrsLastRating);
+          updateData.fsrsLastRating = options.fsrsLastRating;
         }
         if (options.fsrsVersion !== undefined) {
-          updates.push('fsrs_version = ?');
-          params.push(options.fsrsVersion);
+          updateData.fsrsVersion = options.fsrsVersion;
         }
       }
 
-      const stmt = db.prepare(`
-        UPDATE words 
-        SET ${updates.join(', ')}
-        WHERE id = ?
-      `);
+      const result = await db.update(schema.words)
+        .set(updateData)
+        .where(eq(schema.words.id, wordId))
+        .returning({ id: schema.words.id });
       
-      const result = stmt.run(...params, wordId);
-      
-      if (result.changes === 0) {
+      if (result.length === 0) {
         throw new Error(`Word with ID ${wordId} not found`);
       }
     } catch (error) {
@@ -1149,22 +1150,18 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const currentLanguage = language || await this.getCurrentLanguage();
       const now = new Date().toISOString();
       
-      let query = `
-        SELECT * FROM words 
-        WHERE known = FALSE AND ignored = FALSE 
-        AND language = ? AND next_due <= ?
-        ORDER BY next_due ASC, strength ASC
-      `;
+      const baseQuery = db.select().from(schema.words)
+        .where(and(
+          eq(schema.words.known, false),
+          eq(schema.words.ignored, false),
+          eq(schema.words.language, currentLanguage),
+          sql`${schema.words.nextDue} <= ${now}`
+        ))
+        .orderBy(asc(schema.words.nextDue), asc(schema.words.strength));
       
-      if (limit) {
-        query += ' LIMIT ?';
-      }
+      const result = limit ? await baseQuery.limit(limit) : await baseQuery;
       
-      const stmt = db.prepare(query);
-      const params = limit ? [currentLanguage, now, limit] : [currentLanguage, now];
-      const rows = stmt.all(...params) as any[];
-      
-      return rows.map(this.mapRowToWord);
+      return result.map(this.mapRowToWord);
     } catch (error) {
       throw new Error(`Failed to get words due for review: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -1180,14 +1177,18 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const currentLanguage = language || await this.getCurrentLanguage();
       const now = new Date().toISOString();
       
-      const stmt = db.prepare(`
-        SELECT COUNT(*) as count FROM words 
-        WHERE known = FALSE AND ignored = FALSE 
-        AND language = ? AND next_due <= ?
-      `);
+      const result = await db.select({
+        count: count(),
+      })
+        .from(schema.words)
+        .where(and(
+          eq(schema.words.known, false),
+          eq(schema.words.ignored, false),
+          eq(schema.words.language, currentLanguage),
+          sql`${schema.words.nextDue} <= ${now}`
+        ));
       
-      const result = stmt.get(currentLanguage, now) as { count: number };
-      return result.count;
+      return Number(result[0].count);
     } catch (error) {
       throw new Error(`Failed to get words due count: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -1204,14 +1205,15 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const now = new Date().toISOString();
       
       // Get all due words first
-      const stmt = db.prepare(`
-        SELECT * FROM words 
-        WHERE known = FALSE AND ignored = FALSE 
-        AND language = ? AND next_due <= ?
-      `);
+      const result = await db.select().from(schema.words)
+        .where(and(
+          eq(schema.words.known, false),
+          eq(schema.words.ignored, false),
+          eq(schema.words.language, currentLanguage),
+          sql`${schema.words.nextDue} <= ${now}`
+        ));
       
-      const rows = stmt.all(currentLanguage, now) as any[];
-      const words = rows.map(this.mapRowToWord);
+      const words = result.map(this.mapRowToWord);
       
       // Sort by SRS priority (overdue first, then by strength)
       const sortedWords = words.sort((a, b) => {
@@ -1253,25 +1255,28 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       today.setHours(23, 59, 59, 999); // End of today
       const todayStr = today.toISOString();
       
-      const stmt = db.prepare(`
-        SELECT 
-          COUNT(*) as totalWords,
-          COUNT(CASE WHEN next_due <= ? THEN 1 END) as dueToday,
-          COUNT(CASE WHEN next_due < ? THEN 1 END) as overdue,
-          AVG(interval_days) as averageInterval,
-          AVG(ease_factor) as averageEaseFactor
-        FROM words
-        WHERE ignored = FALSE AND known = FALSE AND language = ?
-      `);
+      const result = await db.select({
+        totalWords: count(),
+        dueToday: sql<number>`COUNT(CASE WHEN ${schema.words.nextDue} <= ${todayStr} THEN 1 END)`,
+        overdue: sql<number>`COUNT(CASE WHEN ${schema.words.nextDue} < ${now} THEN 1 END)`,
+        averageInterval: avg(schema.words.intervalDays),
+        averageEaseFactor: avg(schema.words.easeFactor),
+      })
+        .from(schema.words)
+        .where(and(
+          eq(schema.words.ignored, false),
+          eq(schema.words.known, false),
+          eq(schema.words.language, currentLanguage)
+        ));
       
-      const result = stmt.get(todayStr, now, currentLanguage) as any;
+      const stats = result[0];
       
       return {
-        totalWords: result.totalWords || 0,
-        dueToday: result.dueToday || 0,
-        overdue: result.overdue || 0,
-        averageInterval: result.averageInterval || 1,
-        averageEaseFactor: result.averageEaseFactor || 2.5
+        totalWords: Number(stats.totalWords) || 0,
+        dueToday: Number(stats.dueToday) || 0,
+        overdue: Number(stats.overdue) || 0,
+        averageInterval: Number(stats.averageInterval) || 1,
+        averageEaseFactor: Number(stats.averageEaseFactor) || 2.5
       };
     } catch (error) {
       throw new Error(`Failed to get SRS stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -1303,9 +1308,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
 
     const db = this.getDb();
-    const deleteStmt = db.prepare('DELETE FROM dict WHERE lang = ?');
-    const insertStmt = db.prepare('INSERT INTO dict (word, pos, glosses, lang) VALUES (?, ?, ?, ?)');
-    const hasEntriesStmt = db.prepare('SELECT 1 FROM dict WHERE lang = ? LIMIT 1');
+    const rawDb = this.getRawDb();
+    const deleteStmt = rawDb.prepare('DELETE FROM dict WHERE lang = ?');
+    const insertStmt = rawDb.prepare('INSERT INTO dict (word, pos, glosses, lang) VALUES (?, ?, ?, ?)');
+    const hasEntriesStmt = rawDb.prepare('SELECT 1 FROM dict WHERE lang = ? LIMIT 1');
 
     for (const file of jsonlFiles) {
       const language = file.replace('_dict.jsonl', '');
@@ -1329,7 +1335,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       try {
         const entries = await this.parseDictionaryFile(filePath, language);
 
-        const transaction = db.transaction((dictionaryEntries: Array<{ word: string; pos: string; glosses: string; lang: string }>) => {
+        const transaction = rawDb.transaction((dictionaryEntries: Array<{ word: string; pos: string; glosses: string; lang: string }>) => {
           deleteStmt.run(language);
           for (const entry of dictionaryEntries) {
             insertStmt.run(entry.word, entry.pos, entry.glosses, entry.lang);
@@ -1424,15 +1430,19 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     return shuffled;
   }
 
-  private backfillSentenceParts(): void {
+  private async backfillSentenceParts(): Promise<void> {
     const db = this.getDb();
 
     try {
-      const rows = db.prepare(`
-        SELECT id, sentence 
-        FROM sentences 
-        WHERE sentence_parts IS NULL OR sentence_parts = ''
-      `).all() as Array<{ id: number; sentence: string }>;
+      const rows = await db.select({
+        id: schema.sentences.id,
+        sentence: schema.sentences.sentence,
+      })
+        .from(schema.sentences)
+        .where(or(
+          sql`${schema.sentences.sentenceParts} IS NULL`,
+          sql`${schema.sentences.sentenceParts} = ''`
+        ));
 
       if (!rows.length) {
         return;
@@ -1453,14 +1463,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         return;
       }
 
-      const updateStmt = db.prepare('UPDATE sentences SET sentence_parts = ? WHERE id = ?');
-      const updateTransaction = db.transaction((items: Array<{ id: number; serialized: string }>) => {
-        for (const item of items) {
-          updateStmt.run(item.serialized, item.id);
-        }
-      });
-
-      updateTransaction(updates);
+      for (const item of updates) {
+        await db.update(schema.sentences)
+          .set({ sentenceParts: item.serialized })
+          .where(eq(schema.sentences.id, item.id));
+      }
     } catch (error) {
       console.warn('Failed to backfill sentence parts:', error);
     }
@@ -1472,57 +1479,57 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       word: row.word,
       language: row.language,
       translation: row.translation,
-      audioPath: row.audio_path || '',
+      audioPath: row.audioPath || '',
       strength: row.strength,
       known: Boolean(row.known),
       ignored: Boolean(row.ignored),
-      createdAt: new Date(row.created_at),
-      lastStudied: row.last_studied ? new Date(row.last_studied) : undefined,
+      createdAt: new Date(row.createdAt),
+      lastStudied: row.lastStudied ? new Date(row.lastStudied) : undefined,
       // SRS fields
-      intervalDays: row.interval_days || 1,
-      easeFactor: row.ease_factor || 2.5,
-      lastReview: row.last_review ? new Date(row.last_review) : undefined,
-      nextDue: row.next_due ? new Date(row.next_due) : new Date(),
-      fsrsDifficulty: row.fsrs_difficulty ?? undefined,
-      fsrsStability: row.fsrs_stability ?? undefined,
-      fsrsLapses: row.fsrs_lapses ?? undefined,
-      fsrsLastRating: row.fsrs_last_rating ?? undefined,
-      fsrsVersion: row.fsrs_version ?? undefined,
-      processingStatus: row.processing_status ?? 'ready',
-      sentenceCount: row.sentence_count ?? 0
+      intervalDays: row.intervalDays || 1,
+      easeFactor: row.easeFactor || 2.5,
+      lastReview: row.lastReview ? new Date(row.lastReview) : undefined,
+      nextDue: row.nextDue ? new Date(row.nextDue) : new Date(),
+      fsrsDifficulty: row.fsrsDifficulty ?? undefined,
+      fsrsStability: row.fsrsStability ?? undefined,
+      fsrsLapses: row.fsrsLapses ?? undefined,
+      fsrsLastRating: row.fsrsLastRating ?? undefined,
+      fsrsVersion: row.fsrsVersion ?? undefined,
+      processingStatus: row.processingStatus ?? 'ready',
+      sentenceCount: row.sentenceCount ?? 0
     };
   }
 
   private mapRowToSentence(row: any): Sentence {
     return {
       id: row.id,
-      wordId: row.word_id,
+      wordId: row.wordId,
       sentence: row.sentence,
-      sentenceParts: parseSentenceParts(row.sentence_parts),
+      sentenceParts: parseSentenceParts(row.sentenceParts),
       translation: row.translation,
-      audioPath: row.audio_path || '',
-      createdAt: new Date(row.created_at),
-      lastShown: row.last_shown ? new Date(row.last_shown) : undefined,
-      contextBefore: row.context_before || undefined,
-      contextAfter: row.context_after || undefined,
-      contextBeforeTranslation: row.context_before_translation || undefined,
-      contextAfterTranslation: row.context_after_translation || undefined
+      audioPath: row.audioPath || '',
+      createdAt: new Date(row.createdAt),
+      lastShown: row.lastShown ? new Date(row.lastShown) : undefined,
+      contextBefore: row.contextBefore || undefined,
+      contextAfter: row.contextAfter || undefined,
+      contextBeforeTranslation: row.contextBeforeTranslation || undefined,
+      contextAfterTranslation: row.contextAfterTranslation || undefined
     };
   }
 
   private mapRowToWordGenerationJob(row: any): WordGenerationJob {
     return {
       id: row.id,
-      wordId: row.word_id,
+      wordId: row.wordId,
       language: row.language,
       topic: row.topic ?? undefined,
-      desiredSentenceCount: row.desired_sentence_count ?? 3,
+      desiredSentenceCount: row.desiredSentenceCount ?? 3,
       status: row.status as WordGenerationJobStatus,
       attempts: row.attempts ?? 0,
-      lastError: row.last_error ?? undefined,
-      createdAt: row.created_at ? new Date(row.created_at) : new Date(),
-      updatedAt: row.updated_at ? new Date(row.updated_at) : new Date(),
-      startedAt: row.started_at ? new Date(row.started_at) : undefined
+      lastError: row.lastError ?? undefined,
+      createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : new Date(),
+      startedAt: row.startedAt ? new Date(row.startedAt) : undefined
     };
   }
 

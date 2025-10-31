@@ -55,6 +55,8 @@
   },
   "dependencies": {
     "better-sqlite3": "^12.4.1",
+    "drizzle-kit": "^0.31.6",
+    "drizzle-orm": "^0.44.7",
     "lit": "^3.0.0",
     "node-record-lpcm16": "^1.0.1",
     "whisper-node": "^1.1.1",

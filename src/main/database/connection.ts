@@ -1,14 +1,17 @@
 /**
- * SQLite database connection and configuration
+ * SQLite database connection and configuration using Drizzle ORM
  */
 
 import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { DatabaseConfig } from '../../shared/types/database.js';
 import path from 'path';
 import fs from 'fs';
+import * as schema from './schema.js';
 
 export class DatabaseConnection {
   private db: Database.Database | null = null;
+  private drizzleDb: ReturnType<typeof drizzle> | null = null;
   private config: DatabaseConfig;
 
   constructor(config: DatabaseConfig) {
@@ -18,9 +21,9 @@ export class DatabaseConnection {
   /**
    * Initialize database connection with proper configuration
    */
-  async connect(): Promise<Database.Database> {
-    if (this.db) {
-      return this.db;
+  async connect(): Promise<ReturnType<typeof drizzle>> {
+    if (this.drizzleDb) {
+      return this.drizzleDb;
     }
 
     try {
@@ -47,16 +50,29 @@ export class DatabaseConnection {
       // Set synchronous mode for better performance with WAL
       this.db.pragma('synchronous = NORMAL');
 
-      return this.db;
+      // Create Drizzle instance
+      this.drizzleDb = drizzle(this.db, { schema });
+
+      return this.drizzleDb;
     } catch (error) {
       throw new Error(`Failed to connect to database: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   /**
-   * Get the current database instance
+   * Get the current Drizzle database instance
    */
-  getDatabase(): Database.Database {
+  getDatabase(): ReturnType<typeof drizzle> {
+    if (!this.drizzleDb) {
+      throw new Error('Database not connected. Call connect() first.');
+    }
+    return this.drizzleDb;
+  }
+
+  /**
+   * Get the raw better-sqlite3 database instance (for migrations and direct SQL)
+   */
+  getRawDatabase(): Database.Database {
     if (!this.db) {
       throw new Error('Database not connected. Call connect() first.');
     }
@@ -71,6 +87,7 @@ export class DatabaseConnection {
       try {
         this.db.close();
         this.db = null;
+        this.drizzleDb = null;
       } catch (error) {
         throw new Error(`Failed to close database: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
@@ -81,6 +98,6 @@ export class DatabaseConnection {
    * Check if database is connected
    */
   isConnected(): boolean {
-    return this.db !== null;
+    return this.db !== null && this.drizzleDb !== null;
   }
 }
