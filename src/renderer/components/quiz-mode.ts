@@ -1172,17 +1172,19 @@ export class QuizMode extends LitElement {
       this.quizSession.currentQuestionIndex++;
       this.currentQuestion = this.quizSession.questions[this.quizSession.currentQuestionIndex];
       
-      // Prioritize: Load next question's audio before autoplay (await to ensure it's ready)
-      await this.ensureCurrentQuestionAudioLoaded();
-      
-      // Immediately load next question's audio after current one is ready
-      this.preloadNextQuestionAudio();
-      
       // Save progress immediately when moving to next question
       this.saveQuizProgressToSession();
       
-      // Autoplay after audio is loaded (non-blocking)
+      // Start audio playback immediately (don't wait for loading)
       void this.maybeAutoplayCurrentQuestion();
+      
+      // Load current question's audio into cache in background (non-blocking)
+      void this.ensureCurrentQuestionAudioLoaded().catch(err => {
+        console.warn('Failed to load audio into cache:', err);
+      });
+      
+      // Immediately load next question's audio in background
+      this.preloadNextQuestionAudio();
     }
   }
 
@@ -1262,16 +1264,18 @@ export class QuizMode extends LitElement {
       return;
     }
 
-    // Ensure audio is loaded before playing (in case it wasn't preloaded yet)
-    await this.ensureCurrentQuestionAudioLoaded();
+    // Stop any currently playing audio (non-blocking)
+    void window.electronAPI.audio.stopAudio().catch(() => {
+      // Ignore errors when stopping
+    });
 
-    try {
-      await window.electronAPI.audio.stopAudio();
-    } catch (error) {
-      console.warn('Failed to stop audio before autoplay:', error);
-    }
-
-    await this.playAudio();
+    // Play audio immediately (don't wait for loading)
+    void this.playAudio();
+    
+    // Load audio into cache in background for next time (non-blocking)
+    void this.ensureCurrentQuestionAudioLoaded().catch(err => {
+      console.warn('Failed to load audio into cache:', err);
+    });
   }
 
   /**
@@ -1403,12 +1407,12 @@ export class QuizMode extends LitElement {
         return;
       }
 
-      // Try to use cached audio first (much faster - no file system access)
+      // Stop any currently playing audio
+      this.stopCachedAudio();
+
+      // Try to use cached audio first (instant playback)
       const cachedAudio = this.audioCache.get(audioPath);
       if (cachedAudio) {
-        // Stop any currently playing audio
-        this.stopCachedAudio();
-        
         // Use HTML5 Audio API to play from memory
         this.currentAudioElement = new Audio(cachedAudio);
         
@@ -1418,7 +1422,7 @@ export class QuizMode extends LitElement {
         });
         
         this.currentAudioElement.addEventListener('error', (e) => {
-          console.warn('Error playing cached audio, falling back to file system:', e);
+          console.warn('Error playing cached audio, falling back to IPC:', e);
           this.currentAudioElement = null;
           // Fall back to IPC playback
           void window.electronAPI.audio.playAudio(audioPath).catch(err => {
@@ -1432,12 +1436,15 @@ export class QuizMode extends LitElement {
         } catch (playError) {
           console.warn('Failed to play cached audio:', playError);
           this.currentAudioElement = null;
-          // Fall through to fallback
+          // Fall through to IPC playback
         }
       }
 
-      // Fallback: Use IPC to play from file system (original method)
-      await window.electronAPI.audio.playAudio(audioPath);
+      // Not cached: Start IPC playback immediately (non-blocking, returns quickly)
+      // IPC playback starts immediately and plays in background
+      void window.electronAPI.audio.playAudio(audioPath).catch(err => {
+        console.error('Failed to play audio via IPC:', err);
+      });
     } catch (error) {
       console.error('Error playing audio:', error);
     }

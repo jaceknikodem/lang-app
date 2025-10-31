@@ -378,15 +378,16 @@ export class SentenceViewer extends LitElement {
 
   private async handleAutoPlay() {
     try {
-      console.log('Auto-play: Stopping previous audio...');
-      // Stop any currently playing audio first
-      await window.electronAPI.audio.stopAudio();
-      console.log('Auto-play: Previous audio stopped, starting new audio...');
+      // Stop any currently playing audio (non-blocking)
+      void window.electronAPI.audio.stopAudio().catch(() => {
+        // Ignore errors when stopping
+      });
       
-      // Small delay to ensure audio is stopped before starting new one
+      // Start playing immediately (don't wait for stopping or loading)
+      // Use minimal delay just to ensure previous audio stops
       setTimeout(() => {
-        this.handlePlayAudio();
-      }, 100);
+        void this.handlePlayAudio();
+      }, 50);
     } catch (error) {
       console.warn('Failed to handle auto-play:', error);
     }
@@ -771,20 +772,24 @@ export class SentenceViewer extends LitElement {
     this.isPlayingAudio = true;
 
     try {
-      // Stop any currently playing audio first
-      await window.electronAPI.audio.stopAudio();
+      // Stop any currently playing audio (non-blocking)
+      void window.electronAPI.audio.stopAudio().catch(() => {
+        // Ignore errors when stopping
+      });
       
-      // Play the new audio
-      await window.electronAPI.audio.playAudio(this.sentence.audioPath);
-
-      this.dispatchEvent(new CustomEvent('sentence-audio-played', {
-        detail: {
-          sentenceId: this.sentence.id,
-          wordId: this.targetWord.id
-        },
-        bubbles: true,
-        composed: true
-      }));
+      // Play audio immediately (non-blocking - returns quickly)
+      void window.electronAPI.audio.playAudio(this.sentence.audioPath).then(() => {
+        this.dispatchEvent(new CustomEvent('sentence-audio-played', {
+          detail: {
+            sentenceId: this.sentence.id,
+            wordId: this.targetWord.id
+          },
+          bubbles: true,
+          composed: true
+        }));
+      }).catch(err => {
+        console.error('Failed to play audio:', err);
+      });
     } catch (error) {
       console.error('Failed to play audio:', error);
     } finally {

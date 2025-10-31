@@ -1052,14 +1052,19 @@ export class LearningMode extends LitElement {
       this.currentSentenceIndex = 0;
     }
 
-    // Prioritize: Load current sentence's audio before it's needed
-    await this.ensureCurrentSentenceAudioLoaded();
-    
-    // Immediately load next sentence's audio after current one is ready
-    this.preloadNextSentenceAudio();
-
     // Save progress to session
     this.saveProgressToSession();
+
+    // Load current sentence's audio into cache in background (non-blocking)
+    void this.ensureCurrentSentenceAudioLoaded().catch(err => {
+      console.warn('Failed to load audio into cache:', err);
+    });
+    
+    // Immediately load next sentence's audio in background
+    this.preloadNextSentenceAudio();
+
+    // Note: Audio autoplay is handled by sentence-viewer component when sentence changes
+    // It will start playing immediately without waiting for loading
   }
 
   private saveProgressToSession() {
@@ -1382,7 +1387,7 @@ export class LearningMode extends LitElement {
   }
 
   /**
-   * Play audio using cached data if available, otherwise fall back to IPC
+   * Play audio immediately - don't wait for loading
    */
   private async handlePlayCurrentAudio() {
     if (this.isLoading || this.error || this.showCompletion) return;
@@ -1393,30 +1398,27 @@ export class LearningMode extends LitElement {
       return;
     }
 
-    // Ensure audio is loaded before playing (in case it wasn't preloaded yet)
-    await this.ensureCurrentSentenceAudioLoaded();
-
     try {
       const audioPath = currentSentence.audioPath;
 
-      // Try to use cached audio first (much faster - no file system access)
+      // Stop any currently playing audio
+      this.stopCachedAudio();
+
+      // Try to use cached audio first (instant playback)
       const cachedAudio = this.audioCache.get(audioPath);
       if (cachedAudio) {
-        // Stop any currently playing audio
-        this.stopCachedAudio();
-        
         // Use HTML5 Audio API to play from memory
         this.currentAudioElement = new Audio(cachedAudio);
-        
+
         // Handle errors and cleanup
         this.currentAudioElement.addEventListener('ended', () => {
           this.currentAudioElement = null;
           // Increment strength when audio finishes playing
           void this.incrementStrengthForWord(currentWord.id);
         });
-        
+
         this.currentAudioElement.addEventListener('error', (e) => {
-          console.warn('Error playing cached audio, falling back to file system:', e);
+          console.warn('Error playing cached audio, falling back to IPC:', e);
           this.currentAudioElement = null;
           // Fall back to IPC playback
           void window.electronAPI.audio.playAudio(audioPath)
@@ -1425,20 +1427,31 @@ export class LearningMode extends LitElement {
               console.error('Failed to play audio via IPC:', err);
             });
         });
-        
+
         try {
           await this.currentAudioElement.play();
           return; // Success - audio playing from cache
         } catch (playError) {
           console.warn('Failed to play cached audio:', playError);
           this.currentAudioElement = null;
-          // Fall through to fallback
+          // Fall through to IPC playback
         }
       }
 
-      // Fallback: Use IPC to play from file system (original method)
-      await window.electronAPI.audio.playAudio(audioPath);
-      void this.incrementStrengthForWord(currentWord.id);
+      // Not cached: Start IPC playback immediately (non-blocking, returns quickly)
+      // IPC playback starts immediately and plays in background
+      void window.electronAPI.audio.playAudio(audioPath)
+        .then(() => void this.incrementStrengthForWord(currentWord.id))
+        .catch(err => {
+          console.error('Failed to play audio via IPC:', err);
+        });
+      
+      // Load audio into cache in background for next time (non-blocking)
+      if (!this.audioCache.has(audioPath)) {
+        void this.loadAudioIntoCache(audioPath).catch(err => {
+          console.warn(`Failed to load audio into cache: ${err}`);
+        });
+      }
     } catch (error) {
       console.error('Failed to play audio:', error);
     }
