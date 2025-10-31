@@ -10,9 +10,9 @@ import { router } from '../utils/router.js';
 import { sessionManager, type QuizSessionState } from '../utils/session-manager.js';
 import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 import './session-complete.js';
-import './audio-recorder.js';
 import type { SessionSummary } from './session-complete.js';
 import type { RecordingResult } from './audio-recorder.js';
+import type { RecordingOptions, RecordingSession } from '../../shared/types/audio.js';
 
 @customElement('quiz-mode')
 export class QuizMode extends LitElement {
@@ -51,7 +51,10 @@ export class QuizMode extends LitElement {
   private selectedWords: Word[] = [];
 
   @state()
-  private showRecorder = false;
+  private isRecording = false;
+
+  @state()
+  private recordingTime = 0;
 
   @state()
   private currentRecording: RecordingResult | null = null;
@@ -87,6 +90,8 @@ export class QuizMode extends LitElement {
   private sessionStartTime = Date.now();
   private keyboardUnsubscribe?: () => void;
   private lastAutoplayKey: string | null = null;
+  private recordingTimer: number | null = null;
+  private recordingStatusCheckTimer: number | null = null;
   
   // Audio cache: Map of audioPath -> blob URL
   // Using Blob URLs instead of data URLs for better performance (no base64 encoding/decoding)
@@ -207,6 +212,58 @@ export class QuizMode extends LitElement {
         align-items: center;
         gap: var(--spacing-md);
         margin-bottom: var(--spacing-sm);
+      }
+
+      .question-actions {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        flex-shrink: 0;
+      }
+
+      .record-button {
+        background: var(--background-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 14px;
+        color: var(--text-secondary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        width: 32px;
+        height: 32px;
+        line-height: 1;
+      }
+
+      .record-button:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+        background: rgba(0, 0, 0, 0.03);
+      }
+
+      .record-button.active {
+        background: var(--primary-color);
+        border-color: var(--primary-color);
+        color: white;
+      }
+
+      .record-button.active:hover {
+        background: var(--primary-dark);
+        border-color: var(--primary-dark);
+      }
+
+      .record-button.recording {
+        background: var(--error-color);
+        border-color: var(--error-color);
+        color: white;
+      }
+
+      .record-button.recording:hover {
+        background: var(--error-dark);
+        border-color: var(--error-dark);
       }
 
       .question-text {
@@ -571,10 +628,72 @@ export class QuizMode extends LitElement {
       .recording-section {
         margin-top: var(--spacing-md);
         margin-bottom: var(--spacing-lg);
+      }
+
+      .recording-status-container {
         padding: var(--spacing-md);
         background: var(--background-primary);
         border-radius: var(--border-radius);
-        border: 2px solid var(--primary-color);
+        border: 2px solid var(--error-color);
+        margin-bottom: var(--spacing-md);
+      }
+
+      .recording-status {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--spacing-sm);
+      }
+
+      .recording-indicator {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        font-size: 14px;
+        color: var(--error-color);
+        font-weight: 500;
+      }
+
+      .recording-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--error-color);
+        animation: pulse 1.5s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      .recording-time {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text-primary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .cancel-recording-button {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        border: 1px solid var(--border-color);
+        background: var(--background-secondary);
+        color: var(--text-primary);
+        border-radius: var(--border-radius);
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin-top: var(--spacing-xs);
+      }
+
+      .cancel-recording-button:hover {
+        background: var(--error-light);
+        border-color: var(--error-color);
+        color: var(--error-color);
       }
 
       .recording-header {
@@ -1100,6 +1219,17 @@ export class QuizMode extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+    
+    // Clean up recording timers
+    this.clearRecordingTimer();
+    this.clearRecordingStatusCheck();
+    
+    // Cancel any ongoing recording
+    if (this.isRecording) {
+      this.cancelRecording().catch(err => {
+        console.error('Error cancelling recording on disconnect:', err);
+      });
+    }
 
     // Clean up language change listener
     document.removeEventListener('language-changed', this.handleExternalLanguageChange);
@@ -1822,7 +1952,7 @@ export class QuizMode extends LitElement {
       // Pronunciation practice
       {
         ...GlobalShortcuts.RECORD_PRONUNCIATION,
-        action: () => this.toggleRecorder(),
+        action: () => this.toggleRecording(),
         context: 'quiz',
         description: 'Toggle pronunciation recorder'
       },
@@ -1847,8 +1977,8 @@ export class QuizMode extends LitElement {
     // Don't handle if quiz is complete
     if (this.quizSession.isComplete) return;
 
-    // Don't handle if recorder is open (let recorder handle its own keys)
-    if (this.showRecorder) return;
+    // Don't handle if recording is in progress
+    if (this.isRecording) return;
 
     // If showing result, the auto-advance will handle progression
     if (this.showResult) return;
@@ -1864,8 +1994,8 @@ export class QuizMode extends LitElement {
   }
 
   private handleEscape() {
-    if (this.showRecorder) {
-      this.toggleRecorder();
+    if (this.isRecording) {
+      this.cancelRecording();
     } else {
       this.goToTopicSelection();
     }
@@ -1873,17 +2003,165 @@ export class QuizMode extends LitElement {
 
 
 
-  private async toggleRecorder() {
-    this.showRecorder = !this.showRecorder;
-    this.currentRecording = null;
-    this.transcriptionResult = null;
-    this.isTranscribing = false;
-    this.textInputValue = '';
+  private async toggleRecording() {
+    if (!this.speechRecognitionReady || !this.currentQuestion) return;
     
-    // Always use recorder (OS dictation removed)
-    // Text input mode can still be toggled manually if needed
-    if (!this.showRecorder) {
-      this.useTextInput = false;
+    if (this.isRecording) {
+      await this.stopRecording();
+    } else {
+      await this.startRecording();
+    }
+  }
+
+  private async startRecording() {
+    if (this.isRecording || !this.speechRecognitionReady || !this.currentQuestion) return;
+
+    try {
+      // Get the expected sentence for the initial prompt (if supported)
+      const expectedSentence = this.direction === 'foreign-to-english'
+        ? this.currentQuestion.sentence.sentence
+        : this.currentQuestion.sentence.translation;
+
+      const recordingOptions: RecordingOptions = {
+        sampleRate: 16000,
+        channels: 1,
+        threshold: 0.5,
+        silence: '1.0',
+        endOnSilence: true
+      };
+
+      const session = await window.electronAPI.audio.startRecording(recordingOptions);
+      this.isRecording = true;
+      this.recordingTime = 0;
+      this.currentRecording = null;
+      this.transcriptionResult = null;
+      this.isTranscribing = false;
+      
+      // Start recording timer
+      this.recordingTimer = window.setInterval(() => {
+        this.recordingTime += 1;
+      }, 1000);
+
+      // Set up periodic check for recording status (in case of auto-stop)
+      this.setupRecordingStatusCheck();
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      this.isRecording = false;
+      this.error = `Failed to start recording: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    }
+  }
+
+  private async stopRecording() {
+    if (!this.isRecording) return;
+
+    try {
+      const completedSession = await window.electronAPI.audio.stopRecording();
+      this.isRecording = false;
+      this.clearRecordingTimer();
+      this.clearRecordingStatusCheck();
+
+      if (completedSession && !completedSession.isRecording) {
+        // Get the recording file path from the session
+        const filePath = completedSession.filePath;
+        
+        // Calculate duration if available
+        const duration = completedSession.duration || (Date.now() - completedSession.startTime) / 1000;
+
+        this.currentRecording = {
+          session: completedSession,
+          filePath,
+          duration
+        };
+
+        // Automatically perform speech recognition
+        await this.performSpeechRecognition();
+      }
+    } catch (error) {
+      console.error('Error stopping recording:', error);
+      this.isRecording = false;
+      this.clearRecordingTimer();
+      this.clearRecordingStatusCheck();
+      this.error = `Failed to stop recording: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    }
+  }
+
+  private async cancelRecording() {
+    if (!this.isRecording) return;
+
+    try {
+      await window.electronAPI.audio.cancelRecording();
+      this.isRecording = false;
+      this.currentRecording = null;
+      this.transcriptionResult = null;
+      this.clearRecordingTimer();
+      this.clearRecordingStatusCheck();
+    } catch (error) {
+      console.error('Error cancelling recording:', error);
+      this.isRecording = false;
+      this.clearRecordingTimer();
+      this.clearRecordingStatusCheck();
+    }
+  }
+
+  private clearRecordingTimer() {
+    if (this.recordingTimer) {
+      clearInterval(this.recordingTimer);
+      this.recordingTimer = null;
+    }
+  }
+
+  private setupRecordingStatusCheck() {
+    // Clear any existing status check timer
+    this.clearRecordingStatusCheck();
+
+    // Check recording status every 500ms to detect auto-stop
+    this.recordingStatusCheckTimer = window.setInterval(async () => {
+      if (this.isRecording) {
+        try {
+          const isStillRecording = await window.electronAPI.audio.isRecording();
+          if (!isStillRecording) {
+            // Recording was stopped automatically (likely due to silence)
+            await this.handleRecordingAutoStop();
+          }
+        } catch (error) {
+          console.error('Error checking recording status:', error);
+        }
+      }
+    }, 500);
+  }
+
+  private clearRecordingStatusCheck() {
+    if (this.recordingStatusCheckTimer) {
+      clearInterval(this.recordingStatusCheckTimer);
+      this.recordingStatusCheckTimer = null;
+    }
+  }
+
+  private async handleRecordingAutoStop() {
+    this.isRecording = false;
+    this.clearRecordingTimer();
+    this.clearRecordingStatusCheck();
+
+    try {
+      const completedSession = await window.electronAPI.audio.getCurrentRecordingSession();
+      
+      if (completedSession && !completedSession.isRecording) {
+        const filePath = completedSession.filePath;
+        const duration = completedSession.duration || (Date.now() - completedSession.startTime) / 1000;
+
+        this.currentRecording = {
+          session: completedSession,
+          filePath,
+          duration
+        };
+
+        // Automatically perform speech recognition
+        await this.performSpeechRecognition();
+      }
+    } catch (error) {
+      console.error('Error handling auto-stop:', error);
+      this.error = 'Recording stopped automatically but there was an error processing it.';
+      this.isRecording = false;
     }
   }
 
@@ -1945,31 +2223,6 @@ export class QuizMode extends LitElement {
     this.saveQuizProgressToSession();
   }
 
-  private async handleRecordingCompleted(event: CustomEvent<{ recording: RecordingResult; autoStopped?: boolean }>) {
-    this.currentRecording = event.detail.recording;
-    const autoStopped = event.detail.autoStopped || false;
-
-    console.log('Recording completed:', {
-      recording: this.currentRecording,
-      autoStopped,
-      sentence: this.currentQuestion?.sentence.sentence,
-      word: this.currentQuestion?.word.word
-    });
-
-    // Show success feedback
-    if (autoStopped) {
-      console.log('Recording stopped automatically due to silence detection');
-    }
-
-    // Perform speech recognition on the recorded audio
-    await this.performSpeechRecognition();
-  }
-
-  private handleRecordingCancelled() {
-    this.currentRecording = null;
-    this.transcriptionResult = null;
-    console.log('Recording cancelled');
-  }
 
   private async initializeSpeechRecognition() {
     try {
@@ -2162,28 +2415,74 @@ export class QuizMode extends LitElement {
             
             ${this.audioOnlyMode ? html`
               <div class="audio-only-controls">
-                <button 
-                  class="audio-replay-button" 
-                  @click=${this.playAudio} 
-                  title="Replay audio"
-                  aria-label="Replay audio"
-                >
-                  <span aria-hidden="true">🔊</span>
-                  <span class="audio-replay-label">Replay audio</span>
-                </button>
+                <div class="question-actions">
+                  <button 
+                    class="audio-replay-button" 
+                    @click=${this.playAudio} 
+                    title="Replay audio"
+                    aria-label="Replay audio"
+                  >
+                    <span aria-hidden="true">🔊</span>
+                    <span class="audio-replay-label">Replay audio</span>
+                  </button>
+                  ${this.speechRecognitionReady ? html`
+                    ${this.isRecording ? html`
+                      <button 
+                        class="record-button recording"
+                        @click=${this.stopRecording}
+                        title="Stop recording"
+                        aria-label="Stop recording"
+                      >
+                        <span aria-hidden="true">⏹</span>
+                      </button>
+                    ` : html`
+                      <button 
+                        class="record-button"
+                        @click=${this.startRecording}
+                        title="Start recording"
+                        aria-label="Start recording"
+                      >
+                        <span aria-hidden="true">🎤</span>
+                      </button>
+                    `}
+                  ` : nothing}
+                </div>
               </div>
             ` : html`
               <div class="question-text-container">
                 <div class="question-text">${displayText}</div>
-                <button 
-                  class="audio-replay-button" 
-                  @click=${this.playAudio}
-                  title="Replay audio"
-                  aria-label="Replay audio"
-                >
-                  <span aria-hidden="true">🔊</span>
-                  <span class="audio-replay-label">Replay audio</span>
-                </button>
+                <div class="question-actions">
+                  <button 
+                    class="audio-replay-button" 
+                    @click=${this.playAudio}
+                    title="Replay audio"
+                    aria-label="Replay audio"
+                  >
+                    <span aria-hidden="true">🔊</span>
+                    <span class="audio-replay-label">Replay audio</span>
+                  </button>
+                  ${this.speechRecognitionReady ? html`
+                    ${this.isRecording ? html`
+                      <button 
+                        class="record-button recording"
+                        @click=${this.stopRecording}
+                        title="Stop recording"
+                        aria-label="Stop recording"
+                      >
+                        <span aria-hidden="true">⏹</span>
+                      </button>
+                    ` : html`
+                      <button 
+                        class="record-button"
+                        @click=${this.startRecording}
+                        title="Start recording"
+                        aria-label="Start recording"
+                      >
+                        <span aria-hidden="true">🎤</span>
+                      </button>
+                    `}
+                  ` : nothing}
+                </div>
               </div>
             `}
 
@@ -2191,7 +2490,7 @@ export class QuizMode extends LitElement {
               Do you know what ${questionWord} means in this context?
             </div>
 
-            ${this.showRecorder ? this.renderRecordingSection() : ''}
+            ${(this.isRecording || this.currentRecording || this.transcriptionResult) ? this.renderRecordingSection() : ''}
 
             ${this.showResult ? this.renderResult() : this.renderQuizButtons()}
           </div>
@@ -2211,15 +2510,6 @@ export class QuizMode extends LitElement {
           >
             Reveal Answer <span class="keyboard-hint">(Enter)</span>
           </button>
-          ${this.speechRecognitionReady ? html`
-            <button 
-              class="answer-button"
-              @click=${this.toggleRecorder}
-              title=${this.showRecorder ? 'Close pronunciation practice' : 'Practice pronunciation with speech recognition'}
-            >
-              ${this.showRecorder ? '✕ Close Pronunciation' : '🎤 Practice Pronunciation'}
-            </button>
-          ` : nothing}
         </div>
       `;
     }
@@ -2291,21 +2581,35 @@ export class QuizMode extends LitElement {
   private renderRecordingSection() {
     if (!this.currentQuestion) return '';
 
-    const languageLabel = this.direction === 'foreign-to-english'
-      ? 'Foreign Language'
-      : 'English';
-
-    const prompt = '';
-
     return html`
       <div class="recording-section">
-        <audio-recorder
-          .prompt=${prompt}
-          @recording-completed=${this.handleRecordingCompleted}
-          @recording-cancelled=${this.handleRecordingCancelled}
-        ></audio-recorder>
-        
+        ${this.isRecording ? this.renderRecordingStatus() : ''}
         ${this.renderTranscriptionResults()}
+      </div>
+    `;
+  }
+
+  private renderRecordingStatus() {
+    const minutes = Math.floor(this.recordingTime / 60);
+    const seconds = this.recordingTime % 60;
+    const formattedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+    return html`
+      <div class="recording-status-container">
+        <div class="recording-status">
+          <div class="recording-indicator">
+            <div class="recording-dot"></div>
+            Recording... (auto-stop enabled)
+          </div>
+          <div class="recording-time">${formattedTime}</div>
+          <button 
+            class="cancel-recording-button"
+            @click=${this.cancelRecording}
+            title="Cancel recording"
+          >
+            ✕ Cancel
+          </button>
+        </div>
       </div>
     `;
   }
@@ -2340,15 +2644,15 @@ export class QuizMode extends LitElement {
     let feedbackClass = 'poor';
     let feedbackMessage = '';
 
-    if (similarity >= 0.9) {
+    if (similarity >= 0.95) {
       similarityClass = 'excellent';
       feedbackClass = 'excellent';
       feedbackMessage = 'Excellent pronunciation! 🎉';
-    } else if (similarity >= 0.7) {
+    } else if (similarity >= 0.8) {
       similarityClass = 'good';
       feedbackClass = 'good';
       feedbackMessage = 'Good pronunciation! Keep it up! 👍';
-    } else if (similarity >= 0.5) {
+    } else if (similarity >= 0.6) {
       similarityClass = 'fair';
       feedbackClass = 'fair';
       feedbackMessage = 'Not bad! Try to match the original more closely. 🤔';

@@ -524,7 +524,7 @@ export class AudioRecorder extends LitElement {
           ?disabled=${this.disabled}
           title="Start recording"
         >
-          🎤
+          🎤 Practice
         </button>
       </div>
     `;
