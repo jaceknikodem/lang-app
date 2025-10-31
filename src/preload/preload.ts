@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_TO_STUDY, limit, language),
     getWordById: (wordId: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORD_BY_ID, wordId),
+    getWordsByIds: (wordIds: number[]) => 
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_BY_IDS, wordIds),
     getAllWords: (includeKnown?: boolean, includeIgnored?: boolean, language?: string) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_ALL_WORDS, includeKnown, includeIgnored, language),
     getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean, language?: string) => 
@@ -62,6 +64,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ),
     getSentencesByWord: (wordId: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_SENTENCES_BY_WORD, wordId),
+    getSentencesByIds: (sentenceIds: number[]) => 
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_SENTENCES_BY_IDS, sentenceIds),
     deleteSentence: (sentenceId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.DELETE_SENTENCE, sentenceId),
     updateSentenceLastShown: (sentenceId: number) =>
@@ -271,12 +275,14 @@ declare global {
         markWordIgnored: (wordId: number, ignored: boolean) => Promise<void>;
         getWordsToStudy: (limit: number, language?: string) => Promise<any[]>;
         getWordById: (wordId: number) => Promise<any | null>;
+        getWordsByIds: (wordIds: number[]) => Promise<any[]>;
         getAllWords: (includeKnown?: boolean, includeIgnored?: boolean, language?: string) => Promise<any[]>;
         getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean, language?: string) => Promise<any[]>;
         getWordsWithSentencesOrderedByStrength: (includeKnown?: boolean, includeIgnored?: boolean, language?: string) => Promise<any[]>;
         getRecentStudySessions: (limit?: number) => Promise<any[]>;
         insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string, contextBefore?: string, contextAfter?: string, contextBeforeTranslation?: string, contextAfterTranslation?: string) => Promise<number>;
         getSentencesByWord: (wordId: number) => Promise<any[]>;
+        getSentencesByIds: (sentenceIds: number[]) => Promise<any[]>;
         deleteSentence: (sentenceId: number) => Promise<void>;
         updateSentenceLastShown: (sentenceId: number) => Promise<void>;
         updateSentenceAudioPath: (sentenceId: number, audioPath: string) => Promise<void>;

@@ -376,6 +376,27 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
+  /**
+   * Get multiple words by IDs (batch query)
+   */
+  async getWordsByIds(wordIds: number[]): Promise<Word[]> {
+    const db = this.getDb();
+    
+    try {
+      if (wordIds.length === 0) {
+        return [];
+      }
+
+      const placeholders = wordIds.map(() => '?').join(',');
+      const stmt = db.prepare(`SELECT * FROM words WHERE id IN (${placeholders})`);
+      const rows = stmt.all(...wordIds) as any[];
+      
+      return rows.map(row => this.mapRowToWord(row));
+    } catch (error) {
+      throw new Error(`Failed to get words by IDs: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   // Sentence management operations
 
   /**
@@ -570,6 +591,27 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       return rows.map(this.mapRowToSentence);
     } catch (error) {
       throw new Error(`Failed to get sentences by word: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get multiple sentences by IDs (batch query)
+   */
+  async getSentencesByIds(sentenceIds: number[]): Promise<Sentence[]> {
+    const db = this.getDb();
+    
+    try {
+      if (sentenceIds.length === 0) {
+        return [];
+      }
+
+      const placeholders = sentenceIds.map(() => '?').join(',');
+      const stmt = db.prepare(`SELECT * FROM sentences WHERE id IN (${placeholders})`);
+      const rows = stmt.all(...sentenceIds) as any[];
+      
+      return rows.map(row => this.mapRowToSentence(row));
+    } catch (error) {
+      throw new Error(`Failed to get sentences by IDs: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

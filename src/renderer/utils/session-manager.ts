@@ -6,6 +6,8 @@
 export interface LearningSessionState {
   id: string;
   wordIds: number[];
+  sentenceIds?: number[];
+  audioPaths?: string[];
   maxSentences: number;
   createdAt: string;
   completed: boolean;
@@ -165,10 +167,12 @@ export class SessionManager {
   /**
    * Start a brand new learning session with a predefined set of words
    */
-  startNewLearningSession(wordIds: number[], maxSentences: number): void {
+  startNewLearningSession(wordIds: number[], maxSentences: number, sentenceIds?: number[], audioPaths?: string[]): void {
     const newSession: LearningSessionState = {
       id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
       wordIds,
+      sentenceIds,
+      audioPaths,
       maxSentences,
       createdAt: new Date().toISOString(),
       completed: false

@@ -504,30 +504,123 @@ export class LearningMode extends LitElement {
     this.error = '';
 
     try {
-      const wordsWithSentences: WordWithSentences[] = [];
+      // Check if we have cached IDs in session for fast batch loading
+      const activeSession = sessionManager.getLearningSession();
+      const hasCachedIds = activeSession?.wordIds?.length && activeSession?.sentenceIds?.length && activeSession?.audioPaths?.length;
 
-      for (const word of this.selectedWords) {
-        // Get sentences for this word
-        const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
+      let wordsWithValidSentences: WordWithSentences[];
 
-        if (!sentences.length) {
-          console.warn(`No sentences found for word: ${word.word}`);
+      if (hasCachedIds && activeSession.wordIds.length === this.selectedWords.length && activeSession.sentenceIds && activeSession.audioPaths) {
+        // Fast path: Use cached IDs for batch loading
+        console.log('Using cached IDs for fast batch loading');
+        
+        const wordIds = activeSession.wordIds;
+        const sentenceIds = activeSession.sentenceIds;
+        const audioPaths = activeSession.audioPaths;
+
+        // Start audio loading in parallel with DB queries (non-blocking)
+        const audioLoadPromises = audioPaths.length > 0
+          ? audioPaths
+              .filter(path => path && !this.audioCache.has(path))
+              .map(path => 
+                this.loadAudioIntoCache(path).catch(err => {
+                  console.warn(`Failed to preload audio ${path}:`, err);
+                })
+              )
+          : [];
+
+        // Start DB queries (await these, audio loads in parallel)
+        const [loadedWords, loadedSentences] = await Promise.all([
+          window.electronAPI.database.getWordsByIds(wordIds),
+          window.electronAPI.database.getSentencesByIds(sentenceIds)
+        ]);
+
+        // Note: Audio loading is happening in parallel, we don't await it
+
+        // Build wordId -> sentenceId map from loaded sentences
+        const sentenceMapByWordId = new Map<number, Sentence[]>();
+        for (const sentence of loadedSentences) {
+          if (!sentenceMapByWordId.has(sentence.wordId)) {
+            sentenceMapByWordId.set(sentence.wordId, []);
+          }
+          sentenceMapByWordId.get(sentence.wordId)!.push(sentence);
         }
 
-        // Keep sentences in their original order for consistent review
-        const limitedSentences = this.prepareSentencesForWord(word, sentences);
-        wordsWithSentences.push({
-          ...word,
-          sentences: limitedSentences
+        // Reconstruct wordsWithSentences array matching wordId -> sentenceIds
+        wordsWithValidSentences = loadedWords
+          .map((word: Word) => {
+            const sentences = sentenceMapByWordId.get(word.id) || [];
+            // Apply filtering logic (prepareSentencesForWord)
+            const limitedSentences = this.prepareSentencesForWord(word, sentences);
+            return {
+              ...word,
+              sentences: limitedSentences
+            };
+          })
+          .filter((w: WordWithSentences) => w.sentences.length > 0);
+
+        // Track audio loading completion (non-blocking)
+        void Promise.all(audioLoadPromises).then(() => {
+          console.log(`Preloaded ${audioPaths.length} audio files in parallel with DB queries`);
         });
+
+        this.wordsWithSentences = wordsWithValidSentences;
+      } else {
+        // Fallback: Sequential loading (for new sessions or when cache is missing)
+        console.log('Using sequential loading (cache miss or new session)');
+        
+        const wordsWithSentences: WordWithSentences[] = [];
+
+        for (const word of this.selectedWords) {
+          // Get sentences for this word
+          const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
+
+          if (!sentences.length) {
+            console.warn(`No sentences found for word: ${word.word}`);
+          }
+
+          // Keep sentences in their original order for consistent review
+          const limitedSentences = this.prepareSentencesForWord(word, sentences);
+          wordsWithSentences.push({
+            ...word,
+            sentences: limitedSentences
+          });
+        }
+
+        // Filter out words with no sentences but maintain strength-based order
+        wordsWithValidSentences = wordsWithSentences.filter(w => w.sentences.length > 0);
+        
+        // Extract IDs and audio paths for caching
+        const wordIds = wordsWithValidSentences.map(w => w.id);
+        const sentenceIds: number[] = [];
+        const audioPaths: string[] = [];
+        
+        for (const wordWithSentences of wordsWithValidSentences) {
+          for (const sentence of wordWithSentences.sentences) {
+            sentenceIds.push(sentence.id);
+            if (sentence.audioPath) {
+              audioPaths.push(sentence.audioPath);
+            }
+          }
+        }
+
+        // Store IDs and audio paths in session for future fast loading
+        if (wordIds.length > 0) {
+          sessionManager.startNewLearningSession(
+            wordIds,
+            Math.min(20, wordIds.length),
+            sentenceIds,
+            audioPaths
+          );
+        }
+
+        this.wordsWithSentences = wordsWithValidSentences;
+        
+        // Pre-load all audio files into cache (background)
+        void this.preloadReviewAudio(wordsWithValidSentences);
       }
 
-      // Filter out words with no sentences but maintain strength-based order
-      const wordsWithValidSentences = wordsWithSentences.filter(w => w.sentences.length > 0);
-      console.log(`Words with sentences: ${wordsWithValidSentences.length} out of ${wordsWithSentences.length} total words`);
-      
-      // Keep words ordered by strength (weakest first) - no shuffling for review mode
-      this.wordsWithSentences = wordsWithValidSentences;
+      console.log(`Words with sentences: ${wordsWithValidSentences.length} out of ${this.selectedWords.length} total words`);
 
       if (this.wordsWithSentences.length === 0) {
         console.warn('No words have sentences available for learning');
@@ -540,9 +633,6 @@ export class LearningMode extends LitElement {
         
         // Load next sentence's audio right after current one is ready
         this.preloadNextSentenceAudio();
-        
-        // Pre-load all audio files into cache for instant playback (background)
-        void this.preloadReviewAudio(wordsWithValidSentences);
       }
 
     } catch (error) {

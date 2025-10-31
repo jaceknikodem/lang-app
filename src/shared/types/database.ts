@@ -41,6 +41,7 @@ export interface DatabaseLayer {
   getWordsWithSentences(includeKnown?: boolean, includeIgnored?: boolean, language?: string): Promise<Word[]>;
   getWordsWithSentencesOrderedByStrength(includeKnown?: boolean, includeIgnored?: boolean, language?: string): Promise<Word[]>;
   getWordById(wordId: number): Promise<Word | null>;
+  getWordsByIds(wordIds: number[]): Promise<Word[]>;
   
   // SRS-specific operations
   updateWordSRS(
@@ -84,6 +85,7 @@ export interface DatabaseLayer {
     audioGenerationModel?: string
   ): Promise<number>;
   getSentencesByWord(wordId: number): Promise<Sentence[]>;
+  getSentencesByIds(sentenceIds: number[]): Promise<Sentence[]>;
   getSentenceById(sentenceId: number): Promise<Sentence | null>;
   deleteSentence(sentenceId: number): Promise<void>;
   updateSentenceLastShown(sentenceId: number): Promise<void>;

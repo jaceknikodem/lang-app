@@ -21,7 +21,9 @@ const CreateWordSchema = z.object({
 });
 
 const WordIdSchema = z.number().int().positive();
+const WordIdsSchema = z.array(z.number().int().positive());
 const SentenceIdSchema = z.number().int().positive();
+const SentenceIdsSchema = z.array(z.number().int().positive());
 const StrengthSchema = z.number().int().min(0).max(100);
 const BooleanSchema = z.boolean();
 const LimitSchema = z.number().int().positive().max(1000);
@@ -136,6 +138,16 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     }
   });
 
+  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_WORDS_BY_IDS, async (event, wordIds) => {
+    try {
+      const validatedWordIds = WordIdsSchema.parse(wordIds);
+      return await databaseLayer.getWordsByIds(validatedWordIds);
+    } catch (error) {
+      console.error('Error getting words by IDs:', error);
+      throw new Error(`Failed to get words by IDs: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.DATABASE.INSERT_SENTENCE, async (event, wordId, sentence, translation, audioPath, contextBefore, contextAfter, contextBeforeTranslation, contextAfterTranslation, sentenceParts, sentenceGenerationModel, audioGenerationService, audioGenerationModel) => {
     try {
       const validatedWordId = WordIdSchema.parse(wordId);
@@ -175,6 +187,16 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     } catch (error) {
       console.error('Error getting sentences by word:', error);
       throw new Error(`Failed to get sentences by word: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_SENTENCES_BY_IDS, async (event, sentenceIds) => {
+    try {
+      const validatedSentenceIds = SentenceIdsSchema.parse(sentenceIds);
+      return await databaseLayer.getSentencesByIds(validatedSentenceIds);
+    } catch (error) {
+      console.error('Error getting sentences by IDs:', error);
+      throw new Error(`Failed to get sentences by IDs: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
 

@@ -16,6 +16,7 @@ declare global {
         markWordIgnored: (wordId: number, ignored: boolean) => Promise<void>;
         getWordsToStudy: (limit: number) => Promise<Word[]>;
         getWordById: (wordId: number) => Promise<Word | null>;
+        getWordsByIds: (wordIds: number[]) => Promise<Word[]>;
         getAllWords: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
         getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
         getWordsWithSentencesOrderedByStrength: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
@@ -35,6 +36,7 @@ declare global {
           audioGenerationModel?: string
         ) => Promise<number>;
         getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
+        getSentencesByIds: (sentenceIds: number[]) => Promise<Sentence[]>;
         deleteSentence: (sentenceId: number) => Promise<void>;
         updateLastStudied: (wordId: number) => Promise<void>;
         getStudyStats: () => Promise<StudyStats>;

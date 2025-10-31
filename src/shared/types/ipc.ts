@@ -15,6 +15,7 @@ export interface IPCBridge {
     markWordIgnored: (wordId: number, ignored: boolean) => Promise<void>;
     getWordsToStudy: (limit: number) => Promise<Word[]>;
     getWordById: (wordId: number) => Promise<Word | null>;
+    getWordsByIds: (wordIds: number[]) => Promise<Word[]>;
     getAllWords: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
     getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
     getWordsWithSentencesOrderedByStrength: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
@@ -34,6 +35,7 @@ export interface IPCBridge {
       audioGenerationModel?: string
     ) => Promise<number>;
     getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
+    getSentencesByIds: (sentenceIds: number[]) => Promise<Sentence[]>;
     deleteSentence: (sentenceId: number) => Promise<void>;
     updateSentenceLastShown: (sentenceId: number) => Promise<void>;
     updateSentenceAudioPath: (sentenceId: number, audioPath: string) => Promise<void>;
@@ -185,12 +187,14 @@ export const IPC_CHANNELS = {
     MARK_WORD_IGNORED: 'database:markWordIgnored',
     GET_WORDS_TO_STUDY: 'database:getWordsToStudy',
     GET_WORD_BY_ID: 'database:getWordById',
+    GET_WORDS_BY_IDS: 'database:getWordsByIds',
     GET_ALL_WORDS: 'database:getAllWords',
     GET_WORDS_WITH_SENTENCES: 'database:getWordsWithSentences',
     GET_WORDS_WITH_SENTENCES_ORDERED_BY_STRENGTH: 'database:getWordsWithSentencesOrderedByStrength',
     GET_RECENT_STUDY_SESSIONS: 'database:getRecentStudySessions',
     INSERT_SENTENCE: 'database:insertSentence',
     GET_SENTENCES_BY_WORD: 'database:getSentencesByWord',
+    GET_SENTENCES_BY_IDS: 'database:getSentencesByIds',
     DELETE_SENTENCE: 'database:deleteSentence',
     UPDATE_SENTENCE_LAST_SHOWN: 'database:updateSentenceLastShown',
     UPDATE_SENTENCE_AUDIO_PATH: 'database:updateSentenceAudioPath',
