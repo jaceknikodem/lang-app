@@ -1060,7 +1060,6 @@ export class SettingsPanel extends LitElement {
           <div class="dropdown-row">
             <div class="dropdown-description">
               <strong>TTS Engine</strong>
-              <p>Choose the text-to-speech engine and model</p>
             </div>
             <select 
               class="model-select"

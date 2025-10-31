@@ -272,7 +272,7 @@ export class QuizMode extends LitElement {
         color: var(--text-primary);
         line-height: 1.4;
         flex: 1;
-        text-align: left;
+        text-align: center;
       }
 
       .question-translation {
@@ -355,6 +355,7 @@ export class QuizMode extends LitElement {
 
       /* SRS Difficulty Button Styles */
       .difficulty-prompt {
+        margin-top: var(--spacing-md);
         margin-bottom: var(--spacing-sm);
         text-align: center;
       }
@@ -371,6 +372,7 @@ export class QuizMode extends LitElement {
         gap: var(--spacing-xs);
         justify-content: center;
         flex-wrap: wrap;
+        margin-bottom: var(--spacing-sm);
       }
 
       .difficulty-fail {
@@ -911,16 +913,17 @@ export class QuizMode extends LitElement {
         background: var(--background-primary);
         border: 1px solid var(--border-color);
         border-radius: 999px;
-        padding: 4px 12px;
-        font-size: 13px;
+        padding: 4px 8px;
+        font-size: 14px;
         color: var(--text-secondary);
         display: inline-flex;
         align-items: center;
-        gap: 6px;
+        justify-content: center;
         cursor: pointer;
         transition: all 0.2s ease;
-        white-space: nowrap;
-        line-height: 1.2;
+        width: 32px;
+        height: 32px;
+        line-height: 1;
         flex-shrink: 0;
       }
 
@@ -1961,7 +1964,7 @@ export class QuizMode extends LitElement {
         ...GlobalShortcuts.ESCAPE,
         action: () => this.handleEscape(),
         context: 'quiz',
-        description: 'Close recorder / Back to topic selection'
+        description: 'Cancel recording (if active)'
       }
     ];
 
@@ -1996,9 +1999,8 @@ export class QuizMode extends LitElement {
   private handleEscape() {
     if (this.isRecording) {
       this.cancelRecording();
-    } else {
-      this.goToTopicSelection();
     }
+    // ESC in quiz mode no longer navigates away - just cancel recording if active
   }
 
 
@@ -2423,7 +2425,6 @@ export class QuizMode extends LitElement {
                     aria-label="Replay audio"
                   >
                     <span aria-hidden="true">🔊</span>
-                    <span class="audio-replay-label">Replay audio</span>
                   </button>
                   ${this.speechRecognitionReady ? html`
                     ${this.isRecording ? html`
@@ -2459,7 +2460,6 @@ export class QuizMode extends LitElement {
                     aria-label="Replay audio"
                   >
                     <span aria-hidden="true">🔊</span>
-                    <span class="audio-replay-label">Replay audio</span>
                   </button>
                   ${this.speechRecognitionReady ? html`
                     ${this.isRecording ? html`
@@ -2500,23 +2500,8 @@ export class QuizMode extends LitElement {
   }
 
   private renderQuizButtons() {
-    if (!this.showAnswer) {
-      // First show the reveal button
-      return html`
-        <div class="answer-buttons">
-          <button 
-            class="answer-button primary"
-            @click=${this.revealAnswer}
-          >
-            Reveal Answer <span class="keyboard-hint">(Enter)</span>
-          </button>
-        </div>
-      `;
-    }
-
-    // After reveal, show the answer and self-assessment buttons
-    return html`
-      ${this.renderRevealedAnswer()}
+    // Always show the difficulty prompt and buttons
+    const difficultyButtons = html`
       <div class="answer-buttons">
         <div class="difficulty-prompt">
           <p>How well did you know this?</p>
@@ -2548,6 +2533,27 @@ export class QuizMode extends LitElement {
           </button>
         </div>
       </div>
+    `;
+
+    if (!this.showAnswer) {
+      // Before revealing answer, show both reveal button and difficulty buttons
+      return html`
+        <div class="answer-buttons">
+          <button 
+            class="answer-button primary"
+            @click=${this.revealAnswer}
+          >
+            Reveal Answer <span class="keyboard-hint">(Enter)</span>
+          </button>
+        </div>
+        ${difficultyButtons}
+      `;
+    }
+
+    // After reveal, show the answer and self-assessment buttons
+    return html`
+      ${this.renderRevealedAnswer()}
+      ${difficultyButtons}
     `;
   }
 
