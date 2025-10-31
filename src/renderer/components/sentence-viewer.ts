@@ -46,6 +46,9 @@ export class SentenceViewer extends LitElement {
   @state()
   private autoplayEnabled = false;
 
+  @state()
+  private wordPopup: { wordInfo: WordInSentence; position: { x: number; y: number } } | null = null;
+
   // Dictionary cache is not reactive to avoid unnecessary re-renders
   // Dictionary data is precomputed in tokens, so cache updates shouldn't trigger UI updates
   private dictionaryCache: Record<string, DictionaryEntry[] | null> = {};
@@ -373,6 +376,71 @@ export class SentenceViewer extends LitElement {
         border-top-color: var(--text-primary);
       }
 
+      .word-popup {
+        position: fixed;
+        background: var(--background-primary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        padding: var(--spacing-xs);
+        z-index: 1000;
+        min-width: 180px;
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-xs);
+      }
+
+      .word-popup-button {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border: none;
+        border-radius: var(--border-radius-small);
+        cursor: pointer;
+        font-size: 14px;
+        text-align: left;
+        transition: all 0.2s ease;
+        background: transparent;
+        color: var(--text-primary);
+      }
+
+      .word-popup-button:hover:not(:disabled) {
+        background: var(--background-secondary);
+      }
+
+      .word-popup-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .word-popup-button.ignore {
+        color: #c62828;
+      }
+
+      .word-popup-button.ignore:hover:not(:disabled) {
+        background: #ffebee;
+      }
+
+      .word-popup-button.known {
+        color: #2e7d32;
+      }
+
+      .word-popup-button.known:hover:not(:disabled) {
+        background: #e8f5e9;
+      }
+
+      .word-popup-button.add {
+        color: var(--primary-color);
+      }
+
+      .word-popup-button.add:hover:not(:disabled) {
+        background: var(--primary-light);
+      }
+
+      .word-popup-divider {
+        height: 1px;
+        background: var(--border-color);
+        margin: var(--spacing-xs) 0;
+      }
+
       @media (max-width: 768px) {
         .sentence-header {
           flex-direction: column;
@@ -417,6 +485,10 @@ export class SentenceViewer extends LitElement {
     
     // Trigger autoplay for the initial sentence if autoplay is enabled
     this.checkInitialAutoplay();
+    
+    // Close popup on outside click or ESC key
+    document.addEventListener('click', this.handleOutsideClick);
+    document.addEventListener('keydown', this.handleKeyDown);
   }
 
   disconnectedCallback() {
@@ -424,7 +496,42 @@ export class SentenceViewer extends LitElement {
     if (this.keyboardUnsubscribe) {
       this.keyboardUnsubscribe();
     }
+    document.removeEventListener('click', this.handleOutsideClick);
+    document.removeEventListener('keydown', this.handleKeyDown);
   }
+
+  private handleOutsideClick = (event: MouseEvent) => {
+    if (!this.wordPopup) return;
+    
+    // Use setTimeout to allow click handlers on words to execute first
+    setTimeout(() => {
+      if (!this.wordPopup) return;
+      
+      const target = event.target as Node;
+      if (!this.shadowRoot) {
+        this.closeWordPopup();
+        return;
+      }
+      
+      // Check if the click is inside the popup
+      const popupElement = this.shadowRoot.querySelector('.word-popup');
+      if (popupElement && (popupElement.contains(target) || popupElement === target)) {
+        return;
+      }
+      
+      // Close if click is outside shadow root or outside popup but inside shadow root
+      if (!this.shadowRoot.contains(target) || 
+          (popupElement && !popupElement.contains(target))) {
+        this.closeWordPopup();
+      }
+    }, 0);
+  };
+
+  private handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && this.wordPopup) {
+      this.closeWordPopup();
+    }
+  };
 
   updated(changedProperties: Map<string, any>) {
     // Only re-parse if sentence actually changed (different ID) or allWords meaningfully changed
@@ -619,6 +726,71 @@ export class SentenceViewer extends LitElement {
 
     this.parsedWords = baseWords;
     await this.enhanceSentenceWithDictionary(requestId);
+  }
+
+  /**
+   * Immediately update wordData in parsedWords for a specific word.
+   * This ensures the UI reflects status changes immediately.
+   */
+  private updateParsedWordsWordData(updatedWord: Word): void {
+    const normalizedUpdatedWord = updatedWord.word.toLowerCase().trim();
+    
+    // Helper to normalize text for comparison
+    const normalizeText = (text: string): string => {
+      return text.trim().replace(/[.,!?;:]/g, '').toLowerCase();
+    };
+    
+    let foundMatch = false;
+    this.parsedWords = this.parsedWords.map(word => {
+      // Skip whitespace and punctuation
+      if (/^\s+$/.test(word.text) || /^[.,!?;:]+$/.test(word.text)) {
+        return word;
+      }
+      
+      // Check if this parsed word matches the updated word by ID
+      if (word.wordData?.id === updatedWord.id) {
+        foundMatch = true;
+        return { ...word, wordData: updatedWord };
+      }
+      
+      // Check by dictionary form
+      if (word.dictionaryForm) {
+        const normalizedDictForm = normalizeText(word.dictionaryForm);
+        if (normalizedDictForm === normalizedUpdatedWord) {
+          foundMatch = true;
+          return { ...word, wordData: updatedWord };
+        }
+      }
+      
+      // Check by normalized text content (strip punctuation for comparison)
+      const normalizedText = normalizeText(word.text);
+      if (normalizedText === normalizedUpdatedWord) {
+        foundMatch = true;
+        return { ...word, wordData: updatedWord };
+      }
+      
+      // For words without wordData, also check without dictionary form normalization
+      if (!word.wordData) {
+        // Try matching raw text
+        const rawNormalized = word.text.trim().toLowerCase();
+        if (rawNormalized === normalizedUpdatedWord) {
+          foundMatch = true;
+          return { ...word, wordData: updatedWord };
+        }
+      }
+      
+      return word;
+    });
+    
+    // If we didn't find a match, log for debugging
+    if (!foundMatch) {
+      console.warn('[SentenceViewer] Could not find matching word in parsedWords for:', {
+        word: updatedWord.word,
+        wordId: updatedWord.id,
+        parsedWordsCount: this.parsedWords.length,
+        sampleParsedWord: this.parsedWords.find(w => !w.wordData && w.text.trim())
+      });
+    }
   }
 
   /**
@@ -966,20 +1138,214 @@ export class SentenceViewer extends LitElement {
     return `Learning (${word.strength}%): ${word.translation}`;
   }
 
-  private async handleWordClick(wordInfo: WordInSentence) {
+  private async handleWordClick(wordInfo: WordInSentence, event: MouseEvent) {
     // Don't handle clicks on whitespace or punctuation
     if (/^\s+$/.test(wordInfo.text) || /^[.,!?;:]+$/.test(wordInfo.text)) {
       return;
     }
     
-    if (!wordInfo.wordData && !wordInfo.isTargetWord) {
-      await this.addWordFromSentence(wordInfo);
+    // Stop event propagation to prevent outside click handler from firing immediately
+    event.stopPropagation();
+    
+    // Close popup if clicking the same word (check by text content since object reference might differ)
+    if (this.wordPopup) {
+      const currentWordText = this.wordPopup.wordInfo.text.trim();
+      const clickedWordText = wordInfo.text.trim();
+      if (currentWordText === clickedWordText && 
+          this.wordPopup.wordInfo.dictionaryForm === wordInfo.dictionaryForm) {
+        this.wordPopup = null;
+        this.requestUpdate();
       return;
     }
+    }
+    
+    // Show popup at click position
+    this.wordPopup = {
+      wordInfo,
+      position: { x: event.clientX, y: event.clientY }
+    };
+    
+    // Request update to render the popup
+    this.requestUpdate();
+  }
 
+  private closeWordPopup() {
+    this.wordPopup = null;
+    this.requestUpdate();
+  }
+
+  private getPopupStyle(): string {
+    if (!this.wordPopup) return '';
+    
+    // Position popup near the click, but ensure it stays on screen
+    const padding = 10;
+    const popupWidth = 180;
+    const popupHeight = 150; // Approximate height
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    let left = this.wordPopup.position.x;
+    let top = this.wordPopup.position.y;
+    
+    // Adjust horizontally if popup would go off-screen
+    if (left + popupWidth > viewportWidth - padding) {
+      left = viewportWidth - popupWidth - padding;
+    }
+    if (left < padding) {
+      left = padding;
+    }
+    
+    // Adjust vertically if popup would go off-screen (show above click if needed)
+    if (top + popupHeight > viewportHeight - padding) {
+      top = this.wordPopup.position.y - popupHeight - 5;
+    }
+    if (top < padding) {
+      top = padding;
+    }
+    
+    return `left: ${left}px; top: ${top}px;`;
+  }
+
+  private async handleIgnoreWord() {
+    if (!this.wordPopup) return;
+    
+    const wordInfo = this.wordPopup.wordInfo;
+    let word: Word | null = wordInfo.isTargetWord ? this.targetWord : wordInfo.wordData || null;
+    
+    if (!word) {
+      // Word doesn't exist yet, need to add it first
+      // Don't generate sentences for ignored words
+      word = await this.addWordFromSentence(wordInfo, false);
+      if (!word) {
+        this.closeWordPopup();
+        return;
+      }
+    }
+    
+    // Mark word as ignored
+    await window.electronAPI.database.markWordIgnored(word.id, true);
+    
+    // Update the word with ignored status
+    const updatedWord = { ...word, ignored: true };
+    
+    // Update local state in allWords
+    const wordIndex = this.allWords.findIndex(w => w.id === word!.id);
+    if (wordIndex !== -1) {
+      this.allWords = [
+        ...this.allWords.slice(0, wordIndex),
+        updatedWord,
+        ...this.allWords.slice(wordIndex + 1)
+      ];
+    } else {
+      // If word wasn't in allWords (newly added), add it
+      this.allWords = [...this.allWords, updatedWord];
+    }
+    
+    // Immediately update parsedWords to reflect the change
+    this.updateParsedWordsWordData(updatedWord);
+    
+    // Create a new array reference to ensure Lit detects the change
+    this.parsedWords = [...this.parsedWords];
+    
+    // Request update to trigger re-render
+    this.requestUpdate();
+    
+    // Emit event for parent to handle
+    this.dispatchEvent(new CustomEvent('mark-word-ignored', {
+      detail: { word: updatedWord },
+      bubbles: true,
+      composed: true
+    }));
+    
+    this.closeWordPopup();
+  }
+
+  private async handleMarkWordKnown() {
+    if (!this.wordPopup) return;
+    
+    const wordInfo = this.wordPopup.wordInfo;
+    let word: Word | null = wordInfo.isTargetWord ? this.targetWord : wordInfo.wordData || null;
+    
+    if (!word) {
+      // Word doesn't exist yet, need to add it first
+      // Don't generate sentences for known words
+      word = await this.addWordFromSentence(wordInfo, false);
+      if (!word) {
+        this.closeWordPopup();
+        return;
+      }
+    }
+    
+    // Mark word as known
+    await window.electronAPI.database.markWordKnown(word.id, true);
+    await window.electronAPI.database.updateWordStrength(word.id, 100);
+    
+    // Update the word with known status
+    const updatedWord = { ...word, known: true, strength: 100 };
+    
+    // Update local state in allWords
+    const wordIndex = this.allWords.findIndex(w => w.id === word!.id);
+    if (wordIndex !== -1) {
+      this.allWords = [
+        ...this.allWords.slice(0, wordIndex),
+        updatedWord,
+        ...this.allWords.slice(wordIndex + 1)
+      ];
+    } else {
+      // If word wasn't in allWords (newly added), add it
+      this.allWords = [...this.allWords, updatedWord];
+    }
+    
+    // Immediately update parsedWords to reflect the change
+    this.updateParsedWordsWordData(updatedWord);
+    
+    // Create a new array reference to ensure Lit detects the change
+    this.parsedWords = [...this.parsedWords];
+    
+    // Request update to trigger re-render
+    this.requestUpdate();
+    
+    // Emit event for parent to handle
+    this.dispatchEvent(new CustomEvent('mark-word-known', {
+      detail: { word: updatedWord },
+      bubbles: true,
+      composed: true
+    }));
+    
+    this.closeWordPopup();
+  }
+
+  private async handleAddToLearningSet() {
+    if (!this.wordPopup) return;
+    
+    const wordInfo = this.wordPopup.wordInfo;
+    
+    if (!wordInfo.wordData && !wordInfo.isTargetWord) {
+      // Word doesn't exist yet, add it to learning set (with sentence generation)
+      const newWord = await this.addWordFromSentence(wordInfo, true);
+      if (newWord) {
+        // Immediately update parsedWords to include the new word
+        // This ensures the UI updates before the async parseSentence() completes
+        this.updateParsedWordsWordData(newWord);
+        
+        // Create a new array reference to ensure Lit detects the change
+        this.parsedWords = [...this.parsedWords];
+        
+        // Force a re-render to show the updated color
+        this.requestUpdate();
+      }
+    } else {
     const word = wordInfo.isTargetWord ? this.targetWord : wordInfo.wordData!;
     
-    // Emit event for parent to handle word status change
+      // If word is already in learning set, ensure it's updated in parsedWords
+      this.updateParsedWordsWordData(word);
+      
+      // Create a new array reference to ensure Lit detects the change
+      this.parsedWords = [...this.parsedWords];
+      
+      this.requestUpdate();
+      
+      // Emit event for parent to handle (existing word clicked)
     this.dispatchEvent(new CustomEvent('word-clicked', {
       detail: { word, wordText: wordInfo.text.trim() },
       bubbles: true,
@@ -987,10 +1353,13 @@ export class SentenceViewer extends LitElement {
     }));
   }
 
-  private async addWordFromSentence(wordInfo: WordInSentence): Promise<void> {
+    this.closeWordPopup();
+  }
+
+  private async addWordFromSentence(wordInfo: WordInSentence, generateSentences: boolean = true): Promise<Word | null> {
     const rawWord = wordInfo.dictionaryForm?.trim() || wordInfo.text.trim();
     if (!rawWord) {
-      return;
+      return null;
     }
 
     const normalized = rawWord.replace(/\s+/g, ' ');
@@ -999,12 +1368,15 @@ export class SentenceViewer extends LitElement {
     );
 
     if (alreadyTracked) {
+      const existingWord = this.allWords.find(w => 
+        w.word.toLowerCase() === normalized.toLowerCase()
+      );
       this.dispatchEvent(new CustomEvent('word-addition-skipped', {
         detail: { word: normalized },
         bubbles: true,
         composed: true
       }));
-      return;
+      return existingWord || null;
     }
 
     let suggestedTranslation = '';
@@ -1028,15 +1400,20 @@ export class SentenceViewer extends LitElement {
         translation
       });
 
+      // Only generate sentences if requested (not for known/ignored words)
+      if (generateSentences) {
       await window.electronAPI.jobs.enqueueWordGeneration(wordId, {
         language: this.targetWord.language,
         desiredSentenceCount: 3
       });
+      }
 
       const newWord = await window.electronAPI.database.getWordById(wordId);
       if (newWord) {
+        // Update allWords immediately
         this.allWords = [...this.allWords, newWord];
-        void this.parseSentence();
+        // Don't call parseSentence here - let the caller handle immediate UI update
+        // parseSentence will be called if needed, but we want immediate feedback
       }
 
       this.dispatchEvent(new CustomEvent('word-added-from-sentence', {
@@ -1048,6 +1425,8 @@ export class SentenceViewer extends LitElement {
         bubbles: true,
         composed: true
       }));
+      
+      return newWord || null;
     } catch (error) {
       console.error('Failed to add word from sentence:', error);
       this.dispatchEvent(new CustomEvent('word-addition-error', {
@@ -1058,6 +1437,7 @@ export class SentenceViewer extends LitElement {
         bubbles: true,
         composed: true
       }));
+      return null;
     }
   }
 
@@ -1296,18 +1676,90 @@ export class SentenceViewer extends LitElement {
               
               // For actual words, render with full styling
               const tooltipText = this.getWordTooltip(wordInfo);
+              const isPopupOpen = this.wordPopup && 
+                this.wordPopup.wordInfo.text.trim() === wordInfo.text.trim() &&
+                this.wordPopup.wordInfo.dictionaryForm === wordInfo.dictionaryForm;
               return html`
                 <span
                   class="word-in-sentence ${this.getWordClass(wordInfo)}"
-                  @click=${() => this.handleWordClick(wordInfo)}
+                  @click=${(e: MouseEvent) => this.handleWordClick(wordInfo, e)}
                   aria-label=${tooltipText || nothing}
                 >
                   ${wordInfo.text}
-                  ${tooltipText ? html`<div class="tooltip">${tooltipText}</div>` : nothing}
+                  ${tooltipText && !isPopupOpen ? html`<div class="tooltip">${tooltipText}</div>` : nothing}
                 </span>
               `;
             })}
           </div>
+          
+          ${this.wordPopup ? html`
+            <div
+              class="word-popup"
+              style="${this.getPopupStyle()}"
+              @click=${(e: Event) => e.stopPropagation()}
+            >
+              ${(() => {
+                const wordInfo = this.wordPopup!.wordInfo;
+                const word = wordInfo.isTargetWord ? this.targetWord : wordInfo.wordData;
+                const isKnown = word?.known ?? false;
+                const isIgnored = word?.ignored ?? false;
+                const existsInLearning = !!word || wordInfo.isTargetWord;
+                const needsAddToLearningSet = !existsInLearning;
+                
+                const buttons: any[] = [];
+                
+                if (!isKnown) {
+                  buttons.push(html`
+                    <button
+                      class="word-popup-button known"
+                      @click=${this.handleMarkWordKnown}
+                      ?disabled=${this.isProcessing}
+                    >
+                      Mark as known
+                    </button>
+                  `);
+                }
+                
+                if (!isIgnored) {
+                  buttons.push(html`
+                    <button
+                      class="word-popup-button ignore"
+                      @click=${this.handleIgnoreWord}
+                      ?disabled=${this.isProcessing}
+                    >
+                      Ignore
+                    </button>
+                  `);
+                }
+                
+                if (needsAddToLearningSet) {
+                  if (buttons.length > 0) {
+                    buttons.push(html`<div class="word-popup-divider"></div>`);
+                  }
+                  buttons.push(html`
+                    <button
+                      class="word-popup-button add"
+                      @click=${this.handleAddToLearningSet}
+                      ?disabled=${this.isProcessing}
+                    >
+                      Add to learning set
+                    </button>
+                  `);
+                }
+                
+                // If no buttons to show (word is already known/ignored and in learning set)
+                if (buttons.length === 0) {
+                  buttons.push(html`
+                    <div class="word-popup-button" style="opacity: 0.6; cursor: default; padding: var(--spacing-sm);">
+                      ${wordInfo.isTargetWord ? 'Target word' : isKnown ? 'Already known' : 'Already ignored'}
+                    </div>
+                  `);
+                }
+                
+                return buttons;
+              })()}
+            </div>
+          ` : nothing}
           
           <div class="sentence-translation">
             ${this.sentence.translation}
