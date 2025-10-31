@@ -119,15 +119,24 @@ export class AudioRecorder {
         this.recordingStream = null;
       }
 
-      // Close file stream
+      // Close file stream and ensure it's fully flushed to disk
       if (this.fileStream) {
         await new Promise<void>((resolve, reject) => {
-          this.fileStream!.end((error?: Error) => {
-            if (error) reject(error);
-            else resolve();
+          // Wait for the 'finish' event to ensure data is written
+          this.fileStream!.on('finish', () => {
+            this.fileStream = null;
+            resolve();
           });
+          this.fileStream!.on('error', (error: Error) => {
+            this.fileStream = null;
+            reject(error);
+          });
+          this.fileStream!.end();
         });
-        this.fileStream = null;
+        
+        // Additional small delay to ensure WAV header is fully written to disk
+        // This prevents corruption when reading the file immediately after closing
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
 
       // Update session

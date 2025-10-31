@@ -26,7 +26,7 @@ export class AudioRecorder extends LitElement {
     sampleRate: 16000,
     channels: 1,
     threshold: 0.5,
-    silence: '1.5',
+    silence: '1.0',
     endOnSilence: true
   };
 

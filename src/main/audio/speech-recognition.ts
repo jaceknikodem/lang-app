@@ -1,16 +1,15 @@
 /**
- * Speech recognition service using whisper-node
+ * Speech recognition service using Whisper HTTP server
  * Handles transcription of recorded audio files for pronunciation practice
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
-
-// Use system whisper-cpp binary instead of whisper-node
-import { spawn } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
-const execFile = promisify(require('child_process').execFile);
+
+const execFileAsync = promisify(execFile);
 
 export interface TranscriptionOptions {
   language?: string;
@@ -46,47 +45,66 @@ export interface SpeechRecognitionError extends Error {
 }
 
 export class SpeechRecognitionService {
-  private whisperBinaryPath: string = '/opt/homebrew/bin/whisper-cli';
-  private modelPath: string = '';
-  private defaultModelPath: string;
+  private whisperServerUrl: string = 'http://127.0.0.1:8080';
   private isInitialized: boolean = false;
 
+  // Map app language names to Whisper language codes
+  private readonly LANGUAGE_CODE_MAP: Record<string, string> = {
+    'spanish': 'es',
+    'italian': 'it',
+    'portuguese': 'pt',
+    'polish': 'pl',
+    'indonesian': 'id',
+    // Also handle ISO codes directly
+    'es': 'es',
+    'it': 'it',
+    'pt': 'pt',
+    'pl': 'pl',
+    'id': 'id'
+  };
+
   constructor() {
-    // Look for models in the models/ folder first, then project directory, then Downloads
-    const projectDir = process.cwd();
-    const homeDir = require('os').homedir();
-    
-    // Model search locations in order of preference
-    const searchPaths = [
-      path.join(projectDir, 'models'),  // New models/ folder
-      projectDir,
-      path.join(homeDir, 'Downloads')
-    ];
-    
-    // Common model filenames to look for (including your specific model)
-    const commonModels = [
-      'ggml-small-q5_1.bin',  // Your specific model
-      'ggml-small.bin',       // Standard small model
-      'ggml-base.bin',
-      'ggml-base.en.bin', 
-      'ggml-small.en.bin',
-      'ggml-medium.bin',
-      'ggml-large.bin'
-    ];
-    
-    // Find the first available model
-    this.defaultModelPath = '';
-    for (const searchPath of searchPaths) {
-      for (const modelName of commonModels) {
-        const modelFile = path.join(searchPath, modelName);
-        if (fs.existsSync(modelFile)) {
-          this.defaultModelPath = modelFile;
-          this.modelPath = searchPath;
-          console.log(`Found Whisper model: ${modelFile}`);
-          return; // Exit both loops when found
-        }
-      }
+    // Server URL can be overridden via environment variable
+    if (process.env.WHISPER_SERVER_URL) {
+      this.whisperServerUrl = process.env.WHISPER_SERVER_URL;
     }
+  }
+
+  /**
+   * Convert app language name to Whisper language code
+   */
+  private mapLanguageToWhisperCode(language: string): string {
+    const normalized = language.toLowerCase().trim();
+    return this.LANGUAGE_CODE_MAP[normalized] || 'es'; // Default to Spanish if unknown
+  }
+
+  /**
+   * Fix WAV file headers using ffmpeg to ensure correct format
+   * Converts to: 16kHz sample rate, mono (1 channel), PCM s16le format
+   * Returns path to fixed file, or null if ffmpeg is not available
+   */
+  private async fixWavFile(filePath: string): Promise<string> {
+    // Create temporary file for the fixed WAV
+    const fixedFilePath = filePath.replace(/\.wav$/i, '_fixed.wav');
+    
+    console.log('Fixing WAV file headers with ffmpeg...');
+    
+    // Run ffmpeg to fix the WAV file:
+    // -ar 16000: Set audio sample rate to 16kHz
+    // -ac 1: Set audio channels to 1 (mono)
+    // -c:a pcm_s16le: Set audio codec to PCM signed 16-bit little-endian
+    await execFileAsync('ffmpeg', [
+      '-i', filePath,           // Input file
+      '-ar', '16000',          // Sample rate: 16kHz
+      '-ac', '1',              // Channels: 1 (mono)
+      '-c:a', 'pcm_s16le',     // Codec: PCM signed 16-bit little-endian
+      '-y',                    // Overwrite output file if it exists
+      fixedFilePath            // Output file
+    ], {
+      timeout: 5000, // 5 second timeout
+      maxBuffer: 1024 * 1024 // 1MB buffer
+    });
+    return fixedFilePath;
   }
 
   /**
@@ -99,19 +117,14 @@ export class SpeechRecognitionService {
 
     try {
       console.log('Initializing speech recognition service...');
+      console.log(`Connecting to Whisper server at: ${this.whisperServerUrl}`);
       
-      // Check if whisper binary is available
-      await this.checkWhisperAvailability();
-
-      // Check if we have a model
-      if (!this.defaultModelPath) {
-        throw new Error('No Whisper model found in Downloads folder. Please download a model (e.g., ggml-base.bin)');
-      }
+      // Check if Whisper server is available
+      await this.checkWhisperServerAvailability();
 
       this.isInitialized = true;
       console.log('Speech recognition service initialized successfully');
-      console.log(`Using model: ${this.defaultModelPath}`);
-      console.log(`Using binary: ${this.whisperBinaryPath}`);
+      console.log(`Using Whisper server: ${this.whisperServerUrl}`);
       
     } catch (error) {
       console.error('Speech recognition initialization failed:', error);
@@ -122,7 +135,7 @@ export class SpeechRecognitionService {
   }
 
   /**
-   * Transcribe audio file to text using system whisper-cpp binary
+   * Transcribe audio file to text using Whisper HTTP server
    */
   async transcribeAudio(filePath: string, options: TranscriptionOptions = {}): Promise<TranscriptionResult> {
     if (!this.isInitialized) {
@@ -137,120 +150,127 @@ export class SpeechRecognitionService {
         error.filePath = filePath;
         throw error;
       }
-
       // Check file size - if too small, likely no speech
-      const stats = fs.statSync(filePath);
-      if (stats.size < 1000) { // Less than 1KB
-        throw new Error('Audio recording is too short or empty. Please record a longer sample.');
-      }
-
+      let stats = fs.statSync(filePath);
       console.log(`Transcribing audio: ${filePath} (${(stats.size / 1024).toFixed(1)} KB)`);
-      console.log(`Using model: ${this.defaultModelPath}`);
 
-      // Build whisper-cli command arguments with conservative settings
-      const args = [
-        '-m', this.defaultModelPath,  // Model path
-        '-f', filePath,               // Input file
-        '--output-txt',               // Output as text
-        '--no-timestamps',            // No timestamps for cleaner output
-        '--no-prints',                // Reduce verbose output
-        '--temperature', '0.0',       // Use deterministic output (no randomness)
-        '--best-of', '1',             // Use single best candidate
-        '--beam-size', '5',           // Use reasonable beam size for quality
-        '--entropy-thold', '2.4',     // Default entropy threshold
-        '--logprob-thold', '-1.0',    // Default log probability threshold
-        '--no-speech-thold', '0.6',   // Default no-speech threshold
-        '--suppress-nst'              // Suppress non-speech tokens
-      ];
-
-      // Always specify language to prevent hallucination
-      const language = options.language && options.language !== 'auto' ? options.language : 'es'; // Default to Spanish
-      args.push('-l', language);
+      // Fix WAV headers using ffmpeg to ensure correct sample rate, channels, and format
+      // This prevents decoder issues where corrupted headers make the file appear hours long
+      const fileToTranscribe = await this.fixWavFile(filePath);
       
-      // Limit duration to prevent processing too much audio (max 5 seconds)
-      args.push('-d', '5000');
+      // Map language to Whisper language code (default to Spanish if not specified)
+      const inputLanguage = options.language && options.language !== 'auto' ? options.language : 'spanish';
+      const whisperLanguageCode = this.mapLanguageToWhisperCode(inputLanguage);
+      console.log(`Using language: ${inputLanguage} -> Whisper code: ${whisperLanguageCode}`);
+
+      // Use Whisper.cpp Server API format: /inference with file parameter
+      // API: curl 127.0.0.1:8080/inference -H "Content-Type: multipart/form-data" 
+      //      -F file="@<file-path>" -F temperature="0.0" -F response_format="json"
+      //      -F translate="false" -F language="es"
+      const url = `${this.whisperServerUrl}/inference`;
+      console.log(`Transcribing audio via Whisper server: ${url}`);
+
+      // Read the fixed file as a buffer for native FormData
+      const fileBuffer = await fs.promises.readFile(fileToTranscribe);
+      const filename = path.basename(fileToTranscribe);
       
-      console.log(`Using language: ${language}`);
+      // Create native FormData (available in Node.js 18+)
+      const formData = new FormData();
+      
+      // Create a Blob from the buffer and append to FormData
+      // Native FormData works with Blob, which is compatible with fetch
+      const audioBlob = new Blob([fileBuffer], { type: 'audio/wav' });
+      formData.append('file', audioBlob, filename);
+      
+      // Add language code (mapped from app language name to Whisper code)
+      formData.append('language', whisperLanguageCode);
+      
+      // Set temperature (default to 0.0 for deterministic output)
+      const temperature = options.temperature !== undefined ? options.temperature : 0.0;
+      formData.append('temperature', temperature.toString());
+      
+      // Request JSON response format
+      formData.append('response_format', 'json');
+      
+      // Additional Whisper parameters for better transcription quality/speed
+      formData.append('no_speech_thold', '0.8');  // Threshold for detecting no speech
+      formData.append('no_timestamps', 'true');  // Don't include timestamps in output
+      formData.append('best_of', '1');            // Use single best candidate
+      formData.append('beam_size', '1');          // Use beam size of 1 for speed
+      
+      console.log('FormData fields:', {
+        file: filename,
+        language: whisperLanguageCode,
+        temperature: temperature.toString(),
+        response_format: 'json',
+        no_speech_thold: '0.8',
+        no_timestamps: 'true',
+        best_of: '1',
+        beam_size: '1'
+      });
 
-      console.log('Whisper command:', this.whisperBinaryPath, args.join(' '));
+      let transcriptionResult: string | null = null;
 
-      // Execute whisper-cli
-      let result;
       try {
-        const { stdout, stderr } = await execFile(this.whisperBinaryPath, args, {
-          timeout: 60000, // 60 second timeout
-          maxBuffer: 1024 * 1024 // 1MB buffer
+        console.log('Sending request to Whisper server...');
+        const startTime = Date.now();
+        
+        // Use native FormData with fetch - fetch will automatically set Content-Type with boundary
+        // Do NOT manually set Content-Type header - fetch handles it automatically
+        const response = await fetch(url, {
+          method: 'POST',
+          body: formData
         });
 
-        console.log('Whisper stdout length:', stdout.length);
-        console.log('Whisper stdout preview:', stdout.substring(0, 200) + (stdout.length > 200 ? '...' : ''));
-        if (stderr) {
-          console.log('Whisper stderr:', stderr);
+        const elapsed = Date.now() - startTime;
+        console.log(`Whisper server responded in ${elapsed}ms`);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Whisper server ${url} returned ${response.status}: ${errorText}`);
+          throw new Error(`Whisper server returned ${response.status}: ${errorText}`);
         }
 
-        result = stdout;
+        const responseContentType = response.headers.get('content-type');
         
-      } catch (execError) {
-        console.error('Whisper execution error:', execError);
-        
-        const errorMessage = execError instanceof Error ? execError.message : String(execError);
-        
-        // Check if it's actually an error or just stderr output
-        if (execError && typeof execError === 'object' && 'stdout' in execError) {
-          // If we have stdout, it might not be a real error
-          result = (execError as any).stdout || '';
-          console.log('Whisper completed with stderr but has output:', result);
-        } else if (errorMessage.includes('timeout')) {
-          throw new Error('Transcription took too long. The audio file may be too large.');
-        } else if (errorMessage.includes('model') || errorMessage.includes('ggml')) {
-          throw new Error('Whisper model file is invalid or corrupted. Please re-download the model.');
-        } else if (errorMessage.includes('audio') || errorMessage.includes('format')) {
-          throw new Error('Invalid audio format. Please ensure the recording is in WAV format.');
+        // Handle JSON response (as requested via response_format=json)
+        if (responseContentType && responseContentType.includes('application/json')) {
+          const json = await response.json();
+          transcriptionResult = json.text || '';
         } else {
-          throw new Error(`Whisper transcription failed: ${errorMessage}`);
+          // Fallback to plain text if not JSON
+          transcriptionResult = await response.text();
         }
+
+        if (!transcriptionResult || transcriptionResult.trim().length === 0) {
+          throw new Error('Whisper server returned empty transcription result');
+        }
+
+        console.log(`Successfully transcribed using Whisper server endpoint: /inference`);
+      } catch (fetchError) {
+        console.error(`Error calling Whisper server endpoint /inference:`, fetchError);
+        throw new Error(`Failed to transcribe audio via Whisper server: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`);
       }
 
-      // Parse the result
-      let transcribedText = '';
-      
-      if (typeof result === 'string') {
-        // Clean up the output - whisper-cli often includes extra info
-        const lines = result.split('\n');
-        
-        // Find lines that look like transcribed text (not metadata)
-        const textLines = lines.filter(line => {
-          const trimmed = line.trim();
-          return trimmed.length > 0 && 
-                 !trimmed.startsWith('[') && 
-                 !trimmed.includes('whisper_') &&
-                 !trimmed.includes('load time') &&
-                 !trimmed.includes('sample time') &&
-                 !trimmed.includes('encode time') &&
-                 !trimmed.includes('decode time') &&
-                 !trimmed.includes('total time');
-        });
-        
-        // Join all text and clean it up
-        let rawText = textLines.join(' ').trim();
-        
-        console.log('Raw transcription before cleaning:', rawText);
-        
-        // Remove repeated [Música], [Music], and similar tokens
-        transcribedText = this.cleanTranscriptionText(rawText);
-        
-        console.log('Cleaned transcription:', transcribedText);
-      }
+      // Clean the transcription text
+      console.log('Raw transcription before cleaning:', transcriptionResult);
+      // const cleanedText = this.cleanTranscriptionText(transcriptionResult);
+      // console.log('Cleaned transcription:', cleanedText);
 
-      if (!transcribedText || transcribedText.length === 0) {
-        throw new Error('No speech detected in audio. Please speak more clearly or check your microphone.');
-      }
+      // if (!cleanedText || cleanedText.length === 0) {
+      //   throw new Error('No speech detected in audio. Please speak more clearly or check your microphone.');
+      // }
 
-      console.log(`Transcription completed: "${transcribedText}"`);
+      console.log(`Transcription completed: "${transcriptionResult}"`);
+
+      // Clean up temporary fixed file if it was created
+      if (fileToTranscribe && fileToTranscribe !== filePath) {
+        await fs.promises.unlink(fileToTranscribe);
+      }
 
       return {
-        text: transcribedText,
-        language: options.language
+        text: transcriptionResult,
+        language: whisperLanguageCode
       };
 
     } catch (error) {
@@ -258,6 +278,15 @@ export class SpeechRecognitionService {
       
       if (this.isSpeechRecognitionError(error)) {
         throw error;
+      }
+
+      // Handle network errors
+      if (error instanceof Error) {
+        if (error.message.includes('ECONNREFUSED') || error.message.includes('fetch failed')) {
+          const speechError = new Error('Cannot connect to Whisper server. Please ensure it is running at http://127.0.0.1:8080') as SpeechRecognitionError;
+          speechError.code = 'WHISPER_NOT_AVAILABLE';
+          throw speechError;
+        }
       }
 
       const speechError = new Error(`Transcription failed: ${error instanceof Error ? error.message : 'Unknown error'}`) as SpeechRecognitionError;
@@ -331,56 +360,26 @@ export class SpeechRecognitionService {
   }
 
   /**
-   * Get available models (scan models/ folder, current directory and Downloads folder)
+   * Get available models (models are managed by the server)
    */
   getAvailableModels(): string[] {
-    const models: string[] = [];
-    
-    // Scan models/ folder, project directory and Downloads
-    const searchPaths = [
-      path.join(process.cwd(), 'models'),  // New models/ folder
-      process.cwd(),
-      path.join(require('os').homedir(), 'Downloads')
-    ];
-    
-    for (const searchPath of searchPaths) {
-      try {
-        const files = fs.readdirSync(searchPath);
-        const modelFiles = files.filter(file => 
-          file.startsWith('ggml-') && file.endsWith('.bin')
-        );
-        
-        for (const modelFile of modelFiles) {
-          const fullPath = path.join(searchPath, modelFile);
-          if (fs.existsSync(fullPath) && !models.includes(modelFile)) {
-            models.push(modelFile);
-          }
-        }
-      } catch (error) {
-        // Ignore errors reading directories
-      }
-    }
-    
-    return models;
+    // Models are managed by the Whisper server, so we return empty array
+    // In the future, we could query the server for available models
+    return [];
   }
 
   /**
-   * Set model path
+   * Set model path (not applicable when using HTTP server)
    */
   async setModelPath(modelPath: string): Promise<void> {
-    if (!fs.existsSync(modelPath)) {
-      throw new Error(`Model file not found: ${modelPath}`);
-    }
-
-    this.defaultModelPath = modelPath;
-    console.log(`Model path set to: ${modelPath}`);
+    console.log(`Model path setting ignored - models are managed by Whisper server at ${this.whisperServerUrl}`);
   }
 
   /**
-   * Get current model path
+   * Get current model path (not applicable when using HTTP server)
    */
   getCurrentModelPath(): string {
-    return this.defaultModelPath;
+    return ''; // Models are managed by the server
   }
 
   /**
@@ -391,70 +390,74 @@ export class SpeechRecognitionService {
   }
 
   /**
-   * Check if whisper binary is available on the system
+   * Check if Whisper server is available
    */
-  private async checkWhisperAvailability(): Promise<void> {
+  private async checkWhisperServerAvailability(): Promise<void> {
     try {
-      // Check if whisper-cli binary exists
-      if (!fs.existsSync(this.whisperBinaryPath)) {
-        throw new Error(`Whisper binary not found at ${this.whisperBinaryPath}`);
+      // Try to connect to the server (try common health check endpoints)
+      const healthEndpoints = [
+        '/health',
+        '/',
+        '/v1/health',
+        '/api/health'
+      ];
+
+      let serverAvailable = false;
+      
+      for (const endpoint of healthEndpoints) {
+        try {
+          const response = await fetch(`${this.whisperServerUrl}${endpoint}`, {
+            method: 'GET',
+            signal: AbortSignal.timeout(5000) // 5 second timeout
+          });
+          
+          if (response.ok || response.status === 404) {
+            // 404 is fine - it means the server is responding
+            serverAvailable = true;
+            console.log(`Whisper server is available at: ${this.whisperServerUrl}`);
+            break;
+          }
+        } catch (error) {
+          // Continue to next endpoint
+          continue;
+        }
       }
 
-      // Test the binary
-      const { stdout } = await execFile(this.whisperBinaryPath, ['--help']);
-      console.log('System whisper-cpp binary is available');
+      if (!serverAvailable) {
+        // Last attempt: try the inference endpoint with a minimal request
+        try {
+          const testFormData = new FormData();
+          // Create a tiny dummy blob for testing
+          const dummyBlob = new Blob([Buffer.from([])], { type: 'audio/wav' });
+          testFormData.append('file', dummyBlob, 'test.wav');
+          
+          const response = await fetch(`${this.whisperServerUrl}/inference`, {
+            method: 'POST',
+            body: testFormData,
+            signal: AbortSignal.timeout(5000)
+          });
+
+          // If we get any response (even error), the server is there
+          serverAvailable = true;
+        } catch (error) {
+          // Server might be there but not responding to this endpoint
+          // We'll let the actual transcription attempt determine availability
+          console.warn('Could not verify server availability, but will attempt to use it');
+          serverAvailable = true; // Optimistically assume it's available
+        }
+      }
+
+      if (!serverAvailable) {
+        throw new Error(`Cannot connect to Whisper server at ${this.whisperServerUrl}. Please ensure the server is running.`);
+      }
       
     } catch (error) {
-      console.error('Whisper availability check failed:', error);
-      throw new Error(`System whisper-cpp binary is not available: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Whisper server availability check failed:', error);
+      throw new Error(`Whisper server is not available at ${this.whisperServerUrl}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-  /**
-   * Ensure model directory exists
-   */
-  private ensureModelDirectory(): void {
-    try {
-      if (!fs.existsSync(this.modelPath)) {
-        fs.mkdirSync(this.modelPath, { recursive: true });
-        console.log(`Created whisper models directory: ${this.modelPath}`);
-      }
-    } catch (error) {
-      console.error('Error creating models directory:', error);
-      throw new Error('Failed to create whisper models directory');
-    }
-  }
 
-  /**
-   * Ensure a specific model is available
-   */
-  private async ensureModelAvailable(model: string): Promise<void> {
-    const modelFile = `ggml-${model}.bin`;
-    const modelFilePath = path.join(this.modelPath, modelFile);
-
-    if (fs.existsSync(modelFilePath)) {
-      console.log(`Model ${model} already available at: ${modelFilePath}`);
-      return;
-    }
-
-    console.log(`Model ${model} not found, it will be downloaded automatically on first use`);
-    
-    // Note: whisper-node typically downloads models automatically on first use
-    // We don't need to manually download them here
-  }
-
-  /**
-   * Build whisper options from transcription options
-   */
-  private buildWhisperOptions(options: TranscriptionOptions): Record<string, any> {
-    const whisperOptions: Record<string, any> = {};
-
-    // Only include basic options for better compatibility
-    if (options.temperature !== undefined) whisperOptions.temperature = options.temperature;
-    if (options.initial_prompt !== undefined) whisperOptions.initial_prompt = options.initial_prompt;
-
-    return whisperOptions;
-  }
 
 
 

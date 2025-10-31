@@ -57,6 +57,7 @@ Language learners who prioritize privacy, prefer audio-based learning, and want 
 - **Database**: SQLite for local data persistence
 - **LLM Integration**: Ollama HTTP client for local language model access
 - **Audio**: macOS system TTS (`say` command) for speech generation
+- **Speech Recognition**: Whisper.cpp server for audio transcription
 
 ### Key Dependencies
 - **Database**: `sqlite3` or `better-sqlite3` for SQLite operations
@@ -97,7 +98,7 @@ Language learners who prioritize privacy, prefer audio-based learning, and want 
 - **macOS**: Required for system TTS integration (`say` command)
 - **Homebrew**: Package manager for installing dependencies
 - **Ollama**: Local language model for inference (default)
-- **Whisper**: Speech recognition model for audio input
+- **Whisper.cpp**: Speech recognition server for audio transcription
 - **ElevenLabs API Key** (optional): For high-quality TTS audio (free account provides 600-700 audio sentences)
 - **Google Gemini API Key** (optional): For cloud-based LLM as alternative to local Ollama
 
@@ -126,13 +127,15 @@ ollama pull llama3.2
 mkdir -p models
 cd models
 
-# Download the small model (39MB) - good balance of speed and accuracy
+# Download the tiny model - good balance of speed and accuracy
 curl -L -o ggml-small.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
 
 cd ..
 ```
 
 ### Service Setup
+
+#### Ollama Service
 
 Ensure Ollama is running before starting the application:
 
@@ -142,6 +145,23 @@ ollama serve
 ```
 
 You can verify Ollama is running by visiting `http://localhost:11434` in your browser.
+
+#### Whisper Server
+
+The app uses a Whisper.cpp server for speech recognition. Start the Whisper server before using transcription features:
+
+```bash
+whisper-server --model <MODEL_PATH> --threads 8 --flash-attn --no-context --suppress-nst --port 8080
+```
+
+Replace `<MODEL_PATH>` with the path to your Whisper model file.
+
+**Processing Speed** (for two-second audio clips):
+- **Tiny model**: ~150ms per audio clip
+- **Small model**: ~250ms per audio clip (recommended)
+- **Large-turbo model**: ~900ms per audio clip
+
+The Whisper server will be accessible at `http://127.0.0.1:8080` and the app will automatically connect to it for transcription.
 
 ### LLM Provider Options
 
