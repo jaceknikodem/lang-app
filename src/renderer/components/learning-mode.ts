@@ -849,14 +849,19 @@ export class LearningMode extends LitElement {
       if (this.wordsWithSentences[wIndex]?.sentences[sIndex]) {
         const previousLastShown = this.wordsWithSentences[wIndex].sentences[sIndex].lastShown;
         this.currentSentenceDisplayLastSeen = previousLastShown ? new Date(previousLastShown) : undefined;
-        const updatedWords = this.wordsWithSentences.map((w, wi) => {
-          if (wi !== wIndex) return w;
-          const updatedSentences = w.sentences.map((s, si) =>
-            si === sIndex ? { ...s, lastShown: new Date() } : s
-          );
-          return { ...w, sentences: updatedSentences };
-        });
-        this.wordsWithSentences = updatedWords;
+        // Only update wordsWithSentences if the sentence object reference actually changed
+        // This prevents unnecessary re-renders that cause layout shifts
+        const currentSentence = this.wordsWithSentences[wIndex]?.sentences[sIndex];
+        if (currentSentence && currentSentence.lastShown?.getTime() !== new Date().getTime()) {
+          const updatedWords = this.wordsWithSentences.map((w, wi) => {
+            if (wi !== wIndex) return w;
+            const updatedSentences = w.sentences.map((s, si) =>
+              si === sIndex ? { ...s, lastShown: new Date() } : s
+            );
+            return { ...w, sentences: updatedSentences };
+          });
+          this.wordsWithSentences = updatedWords;
+        }
 
         if (this.lastSeenClearFrame !== null) {
           cancelAnimationFrame(this.lastSeenClearFrame);
@@ -864,7 +869,7 @@ export class LearningMode extends LitElement {
         this.lastSeenClearFrame = requestAnimationFrame(() => {
           this.currentSentenceDisplayLastSeen = undefined;
           this.lastSeenClearFrame = null;
-          this.requestUpdate();
+          // Don't call requestUpdate() - only update if something actually changed
         });
       }
       // Fire and forget; no need to block UI
@@ -1765,8 +1770,6 @@ export class LearningMode extends LitElement {
             Review sentences and mark words as known or ignored
           </p>
         </div>
-
-        ${this.renderQueueStatus()}
 
         ${this.infoMessage ? html`
           <div class="info-banner ${this.infoMessageType}">

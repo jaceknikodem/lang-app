@@ -37,12 +37,15 @@ export class SentenceViewer extends LitElement {
   @state()
   private autoplayEnabled = false;
 
-  @state()
+  // Dictionary cache is not reactive to avoid unnecessary re-renders
+  // Dictionary data is precomputed in tokens, so cache updates shouldn't trigger UI updates
   private dictionaryCache: Record<string, DictionaryEntry[] | null> = {};
 
   private tokenizationRequestId = 0;
   private dictionaryLookupInFlight = new Set<string>();
   private dictionaryLookupPromises: Partial<Record<string, Promise<DictionaryEntry[] | null>>> = {};
+  private lastProcessedSentenceId?: number;
+  private lastProcessedAllWordsHash?: string;
 
   private keyboardUnsubscribe?: () => void;
 
@@ -368,17 +371,53 @@ export class SentenceViewer extends LitElement {
   }
 
   updated(changedProperties: Map<string, any>) {
-    if (changedProperties.has('sentence') || changedProperties.has('allWords')) {
-      void this.parseSentence();
+    // Only re-parse if sentence actually changed (different ID) or allWords meaningfully changed
+    const sentenceChanged = changedProperties.has('sentence');
+    const allWordsChanged = changedProperties.has('allWords');
+    
+    if (sentenceChanged || allWordsChanged) {
+      const currentSentenceId = this.sentence?.id;
+      const needsReparse = sentenceChanged 
+        ? (currentSentenceId !== this.lastProcessedSentenceId)
+        : (allWordsChanged && this.needsReparseForAllWords());
+      
+      if (needsReparse) {
+        if (sentenceChanged) {
+          this.lastProcessedSentenceId = currentSentenceId;
+        }
+        void this.parseSentence();
+      }
     }
     
     // Auto-play audio when sentence changes (if enabled)
     // This includes both when sentence changes AND when it's first set
-    if (changedProperties.has('sentence') && this.autoplayEnabled && this.sentence?.audioPath) {
+    if (sentenceChanged && this.autoplayEnabled && this.sentence?.audioPath) {
       console.log('Autoplay triggered - sentence changed or first set');
       // Handle auto-play asynchronously
       this.handleAutoPlay();
     }
+  }
+
+  private needsReparseForAllWords(): boolean {
+    // Create a simple hash of allWords to detect meaningful changes
+    if (!this.allWords || this.allWords.length === 0) {
+      return false;
+    }
+    
+    // Only re-parse if words relevant to current sentence might have changed
+    // This prevents unnecessary re-parsing when unrelated words are added/updated
+    const hash = this.allWords
+      .filter(w => w.id === this.targetWord?.id || 
+                   this.parsedWords.some(p => p.wordData?.id === w.id))
+      .map(w => `${w.id}:${w.strength}:${w.known}:${w.ignored}`)
+      .join(',');
+    
+    if (hash !== this.lastProcessedAllWordsHash) {
+      this.lastProcessedAllWordsHash = hash;
+      return true;
+    }
+    
+    return false;
   }
 
   private async loadAutoplaySettings() {
@@ -421,12 +460,29 @@ export class SentenceViewer extends LitElement {
 
     if (!this.sentence?.sentence) {
       this.parsedWords = [];
+      this.lastProcessedSentenceId = undefined;
       return;
     }
 
     // Check if we have precomputed tokens - use them if available
     if (this.sentence.tokenizedTokens && this.sentence.tokenizedTokens.length > 0) {
-      this.parsedWords = this.convertPrecomputedTokensToWords(this.sentence.tokenizedTokens);
+      // Convert synchronously to avoid re-render jitter
+      const newParsedWords = this.convertPrecomputedTokensToWords(this.sentence.tokenizedTokens);
+      // Only update if it actually changed to prevent unnecessary re-renders
+      if (requestId === this.tokenizationRequestId) {
+        const hasChanged = newParsedWords.length !== this.parsedWords.length ||
+          newParsedWords.some((word, i) => {
+            const oldWord = this.parsedWords[i];
+            return !oldWord || 
+              word.text !== oldWord.text ||
+              word.isTargetWord !== oldWord.isTargetWord ||
+              word.wordData?.id !== oldWord.wordData?.id;
+          });
+        
+        if (hasChanged) {
+          this.parsedWords = newParsedWords;
+        }
+      }
       return;
     }
 
@@ -542,7 +598,20 @@ export class SentenceViewer extends LitElement {
       }
 
       this.dictionaryCache = Object.fromEntries(cache.entries()) as Record<string, DictionaryEntry[] | null>;
-      this.parsedWords = words;
+      // Only update parsedWords if content actually changed to prevent unnecessary re-renders
+      const hasChanged = words.length !== this.parsedWords.length ||
+        words.some((word, i) => {
+          const oldWord = this.parsedWords[i];
+          return !oldWord || 
+            word.text !== oldWord.text ||
+            word.isTargetWord !== oldWord.isTargetWord ||
+            word.wordData?.id !== oldWord.wordData?.id ||
+            word.dictionaryKey !== oldWord.dictionaryKey;
+        });
+      
+      if (hasChanged) {
+        this.parsedWords = words;
+      }
     } catch (error) {
       if (requestId === this.tokenizationRequestId) {
         console.error('Failed to apply dictionary-based tokenization:', error);
@@ -618,17 +687,13 @@ export class SentenceViewer extends LitElement {
           languageOverride ?? this.targetWord?.language
         );
         const normalizedEntries = Array.isArray(entries) && entries.length > 0 ? entries : null;
-        this.dictionaryCache = {
-          ...this.dictionaryCache,
-          [dictionaryKey]: normalizedEntries
-        };
+        // Update cache without triggering re-render (dictionaryCache is not @state)
+        this.dictionaryCache[dictionaryKey] = normalizedEntries;
         return normalizedEntries;
       } catch (error) {
         console.error('Failed to load dictionary entries:', error);
-        this.dictionaryCache = {
-          ...this.dictionaryCache,
-          [dictionaryKey]: null
-        };
+        // Update cache without triggering re-render
+        this.dictionaryCache[dictionaryKey] = null;
         return null;
       } finally {
         this.dictionaryLookupInFlight.delete(dictionaryKey);
