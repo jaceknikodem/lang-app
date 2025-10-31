@@ -160,10 +160,7 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
         validatedContextAfter,
         validatedContextBeforeTranslation,
         validatedContextAfterTranslation,
-        validatedSentenceParts,
-        validatedSentenceGenerationModel,
-        validatedAudioGenerationService,
-        validatedAudioGenerationModel
+        validatedSentenceParts
       );
     } catch (error) {
       console.error('Error inserting sentence:', error);
