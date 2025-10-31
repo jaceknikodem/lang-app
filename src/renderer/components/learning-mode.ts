@@ -87,7 +87,7 @@ export class LearningMode extends LitElement {
   private blobUrlCache: Map<string, string> = new Map(); // audioPath -> blob URL (for cleanup)
   // HTML5 Audio instances for playing cached audio
   private currentAudioElement: HTMLAudioElement | null = null;
-  private handleExternalLanguageChange = (event: Event) => {
+  private handleExternalLanguageChange = async (event: Event) => {
     const detail = (event as CustomEvent<{ language?: string }>).detail;
     const newLanguage = detail?.language;
 
@@ -96,7 +96,34 @@ export class LearningMode extends LitElement {
     }
 
     this.currentLanguage = newLanguage;
-    void this.refreshQueueSummary();
+    
+    // Reload all data for the new language
+    try {
+      // Load all words for highlighting purposes
+      await this.loadAllWords();
+      
+      // Load words from database first
+      await this.loadSelectedWords();
+
+      const initialRouteData = router.getRouteData<{ specificWords?: Word[] }>();
+      if (!initialRouteData?.specificWords?.length) {
+        const appended = await this.maybeAppendNewWordsToSession();
+        if (appended) {
+          await this.loadSelectedWords();
+        }
+      }
+      
+      // Load words and sentences before restoring session progress
+      await this.loadWordsAndSentences();
+      
+      // Try to restore learning session from session manager (after words are loaded)
+      this.restoreSessionProgress();
+      
+      // Refresh queue summary
+      await this.refreshQueueSummary();
+    } catch (error) {
+      console.error('Failed to reload data after language change:', error);
+    }
   };
 
   static styles = [

@@ -335,8 +335,28 @@ export class ProgressSummary extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    // Listen for language changes
+    document.addEventListener('language-changed', this.handleExternalLanguageChange);
     this.loadProgressData();
   }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    // Clean up language change listener
+    document.removeEventListener('language-changed', this.handleExternalLanguageChange);
+  }
+
+  private handleExternalLanguageChange = async (event: Event) => {
+    const detail = (event as CustomEvent<{ language?: string }>).detail;
+    const newLanguage = detail?.language;
+
+    if (!newLanguage || newLanguage === this.currentLanguage) {
+      return;
+    }
+
+    // Reload progress data for the new language
+    await this.loadProgressData();
+  };
 
   private async loadProgressData() {
     this.isLoading = true;

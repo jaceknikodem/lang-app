@@ -90,6 +90,37 @@ export class QuizMode extends LitElement {
   // HTML5 Audio instances for playing cached audio
   private currentAudioElement: HTMLAudioElement | null = null;
 
+  private handleExternalLanguageChange = async (event: Event) => {
+    const detail = (event as CustomEvent<{ language?: string }>).detail;
+    const newLanguage = detail?.language;
+
+    if (!newLanguage) {
+      return;
+    }
+
+    // Reload quiz data for the new language
+    try {
+      this.isLoading = true;
+      this.error = null;
+      
+      // Load words from database for the new language
+      await this.loadSelectedWords();
+
+      if (this.selectedWords.length === 0) {
+        this.error = 'No words available for quiz. Please start a new learning session first.';
+        this.isLoading = false;
+        return;
+      }
+
+      // Start a fresh quiz session with the new language's words
+      await this.startQuiz();
+    } catch (error) {
+      console.error('Failed to reload quiz data after language change:', error);
+      this.error = 'Failed to reload quiz data. Please try again.';
+      this.isLoading = false;
+    }
+  };
+
   static styles = [
     sharedStyles,
     css`
@@ -956,6 +987,9 @@ export class QuizMode extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
 
+    // Listen for language changes
+    document.addEventListener('language-changed', this.handleExternalLanguageChange);
+
     // Setup keyboard bindings
     this.setupKeyboardBindings();
 
@@ -979,6 +1013,9 @@ export class QuizMode extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+
+    // Clean up language change listener
+    document.removeEventListener('language-changed', this.handleExternalLanguageChange);
 
     // Clean up keyboard bindings
     if (this.keyboardUnsubscribe) {
