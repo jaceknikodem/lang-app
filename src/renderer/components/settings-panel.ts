@@ -282,16 +282,7 @@ export class SettingsPanel extends LitElement {
   private autoplayAudioEnabled = false;
 
   @state()
-  private availableSpeechModels: string[] = [];
-
-  @state()
-  private currentSpeechModel = '';
-
-  @state()
   private speechRecognitionReady = false;
-
-  @state()
-  private transcriptionMethod: 'whisper' | 'os-dictation' = 'whisper';
 
   @state()
   private availableLLMModels: string[] = [];
@@ -378,8 +369,14 @@ export class SettingsPanel extends LitElement {
       // Load language settings
       await this.loadLanguageSettings();
 
-      // Load speech recognition settings
-      await this.loadSpeechRecognitionSettings();
+      // Initialize speech recognition (used by audio recorder, but not shown in settings)
+      try {
+        await window.electronAPI.audio.initializeSpeechRecognition();
+        this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
+      } catch (initError) {
+        console.warn('Failed to initialize speech recognition:', initError);
+        this.speechRecognitionReady = false;
+      }
 
       // Load LLM settings
       await this.loadLLMSettings();
@@ -404,85 +401,6 @@ export class SettingsPanel extends LitElement {
     }
   }
 
-  private async loadSpeechRecognitionSettings() {
-    try {
-      // Load transcription method preference from database
-      // Check new setting first, then fall back to legacy setting for backwards compatibility
-      let transcriptionMethodSetting = await window.electronAPI.database.getSetting('transcription_method');
-      
-      // If new setting doesn't exist, check legacy setting
-      if (!transcriptionMethodSetting) {
-        const legacyUseOsDictation = await window.electronAPI.database.getSetting('use_os_dictation');
-        if (legacyUseOsDictation === 'true') {
-          // Migrate from legacy setting to new setting
-          transcriptionMethodSetting = 'os-dictation';
-          try {
-            await window.electronAPI.database.setSetting('transcription_method', 'os-dictation');
-            console.log('Migrated from legacy use_os_dictation setting to transcription_method: os-dictation');
-          } catch (migrateError) {
-            console.warn('Failed to migrate legacy setting:', migrateError);
-          }
-        }
-      }
-      
-      // Set transcription method based on saved setting (default to 'whisper' if not set)
-      if (transcriptionMethodSetting === 'os-dictation') {
-        this.transcriptionMethod = 'os-dictation';
-        console.log('Loaded transcription method from database: os-dictation');
-      } else if (transcriptionMethodSetting === 'whisper') {
-        this.transcriptionMethod = 'whisper';
-        console.log('Loaded transcription method from database: whisper');
-      } else {
-        // First time - no setting exists, default to 'whisper' and save it
-        this.transcriptionMethod = 'whisper';
-        try {
-          await window.electronAPI.database.setSetting('transcription_method', 'whisper');
-          console.log('Initialized transcription method setting to default: whisper');
-        } catch (saveError) {
-          console.warn('Failed to save default transcription method:', saveError);
-        }
-      }
-
-      // Try to initialize speech recognition (this will ping the Whisper server)
-      try {
-        await window.electronAPI.audio.initializeSpeechRecognition();
-        this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
-      } catch (initError) {
-        console.warn('Failed to initialize speech recognition:', initError);
-        this.speechRecognitionReady = false;
-      }
-
-      if (this.speechRecognitionReady) {
-        // Get available models
-        this.availableSpeechModels = await window.electronAPI.audio.getAvailableSpeechModels();
-
-        // Get current model
-        this.currentSpeechModel = await window.electronAPI.audio.getCurrentSpeechModel();
-
-        console.log('Speech recognition settings loaded:', {
-          ready: this.speechRecognitionReady,
-          models: this.availableSpeechModels,
-          current: this.currentSpeechModel,
-          transcriptionMethod: this.transcriptionMethod,
-          savedSetting: transcriptionMethodSetting
-        });
-      } else {
-        console.log('Speech recognition settings loaded (server not available):', {
-          transcriptionMethod: this.transcriptionMethod,
-          savedSetting: transcriptionMethodSetting
-        });
-      }
-      
-      // Request UI update to reflect the loaded transcription method
-      this.requestUpdate();
-    } catch (error) {
-      console.error('Failed to load speech recognition settings:', error);
-      this.speechRecognitionReady = false;
-      this.transcriptionMethod = 'whisper';
-      // Request UI update even on error
-      this.requestUpdate();
-    }
-  }
 
   private async loadLLMSettings() {
     this.isLoadingLLMModels = true;
@@ -686,50 +604,6 @@ export class SettingsPanel extends LitElement {
     }
   }
 
-  private async changeTranscriptionMethod(event: Event) {
-    const select = event.target as HTMLSelectElement;
-    const selectedValue = select.value;
-    const previous = this.transcriptionMethod;
-    
-    // Determine if it's OS dictation or Whisper server
-    if (selectedValue === 'os-dictation') {
-      this.transcriptionMethod = 'os-dictation';
-      try {
-        // Persist the selection to database
-        await window.electronAPI.database.setSetting('transcription_method', 'os-dictation');
-        await window.electronAPI.database.setSetting('use_os_dictation', 'true');
-        console.log('Transcription method saved to database: os-dictation');
-        // Request update to refresh UI
-        this.requestUpdate();
-      } catch (error) {
-        console.error('Failed to save transcription method setting:', error);
-        this.transcriptionMethod = previous;
-        select.value = this.getCurrentTranscriptionValue();
-      }
-    } else if (selectedValue === 'whisper' || selectedValue === 'whisper-unavailable') {
-      // Whisper server - model is managed by the server
-      // Note: 'whisper-unavailable' is disabled, but we handle it in case
-      if (selectedValue === 'whisper-unavailable') {
-        // Can't select unavailable option, revert
-        select.value = this.getCurrentTranscriptionValue();
-        return;
-      }
-      
-      this.transcriptionMethod = 'whisper';
-      try {
-        // Persist the selection to database
-        await window.electronAPI.database.setSetting('transcription_method', 'whisper');
-        await window.electronAPI.database.setSetting('use_os_dictation', 'false');
-        console.log('Transcription method saved to database: whisper');
-        // Request update to refresh UI
-        this.requestUpdate();
-      } catch (error) {
-        console.error('Failed to save transcription method setting:', error);
-        select.value = this.getCurrentTranscriptionValue();
-        this.transcriptionMethod = previous;
-      }
-    }
-  }
 
   private async changeSrsAlgorithm(event: Event) {
     const select = event.target as HTMLSelectElement;
@@ -746,15 +620,6 @@ export class SettingsPanel extends LitElement {
     }
   }
 
-  private getCurrentTranscriptionValue(): string {
-    const value = this.transcriptionMethod === 'os-dictation' ? 'os-dictation' : 'whisper';
-    // Debug logging to track value changes
-    console.log('[SettingsPanel] getCurrentTranscriptionValue:', { 
-      transcriptionMethod: this.transcriptionMethod, 
-      returningValue: value 
-    });
-    return value;
-  }
 
   private getModelDisplayName(modelPath: string): string {
     if (!modelPath) return '';
@@ -1185,53 +1050,6 @@ export class SettingsPanel extends LitElement {
           ` : html`
             <div class="status-message status-error">
               No LLM models available. Please ensure Ollama is running and has models installed.
-            </div>
-          `}
-        </div>
-
-        <div class="settings-section">
-          <h3>Speech Recognition</h3>
-          
-          <div class="dropdown-row">
-            <div class="dropdown-description">
-              <strong>Transcription Method</strong>
-              <p>Choose how to transcribe pronunciation practice</p>
-            </div>
-            <select 
-              class="model-select"
-              .value=${this.getCurrentTranscriptionValue()}
-              @change=${this.changeTranscriptionMethod}
-            >
-              <optgroup label="Local Transcription">
-                ${this.speechRecognitionReady ? html`
-                  <option value="whisper">
-                    Whisper Server (localhost:8080)
-                  </option>
-                ` : html`
-                  <option value="whisper-unavailable" disabled>Whisper (server not available)</option>
-                `}
-              </optgroup>
-              <optgroup label="System Dictation">
-                <option value="os-dictation">OS-Level Dictation (macOS)</option>
-              </optgroup>
-            </select>
-          </div>
-
-          ${this.transcriptionMethod === 'whisper' ? html`
-            ${this.speechRecognitionReady ? html`
-              <div class="model-info">
-                Whisper server is connected and ready.
-                <br>
-                <small>Using server at http://127.0.0.1:8080</small>
-              </div>
-            ` : html`
-              <div class="status-message status-info">
-                Whisper server is not available. Please ensure the Whisper server is running at http://127.0.0.1:8080
-              </div>
-            `}
-          ` : html`
-            <div class="model-info">
-              OS-level dictation enabled. Use macOS dictation (Fn key twice) in text input fields for pronunciation practice.
             </div>
           `}
         </div>

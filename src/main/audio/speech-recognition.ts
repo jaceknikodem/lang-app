@@ -252,15 +252,6 @@ export class SpeechRecognitionService {
         throw new Error(`Failed to transcribe audio via Whisper server: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`);
       }
 
-      // Clean the transcription text
-      console.log('Raw transcription before cleaning:', transcriptionResult);
-      // const cleanedText = this.cleanTranscriptionText(transcriptionResult);
-      // console.log('Cleaned transcription:', cleanedText);
-
-      // if (!cleanedText || cleanedText.length === 0) {
-      //   throw new Error('No speech detected in audio. Please speak more clearly or check your microphone.');
-      // }
-
       console.log(`Transcription completed: "${transcriptionResult}"`);
 
       // Clean up temporary fixed file if it was created

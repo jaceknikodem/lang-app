@@ -2,7 +2,7 @@
  * Quiz mode component for vocabulary assessment
  */
 
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { Word, Sentence, QuizQuestion, QuizSession, QuizResult } from '../../shared/types/core.js';
 import { sharedStyles } from '../styles/shared.js';
@@ -1873,34 +1873,13 @@ export class QuizMode extends LitElement {
     this.isTranscribing = false;
     this.textInputValue = '';
     
-    // Check if OS dictation is preferred in settings
-    if (this.showRecorder) {
-      try {
-        // Check new setting first, then fall back to legacy setting for backwards compatibility
-        const transcriptionMethod = await window.electronAPI.database.getSetting('transcription_method');
-        if (transcriptionMethod === 'os-dictation') {
-          this.useTextInput = true;
-        } else {
-          // Fall back to legacy setting
-          const useOsDictation = await window.electronAPI.database.getSetting('use_os_dictation');
-          this.useTextInput = useOsDictation === 'true';
-        }
-      } catch (error) {
-        console.error('Failed to load transcription method setting:', error);
-        this.useTextInput = false;
-      }
-    } else {
+    // Always use recorder (OS dictation removed)
+    // Text input mode can still be toggled manually if needed
+    if (!this.showRecorder) {
       this.useTextInput = false;
     }
   }
 
-  private toggleInputMode() {
-    this.useTextInput = !this.useTextInput;
-    if (this.useTextInput) {
-      this.currentRecording = null;
-      this.textInputValue = '';
-    }
-  }
 
   private handleTextInputSubmit() {
     if (!this.textInputValue.trim() || !this.currentQuestion) {
@@ -2230,14 +2209,15 @@ export class QuizMode extends LitElement {
           >
             Reveal Answer <span class="keyboard-hint">(Enter)</span>
           </button>
-          <button 
-            class="answer-button"
-            @click=${this.toggleRecorder}
-            ?disabled=${!this.speechRecognitionReady}
-            title=${this.speechRecognitionReady ? 'Practice pronunciation with speech recognition' : 'Speech recognition not available - setting up for first use'}
-          >
-            🎤 Practice Pronunciation${this.speechRecognitionReady ? '' : ' (Setting up...)'}
-          </button>
+          ${this.speechRecognitionReady ? html`
+            <button 
+              class="answer-button"
+              @click=${this.toggleRecorder}
+              title="Practice pronunciation with speech recognition"
+            >
+              🎤 Practice Pronunciation
+            </button>
+          ` : nothing}
         </div>
       `;
     }
@@ -2309,72 +2289,19 @@ export class QuizMode extends LitElement {
   private renderRecordingSection() {
     if (!this.currentQuestion) return '';
 
-    const sentenceToRecord = this.direction === 'foreign-to-english'
-      ? this.currentQuestion.sentence.sentence
-      : this.currentQuestion.sentence.translation;
-
     const languageLabel = this.direction === 'foreign-to-english'
       ? 'Foreign Language'
       : 'English';
 
-    const prompt = `Try pronouncing this ${languageLabel.toLowerCase()} sentence:`;
-
-    const isAudioOnly = this.audioOnlyMode;
+    const prompt = '';
 
     return html`
       <div class="recording-section">
-        
-        <div class="input-mode-toggle">
-          <button 
-            class="input-mode-button ${!this.useTextInput ? 'active' : ''}"
-            @click=${() => { this.useTextInput = false; }}
-          >
-            🎤 Audio Recording
-          </button>
-          <button 
-            class="input-mode-button ${this.useTextInput ? 'active' : ''}"
-            @click=${() => { this.useTextInput = true; }}
-          >
-            ⌨️ Text Input
-          </button>
-        </div>
-
-        ${this.useTextInput ? html`
-          <div class="text-input-container">
-            <input
-              type="text"
-              class="text-input-field"
-              .value=${this.textInputValue}
-              @input=${(e: Event) => {
-                this.textInputValue = (e.target as HTMLInputElement).value;
-              }}
-              @keydown=${(e: KeyboardEvent) => {
-                // Allow Enter to submit for single-line input
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  if (this.textInputValue.trim() && !this.isTranscribing) {
-                    this.handleTextInputSubmit();
-                  }
-                }
-              }}
-              placeholder="Type or use macOS dictation (Fn key twice) to input the sentence..."
-              ?disabled=${this.isTranscribing}
-            />
-            <button
-              class="text-input-submit"
-              @click=${this.handleTextInputSubmit}
-              ?disabled=${!this.textInputValue.trim() || this.isTranscribing}
-            >
-              ${this.isTranscribing ? 'Analyzing...' : 'Compare'}
-            </button>
-          </div>
-        ` : html`
-          <audio-recorder
-            .prompt=${prompt}
-            @recording-completed=${this.handleRecordingCompleted}
-            @recording-cancelled=${this.handleRecordingCancelled}
-          ></audio-recorder>
-        `}
+        <audio-recorder
+          .prompt=${prompt}
+          @recording-completed=${this.handleRecordingCompleted}
+          @recording-cancelled=${this.handleRecordingCancelled}
+        ></audio-recorder>
         
         ${this.renderTranscriptionResults()}
       </div>
@@ -2387,8 +2314,8 @@ export class QuizMode extends LitElement {
         <div class="transcription-results">
           <div class="transcription-loading">
             <div class="spinner"></div>
-            ${this.useTextInput ? 'Analyzing your input...' : 'Analyzing your pronunciation...'}
-            ${!this.useTextInput && !this.speechRecognitionReady ? html`
+            Analyzing your pronunciation...
+            ${!this.speechRecognitionReady ? html`
               <div style="margin-top: var(--spacing-sm); font-size: 14px; color: var(--text-secondary);">
                 First-time setup: This may take 1-2 minutes while speech recognition compiles...
               </div>
@@ -2413,33 +2340,25 @@ export class QuizMode extends LitElement {
     if (similarity >= 0.9) {
       similarityClass = 'excellent';
       feedbackClass = 'excellent';
-      feedbackMessage = this.useTextInput 
-        ? 'Excellent! Perfect match! 🎉' 
-        : 'Excellent pronunciation! 🎉';
+      feedbackMessage = 'Excellent pronunciation! 🎉';
     } else if (similarity >= 0.7) {
       similarityClass = 'good';
       feedbackClass = 'good';
-      feedbackMessage = this.useTextInput 
-        ? 'Good! Very close match! 👍' 
-        : 'Good pronunciation! Keep it up! 👍';
+      feedbackMessage = 'Good pronunciation! Keep it up! 👍';
     } else if (similarity >= 0.5) {
       similarityClass = 'fair';
       feedbackClass = 'fair';
-      feedbackMessage = this.useTextInput 
-        ? 'Not bad! Try to match the original more closely. 🤔' 
-        : 'Not bad! Try to match the original more closely. 🤔';
+      feedbackMessage = 'Not bad! Try to match the original more closely. 🤔';
     } else {
       similarityClass = 'poor';
       feedbackClass = 'poor';
-      feedbackMessage = this.useTextInput 
-        ? 'Keep practicing! Compare your input with the expected text. 💪' 
-        : 'Keep practicing! Listen to the audio again and try to match it. 💪';
+      feedbackMessage = 'Keep practicing! Listen to the audio again and try to match it. 💪';
     }
 
     return html`
       <div class="transcription-results">
         <div class="transcription-header">
-          ${this.useTextInput ? '📝 Text Input Results' : '🎤 Speech Recognition Results'}
+          🎤 Speech Recognition Results
         </div>
 
         <div class="transcription-text">

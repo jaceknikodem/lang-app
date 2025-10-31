@@ -218,56 +218,6 @@ export class AudioRecorder extends LitElement {
         border-top: 1px solid var(--border-color);
       }
 
-      .playback-controls {
-        display: flex;
-        gap: var(--spacing-md);
-        justify-content: center;
-        align-items: center;
-      }
-
-      .play-button {
-        width: 50px;
-        height: 50px;
-        border-radius: 50%;
-        background: var(--primary-color);
-        color: white;
-        border: none;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 16px;
-        transition: all 0.2s ease;
-      }
-
-      .play-button:hover {
-        background: var(--primary-dark);
-        transform: scale(1.05);
-      }
-
-      .play-button.playing {
-        background: var(--primary-dark);
-      }
-
-      .delete-button {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        background: var(--background-primary);
-        color: var(--text-secondary);
-        border: 2px solid var(--border-color);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-        transition: all 0.2s ease;
-      }
-
-      .delete-button:hover {
-        border-color: var(--error-color);
-        color: var(--error-color);
-      }
 
       .recording-info {
         font-size: 14px;
@@ -622,25 +572,6 @@ export class AudioRecorder extends LitElement {
 
     return html`
       <div class="playback-section">
-        <div class="playback-controls">
-          <button 
-            class="play-button ${this.isPlaying ? 'playing' : ''}"
-            @click=${this.playRecording}
-            ?disabled=${this.isPlaying}
-            title="Play recording"
-          >
-            ${this.isPlaying ? '⏸️' : '▶️'}
-          </button>
-          
-          <button 
-            class="delete-button"
-            @click=${this.deleteRecording}
-            title="Delete recording"
-          >
-            🗑️
-          </button>
-        </div>
-        
         <div class="recording-info">
           Duration: ${this.formatDuration(this.lastRecording.duration)}
         </div>
