@@ -52,7 +52,6 @@ export async function backfillSentenceTokens(options: BackfillOptions): Promise<
 
         // Skip if tokens already exist
         if (sentence.tokenizedTokens && sentence.tokenizedTokens.length > 0) {
-          console.log(`[BackfillSentenceTokens] Sentence ${sentence.id} already has tokens, skipping`);
           processed++;
           continue;
         }

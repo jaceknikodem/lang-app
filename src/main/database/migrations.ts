@@ -53,7 +53,7 @@ export class MigrationManager {
             language TEXT NOT NULL DEFAULT 'spanish',
             translation TEXT NOT NULL,
             audio_path TEXT,
-            strength INTEGER DEFAULT 0 CHECK (strength >= 0 AND strength <= 100),
+            strength INTEGER DEFAULT 0 CHECK (strength >= 0),
             known BOOLEAN DEFAULT FALSE,
             ignored BOOLEAN DEFAULT FALSE,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

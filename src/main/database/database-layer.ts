@@ -118,8 +118,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   async updateWordStrength(wordId: number, strength: number): Promise<void> {
     const db = this.getDb();
     
-    // Ensure strength is within valid range
-    const clampedStrength = Math.max(0, Math.min(100, strength));
+    // Ensure strength is non-negative
+    const clampedStrength = Math.max(0, strength);
     
     try {
       const stmt = db.prepare(`
@@ -1353,7 +1353,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         'last_studied = ?'
       ];
       const params: Array<number | string | null> = [
-        Math.max(0, Math.min(100, strength)),
+        Math.max(0, strength),
         intervalDays,
         easeFactor,
         nowIso,

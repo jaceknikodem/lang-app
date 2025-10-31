@@ -77,7 +77,7 @@ export class SRSAlgorithm {
       newIntervalDays = Math.max(newIntervalDays, currentIntervalDays + 1);
       
       // Update strength based on performance
-      newStrength = Math.min(100, currentStrength + 20 * recall);
+      newStrength = currentStrength + 20 * recall;
     }
 
     // Calculate next due date

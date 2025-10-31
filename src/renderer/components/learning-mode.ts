@@ -1656,11 +1656,7 @@ export class LearningMode extends LitElement {
     }
 
     const currentStrength = typeof word.strength === 'number' ? word.strength : 0;
-    if (currentStrength >= 100) {
-      return;
-    }
-
-    const newStrength = Math.min(100, currentStrength + 1);
+    const newStrength = currentStrength + 1;
     this.applyStrengthUpdate(wordId, newStrength);
 
     try {

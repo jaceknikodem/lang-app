@@ -161,7 +161,7 @@ export class FsrsEngine implements SchedulerEngine {
     const previousStrength = word.strength ?? 20;
     const strengthDelta = STRENGTH_DELTA[recall];
     const rawStrength = previousStrength + strengthDelta;
-    const newStrength = clamp(rawStrength, 0, 100);
+    const newStrength = Math.max(0, rawStrength);
     console.log('[FSRS] Strength calculation:', {
       previousStrength: previousStrength,
       delta: strengthDelta,

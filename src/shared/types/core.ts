@@ -8,7 +8,7 @@ export interface Word {
   language: string;
   translation: string;
   audioPath: string;
-  strength: number;        // 0-100 scale representing user mastery
+  strength: number;        // User mastery level (0+), can exceed 100
   known: boolean;
   ignored: boolean;
   createdAt: Date;
