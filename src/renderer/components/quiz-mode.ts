@@ -7,7 +7,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { Word, Sentence, QuizQuestion, QuizSession, QuizResult } from '../../shared/types/core.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
-import { sessionManager } from '../utils/session-manager.js';
+import { sessionManager, type QuizSessionState } from '../utils/session-manager.js';
 import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 import './session-complete.js';
 import './audio-recorder.js';
@@ -364,18 +364,12 @@ export class QuizMode extends LitElement {
         text-align: center;
       }
 
-      .answer-container h3 {
-        margin: 0 0 var(--spacing-sm) 0;
-        color: var(--text-primary);
-        font-size: 18px;
+      .answer-word {
+        font-size: 28px;
         font-weight: 600;
-      }
-
-      .word-pair {
-        font-size: 20px;
-        color: var(--text-primary);
+        color: var(--primary-color);
         margin: var(--spacing-sm) 0;
-        font-weight: 500;
+        letter-spacing: 0.5px;
       }
 
       .sentence-pair {
@@ -383,22 +377,26 @@ export class QuizMode extends LitElement {
         color: var(--text-primary);
         margin: var(--spacing-md) 0 0 0;
         line-height: 1.4;
+        text-align: left;
       }
 
       .sentence-label {
+        display: block;
         font-size: 14px;
         font-weight: 600;
         color: var(--text-secondary);
         text-transform: uppercase;
         letter-spacing: 0.5px;
+        margin-bottom: var(--spacing-xs);
       }
 
-      .sentence-pair strong {
+      .sentence-text {
         display: block;
+        font-weight: 500;
         margin: var(--spacing-xs) 0;
       }
 
-      .sentence-pair em {
+      .sentence-translation {
         display: block;
         color: var(--text-secondary);
         font-style: italic;
@@ -999,16 +997,25 @@ export class QuizMode extends LitElement {
     // Load autoplay preference
     await this.loadAutoplaySetting();
 
-    // Load words from database first
-    await this.loadSelectedWords();
+    // Check if there's an existing quiz session to restore
+    const savedQuizSession = sessionManager.getQuizSession();
+    
+    if (savedQuizSession && !savedQuizSession.isComplete) {
+      // Restore existing quiz
+      await this.restoreQuizFromSession(savedQuizSession);
+    } else {
+      // Start a fresh quiz session
+      // Load words from database first
+      await this.loadSelectedWords();
 
-    if (this.selectedWords.length === 0) {
-      this.error = 'No words available for quiz. Please start a new learning session first.';
-      return;
+      if (this.selectedWords.length === 0) {
+        this.error = 'No words available for quiz. Please start a new learning session first.';
+        return;
+      }
+
+      // Start a fresh quiz session
+      await this.startQuiz();
     }
-
-    // Start a fresh quiz session
-    await this.startQuiz();
   }
 
   disconnectedCallback() {
@@ -1028,6 +1035,103 @@ export class QuizMode extends LitElement {
     this.blobUrlCache.forEach(blobUrl => URL.revokeObjectURL(blobUrl));
     this.audioCache.clear();
     this.blobUrlCache.clear();
+  }
+
+  private async restoreQuizFromSession(savedSession: QuizSessionState) {
+    this.isLoading = true;
+    this.error = null;
+
+    try {
+      // Load words from the saved word IDs in the same order (preserves shuffle)
+      const words = await window.electronAPI.database.getWordsByIds(savedSession.wordIds);
+      
+      if (words.length === 0 || words.length !== savedSession.wordIds.length) {
+        // Some words might have been deleted, clear the session and start fresh
+        sessionManager.clearQuizSession();
+        await this.loadSelectedWords();
+        if (this.selectedWords.length === 0) {
+          this.error = 'No words available for quiz. Please start a new learning session first.';
+          return;
+        }
+        await this.startQuiz();
+        return;
+      }
+
+      // Restore direction and audio-only mode
+      this.direction = savedSession.direction;
+      this.audioOnlyMode = savedSession.audioOnlyMode ?? false;
+
+      // Generate quiz questions from words in the saved order
+      const questions: QuizQuestion[] = [];
+
+      for (const wordId of savedSession.wordIds) {
+        const word = words.find(w => w.id === wordId);
+        if (!word) continue;
+
+        // Get a random sentence for this word
+        const sentence = await window.electronAPI.quiz.getRandomSentenceForWord(word.id);
+
+        if (sentence) {
+          questions.push({
+            word,
+            sentence,
+            direction: savedSession.direction
+          });
+        }
+      }
+
+      if (questions.length === 0) {
+        this.error = 'No sentences found for the saved words. Please start a new quiz.';
+        sessionManager.clearQuizSession();
+        return;
+      }
+
+      // Restore quiz session state
+      this.quizSession = {
+        questions,
+        currentQuestionIndex: savedSession.currentQuestionIndex,
+        direction: savedSession.direction,
+        score: savedSession.score,
+        totalQuestions: savedSession.totalQuestions,
+        isComplete: savedSession.isComplete
+      };
+
+      // Restore current question
+      if (this.quizSession.currentQuestionIndex < questions.length) {
+        this.currentQuestion = questions[this.quizSession.currentQuestionIndex];
+      } else {
+        // If we're past the end (shouldn't happen), go to the last question
+        this.quizSession.currentQuestionIndex = questions.length - 1;
+        this.currentQuestion = questions[this.quizSession.currentQuestionIndex];
+      }
+
+      // Set selected words for compatibility
+      this.selectedWords = words;
+
+      // Prioritize: Load current question's audio first
+      await this.ensureCurrentQuestionAudioLoaded();
+      
+      // Load next question's audio right after current one is ready
+      this.preloadNextQuestionAudio();
+      
+      // Pre-load remaining audio files in background (non-blocking)
+      void this.preloadQuizAudio(questions);
+      
+      void this.maybeAutoplayCurrentQuestion(true);
+
+      console.log(`Restored quiz session: Question ${this.quizSession.currentQuestionIndex + 1}/${this.quizSession.totalQuestions}, Score: ${this.quizSession.score}`);
+
+    } catch (error) {
+      console.error('Error restoring quiz session:', error);
+      this.error = 'Failed to restore quiz session. Starting a new quiz.';
+      sessionManager.clearQuizSession();
+      await this.loadSelectedWords();
+      if (this.selectedWords.length > 0) {
+        await this.startQuiz();
+      }
+    } finally {
+      this.isLoading = false;
+    }
   }
 
   private async startQuiz() {
@@ -1066,6 +1170,7 @@ export class QuizMode extends LitElement {
 
       // Shuffle questions for variety
       const shuffledQuestions = this.shuffleArray(questions);
+      const wordIds = shuffledQuestions.map(q => q.word.id);
 
       this.quizSession = {
         questions: shuffledQuestions,
@@ -1078,6 +1183,9 @@ export class QuizMode extends LitElement {
 
       this.currentQuestion = shuffledQuestions[0];
       
+      // Save quiz session to session manager (creates new session)
+      sessionManager.startNewQuizSession(wordIds, this.direction, this.audioOnlyMode);
+      
       // Prioritize: Load current question's audio first, then autoplay
       // This ensures audio is ready before playback starts
       await this.ensureCurrentQuestionAudioLoaded();
@@ -1089,9 +1197,6 @@ export class QuizMode extends LitElement {
       void this.preloadQuizAudio(shuffledQuestions);
       
       void this.maybeAutoplayCurrentQuestion(true);
-
-      // Save initial quiz state to session
-      this.saveQuizProgressToSession();
 
     } catch (error) {
       console.error('Error starting quiz:', error);
@@ -1127,11 +1232,18 @@ export class QuizMode extends LitElement {
 
   private saveQuizProgressToSession() {
     if (this.quizSession) {
-      sessionManager.updateQuizProgress(
-        this.quizSession.currentQuestionIndex,
-        this.quizSession.score,
-        this.quizSession.totalQuestions
-      );
+      // Save word IDs in the order they appear (preserves shuffle)
+      const wordIds = this.quizSession.questions.map(q => q.word.id);
+      
+      sessionManager.updateQuizSession({
+        wordIds,
+        currentQuestionIndex: this.quizSession.currentQuestionIndex,
+        score: this.quizSession.score,
+        totalQuestions: this.quizSession.totalQuestions,
+        isComplete: this.quizSession.isComplete,
+        direction: this.quizSession.direction,
+        audioOnlyMode: this.audioOnlyMode
+      });
     }
   }
 
@@ -1281,8 +1393,11 @@ export class QuizMode extends LitElement {
       // Record the study session in the database
       await window.electronAPI.database.recordStudySession(this.quizSession.totalQuestions);
 
-      // Clear session progress since we're completing
-      sessionManager.clearSession();
+      // Mark quiz session as complete in session manager
+      sessionManager.markQuizSessionComplete();
+      
+      // Clear quiz session after completion
+      sessionManager.clearQuizSession();
 
       // Show completion screen
       this.showQuizCompletion();
@@ -1687,6 +1802,8 @@ export class QuizMode extends LitElement {
 
   private toggleAudioOnlyMode() {
     this.audioOnlyMode = !this.audioOnlyMode;
+    // Save the audio-only mode setting to session
+    this.saveQuizProgressToSession();
   }
 
   private async handleRecordingCompleted(event: CustomEvent<{ recording: RecordingResult; autoStopped?: boolean }>) {
@@ -2013,20 +2130,22 @@ export class QuizMode extends LitElement {
 
     const word = this.currentQuestion.word;
     const sentence = this.currentQuestion.sentence;
+    
+    // Show the correct answer based on quiz direction
+    const correctAnswer = this.direction === 'foreign-to-english'
+      ? word.translation
+      : word.word;
 
     return html`
       <div class="revealed-answer">
         <div class="answer-container">
-          <h3>Answer:</h3>
-          <p class="word-pair">
-            <strong>${word.word}</strong> = <strong>${word.translation}</strong>
-          </p>
+          <div class="answer-word">${correctAnswer}</div>
           ${this.audioOnlyMode ? html`
-            <p class="sentence-pair">
-              <span class="sentence-label">Sentence:</span><br>
-              <strong>${sentence.sentence}</strong><br>
-              <em>${sentence.translation}</em>
-            </p>
+            <div class="sentence-pair">
+              <span class="sentence-label">Sentence:</span>
+              <div class="sentence-text">${sentence.sentence}</div>
+              <div class="sentence-translation">${sentence.translation}</div>
+            </div>
           ` : ''}
         </div>
       </div>

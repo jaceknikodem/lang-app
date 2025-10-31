@@ -13,6 +13,18 @@ export interface LearningSessionState {
   completed: boolean;
 }
 
+export interface QuizSessionState {
+  id: string;
+  wordIds: number[]; // Word IDs in the order they appear in the quiz (preserves shuffle)
+  currentQuestionIndex: number;
+  direction: 'foreign-to-english' | 'english-to-foreign';
+  score: number;
+  totalQuestions: number;
+  isComplete: boolean;
+  audioOnlyMode: boolean;
+  createdAt: string;
+}
+
 export interface SessionState {
   currentMode: 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'progress' | 'settings';
   selectedTopic?: string;
@@ -27,6 +39,7 @@ export interface SessionState {
     totalQuestions: number;
   };
   learningSession?: LearningSessionState;
+  quizSession?: QuizSessionState;
   lastActivity: Date;
 }
 
@@ -306,6 +319,114 @@ export class SessionManager {
   }
 
   /**
+   * Get the current quiz session state if available
+   */
+  getQuizSession(): QuizSessionState | undefined {
+    return this.getCurrentSession().quizSession;
+  }
+
+  /**
+   * Start a brand new quiz session with a predefined set of words
+   */
+  startNewQuizSession(
+    wordIds: number[],
+    direction: 'foreign-to-english' | 'english-to-foreign',
+    audioOnlyMode: boolean = false
+  ): void {
+    const newSession: QuizSessionState = {
+      id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      wordIds,
+      currentQuestionIndex: 0,
+      direction,
+      score: 0,
+      totalQuestions: wordIds.length,
+      isComplete: false,
+      audioOnlyMode,
+      createdAt: new Date().toISOString()
+    };
+
+    this.saveSession({
+      quizSession: newSession,
+      quizDirection: direction,
+      quizProgress: {
+        currentQuestionIndex: 0,
+        score: 0,
+        totalQuestions: wordIds.length
+      }
+    });
+  }
+
+  /**
+   * Update quiz session state (progress, score, etc.)
+   */
+  updateQuizSession(updates: Partial<QuizSessionState>): void {
+    const session = this.getCurrentSession();
+    if (!session.quizSession) {
+      return;
+    }
+
+    const updatedQuizSession: QuizSessionState = {
+      ...session.quizSession,
+      ...updates
+    };
+
+    this.saveSession({
+      quizSession: updatedQuizSession,
+      quizProgress: {
+        currentQuestionIndex: updatedQuizSession.currentQuestionIndex,
+        score: updatedQuizSession.score,
+        totalQuestions: updatedQuizSession.totalQuestions
+      }
+    });
+  }
+
+  /**
+   * Mark the active quiz session as completed without wiping other state
+   */
+  markQuizSessionComplete(): void {
+    const session = this.getCurrentSession();
+    if (!session.quizSession) {
+      return;
+    }
+
+    this.saveSession({
+      quizSession: {
+        ...session.quizSession,
+        isComplete: true
+      }
+    });
+  }
+
+  /**
+   * Clear only the quiz session metadata while keeping other state intact
+   */
+  clearQuizSession(): void {
+    const session = this.getCurrentSession();
+    if (!session.quizSession) {
+      return;
+    }
+
+    const updatedSession: SessionState = {
+      ...session,
+      quizSession: undefined,
+      quizProgress: undefined,
+      lastActivity: new Date()
+    };
+    delete updatedSession.quizSession;
+    delete updatedSession.quizProgress;
+
+    const languageKey = this.getActiveLanguageKey();
+    this.sessionsByLanguage[languageKey] = updatedSession;
+    this.currentSession = updatedSession;
+
+    try {
+      this.persistSessions();
+    } catch (error) {
+      console.error('Failed to clear quiz session:', error);
+    }
+  }
+
+  /**
    * Update selected topic
    */
   updateSelectedTopic(topic: string | undefined): void {
@@ -400,6 +521,7 @@ export class SessionManager {
       learningProgress: sessionData.learningProgress,
       quizProgress: sessionData.quizProgress,
       learningSession: sessionData.learningSession,
+      quizSession: sessionData.quizSession,
       lastActivity: sessionData.lastActivity ? new Date(sessionData.lastActivity) : new Date()
     };
   }
