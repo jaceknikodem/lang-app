@@ -104,8 +104,8 @@ export class LearningMode extends LitElement {
     css`
       :host {
         display: block;
-        max-width: 900px;
-        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
       }
 
       .learning-container {
@@ -234,17 +234,6 @@ export class LearningMode extends LitElement {
         transition: width 0.3s ease;
       }
 
-      .navigation-section {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: var(--spacing-md);
-        flex-wrap: wrap;
-      }
-
-      .nav-button {
-        min-width: 100px;
-      }
 
       .nav-info {
         display: flex;
@@ -316,10 +305,6 @@ export class LearningMode extends LitElement {
           flex-direction: column;
           align-items: stretch;
           text-align: center;
-        }
-
-        .navigation-section {
-          flex-direction: column;
         }
 
         .nav-info {
@@ -986,6 +971,21 @@ export class LearningMode extends LitElement {
   private handleMarkWordIgnored(event: CustomEvent) {
     const { word } = event.detail;
     this.handleWordStatusChange(word, false);
+  }
+
+  private handlePreviousSentence() {
+    if (this.isLoading || this.error || this.showCompletion || this.isProcessing) return;
+    this.goToPreviousSentence();
+  }
+
+  private handleNextSentence(event?: CustomEvent) {
+    if (this.isLoading || this.error || this.showCompletion || this.isProcessing) return;
+    const isLastSentence = event?.detail?.isLastSentence ?? this.isLastSentence();
+    if (isLastSentence) {
+      this.handleFinishLearning();
+    } else {
+      void this.goToNextSentence();
+    }
   }
 
   private async handleRemoveCurrentSentence() {
@@ -1796,6 +1796,9 @@ export class LearningMode extends LitElement {
           .targetWord=${currentWord}
           .allWords=${this.allWords}
           .displayLastSeen=${this.currentSentenceDisplayLastSeen}
+          .isFirstSentence=${this.isFirstSentence()}
+          .isLastSentence=${this.isLastSentence()}
+          .isProcessing=${this.isProcessing}
           @word-clicked=${this.handleWordClicked}
           @mark-word-known=${this.handleMarkWordKnown}
           @mark-word-ignored=${this.handleMarkWordIgnored}
@@ -1805,25 +1808,9 @@ export class LearningMode extends LitElement {
           @word-added-from-sentence=${this.handleWordAddedFromSentence}
           @word-addition-error=${this.handleWordAdditionError}
           @word-addition-skipped=${this.handleWordAdditionSkipped}
+          @previous-sentence=${this.handlePreviousSentence}
+          @next-sentence=${this.handleNextSentence}
         ></sentence-viewer>
-
-        <div class="navigation-section">
-          <button
-            class="btn btn-secondary nav-button"
-            @click=${this.goToPreviousSentence}
-            ?disabled=${this.isFirstSentence() || this.isProcessing}
-          >
-            ← Previous <span class="keyboard-hint">(←)</span>
-          </button>
-
-          <button
-            class="btn btn-primary nav-button"
-            @click=${this.isLastSentence() ? this.handleFinishLearning : this.goToNextSentence}
-            ?disabled=${this.isProcessing}
-          >
-            ${this.isLastSentence() ? 'Finish' : 'Next →'} <span class="keyboard-hint">(Enter)</span>
-          </button>
-        </div>
       </div>
     `;
   }

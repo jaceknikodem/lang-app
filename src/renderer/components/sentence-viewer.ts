@@ -25,6 +25,15 @@ export class SentenceViewer extends LitElement {
   @property({ type: Array })
   allWords: Word[] = [];
 
+  @property({ type: Boolean })
+  isFirstSentence = false;
+
+  @property({ type: Boolean })
+  isLastSentence = false;
+
+  @property({ type: Boolean })
+  isProcessing = false;
+
   @state()
   private isPlayingAudio = false;
 
@@ -293,8 +302,43 @@ export class SentenceViewer extends LitElement {
         flex-wrap: wrap;
       }
 
-      .word-action-btn {
+      .word-action-btn,
+      .nav-action-btn {
         min-width: 100px;
+      }
+
+      /* Toned down colors for action buttons */
+      .word-action-btn.btn-success {
+        background: #e8f5e9;
+        color: #2e7d32;
+        border: 1px solid #81c784;
+      }
+
+      .word-action-btn.btn-success:hover:not(:disabled) {
+        background: #c8e6c9;
+        border-color: #66bb6a;
+      }
+
+      .word-action-btn.btn-danger {
+        background: #ffebee;
+        color: #c62828;
+        border: 1px solid #ef5350;
+      }
+
+      .word-action-btn.btn-danger:hover:not(:disabled) {
+        background: #ffcdd2;
+        border-color: #e57373;
+      }
+
+      .word-action-btn.btn-warning {
+        background: #fff3e0;
+        color: #e65100;
+        border: 1px solid #ffb74d;
+      }
+
+      .word-action-btn.btn-warning:hover:not(:disabled) {
+        background: #ffe0b2;
+        border-color: #ffa726;
       }
 
       .tooltip {
@@ -346,7 +390,8 @@ export class SentenceViewer extends LitElement {
           flex-direction: column;
         }
 
-        .word-action-btn {
+        .word-action-btn,
+        .nav-action-btn {
           width: 100%;
         }
       }
@@ -1042,6 +1087,19 @@ export class SentenceViewer extends LitElement {
     }));
   }
 
+  private handlePrevious() {
+    this.dispatchEvent(new CustomEvent('previous-sentence', {
+      bubbles: true
+    }));
+  }
+
+  private handleNext() {
+    this.dispatchEvent(new CustomEvent('next-sentence', {
+      detail: { isLastSentence: this.isLastSentence },
+      bubbles: true
+    }));
+  }
+
   private setupKeyboardBindings() {
     // Note: Audio playback and word marking keyboard shortcuts are handled 
     // by the parent learning-mode component to avoid conflicts
@@ -1145,11 +1203,19 @@ export class SentenceViewer extends LitElement {
 
         <div class="word-actions">
           <button
+            class="btn btn-secondary nav-action-btn"
+            @click=${this.handlePrevious}
+            ?disabled=${this.isFirstSentence || this.isProcessing}
+          >
+            Previous <span class="keyboard-hint">(←)</span>
+          </button>
+
+          <button
             class="btn btn-success word-action-btn"
             @click=${this.handleMarkKnown}
             ?disabled=${this.targetWord.known}
           >
-            ${this.targetWord.known ? 'Already Known' : 'Mark as Known'} 
+            ${this.targetWord.known ? 'Already Known' : 'Know'} 
             ${!this.targetWord.known ? html`<span class="keyboard-hint">(K)</span>` : ''}
           </button>
 
@@ -1157,7 +1223,7 @@ export class SentenceViewer extends LitElement {
             class="btn btn-danger word-action-btn"
             @click=${this.handleRemoveSentence}
           >
-            Remove Sentence
+            Remove
             <span class="keyboard-hint">(Del)</span>
           </button>
           
@@ -1166,8 +1232,16 @@ export class SentenceViewer extends LitElement {
             @click=${this.handleMarkIgnored}
             ?disabled=${this.targetWord.ignored}
           >
-            ${this.targetWord.ignored ? 'Already Ignored' : 'Mark as Ignored'}
+            ${this.targetWord.ignored ? 'Already Ignored' : 'Ignore'}
             ${!this.targetWord.ignored ? html`<span class="keyboard-hint">(I)</span>` : ''}
+          </button>
+
+          <button
+            class="btn btn-primary nav-action-btn"
+            @click=${this.handleNext}
+            ?disabled=${this.isProcessing}
+          >
+            ${this.isLastSentence ? 'Finish' : 'Next'} <span class="keyboard-hint">(Enter)</span>
           </button>
         </div>
       </div>
