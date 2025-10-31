@@ -12,7 +12,7 @@ import { DatabaseConfig } from '../../shared/types/database.js';
  */
 export function createDatabase(customConfig?: Partial<DatabaseConfig>): SQLiteDatabaseLayer {
   // Default database path in user data directory
-  const defaultPath = path.join(app.getPath('userData'), 'data', 'language_learning.db');
+  const defaultPath = path.join(app.getPath('userData'), 'language_learning.db');
   
   const config: DatabaseConfig = {
     databasePath: defaultPath,

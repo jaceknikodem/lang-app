@@ -2,10 +2,10 @@
  * Electron main process entry point
  */
 
-import { app, BrowserWindow, ipcMain, session, systemPreferences } from 'electron';
+import { app, BrowserWindow, session, systemPreferences } from 'electron';
 import * as path from 'path';
 import { setupIPCHandlers, cleanupIPCHandlers } from './ipc/index.js';
-import { SQLiteDatabaseLayer } from './database/database-layer.js';
+import { createDatabase, SQLiteDatabaseLayer } from './database/index.js';
 import { LLMClient, ContentGenerator, LLMFactory, LLMProvider } from './llm/index.js';
 import { AudioService } from './audio/audio-service.js';
 import { SRSService } from './srs/srs-service.js';
@@ -29,11 +29,7 @@ const forceLocalServices = process.env.E2E_FORCE_LOCAL_SERVICES === '1';
 async function initializeServices(): Promise<void> {
   try {
     // Initialize database layer first
-    databaseLayer = new SQLiteDatabaseLayer({
-      databasePath: path.join(app.getPath('userData'), 'language_learning.db'),
-      enableWAL: true,
-      timeout: 5000
-    });
+    databaseLayer = createDatabase();
 
     // Initialize database
     await databaseLayer.initialize();
@@ -236,11 +232,9 @@ function createWindow(): void {
   });
 
   // Load the app
+  mainWindow.loadFile(path.join(__dirname, '../../renderer/index.html'));
   if (process.env.NODE_ENV === 'development') {
-    mainWindow.loadFile(path.join(__dirname, '../../renderer/index.html'));
     mainWindow.webContents.openDevTools();
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '../../renderer/index.html'));
   }
 
   // Show window when ready to prevent visual flash (unless in test mode)
