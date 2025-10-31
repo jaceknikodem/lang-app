@@ -58,6 +58,11 @@ export class SentenceViewer extends LitElement {
     css`
       :host {
         display: block;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
       }
 
       .sentence-container {
@@ -66,6 +71,11 @@ export class SentenceViewer extends LitElement {
         padding: var(--spacing-lg);
         box-shadow: var(--shadow-light);
         border: 1px solid var(--border-color);
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        margin: 0;
       }
 
       .sentence-header {
@@ -75,12 +85,16 @@ export class SentenceViewer extends LitElement {
         margin-bottom: var(--spacing-sm);
         flex-wrap: wrap;
         gap: var(--spacing-sm);
+        width: 100%;
+        box-sizing: border-box;
       }
 
       .target-word-info {
         display: flex;
         align-items: center;
         gap: var(--spacing-sm);
+        flex: 1;
+        min-width: 0;
       }
 
       .target-word {
@@ -172,6 +186,8 @@ export class SentenceViewer extends LitElement {
 
       .sentence-content {
         margin-bottom: var(--spacing-md);
+        width: 100%;
+        box-sizing: border-box;
       }
 
       .context-section {
@@ -209,6 +225,10 @@ export class SentenceViewer extends LitElement {
         line-height: 1.5;
         margin-bottom: var(--spacing-sm);
         color: var(--text-primary);
+        width: 100%;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        hyphens: auto;
       }
 
       .sentence-translation {
@@ -224,6 +244,10 @@ export class SentenceViewer extends LitElement {
         border-radius: 3px;
         transition: all 0.2s ease;
         position: relative;
+        display: inline-block;
+        vertical-align: baseline;
+        border: 2px solid transparent;
+        box-sizing: border-box;
       }
 
       .word-in-sentence:hover {
@@ -238,8 +262,7 @@ export class SentenceViewer extends LitElement {
 
       .word-target {
         background-color: var(--primary-light);
-        border: 2px solid var(--primary-color);
-        font-weight: 600;
+        border: 2px solid transparent;
       }
 
       .word-known {

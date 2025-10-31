@@ -109,9 +109,15 @@ export class LearningMode extends LitElement {
       }
 
       .learning-container {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
         display: flex;
         flex-direction: column;
         gap: var(--spacing-md);
+        margin: 0;
+        padding: 0;
       }
 
       .queue-status {
@@ -120,6 +126,11 @@ export class LearningMode extends LitElement {
         border-radius: var(--border-radius);
         font-size: 12px;
         color: var(--text-secondary);
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        margin: 0;
       }
 
       .queue-status .queue-warning {
@@ -133,6 +144,12 @@ export class LearningMode extends LitElement {
         border-radius: var(--border-radius);
         font-size: 13px;
         margin-bottom: var(--spacing-sm);
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        margin-left: 0;
+        margin-right: 0;
       }
 
       .info-banner.info {
@@ -172,6 +189,11 @@ export class LearningMode extends LitElement {
         padding: var(--spacing-md);
         border-radius: var(--border-radius);
         border: 1px solid var(--border-color);
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        margin: 0;
       }
 
       .progress-info {
@@ -1756,9 +1778,6 @@ export class LearningMode extends LitElement {
           <div class="progress-info">
             <div class="progress-text">
               <span class="word-counter">Word ${this.currentWordIndex + 1} of ${this.wordsWithSentences.length}</span>
-              <span class="sentence-counter">
-                (Sentence ${this.currentSentenceIndex + 1} of ${currentWord.sentences.length})
-              </span>
             </div>
             <div class="progress-text">
               Overall: ${currentSentenceNumber} of ${totalSentences} sentences
