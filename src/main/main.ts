@@ -42,15 +42,32 @@ async function initializeServices(): Promise<void> {
       backupRetentionDays: 30
     });
 
-    // Handle startup procedures
-    await lifecycleManager.handleStartup();
-    console.log('Lifecycle manager initialized successfully');
+    // Defer lifecycle startup procedures to background - don't block app startup
+    // These checks (backup recovery, cleanup) can run after the UI is shown
+    setImmediate(async () => {
+      try {
+        await lifecycleManager!.handleStartup();
+        console.log('Lifecycle manager initialized successfully');
+      } catch (error) {
+        console.warn('Lifecycle manager initialization failed (non-critical):', error);
+      }
+    });
 
-    // Initialize update manager
+    // Initialize update manager (checks deferred by UpdateManager itself)
     updateManager = new UpdateManager({
       checkOnStartup: true,
       checkIntervalHours: 24,
       autoDownload: false
+    });
+
+    // Initialize update manager in background (non-blocking)
+    setImmediate(async () => {
+      try {
+        await updateManager!.initialize();
+        await updateManager!.checkUpdateReminders();
+      } catch (error) {
+        console.warn('Update manager initialization failed (non-critical):', error);
+      }
     });
 
     // Determine initial LLM provider from persisted settings
@@ -141,12 +158,6 @@ async function initializeServices(): Promise<void> {
         });
       }
     });
-
-    // Initialize update manager
-    await updateManager.initialize();
-
-    // Check for update reminders
-    await updateManager.checkUpdateReminders();
 
     console.log('All services initialized successfully');
   } catch (error) {
@@ -265,7 +276,11 @@ app.whenReady().then(async () => {
     // Set up security policies
     await setupSecurity();
 
-    // Initialize all services
+    // Create the main window early - show UI while services initialize
+    // This provides better perceived performance
+    createWindow();
+
+    // Initialize all services (some operations deferred to background)
     await initializeServices();
 
     // Set up IPC handlers with initialized services
@@ -280,9 +295,6 @@ app.whenReady().then(async () => {
       llmClient = contentGenerator!.getCurrentClient();
     };
     console.log('IPC handlers initialized successfully');
-
-    // Create the main window
-    createWindow();
 
     app.on('activate', async () => {
       // On macOS it's common to re-create a window in the app when the

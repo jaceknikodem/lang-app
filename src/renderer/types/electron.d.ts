@@ -2,7 +2,9 @@
  * Type declarations for Electron API exposed to renderer process
  */
 
-import { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest, DictionaryEntry } from '../../shared/types/core.js';
+/// <reference types="../../shared/types/core" />
+
+import type { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest, DictionaryEntry } from '../../shared/types/core.js';
 
 declare global {
   interface Window {
@@ -51,7 +53,28 @@ declare global {
       audio: {
         generateAudio: (text: string, language: string, word?: string) => Promise<string>;
         playAudio: (audioPath: string) => Promise<void>;
+        stopAudio: () => Promise<void>;
         audioExists: (audioPath: string) => Promise<boolean>;
+        loadAudioBase64: (audioPath: string) => Promise<string | null>;
+        regenerateAudio: (options: { text: string; language?: string; word?: string; existingPath?: string }) => Promise<string>;
+        startRecording: (options?: any) => Promise<any>;
+        stopRecording: () => Promise<any>;
+        cancelRecording: () => Promise<void>;
+        getCurrentRecordingSession: () => Promise<any>;
+        isRecording: () => Promise<boolean>;
+        getAvailableRecordingDevices: () => Promise<string[]>;
+        deleteRecording: (filePath: string) => Promise<void>;
+        getRecordingInfo: (filePath: string) => Promise<{ size: number; duration?: number } | null>;
+        initializeSpeechRecognition: () => Promise<void>;
+        transcribeAudio: (filePath: string, options?: any) => Promise<any>;
+        compareTranscription: (transcribed: string, expected: string) => Promise<any>;
+        getAvailableSpeechModels: () => Promise<string[]>;
+        setSpeechModel: (model: string) => Promise<void>;
+        getCurrentSpeechModel: () => Promise<string>;
+        isSpeechRecognitionReady: () => Promise<boolean>;
+        switchToElevenLabs: (apiKey: string) => Promise<void>;
+        switchToMinimax: (apiKey: string) => Promise<void>;
+        switchToSystemTTS: () => Promise<void>;
       };
       jobs: {
         enqueueWordGeneration: (

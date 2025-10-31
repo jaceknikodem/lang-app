@@ -30,15 +30,21 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       this.migrationManager = new MigrationManager(db);
       await this.migrationManager.migrate();
 
-      // Ensure sentence parts are populated for existing records
-      this.backfillSentenceParts();
+      // Defer expensive operations to background - don't block startup
+      // Backfill sentence parts in background (non-blocking)
+      setImmediate(() => {
+        this.backfillSentenceParts();
+      });
 
-      // Populate dictionary data from bundled files
-      try {
-        await this.populateDictionaryFromFiles();
-      } catch (dictError) {
-        console.warn('Dictionary population skipped due to error:', dictError);
-      }
+      // Populate dictionary data from bundled files in background (non-blocking)
+      // This is a very expensive operation that can take several seconds
+      setImmediate(async () => {
+        try {
+          await this.populateDictionaryFromFiles();
+        } catch (dictError) {
+          console.warn('Dictionary population skipped due to error:', dictError);
+        }
+      });
       
       console.log('Database initialized successfully');
     } catch (error) {
@@ -1435,13 +1441,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
   /**
    * Load dictionary entries from JSONL files in the dicts directory
+   * Optimized: Checks markers first before doing any file system operations
    */
   private async populateDictionaryFromFiles(): Promise<void> {
     const dictDir = path.join(process.cwd(), 'dicts');
-    let files: string[];
-
+    
+    // Check if directory exists before proceeding
     try {
-      files = await fsPromises.readdir(dictDir);
+      await fsPromises.access(dictDir);
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
       if (err?.code !== 'ENOENT') {
@@ -1449,6 +1456,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       } else {
         console.warn('Dictionary directory not found, skipping dictionary population');
       }
+      return;
+    }
+
+    let files: string[];
+    try {
+      files = await fsPromises.readdir(dictDir);
+    } catch (error) {
+      console.warn('Failed to read dictionary directory:', error);
       return;
     }
 
@@ -1462,24 +1477,41 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const insertStmt = db.prepare('INSERT INTO dict (word, pos, glosses, lang) VALUES (?, ?, ?, ?)');
     const hasEntriesStmt = db.prepare('SELECT 1 FROM dict WHERE lang = ? LIMIT 1');
 
+    // Check all markers FIRST before doing any expensive file operations
+    const languagesToProcess: string[] = [];
     for (const file of jsonlFiles) {
       const language = file.replace('_dict.jsonl', '');
-      const filePath = path.join(dictDir, file);
-
-      const existingEntry = hasEntriesStmt.get(language);
       const markerKey = `dictionary_populated_${language}`;
       const alreadyMarked = await this.getSetting(markerKey);
+      const existingEntry = hasEntriesStmt.get(language);
 
+      // Skip if already marked as populated AND entries exist
       if (alreadyMarked === 'true' && existingEntry) {
-        console.log(`Dictionary already populated for ${language}, skipping`);
-        continue;
+        continue; // Skip this language entirely
       }
 
+      // If entries exist but not marked, just mark it and skip
       if (existingEntry && alreadyMarked !== 'true') {
         await this.setSetting(markerKey, 'true');
-        console.log(`Dictionary entries already present for ${language}, skipping re-import`);
+        console.log(`Dictionary entries already present for ${language}, marked as populated`);
         continue;
       }
+
+      // Only process languages that need importing
+      languagesToProcess.push(language);
+    }
+
+    // Early return if all dictionaries are already populated
+    if (languagesToProcess.length === 0) {
+      console.log('All dictionaries already populated, skipping import');
+      return;
+    }
+
+    // Now process only the languages that need importing
+    for (const language of languagesToProcess) {
+      const file = `${language}_dict.jsonl`;
+      const filePath = path.join(dictDir, file);
+      const markerKey = `dictionary_populated_${language}`;
 
       try {
         const entries = await this.parseDictionaryFile(filePath, language);
@@ -1583,15 +1615,24 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
 
     try {
+      // Check if backfill is needed - early return if already done
+      const checkStmt = db.prepare(`
+        SELECT COUNT(*) as count 
+        FROM sentences 
+        WHERE sentence_parts IS NULL OR sentence_parts = ''
+      `);
+      const checkResult = checkStmt.get() as { count: number };
+      
+      if (!checkResult.count || checkResult.count === 0) {
+        // No sentences need backfilling - skip entirely
+        return;
+      }
+
       const rows = db.prepare(`
         SELECT id, sentence 
         FROM sentences 
         WHERE sentence_parts IS NULL OR sentence_parts = ''
       `).all() as Array<{ id: number; sentence: string }>;
-
-      if (!rows.length) {
-        return;
-      }
 
       const updates = rows
         .map(row => {
@@ -1616,6 +1657,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       });
 
       updateTransaction(updates);
+      console.log(`Backfilled sentence_parts for ${updates.length} sentences`);
     } catch (error) {
       console.warn('Failed to backfill sentence parts:', error);
     }

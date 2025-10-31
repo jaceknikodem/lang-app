@@ -82,6 +82,11 @@ export class QuizMode extends LitElement {
   private sessionStartTime = Date.now();
   private keyboardUnsubscribe?: () => void;
   private lastAutoplayKey: string | null = null;
+  
+  // Audio cache: Map of audioPath -> base64 data URL
+  private audioCache: Map<string, string> = new Map();
+  // HTML5 Audio instances for playing cached audio
+  private currentAudioElement: HTMLAudioElement | null = null;
 
   static styles = [
     sharedStyles,
@@ -977,6 +982,10 @@ export class QuizMode extends LitElement {
     if (this.keyboardUnsubscribe) {
       this.keyboardUnsubscribe();
     }
+    
+    // Clean up audio cache and playing audio
+    this.stopCachedAudio();
+    this.audioCache.clear();
   }
 
   private async startQuiz() {
@@ -1026,6 +1035,10 @@ export class QuizMode extends LitElement {
       };
 
       this.currentQuestion = shuffledQuestions[0];
+      
+      // Pre-load all audio files into cache for instant playback
+      void this.preloadQuizAudio(shuffledQuestions);
+      
       void this.maybeAutoplayCurrentQuestion(true);
 
       // Save initial quiz state to session
@@ -1238,17 +1251,109 @@ export class QuizMode extends LitElement {
     await this.playAudio();
   }
 
+  /**
+   * Pre-load all audio files for the quiz session into memory cache
+   * This allows instant playback without file system access
+   */
+  private async preloadQuizAudio(questions: QuizQuestion[]): Promise<void> {
+    try {
+      console.log(`Pre-loading ${questions.length} audio files into cache...`);
+      const audioPaths = questions
+        .map(q => q.sentence.audioPath)
+        .filter((path): path is string => !!path);
+      
+      // Load all audio files in parallel
+      const loadPromises = audioPaths.map(async (audioPath) => {
+        try {
+          // Check if already cached
+          if (this.audioCache.has(audioPath)) {
+            return;
+          }
+          
+          // Load audio as base64
+          const base64DataUrl = await window.electronAPI.audio.loadAudioBase64(audioPath);
+          if (base64DataUrl) {
+            this.audioCache.set(audioPath, base64DataUrl);
+          }
+        } catch (error) {
+          console.warn(`Failed to preload audio for ${audioPath}:`, error);
+          // Continue loading other files even if one fails
+        }
+      });
+      
+      await Promise.all(loadPromises);
+      console.log(`Audio cache ready: ${this.audioCache.size} files loaded`);
+    } catch (error) {
+      console.error('Error preloading audio:', error);
+      // Don't fail quiz if audio caching fails - will fall back to file system
+    }
+  }
+
+  /**
+   * Play audio using cached data if available, otherwise fall back to IPC
+   */
   private async playAudio() {
     if (!this.currentQuestion) return;
 
     try {
       const audioPath = this.currentQuestion.sentence.audioPath;
-      if (audioPath) {
-        await window.electronAPI.audio.playAudio(audioPath);
+      if (!audioPath) {
+        return;
       }
+
+      // Try to use cached audio first (much faster - no file system access)
+      const cachedAudio = this.audioCache.get(audioPath);
+      if (cachedAudio) {
+        // Stop any currently playing audio
+        this.stopCachedAudio();
+        
+        // Use HTML5 Audio API to play from memory
+        this.currentAudioElement = new Audio(cachedAudio);
+        
+        // Handle errors and cleanup
+        this.currentAudioElement.addEventListener('ended', () => {
+          this.currentAudioElement = null;
+        });
+        
+        this.currentAudioElement.addEventListener('error', (e) => {
+          console.warn('Error playing cached audio, falling back to file system:', e);
+          this.currentAudioElement = null;
+          // Fall back to IPC playback
+          void window.electronAPI.audio.playAudio(audioPath).catch(err => {
+            console.error('Failed to play audio via IPC:', err);
+          });
+        });
+        
+        try {
+          await this.currentAudioElement.play();
+          return; // Success - audio playing from cache
+        } catch (playError) {
+          console.warn('Failed to play cached audio:', playError);
+          this.currentAudioElement = null;
+          // Fall through to fallback
+        }
+      }
+
+      // Fallback: Use IPC to play from file system (original method)
+      await window.electronAPI.audio.playAudio(audioPath);
     } catch (error) {
       console.error('Error playing audio:', error);
     }
+  }
+
+  /**
+   * Stop currently playing cached audio
+   */
+  private stopCachedAudio(): void {
+    if (this.currentAudioElement) {
+      this.currentAudioElement.pause();
+      this.currentAudioElement.currentTime = 0;
+      this.currentAudioElement = null;
+    }
+    // Also stop any IPC audio playback
+    window.electronAPI.audio.stopAudio().catch(() => {
+      // Ignore errors when stopping
+    });
   }
 
   private restartQuiz() {

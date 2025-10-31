@@ -31,19 +31,12 @@ export class FrequencyWordManager {
 
     /**
      * Initialize word lists for all available languages
+     * Optimized: Don't load all word lists at startup - load lazily when needed
      */
     async initialize(): Promise<void> {
-        try {
-            const availableLanguages = this.getAvailableLanguages();
-
-            for (const language of availableLanguages) {
-                await this.loadWordList(language);
-            }
-
-            console.log(`Initialized frequency word manager for languages: ${availableLanguages.join(', ')}`);
-        } catch (error) {
-            throw new Error(`Failed to initialize frequency word manager: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
+        // Lazy initialization - don't load word lists until they're actually needed
+        // This significantly speeds up application startup
+        console.log('Frequency word manager initialized (lazy loading enabled)');
     }
 
     /**

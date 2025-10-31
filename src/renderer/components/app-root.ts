@@ -311,10 +311,15 @@ export class AppRoot extends LitElement {
       await this.loadSession();
       console.log('Session loaded');
 
-      // Check for existing words in database
-      console.log('Checking existing words...');
-      await this.checkExistingWords();
-      console.log('Existing words check complete');
+      // Check for existing words in database (non-blocking - deferred)
+      // This optimization speeds up initial render by deferring the check
+      setImmediate(async () => {
+        try {
+          await this.checkExistingWords();
+        } catch (error) {
+          console.error('Failed to check existing words:', error);
+        }
+      });
 
       console.log('Ensuring learning session...');
       await this.ensureLearningSession();
@@ -340,18 +345,15 @@ export class AppRoot extends LitElement {
 
   private async checkExistingWords() {
     try {
-      console.log('Calling database.getAllWords...');
-      const allWords = await window.electronAPI.database.getAllWords(
-        true,
-        false,
-        this.currentLanguage || undefined
-      );
-      console.log('Database call successful, words found:', allWords.length);
-      this.hasExistingWords = allWords.length > 0;
+      console.log('Checking if words exist...');
+      // Use getStudyStats which is much faster than loading all words
+      // It only returns a count, not the full word data
+      const stats = await window.electronAPI.database.getStudyStats(this.currentLanguage || undefined);
+      this.hasExistingWords = stats.totalWords > 0;
+      console.log('Words check complete, found:', stats.totalWords);
       if (this.hasExistingWords === false && router.isCurrentMode('learning')) {
         router.goToTopicSelection();
       }
-      console.log('Found existing words:', allWords.length);
     } catch (error) {
       console.error('Failed to check existing words:', error);
       this.hasExistingWords = false;

@@ -80,6 +80,11 @@ export class LearningMode extends LitElement {
   private isReloadingFromQueue = false;
   private currentSentenceDisplayLastSeen?: Date;
   private lastSeenClearFrame: number | null = null;
+  
+  // Audio cache: Map of audioPath -> base64 data URL
+  private audioCache: Map<string, string> = new Map();
+  // HTML5 Audio instances for playing cached audio
+  private currentAudioElement: HTMLAudioElement | null = null;
   private handleExternalLanguageChange = (event: Event) => {
     const detail = (event as CustomEvent<{ language?: string }>).detail;
     const newLanguage = detail?.language;
@@ -344,6 +349,10 @@ export class LearningMode extends LitElement {
       this.keyboardUnsubscribe();
     }
 
+    // Clean up audio cache and playing audio
+    this.stopCachedAudio();
+    this.audioCache.clear();
+
     this.stopJobMonitoring();
     this.clearInfoTimeout();
     if (this.lastSeenClearFrame !== null) {
@@ -520,6 +529,9 @@ export class LearningMode extends LitElement {
         this.error = 'No sentences available for the selected words. Please generate new words or check if sentence generation completed successfully.';
       } else {
         console.log(`Ready to learn with ${this.wordsWithSentences.length} words`);
+        
+        // Pre-load all audio files into cache for instant playback
+        void this.preloadReviewAudio(wordsWithValidSentences);
       }
 
     } catch (error) {
@@ -1131,19 +1143,128 @@ export class LearningMode extends LitElement {
     }
   }
 
+  /**
+   * Pre-load all audio files for the review session into memory cache
+   * This allows instant playback without file system access
+   */
+  private async preloadReviewAudio(wordsWithSentences: WordWithSentences[]): Promise<void> {
+    try {
+      // Collect all audio paths from all sentences
+      const audioPaths: string[] = [];
+      for (const wordWithSentences of wordsWithSentences) {
+        for (const sentence of wordWithSentences.sentences) {
+          if (sentence.audioPath) {
+            audioPaths.push(sentence.audioPath);
+          }
+        }
+      }
+      
+      if (audioPaths.length === 0) {
+        return;
+      }
+      
+      console.log(`Pre-loading ${audioPaths.length} audio files into cache for review mode...`);
+      
+      // Load all audio files in parallel
+      const loadPromises = audioPaths.map(async (audioPath) => {
+        try {
+          // Check if already cached
+          if (this.audioCache.has(audioPath)) {
+            return;
+          }
+          
+          // Load audio as base64
+          const base64DataUrl = await window.electronAPI.audio.loadAudioBase64(audioPath);
+          if (base64DataUrl) {
+            this.audioCache.set(audioPath, base64DataUrl);
+          }
+        } catch (error) {
+          console.warn(`Failed to preload audio for ${audioPath}:`, error);
+          // Continue loading other files even if one fails
+        }
+      });
+      
+      await Promise.all(loadPromises);
+      console.log(`Audio cache ready: ${this.audioCache.size} files loaded`);
+    } catch (error) {
+      console.error('Error preloading audio:', error);
+      // Don't fail review if audio caching fails - will fall back to file system
+    }
+  }
+
+  /**
+   * Play audio using cached data if available, otherwise fall back to IPC
+   */
   private async handlePlayCurrentAudio() {
     if (this.isLoading || this.error || this.showCompletion) return;
     
     const currentSentence = this.getCurrentSentence();
     const currentWord = this.getCurrentWord();
-    if (currentSentence?.audioPath && currentWord) {
-      try {
-        await window.electronAPI.audio.playAudio(currentSentence.audioPath);
-        void this.incrementStrengthForWord(currentWord.id);
-      } catch (error) {
-        console.error('Failed to play audio:', error);
-      }
+    if (!currentSentence?.audioPath || !currentWord) {
+      return;
     }
+
+    try {
+      const audioPath = currentSentence.audioPath;
+
+      // Try to use cached audio first (much faster - no file system access)
+      const cachedAudio = this.audioCache.get(audioPath);
+      if (cachedAudio) {
+        // Stop any currently playing audio
+        this.stopCachedAudio();
+        
+        // Use HTML5 Audio API to play from memory
+        this.currentAudioElement = new Audio(cachedAudio);
+        
+        // Handle errors and cleanup
+        this.currentAudioElement.addEventListener('ended', () => {
+          this.currentAudioElement = null;
+          // Increment strength when audio finishes playing
+          void this.incrementStrengthForWord(currentWord.id);
+        });
+        
+        this.currentAudioElement.addEventListener('error', (e) => {
+          console.warn('Error playing cached audio, falling back to file system:', e);
+          this.currentAudioElement = null;
+          // Fall back to IPC playback
+          void window.electronAPI.audio.playAudio(audioPath)
+            .then(() => void this.incrementStrengthForWord(currentWord.id))
+            .catch(err => {
+              console.error('Failed to play audio via IPC:', err);
+            });
+        });
+        
+        try {
+          await this.currentAudioElement.play();
+          return; // Success - audio playing from cache
+        } catch (playError) {
+          console.warn('Failed to play cached audio:', playError);
+          this.currentAudioElement = null;
+          // Fall through to fallback
+        }
+      }
+
+      // Fallback: Use IPC to play from file system (original method)
+      await window.electronAPI.audio.playAudio(audioPath);
+      void this.incrementStrengthForWord(currentWord.id);
+    } catch (error) {
+      console.error('Failed to play audio:', error);
+    }
+  }
+
+  /**
+   * Stop currently playing cached audio
+   */
+  private stopCachedAudio(): void {
+    if (this.currentAudioElement) {
+      this.currentAudioElement.pause();
+      this.currentAudioElement.currentTime = 0;
+      this.currentAudioElement = null;
+    }
+    // Also stop any IPC audio playback
+    window.electronAPI.audio.stopAudio().catch(() => {
+      // Ignore errors when stopping
+    });
   }
 
   private handleSentenceAudioPlayed(event: CustomEvent<{ wordId?: number }>) {

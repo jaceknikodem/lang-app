@@ -308,6 +308,50 @@ export class AudioService {
   }
 
   /**
+   * Load audio file as base64 string for caching in renderer
+   * This allows audio to be played from memory without file system access
+   */
+  async loadAudioBase64(audioPath: string): Promise<string | null> {
+    try {
+      if (!audioPath || typeof audioPath !== 'string') {
+        return null;
+      }
+
+      // Check if file exists
+      if (!await this.audioExists(audioPath)) {
+        return null;
+      }
+
+      // Read file as buffer and convert to base64
+      const fileBuffer = await fsPromises.readFile(audioPath);
+      const base64 = fileBuffer.toString('base64');
+      
+      // Determine MIME type from file extension
+      const ext = extname(audioPath).toLowerCase();
+      let mimeType = 'audio/mpeg'; // default
+      if (ext === '.wav') {
+        mimeType = 'audio/wav';
+      } else if (ext === '.mp3') {
+        mimeType = 'audio/mpeg';
+      } else if (ext === '.ogg') {
+        mimeType = 'audio/ogg';
+      } else if (ext === '.aac') {
+        mimeType = 'audio/aac';
+      } else if (ext === '.flac') {
+        mimeType = 'audio/flac';
+      } else if (ext === '.aiff' || ext === '.aif') {
+        mimeType = 'audio/aiff';
+      }
+
+      // Return data URL format that can be used directly with HTML5 Audio
+      return `data:${mimeType};base64,${base64}`;
+    } catch (error) {
+      console.warn(`Error loading audio as base64: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return null;
+    }
+  }
+
+  /**
    * Regenerate audio while ensuring the original file is only replaced on success.
    * Ensures the currently selected TTS engine is used for regeneration.
    */

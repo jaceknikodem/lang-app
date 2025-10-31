@@ -636,6 +636,16 @@ function setupAudioHandlers(audioService: AudioService): void {
     }
   });
 
+  ipcMain.handle(IPC_CHANNELS.AUDIO.LOAD_AUDIO_BASE64, async (event, audioPath) => {
+    try {
+      const validatedAudioPath = AudioPathSchema.parse(audioPath);
+      return await audioService.loadAudioBase64(validatedAudioPath);
+    } catch (error) {
+      console.error('Error loading audio as base64:', error);
+      return null;
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.AUDIO.REGENERATE_AUDIO, async (event, payload) => {
     try {
       const validatedPayload = z.object({

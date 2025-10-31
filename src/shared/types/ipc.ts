@@ -228,6 +228,7 @@ export const IPC_CHANNELS = {
     PLAY_AUDIO: 'audio:playAudio',
     STOP_AUDIO: 'audio:stopAudio',
     AUDIO_EXISTS: 'audio:audioExists',
+    LOAD_AUDIO_BASE64: 'audio:loadAudioBase64',
     REGENERATE_AUDIO: 'audio:regenerateAudio',
     START_RECORDING: 'audio:startRecording',
     STOP_RECORDING: 'audio:stopRecording',
