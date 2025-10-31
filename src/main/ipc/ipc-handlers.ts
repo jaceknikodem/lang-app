@@ -840,6 +840,18 @@ function setupAudioHandlers(audioService: AudioService): void {
     }
   });
 
+  // Minimax TTS handlers
+  ipcMain.handle(IPC_CHANNELS.AUDIO.SWITCH_TO_MINIMAX, async (event, apiKey) => {
+    try {
+      const validatedApiKey = z.string().min(1).parse(apiKey);
+      
+      await audioService.switchToMinimax(validatedApiKey);
+    } catch (error) {
+      console.error('Error switching to Minimax:', error);
+      throw new Error(`Failed to switch to Minimax: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.AUDIO.SWITCH_TO_SYSTEM_TTS, async (event) => {
     try {
       await audioService.switchToSystemTTS();

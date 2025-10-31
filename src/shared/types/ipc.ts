@@ -154,6 +154,7 @@ export interface IPCBridge {
     getCurrentSpeechModel: () => Promise<string>;
     isSpeechRecognitionReady: () => Promise<boolean>;
     switchToElevenLabs: (apiKey: string) => Promise<void>;
+    switchToMinimax: (apiKey: string) => Promise<void>;
     switchToSystemTTS: () => Promise<void>;
   };
 
@@ -244,6 +245,7 @@ export const IPC_CHANNELS = {
     GET_CURRENT_SPEECH_MODEL: 'audio:getCurrentSpeechModel',
     IS_SPEECH_RECOGNITION_READY: 'audio:isSpeechRecognitionReady',
     SWITCH_TO_ELEVENLABS: 'audio:switchToElevenLabs',
+    SWITCH_TO_MINIMAX: 'audio:switchToMinimax',
     SWITCH_TO_SYSTEM_TTS: 'audio:switchToSystemTTS'
   },
   QUIZ: {

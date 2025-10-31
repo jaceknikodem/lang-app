@@ -24,6 +24,9 @@ export interface AudioConfig {
   elevenLabsApiKey?: string;
   elevenLabsVoiceId?: string;
   elevenLabsModel?: string;
+  minimaxApiKey?: string;
+  minimaxVoiceId?: string;
+  minimaxModel?: string;
 }
 
 export interface AudioError extends Error {

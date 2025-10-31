@@ -2,6 +2,7 @@ import { promises as fsPromises } from 'fs';
 import { join, parse, extname } from 'path';
 import { TTSAudioGenerator } from './audio-generator';
 import { ElevenLabsAudioGenerator } from './elevenlabs-generator';
+import { MinimaxAudioGenerator } from './minimax-generator';
 import { AudioGenerator, AudioError } from '../../shared/types/audio';
 import { DatabaseLayer } from '../../shared/types/database';
 import { AudioRecorder, RecordingSession, RecordingOptions } from './audio-recorder';
@@ -39,10 +40,10 @@ export class AudioService {
       return new TTSAudioGenerator(undefined, database);
     }
 
-    // Try to get ElevenLabs API key from database settings asynchronously
+    // Try to get API keys from database settings asynchronously
     if (database) {
-      // Check for ElevenLabs settings in the background and switch if available
-      this.checkAndSwitchToElevenLabs(database);
+      // Check for Minimax settings first (higher priority), then ElevenLabs, in the background
+      this.checkAndSwitchToAudioBackend(database);
     }
     
     // Default to system TTS initially
@@ -50,14 +51,32 @@ export class AudioService {
   }
 
   /**
-   * Check for ElevenLabs settings and switch if available
+   * Check for audio backend settings (Minimax or ElevenLabs) and switch if available
    */
-  private async checkAndSwitchToElevenLabs(database: DatabaseLayer): Promise<void> {
+  private async checkAndSwitchToAudioBackend(database: DatabaseLayer): Promise<void> {
     if (this.shouldForceSystemTTS()) {
       return;
     }
 
     try {
+      // Check Minimax first
+      const minimaxModel = await database.getSetting('minimax_model');
+      if (minimaxModel && minimaxModel !== 'disabled') {
+        const minimaxApiKey = await database.getSetting('minimax_api_key');
+        if (minimaxApiKey && minimaxApiKey.trim()) {
+          console.log('Minimax API key found, switching to Minimax TTS');
+          const minimaxVoiceId = await database.getSetting('minimax_voice_id').catch(() => null);
+          const config = {
+            minimaxApiKey: minimaxApiKey,
+            minimaxModel: minimaxModel || 'speech-02-hd',
+            minimaxVoiceId: minimaxVoiceId || undefined // Convert null to undefined
+          };
+          this.audioGenerator = new MinimaxAudioGenerator(config, database);
+          return;
+        }
+      }
+
+      // Fall back to ElevenLabs if Minimax is not configured
       const model = await database.getSetting('elevenlabs_model');
       
       // If model is disabled, use system TTS
@@ -75,8 +94,16 @@ export class AudioService {
         this.audioGenerator = new ElevenLabsAudioGenerator(config, database);
       }
     } catch (error) {
-      console.warn('Failed to check ElevenLabs settings, using system TTS:', error);
+      console.warn('Failed to check audio backend settings, using system TTS:', error);
     }
+  }
+
+  /**
+   * Check for ElevenLabs settings and switch if available
+   * @deprecated Use checkAndSwitchToAudioBackend instead
+   */
+  private async checkAndSwitchToElevenLabs(database: DatabaseLayer): Promise<void> {
+    return this.checkAndSwitchToAudioBackend(database);
   }
 
   /**
@@ -119,6 +146,58 @@ export class AudioService {
   }
 
   /**
+   * Switch to Minimax TTS if API key is provided
+   */
+  async switchToMinimax(apiKey: string): Promise<void> {
+    if (this.shouldForceSystemTTS()) {
+      await this.switchToSystemTTS();
+      return;
+    }
+
+    try {
+      // Get model and voice from database if available
+      let model = 'speech-02-hd'; // Default model
+      let voiceId: string | undefined;
+      
+      if (this.database) {
+        try {
+          const savedModel = await this.database.getSetting('minimax_model');
+          if (savedModel) {
+            if (savedModel !== 'disabled') {
+              model = savedModel;
+            } else {
+              // If model is disabled, switch to system TTS instead
+              await this.switchToSystemTTS();
+              return;
+            }
+          }
+
+          const savedVoiceId = await this.database.getSetting('minimax_voice_id');
+          if (savedVoiceId && savedVoiceId.trim()) {
+            voiceId = savedVoiceId;
+          }
+        } catch (error) {
+          console.warn('Failed to get Minimax settings from database, using defaults');
+        }
+      }
+
+      const config: any = {
+        minimaxApiKey: apiKey,
+        minimaxModel: model
+      };
+      if (voiceId) {
+        config.minimaxVoiceId = voiceId;
+      }
+
+      this.audioGenerator = new MinimaxAudioGenerator(config, this.database);
+      console.log('Switched to Minimax TTS with model:', model);
+    } catch (error) {
+      console.error('Failed to switch to Minimax TTS:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Switch back to system TTS
    */
   async switchToSystemTTS(): Promise<void> {
@@ -133,8 +212,14 @@ export class AudioService {
 
   /**
    * Generate audio for text with error handling and validation
+   * Ensures the currently selected TTS engine is used for generation.
    */
   async generateAudio(text: string, language?: string, word?: string): Promise<string> {
+    // Ensure we're using the currently selected TTS engine
+    if (this.database) {
+      await this.checkAndSwitchToAudioBackend(this.database);
+    }
+
     try {
       // Validate inputs
       if (!text || typeof text !== 'string' || text.trim().length === 0) {
@@ -224,8 +309,14 @@ export class AudioService {
 
   /**
    * Regenerate audio while ensuring the original file is only replaced on success.
+   * Ensures the currently selected TTS engine is used for regeneration.
    */
   async regenerateAudio(text: string, language?: string, word?: string, existingPath?: string): Promise<string> {
+    // Ensure we're using the currently selected TTS engine
+    if (this.database) {
+      await this.checkAndSwitchToAudioBackend(this.database);
+    }
+
     let backupPath: string | null = null;
     try {
       if (existingPath && await this.audioExists(existingPath)) {
@@ -538,8 +629,19 @@ export class AudioService {
    * Get current audio generation service and model information
    */
   getAudioGenerationInfo(): { service: string; model?: string } {
+    const generatorName = this.audioGenerator.constructor.name;
+    
+    // Check if it's Minimax generator
+    if (generatorName === 'MinimaxAudioGenerator') {
+      const config = (this.audioGenerator as any).config;
+      return {
+        service: 'minimax',
+        model: config?.minimaxModel || 'speech-02-hd'
+      };
+    }
+    
     // Check if it's ElevenLabs generator
-    if (this.audioGenerator.constructor.name === 'ElevenLabsAudioGenerator') {
+    if (generatorName === 'ElevenLabsAudioGenerator') {
       const config = (this.audioGenerator as any).config;
       return {
         service: 'elevenlabs',

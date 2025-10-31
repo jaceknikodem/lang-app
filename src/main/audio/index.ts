@@ -4,6 +4,7 @@
 
 export { TTSAudioGenerator } from './audio-generator';
 export { ElevenLabsAudioGenerator } from './elevenlabs-generator';
+export { MinimaxAudioGenerator } from './minimax-generator';
 export { AudioService } from './audio-service';
 export { AudioRecorder } from './audio-recorder';
 export { SpeechRecognitionService } from './speech-recognition';
