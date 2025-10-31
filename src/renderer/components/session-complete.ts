@@ -7,6 +7,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { Word, StudyStats } from '../../shared/types/core.js';
+import { useKeyboardBindings, CommonKeys } from '../utils/keyboard-manager.js';
 
 export interface SessionSummary {
   type: 'learning' | 'quiz';
@@ -28,6 +29,8 @@ export class SessionComplete extends LitElement {
 
   @state()
   private isLoading = false;
+
+  private keyboardUnsubscribe?: () => void;
 
   static styles = [
     sharedStyles,
@@ -219,6 +222,31 @@ export class SessionComplete extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.loadUpdatedStats();
+    this.setupKeyboardBindings();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this.keyboardUnsubscribe) {
+      this.keyboardUnsubscribe();
+    }
+  }
+
+  private setupKeyboardBindings() {
+    const bindings = [
+      {
+        key: CommonKeys.ENTER,
+        action: () => {
+          // Only trigger if not in quiz mode (i.e., "Start another session" button is visible)
+          if (!this.isLoading && this.sessionSummary.type !== 'quiz') {
+            this.handleNewSession();
+          }
+        },
+        description: 'Start another session'
+      }
+    ];
+
+    this.keyboardUnsubscribe = useKeyboardBindings(bindings);
   }
 
   private async loadUpdatedStats() {
@@ -353,7 +381,7 @@ export class SessionComplete extends LitElement {
           <p class="recommendation-text">
             ${isQuiz
               ? this.getRecommendationText()
-              : `Congrats! You studied ${this.sessionSummary.wordsStudied} ${this.sessionSummary.wordsStudied === 1 ? 'word' : 'words'}. Would you like to start another session?`}
+              : `Congrats!`}
           </p>
           <div class="action-buttons">
             ${!isQuiz ? html`
@@ -365,12 +393,14 @@ export class SessionComplete extends LitElement {
                 Start another session
               </button>
             ` : ''}
-            <button
-              class="action-button"
-              @click=${this.handleViewProgress}
-            >
-              View progress
-            </button>
+            ${!isQuiz ? html`
+              <button
+                class="action-button"
+                @click=${this.handleViewProgress}
+              >
+                View progress
+              </button>
+            ` : ''}
           </div>
         </div>
       </div>
