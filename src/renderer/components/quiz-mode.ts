@@ -83,8 +83,10 @@ export class QuizMode extends LitElement {
   private keyboardUnsubscribe?: () => void;
   private lastAutoplayKey: string | null = null;
   
-  // Audio cache: Map of audioPath -> base64 data URL
-  private audioCache: Map<string, string> = new Map();
+  // Audio cache: Map of audioPath -> blob URL
+  // Using Blob URLs instead of data URLs for better performance (no base64 encoding/decoding)
+  private audioCache: Map<string, string> = new Map(); // audioPath -> blob URL
+  private blobUrlCache: Map<string, string> = new Map(); // audioPath -> blob URL (for cleanup)
   // HTML5 Audio instances for playing cached audio
   private currentAudioElement: HTMLAudioElement | null = null;
 
@@ -985,7 +987,10 @@ export class QuizMode extends LitElement {
     
     // Clean up audio cache and playing audio
     this.stopCachedAudio();
+    // Revoke all blob URLs to free memory
+    this.blobUrlCache.forEach(blobUrl => URL.revokeObjectURL(blobUrl));
     this.audioCache.clear();
+    this.blobUrlCache.clear();
   }
 
   private async startQuiz() {
@@ -1036,7 +1041,14 @@ export class QuizMode extends LitElement {
 
       this.currentQuestion = shuffledQuestions[0];
       
-      // Pre-load all audio files into cache for instant playback
+      // Prioritize: Load current question's audio first, then autoplay
+      // This ensures audio is ready before playback starts
+      await this.ensureCurrentQuestionAudioLoaded();
+      
+      // Load next question's audio right after current one is ready
+      this.preloadNextQuestionAudio();
+      
+      // Pre-load remaining audio files in background (non-blocking)
       void this.preloadQuizAudio(shuffledQuestions);
       
       void this.maybeAutoplayCurrentQuestion(true);
@@ -1159,10 +1171,18 @@ export class QuizMode extends LitElement {
       // Move to next question
       this.quizSession.currentQuestionIndex++;
       this.currentQuestion = this.quizSession.questions[this.quizSession.currentQuestionIndex];
-      void this.maybeAutoplayCurrentQuestion();
-
+      
+      // Prioritize: Load next question's audio before autoplay (await to ensure it's ready)
+      await this.ensureCurrentQuestionAudioLoaded();
+      
+      // Immediately load next question's audio after current one is ready
+      this.preloadNextQuestionAudio();
+      
       // Save progress immediately when moving to next question
       this.saveQuizProgressToSession();
+      
+      // Autoplay after audio is loaded (non-blocking)
+      void this.maybeAutoplayCurrentQuestion();
     }
   }
 
@@ -1242,6 +1262,9 @@ export class QuizMode extends LitElement {
       return;
     }
 
+    // Ensure audio is loaded before playing (in case it wasn't preloaded yet)
+    await this.ensureCurrentQuestionAudioLoaded();
+
     try {
       await window.electronAPI.audio.stopAudio();
     } catch (error) {
@@ -1252,29 +1275,108 @@ export class QuizMode extends LitElement {
   }
 
   /**
+   * Ensure current question's audio is loaded and ready
+   * Prioritizes current audio for instant playback
+   */
+  private async ensureCurrentQuestionAudioLoaded(): Promise<void> {
+    if (!this.currentQuestion?.sentence.audioPath) {
+      return;
+    }
+
+    const audioPath = this.currentQuestion.sentence.audioPath;
+    
+    // If already cached, we're done
+    if (this.audioCache.has(audioPath)) {
+      return;
+    }
+
+    try {
+      await this.loadAudioIntoCache(audioPath);
+    } catch (error) {
+      console.warn(`Failed to load current question audio:`, error);
+      // Continue anyway - will fall back to IPC playback
+    }
+  }
+
+  /**
+   * Preload the next question's audio after current one is ready
+   * This ensures smooth transitions between questions
+   */
+  private preloadNextQuestionAudio(): void {
+    if (!this.quizSession) {
+      return;
+    }
+
+    const nextIndex = this.quizSession.currentQuestionIndex + 1;
+    if (nextIndex >= this.quizSession.questions.length) {
+      return; // No next question
+    }
+
+    const nextQuestion = this.quizSession.questions[nextIndex];
+    if (!nextQuestion?.sentence.audioPath) {
+      return; // No audio path for next question
+    }
+
+    const nextAudioPath = nextQuestion.sentence.audioPath;
+    
+    // Skip if already cached
+    if (this.audioCache.has(nextAudioPath)) {
+      return;
+    }
+
+    // Load next question's audio in background (non-blocking)
+    void this.loadAudioIntoCache(nextAudioPath).catch(error => {
+      console.warn(`Failed to preload next question audio:`, error);
+      // Non-critical - will load on-demand if needed
+    });
+  }
+
+  /**
+   * Load a single audio file into cache
+   */
+  private async loadAudioIntoCache(audioPath: string): Promise<void> {
+    if (this.audioCache.has(audioPath)) {
+      return; // Already cached
+    }
+
+    try {
+      // Load audio as ArrayBuffer (more efficient than base64)
+      const result = await window.electronAPI.audio.loadAudioBase64(audioPath);
+      if (result && result.data) {
+        // Create Blob and Blob URL (faster than data URLs for browser)
+        const blob = new Blob([result.data], { type: result.mimeType });
+        const blobUrl = URL.createObjectURL(blob);
+        this.audioCache.set(audioPath, blobUrl);
+        this.blobUrlCache.set(audioPath, blobUrl);
+      }
+    } catch (error) {
+      console.warn(`Failed to load audio for ${audioPath}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Pre-load all audio files for the quiz session into memory cache
    * This allows instant playback without file system access
+   * Optimized: Skips already cached files and loads in parallel
    */
   private async preloadQuizAudio(questions: QuizQuestion[]): Promise<void> {
     try {
-      console.log(`Pre-loading ${questions.length} audio files into cache...`);
       const audioPaths = questions
         .map(q => q.sentence.audioPath)
-        .filter((path): path is string => !!path);
+        .filter((path): path is string => !!path)
+        .filter(path => !this.audioCache.has(path)); // Skip already cached
       
-      // Load all audio files in parallel
+      if (audioPaths.length === 0) {
+        return;
+      }
+
+      console.log(`Pre-loading ${audioPaths.length} audio files into cache...`);
+      
+      // Load all audio files in parallel (small files, so parallel loading is fine)
       const loadPromises = audioPaths.map(async (audioPath) => {
         try {
-          // Check if already cached
-          if (this.audioCache.has(audioPath)) {
-            return;
-          }
-          
-          // Load audio as base64
-          const base64DataUrl = await window.electronAPI.audio.loadAudioBase64(audioPath);
-          if (base64DataUrl) {
-            this.audioCache.set(audioPath, base64DataUrl);
-          }
+          await this.loadAudioIntoCache(audioPath);
         } catch (error) {
           console.warn(`Failed to preload audio for ${audioPath}:`, error);
           // Continue loading other files even if one fails

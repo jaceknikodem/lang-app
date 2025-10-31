@@ -81,8 +81,10 @@ export class LearningMode extends LitElement {
   private currentSentenceDisplayLastSeen?: Date;
   private lastSeenClearFrame: number | null = null;
   
-  // Audio cache: Map of audioPath -> base64 data URL
-  private audioCache: Map<string, string> = new Map();
+  // Audio cache: Map of audioPath -> blob URL
+  // Using Blob URLs instead of data URLs for better performance (no base64 encoding/decoding)
+  private audioCache: Map<string, string> = new Map(); // audioPath -> blob URL
+  private blobUrlCache: Map<string, string> = new Map(); // audioPath -> blob URL (for cleanup)
   // HTML5 Audio instances for playing cached audio
   private currentAudioElement: HTMLAudioElement | null = null;
   private handleExternalLanguageChange = (event: Event) => {
@@ -351,7 +353,10 @@ export class LearningMode extends LitElement {
 
     // Clean up audio cache and playing audio
     this.stopCachedAudio();
+    // Revoke all blob URLs to free memory
+    this.blobUrlCache.forEach(blobUrl => URL.revokeObjectURL(blobUrl));
     this.audioCache.clear();
+    this.blobUrlCache.clear();
 
     this.stopJobMonitoring();
     this.clearInfoTimeout();
@@ -530,7 +535,13 @@ export class LearningMode extends LitElement {
       } else {
         console.log(`Ready to learn with ${this.wordsWithSentences.length} words`);
         
-        // Pre-load all audio files into cache for instant playback
+        // Prioritize: Load current sentence's audio first
+        await this.ensureCurrentSentenceAudioLoaded();
+        
+        // Load next sentence's audio right after current one is ready
+        this.preloadNextSentenceAudio();
+        
+        // Pre-load all audio files into cache for instant playback (background)
         void this.preloadReviewAudio(wordsWithValidSentences);
       }
 
@@ -940,7 +951,7 @@ export class LearningMode extends LitElement {
     this.saveProgressToSession();
   }
 
-  private goToNextSentence() {
+  private async goToNextSentence() {
     const currentWord = this.getCurrentWord();
     if (!currentWord) return;
 
@@ -950,6 +961,12 @@ export class LearningMode extends LitElement {
       this.currentWordIndex++;
       this.currentSentenceIndex = 0;
     }
+
+    // Prioritize: Load current sentence's audio before it's needed
+    await this.ensureCurrentSentenceAudioLoaded();
+    
+    // Immediately load next sentence's audio after current one is ready
+    this.preloadNextSentenceAudio();
 
     // Save progress to session
     this.saveProgressToSession();
@@ -1110,7 +1127,7 @@ export class LearningMode extends LitElement {
     this.keyboardUnsubscribe = useKeyboardBindings(bindings);
   }
 
-  private handleNextAction() {
+  private async handleNextAction() {
     // Don't handle if we're loading, have an error, or showing completion
     if (this.isLoading || this.error || this.showCompletion || this.isProcessing) return;
 
@@ -1121,7 +1138,7 @@ export class LearningMode extends LitElement {
     if (this.isLastSentence()) {
       this.handleFinishLearning();
     } else {
-      this.goToNextSentence();
+      await this.goToNextSentence();
     }
   }
 
@@ -1144,8 +1161,99 @@ export class LearningMode extends LitElement {
   }
 
   /**
+   * Load a single audio file into cache
+   */
+  private async loadAudioIntoCache(audioPath: string): Promise<void> {
+    if (this.audioCache.has(audioPath)) {
+      return; // Already cached
+    }
+
+    try {
+      // Load audio as ArrayBuffer (more efficient than base64)
+      const result = await window.electronAPI.audio.loadAudioBase64(audioPath);
+      if (result && result.data) {
+        // Create Blob and Blob URL (faster than data URLs for browser)
+        const blob = new Blob([result.data], { type: result.mimeType });
+        const blobUrl = URL.createObjectURL(blob);
+        this.audioCache.set(audioPath, blobUrl);
+        this.blobUrlCache.set(audioPath, blobUrl);
+      }
+    } catch (error) {
+      console.warn(`Failed to load audio for ${audioPath}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Ensure current sentence's audio is loaded and ready
+   * Prioritizes current audio for instant playback
+   */
+  private async ensureCurrentSentenceAudioLoaded(): Promise<void> {
+    const currentSentence = this.getCurrentSentence();
+    if (!currentSentence?.audioPath) {
+      return;
+    }
+
+    const audioPath = currentSentence.audioPath;
+    
+    // If already cached, we're done
+    if (this.audioCache.has(audioPath)) {
+      return;
+    }
+
+    try {
+      await this.loadAudioIntoCache(audioPath);
+    } catch (error) {
+      console.warn(`Failed to load current sentence audio:`, error);
+      // Continue anyway - will fall back to IPC playback
+    }
+  }
+
+  /**
+   * Preload the next sentence's audio after current one is ready
+   * This ensures smooth transitions between sentences
+   */
+  private preloadNextSentenceAudio(): void {
+    const currentWord = this.getCurrentWord();
+    if (!currentWord) {
+      return;
+    }
+
+    let nextSentence: Sentence | null = null;
+
+    // Check if there's a next sentence in the current word
+    if (this.currentSentenceIndex < currentWord.sentences.length - 1) {
+      nextSentence = currentWord.sentences[this.currentSentenceIndex + 1];
+    } else if (this.currentWordIndex < this.wordsWithSentences.length - 1) {
+      // Move to next word's first sentence
+      const nextWord = this.wordsWithSentences[this.currentWordIndex + 1];
+      if (nextWord && nextWord.sentences.length > 0) {
+        nextSentence = nextWord.sentences[0];
+      }
+    }
+
+    if (!nextSentence?.audioPath) {
+      return; // No next sentence or no audio path
+    }
+
+    const nextAudioPath = nextSentence.audioPath;
+    
+    // Skip if already cached
+    if (this.audioCache.has(nextAudioPath)) {
+      return;
+    }
+
+    // Load next sentence's audio in background (non-blocking)
+    void this.loadAudioIntoCache(nextAudioPath).catch(error => {
+      console.warn(`Failed to preload next sentence audio:`, error);
+      // Non-critical - will load on-demand if needed
+    });
+  }
+
+  /**
    * Pre-load all audio files for the review session into memory cache
    * This allows instant playback without file system access
+   * Optimized: Skips already cached files and loads in parallel
    */
   private async preloadReviewAudio(wordsWithSentences: WordWithSentences[]): Promise<void> {
     try {
@@ -1153,7 +1261,7 @@ export class LearningMode extends LitElement {
       const audioPaths: string[] = [];
       for (const wordWithSentences of wordsWithSentences) {
         for (const sentence of wordWithSentences.sentences) {
-          if (sentence.audioPath) {
+          if (sentence.audioPath && !this.audioCache.has(sentence.audioPath)) {
             audioPaths.push(sentence.audioPath);
           }
         }
@@ -1165,19 +1273,10 @@ export class LearningMode extends LitElement {
       
       console.log(`Pre-loading ${audioPaths.length} audio files into cache for review mode...`);
       
-      // Load all audio files in parallel
+      // Load all audio files in parallel (small files, so parallel loading is fine)
       const loadPromises = audioPaths.map(async (audioPath) => {
         try {
-          // Check if already cached
-          if (this.audioCache.has(audioPath)) {
-            return;
-          }
-          
-          // Load audio as base64
-          const base64DataUrl = await window.electronAPI.audio.loadAudioBase64(audioPath);
-          if (base64DataUrl) {
-            this.audioCache.set(audioPath, base64DataUrl);
-          }
+          await this.loadAudioIntoCache(audioPath);
         } catch (error) {
           console.warn(`Failed to preload audio for ${audioPath}:`, error);
           // Continue loading other files even if one fails
@@ -1203,6 +1302,9 @@ export class LearningMode extends LitElement {
     if (!currentSentence?.audioPath || !currentWord) {
       return;
     }
+
+    // Ensure audio is loaded before playing (in case it wasn't preloaded yet)
+    await this.ensureCurrentSentenceAudioLoaded();
 
     try {
       const audioPath = currentSentence.audioPath;

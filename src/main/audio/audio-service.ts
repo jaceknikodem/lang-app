@@ -308,23 +308,19 @@ export class AudioService {
   }
 
   /**
-   * Load audio file as base64 string for caching in renderer
-   * This allows audio to be played from memory without file system access
+   * Load audio file as ArrayBuffer for caching in renderer
+   * Optimized: Returns ArrayBuffer directly (no base64 encoding overhead)
+   * Also returns MIME type so renderer can create Blob URLs efficiently
    */
-  async loadAudioBase64(audioPath: string): Promise<string | null> {
+  async loadAudioBase64(audioPath: string): Promise<{ data: ArrayBuffer; mimeType: string } | null> {
     try {
       if (!audioPath || typeof audioPath !== 'string') {
         return null;
       }
 
-      // Check if file exists
-      if (!await this.audioExists(audioPath)) {
-        return null;
-      }
-
-      // Read file as buffer and convert to base64
+      // Optimized: Read file directly - if it doesn't exist, readFile will throw
+      // This eliminates redundant file existence check (one less async I/O)
       const fileBuffer = await fsPromises.readFile(audioPath);
-      const base64 = fileBuffer.toString('base64');
       
       // Determine MIME type from file extension
       const ext = extname(audioPath).toLowerCase();
@@ -343,10 +339,20 @@ export class AudioService {
         mimeType = 'audio/aiff';
       }
 
-      // Return data URL format that can be used directly with HTML5 Audio
-      return `data:${mimeType};base64,${base64}`;
+      // Return ArrayBuffer and MIME type - renderer will create Blob URL (faster than data URLs)
+      // Convert Buffer to ArrayBuffer for IPC serialization (Electron uses structured clone which supports ArrayBuffer)
+      // Create a new ArrayBuffer with the same data
+      const arrayBuffer = new ArrayBuffer(fileBuffer.length);
+      const view = new Uint8Array(arrayBuffer);
+      view.set(fileBuffer);
+      
+      return {
+        data: arrayBuffer,
+        mimeType
+      };
     } catch (error) {
-      console.warn(`Error loading audio as base64: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // If file doesn't exist, readFile throws - catch and return null
+      console.warn(`Error loading audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
       return null;
     }
   }
