@@ -256,6 +256,16 @@ export class MigrationManager {
           `DROP INDEX IF EXISTS idx_sentence_words_sentence_id`,
           `DROP TABLE IF EXISTS sentence_words`
         ]
+      },
+      {
+        version: 12,
+        name: 'add_sentence_tokens_column',
+        up: [
+          `ALTER TABLE sentences ADD COLUMN sentence_tokens TEXT`
+        ],
+        down: [
+          // SQLite cannot drop columns; leaving sentence_tokens in place on rollback.
+        ]
       }
     ];
   }

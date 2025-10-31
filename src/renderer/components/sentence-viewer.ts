@@ -5,7 +5,7 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
-import { Word, Sentence, DictionaryEntry } from '../../shared/types/core.js';
+import { Word, Sentence, DictionaryEntry, PrecomputedToken } from '../../shared/types/core.js';
 import { splitSentenceIntoParts } from '../../shared/utils/sentence.js';
 import { useKeyboardBindings } from '../utils/keyboard-manager.js';
 import { tokenizeSentenceWithDictionary } from '../utils/sentence-tokenizer.js';
@@ -401,6 +401,13 @@ export class SentenceViewer extends LitElement {
       return;
     }
 
+    // Check if we have precomputed tokens - use them if available
+    if (this.sentence.tokenizedTokens && this.sentence.tokenizedTokens.length > 0) {
+      this.parsedWords = this.convertPrecomputedTokensToWords(this.sentence.tokenizedTokens);
+      return;
+    }
+
+    // Fallback to runtime tokenization for sentences without precomputed tokens
     const parts = this.sentence.sentenceParts ?? splitSentenceIntoParts(this.sentence.sentence);
 
     const baseWords: WordInSentence[] = parts.map(text => {
@@ -442,6 +449,43 @@ export class SentenceViewer extends LitElement {
 
     this.parsedWords = baseWords;
     await this.enhanceSentenceWithDictionary(requestId);
+  }
+
+  /**
+   * Convert precomputed tokens to WordInSentence format, merging with current word status.
+   * This applies dynamic word status (strength, known, ignored) from current allWords.
+   */
+  private convertPrecomputedTokensToWords(precomputedTokens: PrecomputedToken[]): WordInSentence[] {
+    return precomputedTokens.map(token => {
+      // Find current word data from allWords (status may have changed since precomputation)
+      let wordData: Word | undefined;
+      if (token.wordId) {
+        wordData = this.allWords.find(w => w.id === token.wordId);
+      }
+
+      // Also check by dictionary form in case word wasn't in database when precomputed
+      if (!wordData && token.dictionaryForm) {
+        const cleanText = token.dictionaryForm.toLowerCase();
+        wordData = this.allWords.find(w => w.word.toLowerCase() === cleanText);
+      }
+
+      // Update isTargetWord based on current target word
+      const cleanText = token.dictionaryForm?.toLowerCase() || '';
+      const isTargetWord = cleanText === this.targetWord.word.toLowerCase() || token.isTargetWord;
+
+      // Populate dictionary cache from precomputed entries
+      if (token.dictionaryKey && token.dictionaryEntries) {
+        this.dictionaryCache[token.dictionaryKey] = token.dictionaryEntries;
+      }
+
+      return {
+        text: token.text,
+        isTargetWord,
+        wordData,
+        dictionaryForm: token.dictionaryForm,
+        dictionaryKey: token.dictionaryKey
+      };
+    });
   }
 
   private async enhanceSentenceWithDictionary(requestId: number): Promise<void> {

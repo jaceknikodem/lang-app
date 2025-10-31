@@ -2,6 +2,7 @@ import { DatabaseLayer, WordGenerationJob, WordProcessingStatus } from '../../sh
 import { ContentGenerator } from '../llm/content-generator.js';
 import { AudioService } from '../audio/audio-service.js';
 import { splitSentenceIntoParts } from '../../shared/utils/sentence.js';
+import { precomputeSentenceTokens } from '../database/sentence-preprocessor.js';
 
 export interface WordGenerationRunnerOptions {
   database: DatabaseLayer;
@@ -176,7 +177,7 @@ export class WordGenerationRunner {
           const audioInfo = this.audioService.getAudioGenerationInfo();
           
           const sentenceParts = splitSentenceIntoParts(sentence.sentence);
-          await this.database.insertSentence(
+          const sentenceId = await this.database.insertSentence(
             word.id,
             sentence.sentence,
             sentence.translation,
@@ -190,6 +191,31 @@ export class WordGenerationRunner {
             audioInfo.service,
             audioInfo.model
           );
+
+          // Precompute sentence tokens with dictionary lookups
+          try {
+            const allWords = await this.database.getAllWords(false, false, language);
+            const tokenizedTokens = await precomputeSentenceTokens({
+              sentence: sentence.sentence,
+              targetWord: word,
+              allWords,
+              lookupDictionary: (word: string, lang?: string) => this.database.lookupDictionary(word, lang || language),
+              language,
+              maxPhraseWords: 3
+            });
+            
+            await this.database.updateSentenceTokens(sentenceId, tokenizedTokens);
+            console.log('[WordGenerationRunner] Precomputed tokens for sentence', {
+              sentenceId,
+              tokenCount: tokenizedTokens.length
+            });
+          } catch (tokenError) {
+            console.warn('[WordGenerationRunner] Failed to precompute tokens for sentence', {
+              sentenceId,
+              error: tokenError
+            });
+            // Non-fatal - sentence will work without precomputed tokens
+          }
 
           normalizedExisting.add(normalizedSentence);
           totalSentences += 1;

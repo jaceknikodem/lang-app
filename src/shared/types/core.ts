@@ -51,6 +51,20 @@ export interface Sentence {
   sentenceGenerationModel?: string;
   audioGenerationService?: string;
   audioGenerationModel?: string;
+  tokenizedTokens?: PrecomputedToken[];
+}
+
+/**
+ * Precomputed token data for a sentence word/phrase.
+ * Contains all tokenization and dictionary lookup results.
+ */
+export interface PrecomputedToken {
+  text: string;
+  isTargetWord: boolean;
+  wordId?: number; // ID of matching word in database at creation time
+  dictionaryForm?: string;
+  dictionaryKey?: string;
+  dictionaryEntries?: DictionaryEntry[]; // Fully cached dictionary lookup results
 }
 
 

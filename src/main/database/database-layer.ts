@@ -9,7 +9,8 @@ import { DatabaseLayer, DatabaseConfig, JobWordInfo, WordGenerationJob, WordGene
 import { Word, Sentence, StudyStats, CreateWordRequest, DictionaryEntry } from '../../shared/types/core.js';
 import { DatabaseConnection } from './connection.js';
 import { MigrationManager } from './migrations.js';
-import { splitSentenceIntoParts, serializeSentenceParts, parseSentenceParts } from '../../shared/utils/sentence.js';
+import { splitSentenceIntoParts, serializeSentenceParts, parseSentenceParts, serializeTokenizedTokens, parseTokenizedTokens } from '../../shared/utils/sentence.js';
+import { backfillSentenceTokens } from './backfill-sentence-tokens.js';
 
 export class SQLiteDatabaseLayer implements DatabaseLayer {
   private connection: DatabaseConnection;
@@ -34,6 +35,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // Backfill sentence parts in background (non-blocking)
       setImmediate(() => {
         this.backfillSentenceParts();
+      });
+
+      // Backfill sentence tokens in background (non-blocking)
+      // This precomputes tokens for existing sentences
+      setImmediate(async () => {
+        try {
+          await this.runSentenceTokenBackfill();
+        } catch (tokenError) {
+          console.warn('Sentence token backfill skipped due to error:', tokenError);
+        }
       });
 
       // Populate dictionary data from bundled files in background (non-blocking)
@@ -476,22 +487,28 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     contextAfter?: string,
     contextBeforeTranslation?: string,
     contextAfterTranslation?: string,
-    sentenceParts?: string[]
+    sentenceParts?: string[],
+    sentenceGenerationModel?: string,
+    audioGenerationService?: string,
+    audioGenerationModel?: string,
+    tokenizedTokens?: any[]
   ): Promise<number> {
     const db = this.getDb();
     
     try {
       const parts = sentenceParts ?? splitSentenceIntoParts(sentence);
       const serializedParts = serializeSentenceParts(parts);
+      const serializedTokens = serializeTokenizedTokens(tokenizedTokens);
 
       // Insert sentence with original wordId (for backwards compatibility)
       const stmt = db.prepare(`
         INSERT INTO sentences (
           word_id, sentence, translation, audio_path,
           context_before, context_after, context_before_translation, context_after_translation,
-          sentence_parts
+          sentence_parts, sentence_generation_model, audio_generation_service, audio_generation_model,
+          sentence_tokens
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       const result = stmt.run(
@@ -503,7 +520,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         contextAfter || null,
         contextBeforeTranslation || null,
         contextAfterTranslation || null,
-        serializedParts
+        serializedParts,
+        sentenceGenerationModel || null,
+        audioGenerationService || null,
+        audioGenerationModel || null,
+        serializedTokens
       );
 
       const sentenceId = result.lastInsertRowid as number;
@@ -655,6 +676,44 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       }
     } catch (error) {
       throw new Error(`Failed to update sentence audio path: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Update sentence tokens (precomputed tokenization)
+   */
+  async updateSentenceTokens(sentenceId: number, tokens: any[]): Promise<void> {
+    const db = this.getDb();
+    
+    try {
+      const serializedTokens = serializeTokenizedTokens(tokens);
+      const stmt = db.prepare(`
+        UPDATE sentences
+        SET sentence_tokens = ?
+        WHERE id = ?
+      `);
+      const result = stmt.run(serializedTokens, sentenceId);
+      if (result.changes === 0) {
+        throw new Error(`Sentence with ID ${sentenceId} not found`);
+      }
+    } catch (error) {
+      throw new Error(`Failed to update sentence tokens: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get all sentences (for backfill operations)
+   */
+  async getAllSentences(): Promise<Sentence[]> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare('SELECT * FROM sentences ORDER BY id');
+      const rows = stmt.all() as any[];
+      
+      return rows.map(row => this.mapRowToSentence(row));
+    } catch (error) {
+      throw new Error(`Failed to get all sentences: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -1705,6 +1764,39 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
+  /**
+   * Backfill sentence tokens for all existing sentences.
+   * This precomputes tokenization and dictionary lookups for sentences that don't have them.
+   */
+  private async runSentenceTokenBackfill(): Promise<void> {
+    try {
+      // Check if the sentence_tokens column exists before running backfill
+      const db = this.getDb();
+      try {
+        // Try to select from the column to check if it exists
+        db.prepare('SELECT sentence_tokens FROM sentences LIMIT 1').get();
+      } catch (error) {
+        // Column doesn't exist yet - migration may not have run
+        console.log('Sentence tokens column not found, skipping backfill (migration may not have run)');
+        return;
+      }
+
+      await backfillSentenceTokens({
+        database: this,
+        batchSize: 10,
+        onProgress: (processed, total) => {
+          if (processed % 50 === 0) {
+            console.log(`Backfilling sentence tokens: ${processed}/${total} processed`);
+          }
+        }
+      });
+      console.log('Sentence token backfill completed');
+    } catch (error) {
+      console.error('Failed to backfill sentence tokens:', error);
+      // Non-fatal - continue without backfill
+    }
+  }
+
   private mapRowToWord(row: any): Word {
     return {
       id: row.id,
@@ -1738,6 +1830,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       wordId: row.word_id,
       sentence: row.sentence,
       sentenceParts: parseSentenceParts(row.sentence_parts),
+      tokenizedTokens: parseTokenizedTokens(row.sentence_tokens),
       translation: row.translation,
       audioPath: row.audio_path || '',
       createdAt: new Date(row.created_at),
@@ -1745,7 +1838,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       contextBefore: row.context_before || undefined,
       contextAfter: row.context_after || undefined,
       contextBeforeTranslation: row.context_before_translation || undefined,
-      contextAfterTranslation: row.context_after_translation || undefined
+      contextAfterTranslation: row.context_after_translation || undefined,
+      sentenceGenerationModel: row.sentence_generation_model || undefined,
+      audioGenerationService: row.audio_generation_service || undefined,
+      audioGenerationModel: row.audio_generation_model || undefined
     };
   }
 

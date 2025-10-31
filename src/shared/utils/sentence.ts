@@ -44,3 +44,36 @@ export function parseSentenceParts(serialized: string | null | undefined): strin
   }
 }
 
+/**
+ * Serialize tokenized tokens for storage in database.
+ */
+export function serializeTokenizedTokens(tokens: any[] | null | undefined): string | null {
+  if (!tokens || tokens.length === 0) {
+    return null;
+  }
+
+  try {
+    return JSON.stringify(tokens);
+  } catch (error) {
+    console.warn('Failed to serialize tokenized tokens:', error);
+    return null;
+  }
+}
+
+/**
+ * Parse stored tokenized tokens JSON.
+ */
+export function parseTokenizedTokens(serialized: string | null | undefined): any[] | undefined {
+  if (!serialized) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(serialized);
+    return Array.isArray(parsed) ? parsed : undefined;
+  } catch (error) {
+    console.warn('Failed to parse tokenized tokens JSON:', error);
+    return undefined;
+  }
+}
+
