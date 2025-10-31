@@ -151,9 +151,6 @@ export interface IPCBridge {
     initializeSpeechRecognition: () => Promise<void>;
     transcribeAudio: (filePath: string, options?: TranscriptionOptions) => Promise<TranscriptionResult>;
     compareTranscription: (transcribed: string, expected: string) => Promise<TranscriptionComparison>;
-    getAvailableSpeechModels: () => Promise<string[]>;
-    setSpeechModel: (model: string) => Promise<void>;
-    getCurrentSpeechModel: () => Promise<string>;
     isSpeechRecognitionReady: () => Promise<boolean>;
     switchToElevenLabs: (apiKey: string) => Promise<void>;
     switchToMinimax: (apiKey: string) => Promise<void>;
@@ -245,9 +242,6 @@ export const IPC_CHANNELS = {
     INITIALIZE_SPEECH_RECOGNITION: 'audio:initializeSpeechRecognition',
     TRANSCRIBE_AUDIO: 'audio:transcribeAudio',
     COMPARE_TRANSCRIPTION: 'audio:compareTranscription',
-    GET_AVAILABLE_SPEECH_MODELS: 'audio:getAvailableSpeechModels',
-    SET_SPEECH_MODEL: 'audio:setSpeechModel',
-    GET_CURRENT_SPEECH_MODEL: 'audio:getCurrentSpeechModel',
     IS_SPEECH_RECOGNITION_READY: 'audio:isSpeechRecognitionReady',
     SWITCH_TO_ELEVENLABS: 'audio:switchToElevenLabs',
     SWITCH_TO_MINIMAX: 'audio:switchToMinimax',

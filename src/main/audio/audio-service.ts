@@ -641,37 +641,22 @@ export class AudioService {
   }
 
   /**
-   * Get available speech recognition models
+   * Check if speech recognition is ready (initialized and server available)
+   * Checks both that the service is initialized AND that the Whisper server is available on localhost:8080
    */
-  getAvailableSpeechModels(): string[] {
-    return this.speechRecognition.getAvailableModels();
-  }
-
-  /**
-   * Set speech recognition model path
-   */
-  async setSpeechModel(modelPath: string): Promise<void> {
-    try {
-      await this.speechRecognition.setModelPath(modelPath);
-    } catch (error) {
-      const audioError = new Error(`Failed to set speech model: ${error instanceof Error ? error.message : 'Unknown error'}`) as AudioError;
-      audioError.code = 'RECORDING_FAILED';
-      throw audioError;
+  async isSpeechRecognitionReady(): Promise<boolean> {
+    // Service must be initialized
+    if (!this.speechRecognition.isServiceInitialized()) {
+      return false;
     }
-  }
-
-  /**
-   * Get current speech recognition model path
-   */
-  getCurrentSpeechModel(): string {
-    return this.speechRecognition.getCurrentModelPath();
-  }
-
-  /**
-   * Check if speech recognition is initialized
-   */
-  isSpeechRecognitionReady(): boolean {
-    return this.speechRecognition.isServiceInitialized();
+    
+    // Server must be available
+    try {
+      return await this.speechRecognition.isServerAvailable();
+    } catch (error) {
+      console.error('Error checking Whisper server availability:', error);
+      return false;
+    }
   }
 
   /**

@@ -92,6 +92,7 @@ export class QuizMode extends LitElement {
   private lastAutoplayKey: string | null = null;
   private recordingTimer: number | null = null;
   private recordingStatusCheckTimer: number | null = null;
+  private speechRecognitionCheckTimer: number | null = null;
   
   // Audio cache: Map of audioPath -> blob URL
   // Using Blob URLs instead of data URLs for better performance (no base64 encoding/decoding)
@@ -265,6 +266,21 @@ export class QuizMode extends LitElement {
       .record-button.recording:hover {
         background: var(--error-dark);
         border-color: var(--error-dark);
+      }
+
+      .record-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        background: var(--background-secondary);
+        border-color: var(--border-color);
+        color: var(--text-secondary);
+      }
+
+      .record-button:disabled:hover {
+        opacity: 0.5;
+        border-color: var(--border-color);
+        background: var(--background-secondary);
+        color: var(--text-secondary);
       }
 
       .question-text {
@@ -1197,6 +1213,9 @@ export class QuizMode extends LitElement {
 
     // Initialize speech recognition
     await this.initializeSpeechRecognition();
+    
+    // Start periodic check of speech recognition readiness (includes server availability)
+    this.startSpeechRecognitionCheck();
 
     // Load autoplay preference
     await this.loadAutoplaySetting();
@@ -1228,6 +1247,7 @@ export class QuizMode extends LitElement {
     // Clean up recording timers
     this.clearRecordingTimer();
     this.clearRecordingStatusCheck();
+    this.clearSpeechRecognitionCheck();
     
     // Cancel any ongoing recording
     if (this.isRecording) {
@@ -2251,6 +2271,33 @@ export class QuizMode extends LitElement {
     }
   }
 
+  private startSpeechRecognitionCheck() {
+    // Clear any existing timer
+    this.clearSpeechRecognitionCheck();
+    
+    // Check speech recognition readiness (includes server availability) every 5 seconds
+    this.speechRecognitionCheckTimer = window.setInterval(async () => {
+      await this.checkSpeechRecognitionReady();
+    }, 5000);
+  }
+
+  private clearSpeechRecognitionCheck() {
+    if (this.speechRecognitionCheckTimer !== null) {
+      clearInterval(this.speechRecognitionCheckTimer);
+      this.speechRecognitionCheckTimer = null;
+    }
+  }
+
+  private async checkSpeechRecognitionReady() {
+    try {
+      this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
+      console.log('Quiz: Speech recognition ready:', this.speechRecognitionReady);
+    } catch (error) {
+      console.error('Quiz: Failed to check speech recognition readiness:', error);
+      this.speechRecognitionReady = false;
+    }
+  }
+
   private async performSpeechRecognition() {
     if (!this.currentRecording || !this.currentQuestion || !this.speechRecognitionReady) {
       return;
@@ -2452,27 +2499,26 @@ export class QuizMode extends LitElement {
                   >
                     <span aria-hidden="true">🔊</span>
                   </button>
-                  ${this.speechRecognitionReady ? html`
-                    ${this.isRecording ? html`
-                      <button 
-                        class="record-button recording"
-                        @click=${this.stopRecording}
-                        title="Stop recording"
-                        aria-label="Stop recording"
-                      >
-                        <span aria-hidden="true">⏹</span>
-                      </button>
-                    ` : html`
-                      <button 
-                        class="record-button"
-                        @click=${this.startRecording}
-                        title="Start recording"
-                        aria-label="Start recording"
-                      >
-                        <span aria-hidden="true">🎤</span>
-                      </button>
-                    `}
-                  ` : nothing}
+                  ${this.isRecording ? html`
+                    <button 
+                      class="record-button recording"
+                      @click=${this.stopRecording}
+                      title="Stop recording"
+                      aria-label="Stop recording"
+                    >
+                      <span aria-hidden="true">⏹</span>
+                    </button>
+                  ` : html`
+                    <button 
+                      class="record-button"
+                      @click=${this.startRecording}
+                      ?disabled=${!this.speechRecognitionReady}
+                      title=${this.speechRecognitionReady ? 'Start recording' : 'Speech recognition not ready'}
+                      aria-label="Start recording"
+                    >
+                      <span aria-hidden="true">🎤</span>
+                    </button>
+                  `}
                 </div>
               </div>
             ` : html`
@@ -2487,27 +2533,26 @@ export class QuizMode extends LitElement {
                   >
                     <span aria-hidden="true">🔊</span>
                   </button>
-                  ${this.speechRecognitionReady ? html`
-                    ${this.isRecording ? html`
-                      <button 
-                        class="record-button recording"
-                        @click=${this.stopRecording}
-                        title="Stop recording"
-                        aria-label="Stop recording"
-                      >
-                        <span aria-hidden="true">⏹</span>
-                      </button>
-                    ` : html`
-                      <button 
-                        class="record-button"
-                        @click=${this.startRecording}
-                        title="Start recording"
-                        aria-label="Start recording"
-                      >
-                        <span aria-hidden="true">🎤</span>
-                      </button>
-                    `}
-                  ` : nothing}
+                  ${this.isRecording ? html`
+                    <button 
+                      class="record-button recording"
+                      @click=${this.stopRecording}
+                      title="Stop recording"
+                      aria-label="Stop recording"
+                    >
+                      <span aria-hidden="true">⏹</span>
+                    </button>
+                  ` : html`
+                    <button 
+                      class="record-button"
+                      @click=${this.startRecording}
+                      ?disabled=${!this.speechRecognitionReady}
+                      title=${this.speechRecognitionReady ? 'Start recording' : 'Speech recognition not ready'}
+                      aria-label="Start recording"
+                    >
+                      <span aria-hidden="true">🎤</span>
+                    </button>
+                  `}
                 </div>
               </div>
             `}

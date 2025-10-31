@@ -70,9 +70,6 @@ declare global {
         initializeSpeechRecognition: () => Promise<void>;
         transcribeAudio: (filePath: string, options?: any) => Promise<any>;
         compareTranscription: (transcribed: string, expected: string) => Promise<any>;
-        getAvailableSpeechModels: () => Promise<string[]>;
-        setSpeechModel: (model: string) => Promise<void>;
-        getCurrentSpeechModel: () => Promise<string>;
         isSpeechRecognitionReady: () => Promise<boolean>;
         switchToElevenLabs: (apiKey: string) => Promise<void>;
         switchToMinimax: (apiKey: string) => Promise<void>;

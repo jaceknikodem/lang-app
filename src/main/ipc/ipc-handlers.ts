@@ -823,37 +823,9 @@ function setupAudioHandlers(audioService: AudioService): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.AUDIO.GET_AVAILABLE_SPEECH_MODELS, async (event) => {
-    try {
-      return audioService.getAvailableSpeechModels();
-    } catch (error) {
-      console.error('Error getting available speech models:', error);
-      return ['base'];
-    }
-  });
-
-  ipcMain.handle(IPC_CHANNELS.AUDIO.SET_SPEECH_MODEL, async (event, model) => {
-    try {
-      const validatedModel = z.enum(['tiny', 'base', 'small', 'medium', 'large']).parse(model);
-      await audioService.setSpeechModel(validatedModel);
-    } catch (error) {
-      console.error('Error setting speech model:', error);
-      throw new Error(`Failed to set speech model: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
-
-  ipcMain.handle(IPC_CHANNELS.AUDIO.GET_CURRENT_SPEECH_MODEL, async (event) => {
-    try {
-      return audioService.getCurrentSpeechModel();
-    } catch (error) {
-      console.error('Error getting current speech model:', error);
-      return 'base';
-    }
-  });
-
   ipcMain.handle(IPC_CHANNELS.AUDIO.IS_SPEECH_RECOGNITION_READY, async (event) => {
     try {
-      return audioService.isSpeechRecognitionReady();
+      return await audioService.isSpeechRecognitionReady();
     } catch (error) {
       console.error('Error checking speech recognition status:', error);
       return false;

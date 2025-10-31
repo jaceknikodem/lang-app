@@ -120,7 +120,10 @@ export class SpeechRecognitionService {
       console.log(`Connecting to Whisper server at: ${this.whisperServerUrl}`);
       
       // Check if Whisper server is available
-      await this.checkWhisperServerAvailability();
+      const available = await this.isServerAvailable();
+      if (!available) {
+        throw new Error('Whisper server is not available at http://localhost:8080. Please ensure the server is running and responds with HTTP 200 to GET requests.');
+      }
 
       this.isInitialized = true;
       console.log('Speech recognition service initialized successfully');
@@ -431,29 +434,6 @@ export class SpeechRecognitionService {
   }
 
   /**
-   * Get available models (models are managed by the server)
-   */
-  getAvailableModels(): string[] {
-    // Models are managed by the Whisper server, so we return empty array
-    // In the future, we could query the server for available models
-    return [];
-  }
-
-  /**
-   * Set model path (not applicable when using HTTP server)
-   */
-  async setModelPath(modelPath: string): Promise<void> {
-    console.log(`Model path setting ignored - models are managed by Whisper server at ${this.whisperServerUrl}`);
-  }
-
-  /**
-   * Get current model path (not applicable when using HTTP server)
-   */
-  getCurrentModelPath(): string {
-    return ''; // Models are managed by the server
-  }
-
-  /**
    * Check if service is initialized
    */
   isServiceInitialized(): boolean {
@@ -461,72 +441,36 @@ export class SpeechRecognitionService {
   }
 
   /**
-   * Check if Whisper server is available
+   * Check if Whisper server is available on localhost:8080
+   * Performs a simple GET request to "/" endpoint and checks for HTTP 200
+   * Returns true if available, false otherwise
    */
-  private async checkWhisperServerAvailability(): Promise<void> {
+  async isServerAvailable(): Promise<boolean> {
     try {
-      // Try to connect to the server (try common health check endpoints)
-      const healthEndpoints = [
-        '/health',
-        '/',
-        '/v1/health',
-        '/api/health'
-      ];
-
-      let serverAvailable = false;
+      // Only check localhost:8080 (not the configured URL)
+      const checkUrl = 'http://localhost:8080';
       
-      for (const endpoint of healthEndpoints) {
-        try {
-          const response = await fetch(`${this.whisperServerUrl}${endpoint}`, {
-            method: 'GET',
-            signal: AbortSignal.timeout(5000) // 5 second timeout
-          });
-          
-          if (response.ok || response.status === 404) {
-            // 404 is fine - it means the server is responding
-            serverAvailable = true;
-            console.log(`Whisper server is available at: ${this.whisperServerUrl}`);
-            break;
-          }
-        } catch (error) {
-          // Continue to next endpoint
-          continue;
-        }
-      }
-
-      if (!serverAvailable) {
-        // Last attempt: try the inference endpoint with a minimal request
-        try {
-          const testFormData = new FormData();
-          // Create a tiny dummy blob for testing
-          const dummyBlob = new Blob([Buffer.from([])], { type: 'audio/wav' });
-          testFormData.append('file', dummyBlob, 'test.wav');
-          
-          const response = await fetch(`${this.whisperServerUrl}/inference`, {
-            method: 'POST',
-            body: testFormData,
-            signal: AbortSignal.timeout(5000)
-          });
-
-          // If we get any response (even error), the server is there
-          serverAvailable = true;
-        } catch (error) {
-          // Server might be there but not responding to this endpoint
-          // We'll let the actual transcription attempt determine availability
-          console.warn('Could not verify server availability, but will attempt to use it');
-          serverAvailable = true; // Optimistically assume it's available
-        }
-      }
-
-      if (!serverAvailable) {
-        throw new Error(`Cannot connect to Whisper server at ${this.whisperServerUrl}. Please ensure the server is running.`);
+      const response = await fetch(`${checkUrl}/`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(3000) // 3 second timeout
+      });
+      
+      // Server is available if it returns HTTP 200
+      const available = response.status === 200;
+      
+      if (available) {
+        console.log(`Whisper server is available at ${checkUrl}`);
+      } else {
+        console.log(`Whisper server at ${checkUrl} returned status ${response.status}, expected 200`);
       }
       
+      return available;
     } catch (error) {
-      console.error('Whisper server availability check failed:', error);
-      throw new Error(`Whisper server is not available at ${this.whisperServerUrl}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.log(`Whisper server at http://localhost:8080 is not available: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return false;
     }
   }
+
 
 
 

@@ -165,12 +165,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.TRANSCRIBE_AUDIO, filePath, options),
     compareTranscription: (transcribed: string, expected: string) => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.COMPARE_TRANSCRIPTION, transcribed, expected),
-    getAvailableSpeechModels: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GET_AVAILABLE_SPEECH_MODELS),
-    setSpeechModel: (model: string) => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.SET_SPEECH_MODEL, model),
-    getCurrentSpeechModel: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GET_CURRENT_SPEECH_MODEL),
     isSpeechRecognitionReady: () => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.IS_SPEECH_RECOGNITION_READY),
     switchToElevenLabs: (apiKey: string) => 
@@ -338,9 +332,6 @@ declare global {
         initializeSpeechRecognition: () => Promise<void>;
         transcribeAudio: (filePath: string, options?: any) => Promise<any>;
         compareTranscription: (transcribed: string, expected: string) => Promise<any>;
-        getAvailableSpeechModels: () => Promise<string[]>;
-        setSpeechModel: (model: string) => Promise<void>;
-        getCurrentSpeechModel: () => Promise<string>;
         isSpeechRecognitionReady: () => Promise<boolean>;
         switchToElevenLabs: (apiKey: string) => Promise<void>;
         switchToMinimax: (apiKey: string) => Promise<void>;
