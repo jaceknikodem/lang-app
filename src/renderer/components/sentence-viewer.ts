@@ -55,6 +55,7 @@ export class SentenceViewer extends LitElement {
   private dictionaryLookupPromises: Partial<Record<string, Promise<DictionaryEntry[] | null>>> = {};
   private lastProcessedSentenceId?: number;
   private lastProcessedAllWordsHash?: string;
+  private lastAllWordsArrayReference?: Word[]; // Track array reference to avoid re-parsing on same array
 
   private keyboardUnsubscribe?: () => void;
 
@@ -400,7 +401,17 @@ export class SentenceViewer extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback();
-    void this.parseSentence();
+    
+    // If we have precomputed tokens, handle synchronously (no async tokenization)
+    if (this.sentence?.tokenizedTokens && this.sentence.tokenizedTokens.length > 0) {
+      const newParsedWords = this.convertPrecomputedTokensToWords(this.sentence.tokenizedTokens);
+      this.parsedWords = newParsedWords;
+      this.lastProcessedSentenceId = this.sentence?.id;
+    } else {
+      // No precomputed tokens - need async tokenization
+      void this.parseSentence();
+    }
+    
     await this.loadAutoplaySettings();
     this.setupKeyboardBindings();
     
@@ -420,17 +431,59 @@ export class SentenceViewer extends LitElement {
     const sentenceChanged = changedProperties.has('sentence');
     const allWordsChanged = changedProperties.has('allWords');
     
+    // Skip if only non-relevant properties changed (isFirstSentence, isLastSentence, isProcessing, displayLastSeen)
+    const relevantPropertyChanged = sentenceChanged || allWordsChanged || 
+                                    changedProperties.has('targetWord') ||
+                                    changedProperties.has('displayLastSeen');
+    
+    if (!relevantPropertyChanged) {
+      return;
+    }
+    
+    // If we have precomputed tokens, we never need to do async tokenization
+    // We can update word statuses synchronously if needed
+    const hasPrecomputedTokens = this.sentence?.tokenizedTokens && this.sentence.tokenizedTokens.length > 0;
+    
     if (sentenceChanged || allWordsChanged) {
-      const currentSentenceId = this.sentence?.id;
-      const needsReparse = sentenceChanged 
-        ? (currentSentenceId !== this.lastProcessedSentenceId)
-        : (allWordsChanged && this.needsReparseForAllWords());
+      // Check if allWords array reference is the same (no need to re-parse)
+      if (allWordsChanged && this.allWords === this.lastAllWordsArrayReference) {
+        // Same array reference, skip re-parsing
+        this.lastAllWordsArrayReference = this.allWords;
+        return;
+      }
       
-      if (needsReparse) {
+      const currentSentenceId = this.sentence?.id;
+      const sentenceIdChanged = sentenceChanged && (currentSentenceId !== this.lastProcessedSentenceId);
+      const needsReparse = sentenceIdChanged || 
+                          (allWordsChanged && !hasPrecomputedTokens && this.needsReparseForAllWords());
+      
+      if (hasPrecomputedTokens) {
+        // With precomputed tokens, only do synchronous conversion
+        if (sentenceIdChanged) {
+          this.lastProcessedSentenceId = currentSentenceId;
+          // Convert precomputed tokens synchronously - no async work
+          const newParsedWords = this.convertPrecomputedTokensToWords(this.sentence.tokenizedTokens!);
+          const hasChanged = this.hasParsedWordsChanged(newParsedWords, this.parsedWords);
+          if (hasChanged) {
+            this.parsedWords = newParsedWords;
+          }
+        } else if (allWordsChanged) {
+          // Only word statuses might have changed - update without re-tokenizing
+          this.lastAllWordsArrayReference = this.allWords;
+          this.updateWordStatusesFromPrecomputedTokens();
+        }
+      } else if (needsReparse) {
+        // No precomputed tokens - need async tokenization
         if (sentenceChanged) {
           this.lastProcessedSentenceId = currentSentenceId;
         }
+        if (allWordsChanged) {
+          this.lastAllWordsArrayReference = this.allWords;
+        }
         void this.parseSentence();
+      } else if (allWordsChanged) {
+        // Array changed but content might be same, still update reference
+        this.lastAllWordsArrayReference = this.allWords;
       }
     }
     
@@ -515,14 +568,7 @@ export class SentenceViewer extends LitElement {
       const newParsedWords = this.convertPrecomputedTokensToWords(this.sentence.tokenizedTokens);
       // Only update if it actually changed to prevent unnecessary re-renders
       if (requestId === this.tokenizationRequestId) {
-        const hasChanged = newParsedWords.length !== this.parsedWords.length ||
-          newParsedWords.some((word, i) => {
-            const oldWord = this.parsedWords[i];
-            return !oldWord || 
-              word.text !== oldWord.text ||
-              word.isTargetWord !== oldWord.isTargetWord ||
-              word.wordData?.id !== oldWord.wordData?.id;
-          });
+        const hasChanged = this.hasParsedWordsChanged(newParsedWords, this.parsedWords);
         
         if (hasChanged) {
           this.parsedWords = newParsedWords;
@@ -573,6 +619,88 @@ export class SentenceViewer extends LitElement {
 
     this.parsedWords = baseWords;
     await this.enhanceSentenceWithDictionary(requestId);
+  }
+
+  /**
+   * Update word statuses from precomputed tokens without full re-tokenization.
+   * Only updates wordData references when they actually change.
+   */
+  private updateWordStatusesFromPrecomputedTokens(): void {
+    if (!this.sentence?.tokenizedTokens || !this.parsedWords.length) {
+      return;
+    }
+    
+    let hasChanged = false;
+    const updatedWords = this.parsedWords.map((word, i) => {
+      const token = this.sentence.tokenizedTokens?.[i];
+      if (!token) return word;
+      
+      // Update wordData reference if it changed
+      let wordData: Word | undefined;
+      if (token.wordId) {
+        wordData = this.allWords.find(w => w.id === token.wordId);
+      }
+      if (!wordData && token.dictionaryForm) {
+        const cleanText = token.dictionaryForm.toLowerCase();
+        wordData = this.allWords.find(w => w.word.toLowerCase() === cleanText);
+      }
+      
+      // Check if wordData actually changed (by ID, not by reference)
+      const oldWordDataId = word.wordData?.id;
+      const newWordDataId = wordData?.id;
+      
+      if (oldWordDataId !== newWordDataId || 
+          word.wordData?.strength !== wordData?.strength ||
+          word.wordData?.known !== wordData?.known ||
+          word.wordData?.ignored !== wordData?.ignored) {
+        hasChanged = true;
+        return { ...word, wordData };
+      }
+      
+      return word;
+    });
+    
+    if (hasChanged) {
+      this.parsedWords = updatedWords;
+    }
+  }
+
+  /**
+   * Deep comparison of parsed words to detect meaningful changes.
+   */
+  private hasParsedWordsChanged(newWords: WordInSentence[], oldWords: WordInSentence[]): boolean {
+    if (newWords.length !== oldWords.length) {
+      return true;
+    }
+    
+    return newWords.some((word, i) => {
+      const oldWord = oldWords[i];
+      if (!oldWord) return true;
+      
+      // Check text and isTargetWord (these should rarely change)
+      if (word.text !== oldWord.text || word.isTargetWord !== oldWord.isTargetWord) {
+        return true;
+      }
+      
+      // Check wordData by ID and relevant properties, not by reference
+      const oldWordId = oldWord.wordData?.id;
+      const newWordId = word.wordData?.id;
+      
+      if (oldWordId !== newWordId) {
+        return true;
+      }
+      
+      // If same word ID, check if status changed
+      if (oldWordId && oldWordId === newWordId) {
+        const oldWordData = oldWord.wordData!;
+        const newWordData = word.wordData!;
+        return oldWordData.strength !== newWordData.strength ||
+               oldWordData.known !== newWordData.known ||
+               oldWordData.ignored !== newWordData.ignored;
+      }
+      
+      return false;
+    });
   }
 
   /**
@@ -644,15 +772,7 @@ export class SentenceViewer extends LitElement {
 
       this.dictionaryCache = Object.fromEntries(cache.entries()) as Record<string, DictionaryEntry[] | null>;
       // Only update parsedWords if content actually changed to prevent unnecessary re-renders
-      const hasChanged = words.length !== this.parsedWords.length ||
-        words.some((word, i) => {
-          const oldWord = this.parsedWords[i];
-          return !oldWord || 
-            word.text !== oldWord.text ||
-            word.isTargetWord !== oldWord.isTargetWord ||
-            word.wordData?.id !== oldWord.wordData?.id ||
-            word.dictionaryKey !== oldWord.dictionaryKey;
-        });
+      const hasChanged = this.hasParsedWordsChanged(words, this.parsedWords);
       
       if (hasChanged) {
         this.parsedWords = words;
