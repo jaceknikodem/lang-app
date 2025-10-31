@@ -179,8 +179,14 @@ export class SRSService {
       throw new Error(`Word with ID ${wordId} not found`);
     }
 
+    console.log(`[SRS Service] Processing review for word "${word.word}" (ID: ${wordId})`);
+    console.log(`[SRS Service] Using engine: ${engine.name}`);
+    console.log(`[SRS Service] Review result: recall=${reviewResult.recall} (${reviewResult.recall === 0 ? 'Failed' : reviewResult.recall === 1 ? 'Hard' : reviewResult.recall === 2 ? 'Good' : 'Easy'})`);
+
     const update = engine.update(word, reviewResult, now);
 
+    console.log(`[SRS Service] Saving update to database for word "${word.word}" (ID: ${wordId})`);
+    
     await this.database.updateWordSRS(
       wordId,
       update.strength,
@@ -189,6 +195,8 @@ export class SRSService {
       update.nextDue,
       this.extractFsrsOptions(update)
     );
+
+    console.log(`[SRS Service] Successfully saved SRS update for word "${word.word}" (ID: ${wordId})\n`);
   }
 
   private async getActiveEngine(): Promise<SchedulerEngine> {

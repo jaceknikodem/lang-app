@@ -64,8 +64,29 @@ export class FsrsEngine implements SchedulerEngine {
     const elapsedDays = diffInDays(word.lastReview ?? word.lastStudied, now);
     const retrievability = Math.exp(-elapsedDays / previousStability);
 
+    // Log input state
+    console.log('[FSRS] ========== UPDATE START ==========');
+    console.log('[FSRS] Word:', word.word, `(${word.id})`);
+    console.log('[FSRS] Input state:', {
+      recall: `${recall} (${recall === 0 ? 'Failed' : recall === 1 ? 'Hard' : recall === 2 ? 'Good' : 'Easy'})`,
+      previousDifficulty: previousDifficulty.toFixed(2),
+      previousStability: previousStability.toFixed(2),
+      previousLapses: word.fsrsLapses ?? 0,
+      elapsedDays: elapsedDays.toFixed(2),
+      retrievability: retrievability.toFixed(4),
+      lastReview: word.lastReview?.toISOString() ?? 'never',
+      lastStudied: word.lastStudied?.toISOString() ?? 'never',
+      currentStrength: word.strength ?? 20,
+      currentNextDue: word.nextDue?.toISOString() ?? 'unknown'
+    });
+
     const difficultyAdjustment = DIFFICULTY_ADJUSTMENTS[recall];
     const newDifficulty = clamp(previousDifficulty + difficultyAdjustment, MIN_DIFFICULTY, MAX_DIFFICULTY);
+    console.log('[FSRS] Difficulty calculation:', {
+      adjustment: difficultyAdjustment.toFixed(2),
+      rawNewDifficulty: (previousDifficulty + difficultyAdjustment).toFixed(2),
+      clampedNewDifficulty: newDifficulty.toFixed(2)
+    });
 
     let lapses = word.fsrsLapses ?? 0;
     let newStability: number;
@@ -77,36 +98,85 @@ export class FsrsEngine implements SchedulerEngine {
       if (recall === 0) {
         lapses += 1;
       }
+      console.log('[FSRS] Learning phase (first review):', {
+        baseStability: base.toFixed(2),
+        newLapses: lapses,
+        phase: 'learning'
+      });
     } else if (recall === 0) {
       lapses += 1;
-      newStability = Math.max(0.4, previousStability * 0.35);
+      const rawStability = previousStability * 0.35;
+      newStability = Math.max(0.4, rawStability);
+      console.log('[FSRS] Failed recall:', {
+        rawStability: rawStability.toFixed(2),
+        clampedStability: newStability.toFixed(2),
+        newLapses: lapses,
+        stabilityMultiplier: 0.35
+      });
     } else {
       const growthFactor = recall === 1 ? 0.6 : recall === 2 ? 1.0 : 1.4;
       const difficultyFactor = Math.exp(-(newDifficulty - 5) / 6);
       const stabilityGain = previousStability * growthFactor * difficultyFactor * (1 - retrievability);
-      newStability = clamp(previousStability + stabilityGain, 0.4, previousStability * (1 + growthFactor * 1.2));
+      const maxStability = previousStability * (1 + growthFactor * 1.2);
+      const rawStability = previousStability + stabilityGain;
+      newStability = clamp(rawStability, 0.4, maxStability);
+      console.log('[FSRS] Successful recall:', {
+        growthFactor: growthFactor.toFixed(2),
+        difficultyFactor: difficultyFactor.toFixed(4),
+        stabilityGain: stabilityGain.toFixed(4),
+        rawStability: rawStability.toFixed(2),
+        maxStability: maxStability.toFixed(2),
+        clampedStability: newStability.toFixed(2),
+        components: {
+          base: previousStability.toFixed(2),
+          growth: growthFactor.toFixed(2),
+          difficulty: difficultyFactor.toFixed(4),
+          retrievabilityEffect: (1 - retrievability).toFixed(4)
+        }
+      });
     }
 
     const targetRetention = TARGET_RETENTION[recall];
+    const rawIntervalDays = -newStability * Math.log(targetRetention);
     const scheduledIntervalDays =
       recall === 0
         ? 1
-        : Math.max(1, Math.round(-newStability * Math.log(targetRetention)));
+        : Math.max(1, Math.round(rawIntervalDays));
+    console.log('[FSRS] Interval calculation:', {
+      targetRetention: targetRetention.toFixed(2),
+      rawIntervalDays: rawIntervalDays.toFixed(2),
+      scheduledIntervalDays: scheduledIntervalDays,
+      beforeFuzz: true
+    });
 
     const intervalWithFuzz = this.applyIntervalFuzz(scheduledIntervalDays, recall);
+    console.log('[FSRS] Interval fuzz applied:', {
+      beforeFuzz: scheduledIntervalDays,
+      afterFuzz: intervalWithFuzz
+    });
 
     const nextDue = new Date(now);
     nextDue.setDate(now.getDate() + intervalWithFuzz);
 
-    const newStrength = clamp(
-      (word.strength ?? 20) + STRENGTH_DELTA[recall],
-      0,
-      100
-    );
+    const previousStrength = word.strength ?? 20;
+    const strengthDelta = STRENGTH_DELTA[recall];
+    const rawStrength = previousStrength + strengthDelta;
+    const newStrength = clamp(rawStrength, 0, 100);
+    console.log('[FSRS] Strength calculation:', {
+      previousStrength: previousStrength,
+      delta: strengthDelta,
+      rawStrength: rawStrength,
+      clampedStrength: newStrength
+    });
 
-    const easeFactor = clamp(1.3 + (10 - newDifficulty) * 0.12, 1.3, 3.0);
+    const rawEaseFactor = 1.3 + (10 - newDifficulty) * 0.12;
+    const easeFactor = clamp(rawEaseFactor, 1.3, 3.0);
+    console.log('[FSRS] Ease factor calculation:', {
+      rawEaseFactor: rawEaseFactor.toFixed(2),
+      clampedEaseFactor: easeFactor.toFixed(2)
+    });
 
-    return {
+    const result = {
       nextDue,
       strength: newStrength,
       intervalDays: intervalWithFuzz,
@@ -117,6 +187,30 @@ export class FsrsEngine implements SchedulerEngine {
       fsrsLastRating: recall,
       fsrsVersion: 'fsrs-baseline'
     };
+
+    console.log('[FSRS] Output state:', {
+      difficulty: result.fsrsDifficulty.toFixed(2),
+      stability: result.fsrsStability.toFixed(2),
+      lapses: result.fsrsLapses,
+      strength: result.strength,
+      intervalDays: result.intervalDays,
+      easeFactor: result.easeFactor.toFixed(2),
+      nextDue: result.nextDue.toISOString(),
+      lastRating: result.fsrsLastRating
+    });
+
+    console.log('[FSRS] Changes:', {
+      difficulty: `${previousDifficulty.toFixed(2)} → ${newDifficulty.toFixed(2)} (${(newDifficulty - previousDifficulty).toFixed(2)})`,
+      stability: `${previousStability.toFixed(2)} → ${newStability.toFixed(2)} (${(newStability - previousStability).toFixed(2)})`,
+      lapses: `${word.fsrsLapses ?? 0} → ${lapses} (${lapses - (word.fsrsLapses ?? 0)})`,
+      strength: `${previousStrength} → ${newStrength} (${newStrength - previousStrength})`,
+      interval: `${word.intervalDays ?? 1} → ${intervalWithFuzz}`,
+      easeFactor: `${word.easeFactor ?? 2.5} → ${easeFactor.toFixed(2)}`
+    });
+
+    console.log('[FSRS] ========== UPDATE END ==========\n');
+
+    return result;
   }
 
   isDue(word: Word, now: Date): boolean {

@@ -1157,9 +1157,29 @@ export class QuizMode extends LitElement {
   private async handleSRSAnswer(recall: 0 | 1 | 2 | 3) {
     if (!this.quizSession || !this.currentQuestion) return;
 
+    const word = this.currentQuestion.word;
+    const recallLabels = ['Failed', 'Hard', 'Good', 'Easy'];
+    
+    console.log(`[Quiz] ========== SUBMITTING REVIEW ==========`);
+    console.log(`[Quiz] Question ${this.quizSession.currentQuestionIndex + 1}/${this.quizSession.totalQuestions}`);
+    console.log(`[Quiz] Word: "${word.word}" (ID: ${word.id})`);
+    console.log(`[Quiz] User rating: ${recall} (${recallLabels[recall]})`);
+    console.log(`[Quiz] Word state BEFORE update:`, {
+      strength: word.strength ?? 20,
+      intervalDays: word.intervalDays ?? 1,
+      easeFactor: word.easeFactor ?? 2.5,
+      nextDue: word.nextDue?.toISOString() ?? 'unknown',
+      fsrsDifficulty: word.fsrsDifficulty ?? 5.0,
+      fsrsStability: word.fsrsStability ?? 1.0,
+      fsrsLapses: word.fsrsLapses ?? 0,
+      fsrsLastRating: word.fsrsLastRating ?? null,
+      lastReview: word.lastReview?.toISOString() ?? 'never',
+      lastStudied: word.lastStudied?.toISOString() ?? 'never'
+    });
+
     this.showResult = true;
     this.lastResult = {
-      wordId: this.currentQuestion.word.id,
+      wordId: word.id,
       correct: recall > 0, // Any non-zero recall counts as correct
       responseTime: Date.now()
     };
@@ -1170,12 +1190,36 @@ export class QuizMode extends LitElement {
 
     // Update word using SRS system and save progress immediately
     try {
-      await window.electronAPI.srs.processReview(this.currentQuestion.word.id, recall);
-      await window.electronAPI.database.updateLastStudied(this.currentQuestion.word.id);
+      console.log(`[Quiz] Calling SRS service to process review...`);
+      await window.electronAPI.srs.processReview(word.id, recall);
+      await window.electronAPI.database.updateLastStudied(word.id);
 
       // Refresh the word data to get updated SRS values
-      const updatedWord = await window.electronAPI.database.getWordById(this.currentQuestion.word.id);
+      const updatedWord = await window.electronAPI.database.getWordById(word.id);
       if (updatedWord) {
+        console.log(`[Quiz] Word state AFTER update:`, {
+          strength: updatedWord.strength ?? 20,
+          intervalDays: updatedWord.intervalDays ?? 1,
+          easeFactor: updatedWord.easeFactor ?? 2.5,
+          nextDue: updatedWord.nextDue?.toISOString() ?? 'unknown',
+          fsrsDifficulty: updatedWord.fsrsDifficulty ?? 5.0,
+          fsrsStability: updatedWord.fsrsStability ?? 1.0,
+          fsrsLapses: updatedWord.fsrsLapses ?? 0,
+          fsrsLastRating: updatedWord.fsrsLastRating ?? null,
+          lastReview: updatedWord.lastReview?.toISOString() ?? 'never',
+          lastStudied: updatedWord.lastStudied?.toISOString() ?? 'never'
+        });
+        
+        console.log(`[Quiz] Changes observed:`, {
+          strength: `${word.strength ?? 20} → ${updatedWord.strength ?? 20}`,
+          intervalDays: `${word.intervalDays ?? 1} → ${updatedWord.intervalDays ?? 1}`,
+          easeFactor: `${word.easeFactor ?? 2.5} → ${updatedWord.easeFactor ?? 2.5}`,
+          fsrsDifficulty: `${word.fsrsDifficulty ?? 5.0} → ${updatedWord.fsrsDifficulty ?? 5.0}`,
+          fsrsStability: `${word.fsrsStability ?? 1.0} → ${updatedWord.fsrsStability ?? 1.0}`,
+          fsrsLapses: `${word.fsrsLapses ?? 0} → ${updatedWord.fsrsLapses ?? 0}`,
+          nextDue: `${word.nextDue?.toISOString() ?? 'unknown'} → ${updatedWord.nextDue?.toISOString() ?? 'unknown'}`
+        });
+        
         this.currentQuestion.word = updatedWord;
       }
 
@@ -1183,8 +1227,10 @@ export class QuizMode extends LitElement {
       this.saveQuizProgressToSession();
 
     } catch (error) {
-      console.error('Error updating word with SRS:', error);
+      console.error('[Quiz] Error updating word with SRS:', error);
     }
+    
+    console.log(`[Quiz] ========== REVIEW COMPLETE ==========\n`);
 
     // Automatically move to next question after a short delay
     setTimeout(() => {
