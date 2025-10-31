@@ -78,7 +78,10 @@ export interface DatabaseLayer {
     contextAfter?: string,
     contextBeforeTranslation?: string,
     contextAfterTranslation?: string,
-    sentenceParts?: string[]
+    sentenceParts?: string[],
+    sentenceGenerationModel?: string,
+    audioGenerationService?: string,
+    audioGenerationModel?: string
   ): Promise<number>;
   getSentencesByWord(wordId: number): Promise<Sentence[]>;
   getSentenceById(sentenceId: number): Promise<Sentence | null>;

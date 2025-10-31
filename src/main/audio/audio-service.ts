@@ -534,6 +534,25 @@ export class AudioService {
     return this.speechRecognition.isServiceInitialized();
   }
 
+  /**
+   * Get current audio generation service and model information
+   */
+  getAudioGenerationInfo(): { service: string; model?: string } {
+    // Check if it's ElevenLabs generator
+    if (this.audioGenerator.constructor.name === 'ElevenLabsAudioGenerator') {
+      const config = (this.audioGenerator as any).config;
+      return {
+        service: 'elevenlabs',
+        model: config?.elevenLabsModel || 'eleven_flash_v2_5'
+      };
+    }
+    
+    // Otherwise it's system TTS
+    return {
+      service: 'system-tts'
+    };
+  }
+
   private buildExternalAudioPath(sentence: string, language: string, word: string | undefined, extension: string): string {
     const baseDirectory = join(process.cwd(), 'audio');
     const safeLanguage = sanitizeFilename(language || 'unknown');

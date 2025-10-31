@@ -27,7 +27,10 @@ declare global {
           contextAfter?: string,
           contextBeforeTranslation?: string,
           contextAfterTranslation?: string,
-          sentenceParts?: string[]
+          sentenceParts?: string[],
+          sentenceGenerationModel?: string,
+          audioGenerationService?: string,
+          audioGenerationModel?: string
         ) => Promise<number>;
         getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
         deleteSentence: (sentenceId: number) => Promise<void>;

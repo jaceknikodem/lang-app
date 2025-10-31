@@ -412,7 +412,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     contextAfter?: string,
     contextBeforeTranslation?: string,
     contextAfterTranslation?: string,
-    sentenceParts?: string[]
+    sentenceParts?: string[],
+    sentenceGenerationModel?: string,
+    audioGenerationService?: string,
+    audioGenerationModel?: string
   ): Promise<number> {
     const db = this.getDb();
     
@@ -430,6 +433,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         contextBeforeTranslation: contextBeforeTranslation || null,
         contextAfterTranslation: contextAfterTranslation || null,
         sentenceParts: serializedParts,
+        sentenceGenerationModel: sentenceGenerationModel || null,
+        audioGenerationService: audioGenerationService || null,
+        audioGenerationModel: audioGenerationModel || null,
       }).returning({ id: schema.sentences.id });
 
       await db.update(schema.words)
@@ -1513,7 +1519,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       contextBefore: row.contextBefore || undefined,
       contextAfter: row.contextAfter || undefined,
       contextBeforeTranslation: row.contextBeforeTranslation || undefined,
-      contextAfterTranslation: row.contextAfterTranslation || undefined
+      contextAfterTranslation: row.contextAfterTranslation || undefined,
+      sentenceGenerationModel: row.sentenceGenerationModel || undefined,
+      audioGenerationService: row.audioGenerationService || undefined,
+      audioGenerationModel: row.audioGenerationModel || undefined
     };
   }
 

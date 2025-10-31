@@ -48,6 +48,9 @@ export interface Sentence {
   contextAfter?: string;
   contextBeforeTranslation?: string;
   contextAfterTranslation?: string;
+  sentenceGenerationModel?: string;
+  audioGenerationService?: string;
+  audioGenerationModel?: string;
 }
 
 

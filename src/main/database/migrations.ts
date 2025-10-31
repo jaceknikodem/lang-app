@@ -223,6 +223,18 @@ export class MigrationManager {
         down: [
           // SQLite cannot drop columns; leaving sentence_parts in place on rollback.
         ]
+      },
+      {
+        version: 10,
+        name: 'add_generation_metadata_columns',
+        up: [
+          `ALTER TABLE sentences ADD COLUMN sentence_generation_model TEXT`,
+          `ALTER TABLE sentences ADD COLUMN audio_generation_service TEXT`,
+          `ALTER TABLE sentences ADD COLUMN audio_generation_model TEXT`
+        ],
+        down: [
+          // SQLite cannot drop columns; leaving generation metadata columns in place on rollback.
+        ]
       }
     ];
   }

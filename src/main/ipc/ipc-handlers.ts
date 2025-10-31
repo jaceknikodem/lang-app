@@ -136,7 +136,7 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.INSERT_SENTENCE, async (event, wordId, sentence, translation, audioPath, contextBefore, contextAfter, contextBeforeTranslation, contextAfterTranslation, sentenceParts) => {
+  ipcMain.handle(IPC_CHANNELS.DATABASE.INSERT_SENTENCE, async (event, wordId, sentence, translation, audioPath, contextBefore, contextAfter, contextBeforeTranslation, contextAfterTranslation, sentenceParts, sentenceGenerationModel, audioGenerationService, audioGenerationModel) => {
     try {
       const validatedWordId = WordIdSchema.parse(wordId);
       const validatedSentence = TextSchema.parse(sentence);
@@ -147,6 +147,9 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       const validatedContextBeforeTranslation = contextBeforeTranslation ? TextSchema.parse(contextBeforeTranslation) : undefined;
       const validatedContextAfterTranslation = contextAfterTranslation ? TextSchema.parse(contextAfterTranslation) : undefined;
       const validatedSentenceParts = sentenceParts ? z.array(z.string()).parse(sentenceParts) : undefined;
+      const validatedSentenceGenerationModel = sentenceGenerationModel ? z.string().parse(sentenceGenerationModel) : undefined;
+      const validatedAudioGenerationService = audioGenerationService ? z.string().parse(audioGenerationService) : undefined;
+      const validatedAudioGenerationModel = audioGenerationModel ? z.string().parse(audioGenerationModel) : undefined;
 
       return await databaseLayer.insertSentence(
         validatedWordId,
@@ -157,7 +160,10 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
         validatedContextAfter,
         validatedContextBeforeTranslation,
         validatedContextAfterTranslation,
-        validatedSentenceParts
+        validatedSentenceParts,
+        validatedSentenceGenerationModel,
+        validatedAudioGenerationService,
+        validatedAudioGenerationModel
       );
     } catch (error) {
       console.error('Error inserting sentence:', error);

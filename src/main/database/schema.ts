@@ -54,6 +54,9 @@ export const sentences = sqliteTable('sentences', {
   contextBeforeTranslation: text('context_before_translation'),
   contextAfterTranslation: text('context_after_translation'),
   sentenceParts: text('sentence_parts'),
+  sentenceGenerationModel: text('sentence_generation_model'),
+  audioGenerationService: text('audio_generation_service'),
+  audioGenerationModel: text('audio_generation_model'),
 }, (table) => ({
   wordIdIdx: index('idx_sentences_word_id').on(table.wordId),
 }));

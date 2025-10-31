@@ -170,6 +170,11 @@ export class WordGenerationRunner {
           } else {
             audioPath = await this.audioService.generateSentenceAudio(sentence.sentence, language, word.word);
           }
+          
+          // Get generation metadata
+          const sentenceModel = this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
+          const audioInfo = this.audioService.getAudioGenerationInfo();
+          
           const sentenceParts = splitSentenceIntoParts(sentence.sentence);
           await this.database.insertSentence(
             word.id,
@@ -180,7 +185,10 @@ export class WordGenerationRunner {
             sentence.contextAfter,
             sentence.contextBeforeTranslation,
             sentence.contextAfterTranslation,
-            sentenceParts
+            sentenceParts,
+            sentenceModel,
+            audioInfo.service,
+            audioInfo.model
           );
 
           normalizedExisting.add(normalizedSentence);
