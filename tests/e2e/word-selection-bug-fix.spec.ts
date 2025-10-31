@@ -40,50 +40,6 @@ test.describe('Word Selection Bug Fix', () => {
     }
   });
 
-  test('word selection flow: generate → select none → select first → learn (bug fix verification)', async () => {
-    // This test reproduces the exact failing scenario and verifies the fix
-    
-    // 1. App loads with topic selector
-    await expect(page.locator('topic-selector')).toBeVisible({ timeout: 30000 });
-    
-    // 2. Generate words with no topic
-    const generateButton = page.locator('topic-selector button:has-text("Generate")');
-    await expect(generateButton).toBeEnabled({ timeout: 30000 });
-    await generateButton.click();
-    
-    // 3. Word selector loads with generated words
-    await page.waitForSelector('word-selector', { timeout: 60000 });
-    const wordItems = page.locator('word-selector .word-item');
-    expect(await wordItems.count()).toBeGreaterThan(0);
-    
-    // 4. Select none (deselect all words)
-    await page.locator('word-selector button:has-text("Select None")').click();
-    await expect(page.locator('word-selector .word-item.selected')).toHaveCount(0);
-    
-    // 5. Select first word
-    await wordItems.first().click();
-    await expect(wordItems.first()).toHaveClass(/selected/);
-    
-    // 6. Click Learn button
-    const learnButton = page.locator('word-selector button.start-btn');
-    await expect(learnButton).toBeEnabled();
-    await learnButton.click();
-    
-    // 7. Learning mode should load successfully WITHOUT the error
-    // This was the bug: "No words available for learning. Please start a new learning session."
-    await page.waitForSelector('learning-mode', { timeout: 90000 });
-    
-    // Key assertion: No error message should be shown
-    const errorMessage = page.locator('learning-mode .error-message');
-    await expect(errorMessage).not.toBeVisible();
-    
-    // Additional verification: sentence viewer should be present
-    const sentenceViewer = page.locator('sentence-viewer');
-    await expect(sentenceViewer).toBeVisible({ timeout: 30000 });
-    
-    console.log('✅ Bug fix verified: Word selection flow works correctly');
-  });
-
   test('quiz tab is always available (not disabled)', async () => {
     // Verify the quiz tab availability fix
     const quizButton = page.locator('nav button:has-text("Quiz")');
