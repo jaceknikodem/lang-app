@@ -184,15 +184,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         return dueWords.slice(0, limit);
       }
       
-      // If we need more words, get additional words by strength
+      // If we need more words, get additional words by strength (only words with sentences)
       const remainingLimit = limit - dueWords.length;
       const now = new Date().toISOString();
       
       const stmt = db.prepare(`
-        SELECT * FROM words 
-        WHERE known = FALSE AND ignored = FALSE AND language = ?
-        AND next_due > ?
-        ORDER BY strength ASC, RANDOM()
+        SELECT DISTINCT w.* FROM words w
+        INNER JOIN sentence_words sw ON w.id = sw.word_id
+        WHERE w.known = FALSE AND w.ignored = FALSE AND w.language = ?
+        AND w.next_due > ?
+        ORDER BY w.strength ASC, RANDOM()
         LIMIT ?
       `);
       
@@ -788,15 +789,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         return dueWords.slice(0, limit);
       }
       
-      // Get additional weak words if needed
+      // Get additional weak words if needed (only words with sentences)
       const remainingLimit = limit - dueWords.length;
       const now = new Date().toISOString();
       
       const stmt = db.prepare(`
-        SELECT * FROM words 
-        WHERE known = FALSE AND ignored = FALSE AND language = ?
-        AND next_due > ?
-        ORDER BY strength ASC, RANDOM()
+        SELECT DISTINCT w.* FROM words w
+        INNER JOIN sentence_words sw ON w.id = sw.word_id
+        WHERE w.known = FALSE AND w.ignored = FALSE AND w.language = ?
+        AND w.next_due > ?
+        ORDER BY w.strength ASC, RANDOM()
         LIMIT ?
       `);
       
@@ -1355,11 +1357,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const currentLanguage = language || await this.getCurrentLanguage();
       const now = new Date().toISOString();
       
-      // Get all due words first
+      // Get all due words that have sentences (required for quiz mode)
       const stmt = db.prepare(`
-        SELECT * FROM words 
-        WHERE known = FALSE AND ignored = FALSE 
-        AND language = ? AND next_due <= ?
+        SELECT DISTINCT w.* FROM words w
+        INNER JOIN sentence_words sw ON w.id = sw.word_id
+        WHERE w.known = FALSE AND w.ignored = FALSE 
+        AND w.language = ? AND w.next_due <= ?
       `);
       
       const rows = stmt.all(currentLanguage, now) as any[];
