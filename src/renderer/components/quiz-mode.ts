@@ -1606,14 +1606,10 @@ export class QuizMode extends LitElement {
           <div class="question-container">
             <div class="direction-indicator">
               ${this.direction === 'foreign-to-english' ? 'Foreign → English' : 'English → Foreign'}
-              ${this.audioOnlyMode ? ' • Audio Only Mode' : ''}
             </div>
             
             ${this.audioOnlyMode ? html`
               <div class="audio-only-controls">
-                <div class="audio-only-hint">
-                  🎧 Listen carefully to the audio and answer based on what you hear
-                </div>
                 <button 
                   class="audio-replay-button" 
                   @click=${this.playAudio} 
@@ -1639,7 +1635,7 @@ export class QuizMode extends LitElement {
               </div>
             `}
 
-            <div class="question-translation ${this.audioOnlyMode ? 'hidden' : ''}">
+            <div class="question-translation">
               Do you know what ${questionWord} means in this context?
             </div>
 
