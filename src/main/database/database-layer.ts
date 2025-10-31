@@ -256,9 +256,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
       
+      // Use sentence_words junction table instead of direct join on sentences.word_id
       const stmt = db.prepare(`
         SELECT DISTINCT w.* FROM words w
-        INNER JOIN sentences s ON w.id = s.word_id
+        INNER JOIN sentence_words sw ON w.id = sw.word_id
         ${whereClause}
         ORDER BY w.strength ASC, RANDOM()
       `);
@@ -292,9 +293,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
       
+      // Use sentence_words junction table instead of direct join on sentences.word_id
       const stmt = db.prepare(`
         SELECT DISTINCT w.* FROM words w
-        INNER JOIN sentences s ON w.id = s.word_id
+        INNER JOIN sentence_words sw ON w.id = sw.word_id
         ${whereClause}
         ORDER BY w.strength ASC, w.last_studied ASC NULLS FIRST
       `);
@@ -370,6 +372,71 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   // Sentence management operations
 
   /**
+   * Helper function to find all learning words that appear in a sentence
+   * Tokenizes the sentence and matches normalized words against learning words
+   */
+  private findMatchingLearningWords(sentence: string, language: string): Word[] {
+    const db = this.getDb();
+    
+    try {
+      // Tokenize sentence: split by whitespace and punctuation
+      const parts = splitSentenceIntoParts(sentence);
+      const wordsInSentence = new Set<string>();
+      
+      // Extract and normalize words from sentence parts
+      for (const part of parts) {
+        // Skip whitespace and punctuation-only parts
+        if (/^\s*$/.test(part) || /^[.,!?;:]+$/.test(part)) {
+          continue;
+        }
+        
+        // Normalize word: remove punctuation, convert to lowercase
+        const normalized = part.replace(/[.,!?;:]/g, '').toLowerCase().trim();
+        if (normalized && normalized.length > 0) {
+          wordsInSentence.add(normalized);
+        }
+      }
+      
+      if (wordsInSentence.size === 0) {
+        return [];
+      }
+      
+      // Get all learning words (not known, not ignored) in the same language
+      const stmt = db.prepare(`
+        SELECT * FROM words
+        WHERE language = ? AND known = FALSE AND ignored = FALSE
+      `);
+      
+      const learningWords = stmt.all(language) as any[];
+      
+      // Match sentence words against learning words (case-insensitive)
+      const matchingWords: Word[] = [];
+      const wordLookup = new Map<string, Word>();
+      
+      // Build lookup map for learning words
+      for (const word of learningWords) {
+        const mappedWord = this.mapRowToWord(word);
+        const normalizedWord = word.word.toLowerCase().trim();
+        wordLookup.set(normalizedWord, mappedWord);
+      }
+      
+      // Find matches
+      for (const sentenceWord of wordsInSentence) {
+        const matchedWord = wordLookup.get(sentenceWord);
+        if (matchedWord) {
+          matchingWords.push(matchedWord);
+        }
+      }
+      
+      return matchingWords;
+    } catch (error) {
+      console.error('Failed to find matching learning words:', error);
+      // Return empty array on error to avoid breaking sentence insertion
+      return [];
+    }
+  }
+
+  /**
    * Insert a new sentence for a word
    */
   async insertSentence(
@@ -389,6 +456,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const parts = sentenceParts ?? splitSentenceIntoParts(sentence);
       const serializedParts = serializeSentenceParts(parts);
 
+      // Insert sentence with original wordId (for backwards compatibility)
       const stmt = db.prepare(`
         INSERT INTO sentences (
           word_id, sentence, translation, audio_path,
@@ -410,13 +478,53 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         serializedParts
       );
 
-      db.prepare(`
-        UPDATE words 
-        SET sentence_count = sentence_count + 1
-        WHERE id = ?
-      `).run(wordId);
+      const sentenceId = result.lastInsertRowid as number;
+
+      // Get the word to determine language
+      const word = await this.getWordById(wordId);
+      if (!word) {
+        throw new Error(`Word with ID ${wordId} not found`);
+      }
+
+      // Find all learning words that appear in the sentence
+      const matchingWords = this.findMatchingLearningWords(sentence, word.language);
+
+      // Insert entries in junction table for all matching words
+      if (matchingWords.length > 0) {
+        const insertJunction = db.prepare(`
+          INSERT OR IGNORE INTO sentence_words (sentence_id, word_id)
+          VALUES (?, ?)
+        `);
+
+        const updateSentenceCount = db.prepare(`
+          UPDATE words 
+          SET sentence_count = sentence_count + 1
+          WHERE id = ?
+        `);
+
+        for (const matchedWord of matchingWords) {
+          try {
+            insertJunction.run(sentenceId, matchedWord.id);
+            updateSentenceCount.run(matchedWord.id);
+          } catch (error) {
+            // Ignore duplicate key errors (if entry already exists)
+            if (error instanceof Error && !error.message.includes('UNIQUE constraint')) {
+              console.warn(`Failed to insert junction table entry for sentence ${sentenceId}, word ${matchedWord.id}:`, error);
+            }
+          }
+        }
+      }
+
+      // Also update sentenceCount for the original word (if not already matched)
+      if (!matchingWords.find(w => w.id === wordId)) {
+        db.prepare(`
+          UPDATE words 
+          SET sentence_count = sentence_count + 1
+          WHERE id = ?
+        `).run(wordId);
+      }
       
-      return result.lastInsertRowid as number;
+      return sentenceId;
     } catch (error) {
       throw new Error(`Failed to insert sentence: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -429,13 +537,28 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
+      // First get sentence IDs from junction table
+      const sentenceIdsStmt = db.prepare(`
+        SELECT sentence_id FROM sentence_words WHERE word_id = ?
+      `);
+      
+      const sentenceIdsResult = sentenceIdsStmt.all(wordId) as Array<{ sentence_id: number }>;
+      
+      if (sentenceIdsResult.length === 0) {
+        return [];
+      }
+      
+      const sentenceIds = sentenceIdsResult.map(row => row.sentence_id);
+      
+      // Then fetch sentences by IDs using the junction table
+      const placeholders = sentenceIds.map(() => '?').join(',');
       const stmt = db.prepare(`
         SELECT * FROM sentences 
-        WHERE word_id = ?
+        WHERE id IN (${placeholders})
         ORDER BY RANDOM()
       `);
       
-      const rows = stmt.all(wordId) as any[];
+      const rows = stmt.all(...sentenceIds) as any[];
       
       return rows.map(this.mapRowToSentence);
     } catch (error) {
@@ -509,7 +632,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
+      // Get original wordId before deletion (for backwards compatibility fallback)
       const sentence = db.prepare('SELECT word_id FROM sentences WHERE id = ?').get(sentenceId) as { word_id: number } | undefined;
+      
+      // Get all words linked to this sentence via junction table
+      const linkedWords = db.prepare('SELECT word_id FROM sentence_words WHERE sentence_id = ?').all(sentenceId) as Array<{ word_id: number }>;
+      
+      // Delete the sentence (junction table entries will be cascade deleted)
       const stmt = db.prepare('DELETE FROM sentences WHERE id = ?');
       const result = stmt.run(sentenceId);
       
@@ -517,15 +646,23 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Sentence with ID ${sentenceId} not found`);
       }
 
-      if (sentence?.word_id) {
-        db.prepare(`
-          UPDATE words 
-          SET sentence_count = CASE 
-            WHEN sentence_count > 0 THEN sentence_count - 1 
-            ELSE 0 
-          END
-          WHERE id = ?
-        `).run(sentence.word_id);
+      // Update sentenceCount for all words that were linked to this sentence
+      const updateSentenceCount = db.prepare(`
+        UPDATE words 
+        SET sentence_count = CASE 
+          WHEN sentence_count > 0 THEN sentence_count - 1 
+          ELSE 0 
+        END
+        WHERE id = ?
+      `);
+
+      if (linkedWords.length > 0) {
+        for (const linkedWord of linkedWords) {
+          updateSentenceCount.run(linkedWord.word_id);
+        }
+      } else if (sentence?.word_id) {
+        // Fallback: if no junction table entries (old data), use original wordId
+        updateSentenceCount.run(sentence.word_id);
       }
     } catch (error) {
       throw new Error(`Failed to delete sentence: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -679,14 +816,29 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
+      // First get sentence IDs from junction table
+      const sentenceIdsStmt = db.prepare(`
+        SELECT sentence_id FROM sentence_words WHERE word_id = ?
+      `);
+      
+      const sentenceIdsResult = sentenceIdsStmt.all(wordId) as Array<{ sentence_id: number }>;
+      
+      if (sentenceIdsResult.length === 0) {
+        return null;
+      }
+      
+      const sentenceIds = sentenceIdsResult.map(row => row.sentence_id);
+      
+      // Then fetch a random sentence by IDs using the junction table
+      const placeholders = sentenceIds.map(() => '?').join(',');
       const stmt = db.prepare(`
         SELECT * FROM sentences 
-        WHERE word_id = ?
+        WHERE id IN (${placeholders})
         ORDER BY RANDOM()
         LIMIT 1
       `);
       
-      const row = stmt.get(wordId) as any;
+      const row = stmt.get(...sentenceIds) as any;
       
       return row ? this.mapRowToSentence(row) : null;
     } catch (error) {

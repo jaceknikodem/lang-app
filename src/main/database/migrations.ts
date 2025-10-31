@@ -235,6 +235,27 @@ export class MigrationManager {
         down: [
           // SQLite cannot drop columns; leaving generation metadata columns in place on rollback.
         ]
+      },
+      {
+        version: 11,
+        name: 'add_sentence_words_junction_table',
+        up: [
+          `CREATE TABLE IF NOT EXISTS sentence_words (
+            sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
+            word_id INTEGER NOT NULL REFERENCES words(id) ON DELETE CASCADE,
+            PRIMARY KEY (sentence_id, word_id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_sentence_words_sentence_id ON sentence_words(sentence_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_sentence_words_word_id ON sentence_words(word_id)`,
+          // Populate junction table from existing sentences.word_id data
+          `INSERT OR IGNORE INTO sentence_words (sentence_id, word_id)
+           SELECT id, word_id FROM sentences WHERE word_id IS NOT NULL`
+        ],
+        down: [
+          `DROP INDEX IF EXISTS idx_sentence_words_word_id`,
+          `DROP INDEX IF EXISTS idx_sentence_words_sentence_id`,
+          `DROP TABLE IF EXISTS sentence_words`
+        ]
       }
     ];
   }
