@@ -282,9 +282,6 @@ export class SettingsPanel extends LitElement {
   private autoplayAudioEnabled = false;
 
   @state()
-  private speechRecognitionReady = false;
-
-  @state()
   private availableLLMModels: string[] = [];
 
   @state()
@@ -369,14 +366,7 @@ export class SettingsPanel extends LitElement {
       // Load language settings
       await this.loadLanguageSettings();
 
-      // Initialize speech recognition (used by audio recorder, but not shown in settings)
-      try {
-        await window.electronAPI.audio.initializeSpeechRecognition();
-        this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
-      } catch (initError) {
-        console.warn('Failed to initialize speech recognition:', initError);
-        this.speechRecognitionReady = false;
-      }
+      // Speech recognition is only initialized in quiz mode, not here
 
       // Load LLM settings
       await this.loadLLMSettings();

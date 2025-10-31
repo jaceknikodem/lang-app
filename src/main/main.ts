@@ -134,14 +134,7 @@ async function initializeServices(): Promise<void> {
     // Initialize audio service with database reference
     audioService = new AudioService(undefined, databaseLayer);
     
-    // Initialize speech recognition
-    try {
-      await audioService.initializeSpeechRecognition();
-      console.log('Speech recognition initialized successfully');
-    } catch (error) {
-      console.warn('Speech recognition initialization failed:', error);
-      // Don't fail the entire app startup if speech recognition fails
-    }
+    // Speech recognition is only initialized in quiz mode, not at app startup
 
     // Initialize SRS service
     srsService = new SRSService(databaseLayer);

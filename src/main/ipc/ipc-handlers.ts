@@ -776,12 +776,9 @@ function setupAudioHandlers(audioService: AudioService): void {
 
   // Speech recognition handlers
   ipcMain.handle(IPC_CHANNELS.AUDIO.INITIALIZE_SPEECH_RECOGNITION, async (event) => {
-    try {
-      await audioService.initializeSpeechRecognition();
-    } catch (error) {
-      console.error('Error initializing speech recognition:', error);
-      throw new Error(`Failed to initialize speech recognition: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    // Non-blocking: does not throw errors if server is unavailable
+    // Use isSpeechRecognitionReady() to check if initialization was successful
+    await audioService.initializeSpeechRecognition();
   });
 
   ipcMain.handle(IPC_CHANNELS.AUDIO.TRANSCRIBE_AUDIO, async (event, filePath, options) => {

@@ -585,6 +585,8 @@ export class AudioService {
 
   /**
    * Initialize speech recognition service
+   * Non-blocking: Does not throw errors if server is unavailable.
+   * Use isSpeechRecognitionReady() to check if initialization was successful.
    */
   async initializeSpeechRecognition(): Promise<void> {
     try {
@@ -592,24 +594,9 @@ export class AudioService {
       await this.speechRecognition.initialize();
       console.log('AudioService: Speech recognition initialized successfully');
     } catch (error) {
-      console.error('AudioService: Speech recognition initialization failed:', error);
-
-      // Provide more specific error messages
-      let errorMessage = 'Failed to initialize speech recognition';
-
-      if (error instanceof Error) {
-        if (error.message.includes('whisper-node')) {
-          errorMessage = 'Whisper speech recognition is not available. This feature requires additional setup.';
-        } else if (error.message.includes('compilation')) {
-          errorMessage = 'Speech recognition is setting up for first use. Please try again in a moment.';
-        } else {
-          errorMessage = `Speech recognition initialization failed: ${error.message}`;
-        }
-      }
-
-      const audioError = new Error(errorMessage) as AudioError;
-      audioError.code = 'RECORDING_FAILED';
-      throw audioError;
+      // Don't throw - just log. isSpeechRecognitionReady() will return false.
+      // This allows components to gracefully handle unavailable servers.
+      console.warn('AudioService: Speech recognition initialization failed (server may be unavailable):', error instanceof Error ? error.message : 'Unknown error');
     }
   }
 

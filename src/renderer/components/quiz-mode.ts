@@ -2253,6 +2253,7 @@ export class QuizMode extends LitElement {
 
   private async initializeSpeechRecognition() {
     try {
+      // initializeSpeechRecognition() already checks if server is available
       console.log('Quiz: Initializing speech recognition...');
       await window.electronAPI.audio.initializeSpeechRecognition();
       this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
@@ -2260,6 +2261,8 @@ export class QuizMode extends LitElement {
 
       if (this.speechRecognitionReady) {
         console.log('✓ Speech recognition is ready for use');
+      } else {
+        console.log('Quiz: Speech recognition not ready (server may be unavailable)');
       }
     } catch (error) {
       console.error('Quiz: Failed to initialize speech recognition:', error);
