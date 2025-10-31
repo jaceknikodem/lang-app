@@ -97,6 +97,9 @@ export class LearningMode extends LitElement {
 
     this.currentLanguage = newLanguage;
     
+    // Update session manager with new language to ensure it uses correct language's session
+    sessionManager.setActiveLanguage(newLanguage);
+    
     // Reload all data for the new language
     try {
       // Load all words for highlighting purposes
@@ -415,7 +418,8 @@ export class LearningMode extends LitElement {
   private async loadAllWords() {
     try {
       // Load all words (including known ones) for highlighting purposes
-      this.allWords = await window.electronAPI.database.getAllWords(true, false);
+      // Filter by current language to avoid loading words from other languages
+      this.allWords = await window.electronAPI.database.getAllWords(true, false, this.currentLanguage ?? undefined);
       console.log('Loaded all words for highlighting:', this.allWords.length);
     } catch (error) {
       console.error('Failed to load all words:', error);
@@ -425,6 +429,11 @@ export class LearningMode extends LitElement {
 
   private async loadSelectedWords() {
     try {
+      // Ensure we have current language loaded
+      if (!this.currentLanguage) {
+        await this.loadCurrentLanguage();
+      }
+
       // Check if specific words were passed via router (from word selection)
       const routeData = router.getRouteData<{ specificWords?: Word[] }>();
       if (routeData?.specificWords && routeData.specificWords.length > 0) {
@@ -432,6 +441,11 @@ export class LearningMode extends LitElement {
         const seenIds = new Set<number>();
 
         for (const word of routeData.specificWords) {
+          // Filter by current language to prevent loading words from wrong language
+          if (this.currentLanguage && word.language !== this.currentLanguage) {
+            continue;
+          }
+
           if (seenIds.has(word.id)) {
             continue;
           }
@@ -467,7 +481,8 @@ export class LearningMode extends LitElement {
 
         for (const wordId of orderedWordIds) {
           const word = await window.electronAPI.database.getWordById(wordId);
-          if (word) {
+          // Filter by current language to prevent loading words from wrong language
+          if (word && (!this.currentLanguage || word.language === this.currentLanguage)) {
             loadedWords.push(word);
           }
         }
@@ -581,7 +596,9 @@ export class LearningMode extends LitElement {
         }
 
         // Reconstruct wordsWithSentences array matching wordId -> sentenceIds
+        // Filter by current language to prevent loading words from wrong language
         wordsWithValidSentences = loadedWords
+          .filter((word: Word) => !this.currentLanguage || word.language === this.currentLanguage)
           .map((word: Word) => {
             const sentences = sentenceMapByWordId.get(word.id) || [];
             // Apply filtering logic (prepareSentencesForWord)
@@ -606,6 +623,11 @@ export class LearningMode extends LitElement {
         const wordsWithSentences: WordWithSentences[] = [];
 
         for (const word of this.selectedWords) {
+          // Filter by current language to prevent loading words from wrong language
+          if (this.currentLanguage && word.language !== this.currentLanguage) {
+            continue;
+          }
+
           // Get sentences for this word
           const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
 
