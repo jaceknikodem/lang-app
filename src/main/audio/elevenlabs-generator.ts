@@ -219,13 +219,40 @@ export class ElevenLabsAudioGenerator implements AudioGenerator {
   }
 
   /**
+   * Voice IDs mapped by language
+   * Multiple voices per language for variety
+   */
+  private static readonly VOICE_MAP: Record<string, string[]> = {
+    'portuguese': ['GDzHdQOi6jjf8zaXhCYD', '9pDzHy2OpOgeXM8SeL0t'],
+    'pt': ['GDzHdQOi6jjf8zaXhCYD', '9pDzHy2OpOgeXM8SeL0t'],
+    'italian': ['oCS6WHyqobqW2UapCSHl', 'CiwzbDpaN3pQXjTgx3ML'],
+    'it': ['oCS6WHyqobqW2UapCSHl', 'CiwzbDpaN3pQXjTgx3ML'],
+    'polish': ['zzBTsLBFM6AOJtkr1e9b', 'g8ZOdhoD9R6eYKPTjKbE'],
+    'pl': ['zzBTsLBFM6AOJtkr1e9b', 'g8ZOdhoD9R6eYKPTjKbE'],
+    'spanish': ['Nh2zY9kknu6z4pZy6FhD', 'P951amuWPNCJ0L15rFyC'],
+    'es': ['Nh2zY9kknu6z4pZy6FhD', 'P951amuWPNCJ0L15rFyC'],
+    'indonesian': ['plgKUYgnlZ1DCNh54DwJ', 'I7sakys8pBZ1Z5f0UhT9'],
+    'id': ['plgKUYgnlZ1DCNh54DwJ', 'I7sakys8pBZ1Z5f0UhT9'],
+  };
+
+  /**
+   * Generic voice ID for languages not in the map
+   */
+  private static readonly DEFAULT_VOICE = 'pNInz6obpgDQGcFmaJgB';
+
+  /**
    * Get appropriate voice ID for language
-   * Uses Adam voice (multilingual) for all languages
+   * Randomly selects from multiple voices per language for variety
    */
   private getVoiceForLanguage(language: string): string {
-    // Use Adam voice (multilingual) for all languages
-    // This is a good default voice that works well with multiple languages
-    return 'pNInz6obpgDQGcFmaJgB';
+    const lang = language.toLowerCase();
+    const voices = ElevenLabsAudioGenerator.VOICE_MAP[lang];
+    
+    if (voices && voices.length > 0) {
+      return voices[Math.floor(Math.random() * voices.length)];
+    }
+    
+    return ElevenLabsAudioGenerator.DEFAULT_VOICE;
   }
 
   /**
