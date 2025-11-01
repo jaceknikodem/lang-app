@@ -325,20 +325,10 @@ export class OllamaClient implements LLMClient {
   }
 
   async generateContextSentences(sentence: string, translation: string, language: string): Promise<{ contextBefore?: string; contextAfter?: string; contextBeforeTranslation?: string; contextAfterTranslation?: string }> {
-    console.log('[OllamaClient] generateContextSentences called', {
-      language,
-      sentence: sentence.substring(0, 50) + '...',
-      translation: translation.substring(0, 50) + '...'
-    });
     const prompt = this.createContextSentencesPrompt(sentence, translation, language);
 
     try {
       const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
-      console.log('[OllamaClient] Context generation response received', {
-        responseType: typeof response,
-        isObject: typeof response === 'object',
-        keys: typeof response === 'object' && response !== null ? Object.keys(response) : []
-      });
 
       // Use Zod to parse and validate the response
       const parseResult = ContextSentenceResponseSchema.safeParse(response);

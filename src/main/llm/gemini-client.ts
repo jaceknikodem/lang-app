@@ -318,14 +318,8 @@ export class GeminiClient implements LLMClient {
   }
 
   async generateContextSentences(sentence: string, translation: string, language: string): Promise<{ contextBefore?: string; contextAfter?: string; contextBeforeTranslation?: string; contextAfterTranslation?: string }> {
-    console.log('[GeminiClient] generateContextSentences called', {
-      language,
-      sentence: sentence.substring(0, 50) + '...',
-      translation: translation.substring(0, 50) + '...'
-    });
     if (!this.config.apiKey || this.config.apiKey.trim() === '') {
       // Return empty context instead of throwing if API key not configured
-      console.warn('[GeminiClient] Gemini API key not configured, returning empty context');
       return {};
     }
 
@@ -333,11 +327,6 @@ export class GeminiClient implements LLMClient {
 
     try {
       const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
-      console.log('[GeminiClient] Context generation response received', {
-        responseType: typeof response,
-        isObject: typeof response === 'object',
-        keys: typeof response === 'object' && response !== null ? Object.keys(response) : []
-      });
 
       // Use Zod to parse and validate the response
       const parseResult = ContextSentenceResponseSchema.safeParse(response);

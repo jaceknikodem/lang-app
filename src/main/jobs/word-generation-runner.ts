@@ -151,11 +151,19 @@ export class WordGenerationRunner {
           }
 
           let audioPath: string;
+          const isTatoebaSentence = Boolean(sentence.audioUrl);
+          let sentenceModel: string | undefined;
+          let audioService: string | undefined;
+          let audioModel: string | undefined;
+          
           if (sentence.audioUrl) {
+            // Tatoeba sentence - check if URL is from Tatoeba
+            const isTatoebaAudio = sentence.audioUrl.includes('tatoeba.org');
             console.log('Attempting to download external audio for sentence', {
               word: word.word,
               language,
-              audioUrl: sentence.audioUrl
+              audioUrl: sentence.audioUrl,
+              isTatoeba: isTatoebaAudio
             });
             try {
               audioPath = await this.audioService.downloadSentenceAudioFromUrl(
@@ -164,27 +172,36 @@ export class WordGenerationRunner {
                 language,
                 word.word
               );
+              // Mark as Tatoeba if URL is from Tatoeba
+              if (isTatoebaAudio) {
+                sentenceModel = 'tatoeba';
+                audioService = 'tatoeba';
+                audioModel = undefined; // Tatoeba doesn't have a specific model
+              } else {
+                // Other external source - use LLM model for sentence, but mark audio source
+                sentenceModel = this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
+                audioService = 'external';
+                audioModel = undefined;
+              }
             } catch (downloadError) {
-              console.warn('Failed to download external sentence audio, falling back to TTS:', downloadError);
+              console.warn('Failed to download external audio, falling back to TTS:', downloadError);
               audioPath = await this.audioService.generateSentenceAudio(sentence.sentence, language, word.word);
+              // Fallback to TTS - use normal metadata
+              sentenceModel = 'tatoeba'; // Still mark sentence as Tatoeba
+              const audioInfo = this.audioService.getAudioGenerationInfo();
+              audioService = audioInfo.service;
+              audioModel = audioInfo.model;
             }
           } else {
+            // LLM-generated sentence
             audioPath = await this.audioService.generateSentenceAudio(sentence.sentence, language, word.word);
+            sentenceModel = this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
+            const audioInfo = this.audioService.getAudioGenerationInfo();
+            audioService = audioInfo.service;
+            audioModel = audioInfo.model;
           }
           
-          // Get generation metadata
-          const sentenceModel = this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
-          const audioInfo = this.audioService.getAudioGenerationInfo();
-          
           const sentenceParts = splitSentenceIntoParts(sentence.sentence);
-          console.log('[WordGenerationRunner] Storing sentence with context', {
-            word: word.word,
-            language,
-            hasContextBefore: !!sentence.contextBefore,
-            hasContextAfter: !!sentence.contextAfter,
-            contextBefore: sentence.contextBefore?.substring(0, 30),
-            contextAfter: sentence.contextAfter?.substring(0, 30)
-          });
           const sentenceId = await this.database.insertSentence(
             word.id,
             sentence.sentence,
@@ -196,8 +213,8 @@ export class WordGenerationRunner {
             sentence.contextAfterTranslation,
             sentenceParts,
             sentenceModel,
-            audioInfo.service,
-            audioInfo.model
+            audioService,
+            audioModel
           );
 
           // Precompute sentence tokens with dictionary lookups

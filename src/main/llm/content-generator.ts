@@ -325,38 +325,17 @@ export class ContentGenerator {
         // Always generate context sentences for Tatoeba examples
         if (supplementalSentences.length > 0) {
           const isLLMAvailable = await this.llmClient.isAvailable();
-          console.log('[ContentGenerator] Context generation check', {
-            word,
-            language: targetLanguage,
-            isLLMAvailable,
-            sentenceCount: supplementalSentences.length
-          });
 
           if (isLLMAvailable) {
-            console.log('[ContentGenerator] Generating context sentences for Tatoeba examples', {
-              word,
-              language: targetLanguage,
-              count: supplementalSentences.length
-            });
-
             // Generate context for each Tatoeba sentence
             const sentencesWithContext = await Promise.all(
-              supplementalSentences.map(async (sentence, index) => {
+              supplementalSentences.map(async (sentence) => {
                 try {
-                  console.log(`[ContentGenerator] Generating context for Tatoeba sentence ${index + 1}/${supplementalSentences.length}`, {
-                    sentence: sentence.sentence.substring(0, 50) + '...'
-                  });
                   const context = await this.llmClient.generateContextSentences(
                     sentence.sentence,
                     sentence.translation,
                     targetLanguage
                   );
-                  console.log(`[ContentGenerator] Context generated for sentence ${index + 1}`, {
-                    hasContextBefore: !!context.contextBefore,
-                    hasContextAfter: !!context.contextAfter,
-                    contextBefore: context.contextBefore?.substring(0, 30),
-                    contextAfter: context.contextAfter?.substring(0, 30)
-                  });
                   return {
                     ...sentence,
                     contextBefore: context.contextBefore,
@@ -365,48 +344,21 @@ export class ContentGenerator {
                     contextAfterTranslation: context.contextAfterTranslation
                   };
                 } catch (error) {
-                  console.warn(`[ContentGenerator] Failed to generate context for Tatoeba sentence ${index + 1}:`, error);
+                  console.warn('[ContentGenerator] Failed to generate context for Tatoeba sentence:', error);
                   // Return sentence without context on error
                   return sentence;
                 }
               })
             );
             supplementalSentences = sentencesWithContext;
-          } else {
-            console.log('[ContentGenerator] LLM not available, skipping context generation for Tatoeba sentences');
           }
         }
-
-        console.log('[ContentGenerator] Tatoeba lookup', {
-          word,
-          language: targetLanguage,
-          requested: sentenceCount,
-          received: tatoebaExamples.length,
-          valid: supplementalSentences.length,
-          withAudio: supplementalSentences.filter(sentence => Boolean(sentence.audioUrl)).length,
-          withContext: supplementalSentences.filter(sentence => Boolean(sentence.contextBefore || sentence.contextAfter)).length
-        });
 
         if (supplementalSentences.length >= 3) {
           const shuffled = this.shuffleArray(supplementalSentences);
           const trimmed = shuffled.slice(0, sentenceCount);
-          console.log('[ContentGenerator] Using Tatoeba sentences only', {
-            word,
-            language: targetLanguage,
-            usingCount: trimmed.length,
-            withAudio: trimmed.filter(sentence => Boolean(sentence.audioUrl)).length,
-            withContext: trimmed.filter(sentence => Boolean(sentence.contextBefore || sentence.contextAfter)).length
-          });
           return trimmed.length ? trimmed : shuffled;
         }
-
-        console.log('[ContentGenerator] Insufficient Tatoeba coverage, will fall back to LLM', {
-          word,
-          language: targetLanguage,
-          valid: supplementalSentences.length,
-          withAudio: supplementalSentences.filter(sentence => Boolean(sentence.audioUrl)).length,
-          withContext: supplementalSentences.filter(sentence => Boolean(sentence.contextBefore || sentence.contextAfter)).length
-        });
 
         supplementalSentences = supplementalSentences.slice(0, sentenceCount);
       } catch (supplementError) {
@@ -631,12 +583,12 @@ export class ContentGenerator {
   ): Promise<GeneratedSentence[]> {
     const sourceLang = this.getTatoebaLanguageCode(language);
     if (!sourceLang) {
-      console.log('[ContentGenerator] Tatoeba lookup skipped due to unsupported language', { language });
+      // Tatoeba lookup skipped due to unsupported language
       return [];
     }
 
     if (!(await this.isOnline())) {
-      console.log('[ContentGenerator] Tatoeba lookup skipped because offline');
+      // Tatoeba lookup skipped because offline
       return [];
     }
 
