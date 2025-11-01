@@ -226,36 +226,47 @@ export class DialogMode extends LitElement {
       if (cachedSession) {
         console.log('Using cached dialog session:', cachedSession.id);
         
+        // Get current language to verify cached session is for the correct language
+        const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+        
         // Load from cache
         const sentences = await window.electronAPI.database.getSentencesByIds([cachedSession.sentenceId]);
         const sentence = sentences && sentences.length > 0 ? sentences[0] : null;
         if (sentence) {
-          this.currentSentence = sentence;
-          this.beforeSentenceAudio = cachedSession.beforeSentenceAudio || null;
-          
-          // Convert cached response options back to DialogueVariant format
-          this.responseOptions = cachedSession.responseOptions.map(v => ({
-            id: v.id,
-            sentenceId: v.sentenceId,
-            variantSentence: v.variantSentence,
-            variantTranslation: v.variantTranslation,
-            createdAt: new Date(v.createdAt)
-          }));
-          
-          // Don't consume yet - will be consumed when user completes the dialog (in nextDialog)
-          // This allows the session to persist if the user navigates away and comes back
-          
-          this.isLoading = false;
-          
-          // Auto-play trigger audio if available
-          if (this.beforeSentenceAudio) {
-            requestAnimationFrame(() => {
-              setTimeout(() => {
-                this.playBeforeSentence();
-              }, 300);
-            });
+          // Verify the sentence's language matches the current language
+          const word = await window.electronAPI.database.getWordById(sentence.wordId);
+          if (word && word.language === currentLanguage) {
+            this.currentSentence = sentence;
+            this.beforeSentenceAudio = cachedSession.beforeSentenceAudio || null;
+            
+            // Convert cached response options back to DialogueVariant format
+            this.responseOptions = cachedSession.responseOptions.map(v => ({
+              id: v.id,
+              sentenceId: v.sentenceId,
+              variantSentence: v.variantSentence,
+              variantTranslation: v.variantTranslation,
+              createdAt: new Date(v.createdAt)
+            }));
+            
+            // Don't consume yet - will be consumed when user completes the dialog (in nextDialog)
+            // This allows the session to persist if the user navigates away and comes back
+            
+            this.isLoading = false;
+            
+            // Auto-play trigger audio if available
+            if (this.beforeSentenceAudio) {
+              requestAnimationFrame(() => {
+                setTimeout(() => {
+                  this.playBeforeSentence();
+                }, 300);
+              });
+            }
+            return;
+          } else {
+            // Language mismatch - discard cached session
+            console.log('Cached dialog session language mismatch. Discarding and generating new session.');
+            sessionManager.consumeCurrentDialogSession();
           }
-          return;
         }
       }
 
