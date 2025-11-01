@@ -59,7 +59,8 @@ export interface SessionState {
   };
   learningSession?: LearningSessionState;
   quizSession?: QuizSessionState;
-  dialogSession?: DialogSessionState;
+  dialogSessions?: DialogSessionState[];
+  currentDialogIndex?: number;
   lastActivity: Date;
 }
 
@@ -455,42 +456,155 @@ export class SessionManager {
 
   /**
    * Get the current dialog session state if available
+   * @deprecated Use getCurrentDialogSession() instead
    */
   getDialogSession(): DialogSessionState | undefined {
-    return this.getCurrentSession().dialogSession;
+    return this.getCurrentDialogSession();
   }
 
   /**
-   * Set the dialog session state
+   * Get the current dialog session from the queue
    */
-  setDialogSession(session: DialogSessionState): void {
-    this.saveSession({ dialogSession: session });
-  }
-
-  /**
-   * Clear the dialog session state
-   */
-  clearDialogSession(): void {
+  getCurrentDialogSession(): DialogSessionState | undefined {
     const session = this.getCurrentSession();
-    if (!session.dialogSession) {
-      return;
+    if (!session.dialogSessions || session.dialogSessions.length === 0) {
+      return undefined;
+    }
+    const currentIndex = session.currentDialogIndex ?? 0;
+    if (currentIndex >= session.dialogSessions.length) {
+      return undefined;
+    }
+    return session.dialogSessions[currentIndex];
+  }
+
+  /**
+   * Add a dialog session to the queue (FIFO - up to 5 sessions)
+   * If queue is full, removes the oldest session and adds the new one at the end
+   */
+  addDialogSession(newSession: DialogSessionState): void {
+    const session = this.getCurrentSession();
+    const languageKey = this.getActiveLanguageKey();
+    
+    const existingSessions = session.dialogSessions || [];
+    let updatedSessions: DialogSessionState[];
+    let updatedCurrentIndex: number | undefined;
+
+    if (existingSessions.length >= 5) {
+      // FIFO: Remove the oldest session (first in queue) and add new one at the end
+      const removedSession = existingSessions.shift(); // Remove first element
+      updatedSessions = [...existingSessions, newSession];
+      
+      // Adjust currentDialogIndex if needed
+      const currentIndex = session.currentDialogIndex ?? 0;
+      if (currentIndex > 0) {
+        // Decrement index since we removed the first session
+        updatedCurrentIndex = currentIndex - 1;
+      } else {
+        // We removed the current session, keep index at 0 (pointing to the next session)
+        updatedCurrentIndex = 0;
+      }
+      
+      console.log(`Dialog session queue is full. Removed oldest session (${removedSession?.id}) and added new one.`);
+    } else {
+      // Queue has space, just add to the end
+      updatedSessions = [...existingSessions, newSession];
+      // If this is the first session, set currentDialogIndex to 0
+      updatedCurrentIndex = session.currentDialogIndex ?? (updatedSessions.length === 1 ? 0 : undefined);
     }
 
     const updatedSession: SessionState = {
       ...session,
-      dialogSession: undefined,
+      dialogSessions: updatedSessions,
+      currentDialogIndex: updatedCurrentIndex,
       lastActivity: new Date()
     };
-    delete updatedSession.dialogSession;
 
-    const languageKey = this.getActiveLanguageKey();
     this.sessionsByLanguage[languageKey] = updatedSession;
     this.currentSession = updatedSession;
 
     try {
       this.persistSessions();
     } catch (error) {
-      console.error('Failed to clear dialog session:', error);
+      console.error('Failed to add dialog session:', error);
+    }
+  }
+
+  /**
+   * Mark the current dialog session as used and advance to the next one
+   */
+  consumeCurrentDialogSession(): void {
+    const session = this.getCurrentSession();
+    if (!session.dialogSessions || session.dialogSessions.length === 0) {
+      return;
+    }
+
+    const currentIndex = session.currentDialogIndex ?? 0;
+    const nextIndex = currentIndex + 1;
+
+    const languageKey = this.getActiveLanguageKey();
+    const updatedSession: SessionState = {
+      ...session,
+      currentDialogIndex: nextIndex < session.dialogSessions.length ? nextIndex : undefined,
+      lastActivity: new Date()
+    };
+
+    this.sessionsByLanguage[languageKey] = updatedSession;
+    this.currentSession = updatedSession;
+
+    try {
+      this.persistSessions();
+    } catch (error) {
+      console.error('Failed to consume dialog session:', error);
+    }
+  }
+
+  /**
+   * Clear all dialog sessions
+   */
+  clearDialogSession(): void {
+    const session = this.getCurrentSession();
+    const languageKey = this.getActiveLanguageKey();
+    
+    const updatedSession: SessionState = {
+      ...session,
+      dialogSessions: undefined,
+      currentDialogIndex: undefined,
+      lastActivity: new Date()
+    };
+    delete updatedSession.dialogSessions;
+    delete updatedSession.currentDialogIndex;
+
+    this.sessionsByLanguage[languageKey] = updatedSession;
+    this.currentSession = updatedSession;
+
+    try {
+      this.persistSessions();
+    } catch (error) {
+      console.error('Failed to clear dialog sessions:', error);
+    }
+  }
+
+  /**
+   * Set multiple dialog sessions at once (used for initialization)
+   */
+  setDialogSessions(sessions: DialogSessionState[], startIndex: number = 0): void {
+    const session = this.getCurrentSession();
+    const languageKey = this.getActiveLanguageKey();
+    
+    const updatedSession: SessionState = {
+      ...session,
+      dialogSessions: sessions,
+      currentDialogIndex: sessions.length > 0 ? startIndex : undefined,
+      lastActivity: new Date()
+    };
+
+    this.sessionsByLanguage[languageKey] = updatedSession;
+    this.currentSession = updatedSession;
+
+    try {
+      this.persistSessions();
+    } catch (error) {
+      console.error('Failed to set dialog sessions:', error);
     }
   }
 
@@ -588,8 +702,19 @@ export class SessionManager {
   }
 
   private hydrateSession(
-    sessionData: Partial<Omit<SessionState, 'lastActivity'>> & { lastActivity?: string | Date }
+    sessionData: Partial<Omit<SessionState, 'lastActivity'>> & { lastActivity?: string | Date } & { dialogSession?: DialogSessionState }
   ): SessionState {
+    // Handle backward compatibility: if there's an old dialogSession, convert it to dialogSessions array
+    let dialogSessions = sessionData.dialogSessions;
+    let currentDialogIndex = sessionData.currentDialogIndex;
+    
+    if (!dialogSessions && (sessionData as any).dialogSession) {
+      // Migrate old single session to new array format
+      const oldSession = (sessionData as any).dialogSession as DialogSessionState;
+      dialogSessions = [oldSession];
+      currentDialogIndex = 0;
+    }
+    
     return {
       currentMode: sessionData.currentMode ?? 'topic-selection',
       quizDirection: sessionData.quizDirection ?? 'foreign-to-english',
@@ -599,7 +724,8 @@ export class SessionManager {
       quizProgress: sessionData.quizProgress,
       learningSession: sessionData.learningSession,
       quizSession: sessionData.quizSession,
-      dialogSession: sessionData.dialogSession,
+      dialogSessions,
+      currentDialogIndex,
       lastActivity: sessionData.lastActivity ? new Date(sessionData.lastActivity) : new Date()
     };
   }

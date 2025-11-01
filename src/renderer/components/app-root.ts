@@ -809,64 +809,101 @@ export class AppRoot extends LitElement {
   }
 
   /**
-   * Pre-generate a dialog session and cache it in the session manager
+   * Pre-generate 5 dialog sessions and cache them in the session manager
    */
   private async pregenerateDialogSession(): Promise<void> {
     try {
-      const sessionData = await window.electronAPI.dialog.pregenerateSession();
-      if (!sessionData) {
-        console.log('No dialog session could be pre-generated (no sentences available)');
+      // Check if we already have 5 sessions cached
+      const existingSessions = sessionManager.getCurrentSession().dialogSessions || [];
+      if (existingSessions.length >= 5) {
+        console.log('Dialog session queue already has 5 sessions. Skipping pre-generation.');
         return;
       }
 
-      // Convert response options dates from ISO strings back to Date objects
-      const responseOptions = sessionData.responseOptions.map((v: {
-        id: number;
-        sentenceId: number;
-        variantSentence: string;
-        variantTranslation: string;
-        createdAt: string;
-      }) => ({
-        id: v.id,
-        sentenceId: v.sentenceId,
-        variantSentence: v.variantSentence,
-        variantTranslation: v.variantTranslation,
-        createdAt: new Date(v.createdAt)
-      }));
+      const sessionsToGenerate = 5 - existingSessions.length;
+      const generatedSessions: import('../utils/session-manager.js').DialogSessionState[] = [];
 
-      // Create dialog session state
-      const dialogSession: import('../utils/session-manager.js').DialogSessionState = {
-        id: `dialog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        sentenceId: sessionData.sentenceId,
-        sentence: sessionData.sentence,
-        translation: sessionData.translation,
-        contextBefore: sessionData.contextBefore,
-        contextBeforeTranslation: sessionData.contextBeforeTranslation,
-        beforeSentenceAudio: sessionData.beforeSentenceAudio,
-        responseOptions: responseOptions.map((v: {
-          id: number;
-          sentenceId: number;
-          variantSentence: string;
-          variantTranslation: string;
-          createdAt: Date;
-        }) => ({
-          id: v.id,
-          sentenceId: v.sentenceId,
-          variantSentence: v.variantSentence,
-          variantTranslation: v.variantTranslation,
-          createdAt: v.createdAt.toISOString()
-        })),
-        createdAt: new Date().toISOString()
-      };
+      // Generate sessions asynchronously (but not in parallel to avoid overwhelming the system)
+      for (let i = 0; i < sessionsToGenerate; i++) {
+        try {
+          const sessionData = await window.electronAPI.dialog.pregenerateSession();
+          if (!sessionData) {
+            console.log(`No dialog session ${i + 1} could be pre-generated (no sentences available)`);
+            break; // Stop if no more sentences available
+          }
 
-      // Cache in session manager
-      sessionManager.setDialogSession(dialogSession);
-      console.log('Dialog session pre-generated and cached:', {
-        sentenceId: dialogSession.sentenceId,
-        variantsCount: dialogSession.responseOptions.length
-      });
+          // Convert response options dates from ISO strings back to Date objects
+          const responseOptions = sessionData.responseOptions.map((v: {
+            id: number;
+            sentenceId: number;
+            variantSentence: string;
+            variantTranslation: string;
+            createdAt: string;
+          }) => ({
+            id: v.id,
+            sentenceId: v.sentenceId,
+            variantSentence: v.variantSentence,
+            variantTranslation: v.variantTranslation,
+            createdAt: new Date(v.createdAt)
+          }));
+
+          // Create dialog session state
+          const dialogSession: import('../utils/session-manager.js').DialogSessionState = {
+            id: `dialog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            sentenceId: sessionData.sentenceId,
+            sentence: sessionData.sentence,
+            translation: sessionData.translation,
+            contextBefore: sessionData.contextBefore,
+            contextBeforeTranslation: sessionData.contextBeforeTranslation,
+            beforeSentenceAudio: sessionData.beforeSentenceAudio,
+            responseOptions: responseOptions.map((v: {
+              id: number;
+              sentenceId: number;
+              variantSentence: string;
+              variantTranslation: string;
+              createdAt: Date;
+            }) => ({
+              id: v.id,
+              sentenceId: v.sentenceId,
+              variantSentence: v.variantSentence,
+              variantTranslation: v.variantTranslation,
+              createdAt: v.createdAt.toISOString()
+            })),
+            createdAt: new Date().toISOString()
+          };
+
+          generatedSessions.push(dialogSession);
+          console.log(`Dialog session ${i + 1}/${sessionsToGenerate} pre-generated:`, {
+            sentenceId: dialogSession.sentenceId,
+            variantsCount: dialogSession.responseOptions.length
+          });
+        } catch (error) {
+          console.error(`Failed to pre-generate dialog session ${i + 1}:`, error);
+          // Continue with next session even if one fails
+        }
+      }
+
+      // Add all generated sessions to the queue
+      if (generatedSessions.length > 0) {
+        // If we have existing sessions, add them one by one
+        // Otherwise, set them all at once with startIndex based on existing currentDialogIndex
+        const currentSession = sessionManager.getCurrentSession();
+        const startIndex = currentSession.currentDialogIndex ?? 0;
+        
+        if (existingSessions.length === 0) {
+          // No existing sessions, set all at once
+          sessionManager.setDialogSessions(generatedSessions, startIndex);
+        } else {
+          // Add to existing queue
+          for (const session of generatedSessions) {
+            sessionManager.addDialogSession(session);
+          }
+        }
+        
+        console.log(`Pre-generated ${generatedSessions.length} dialog session(s) and cached in queue. Total sessions: ${existingSessions.length + generatedSessions.length}`);
+      }
     } catch (error) {
-      console.error('Failed to pre-generate dialog session:', error);
+      console.error('Failed to pre-generate dialog sessions:', error);
       // Non-critical error - don't throw
     }
   }

@@ -166,7 +166,7 @@ export class DialogMode extends LitElement {
       this.transcriptionResult = null;
 
       // Check for cached dialog session first
-      const cachedSession = sessionManager.getDialogSession();
+      const cachedSession = sessionManager.getCurrentDialogSession();
       if (cachedSession) {
         console.log('Using cached dialog session:', cachedSession.id);
         
@@ -186,8 +186,8 @@ export class DialogMode extends LitElement {
             createdAt: new Date(v.createdAt)
           }));
           
-          // Clear the cached session after using it (will be regenerated on next app start)
-          sessionManager.clearDialogSession();
+          // Don't consume yet - will be consumed when user completes the dialog (in nextDialog)
+          // This allows the session to persist if the user navigates away and comes back
           
           this.isLoading = false;
           
@@ -332,6 +332,18 @@ export class DialogMode extends LitElement {
         },
         context: 'dialog',
         description: 'Toggle English translation visibility'
+      },
+      // Next dialog
+      {
+        key: CommonKeys.ENTER,
+        action: () => {
+          // Allow skipping dialog anytime, except during recording/transcription or when generating follow-up
+          if (!this.isRecording && !this.isTranscribing && !this.isGeneratingFollowUp) {
+            this.nextDialog();
+          }
+        },
+        context: 'dialog',
+        description: 'Next dialog'
       }
     ];
 
@@ -568,9 +580,18 @@ export class DialogMode extends LitElement {
       this.selectedOption = bestMatch.option;
 
       // If similarity is high enough (>= 0.75), mark as success and continue
+      // (follow-up will be generated after transcription is marked as complete)
       if (bestMatch.comparison.similarity >= 0.75) {
-        // Generate follow-up continuation
+        // Mark transcription as complete first
+        this.isTranscribing = false;
+        this.streamingTranscriptionText = null;
+        
+        // Then generate follow-up continuation
         await this.generateFollowUp();
+      } else {
+        // Similarity too low - mark transcription as complete
+        this.isTranscribing = false;
+        this.streamingTranscriptionText = null;
       }
       // If similarity is too low, show "Try Again" button next to the similarity badge
     } catch (error) {
@@ -583,7 +604,7 @@ export class DialogMode extends LitElement {
         expectedWords: [],
         transcribedWords: []
       };
-    } finally {
+      // Mark transcription as complete on error
       this.isTranscribing = false;
       this.streamingTranscriptionText = null;
     }
@@ -617,7 +638,83 @@ export class DialogMode extends LitElement {
   }
 
   private async nextDialog() {
+    // Consume the current dialog session (mark it as used and advance to next)
+    sessionManager.consumeCurrentDialogSession();
+    
+    // Load the next session from the queue
     await this.loadDialogSession();
+    
+    // Schedule a new dialog session to be generated asynchronously and added to the end of the queue
+    setImmediate(() => {
+      this.scheduleNewDialogSession().catch(error => {
+        console.error('Failed to schedule new dialog session:', error);
+        // Non-critical error - continue without new session
+      });
+    });
+  }
+
+  /**
+   * Generate a new dialog session and add it to the end of the queue (FIFO)
+   */
+  private async scheduleNewDialogSession(): Promise<void> {
+    try {
+      const sessionData = await window.electronAPI.dialog.pregenerateSession();
+      if (!sessionData) {
+        console.log('No dialog session could be pre-generated for queue (no sentences available)');
+        return;
+      }
+
+      // Convert response options dates from ISO strings back to Date objects
+      const responseOptions = sessionData.responseOptions.map((v: {
+        id: number;
+        sentenceId: number;
+        variantSentence: string;
+        variantTranslation: string;
+        createdAt: string;
+      }) => ({
+        id: v.id,
+        sentenceId: v.sentenceId,
+        variantSentence: v.variantSentence,
+        variantTranslation: v.variantTranslation,
+        createdAt: new Date(v.createdAt)
+      }));
+
+      // Create dialog session state
+      const dialogSession: import('../utils/session-manager.js').DialogSessionState = {
+        id: `dialog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        sentenceId: sessionData.sentenceId,
+        sentence: sessionData.sentence,
+        translation: sessionData.translation,
+        contextBefore: sessionData.contextBefore,
+        contextBeforeTranslation: sessionData.contextBeforeTranslation,
+        beforeSentenceAudio: sessionData.beforeSentenceAudio,
+        responseOptions: responseOptions.map((v: {
+          id: number;
+          sentenceId: number;
+          variantSentence: string;
+          variantTranslation: string;
+          createdAt: Date;
+        }) => ({
+          id: v.id,
+          sentenceId: v.sentenceId,
+          variantSentence: v.variantSentence,
+          variantTranslation: v.variantTranslation,
+          createdAt: v.createdAt.toISOString()
+        })),
+        createdAt: new Date().toISOString()
+      };
+
+      // Add to the end of the queue (FIFO - removes oldest if queue is full)
+      sessionManager.addDialogSession(dialogSession);
+      console.log('New dialog session generated and added to queue:', {
+        sessionId: dialogSession.id,
+        sentenceId: dialogSession.sentenceId,
+        variantsCount: dialogSession.responseOptions.length
+      });
+    } catch (error) {
+      console.error('Failed to schedule new dialog session:', error);
+      // Non-critical error - don't throw
+    }
   }
 
   private getSimilarityClass(similarity: number): string {
@@ -630,15 +727,14 @@ export class DialogMode extends LitElement {
   private renderRecordingSection() {
     if (!this.responseOptions.length) return '';
 
-    // Don't show transcribing box if there's no recording or transcribing happening
-    if (!this.isRecording && !this.currentRecording && !this.isTranscribing) {
+    // Only show if actively recording or transcribing
+    if (!this.isRecording && !this.isTranscribing) {
       return '';
     }
 
     return html`
       <div class="recording-section">
         ${this.isRecording ? this.renderRecordingStatus() : ''}
-        ${this.isTranscribing ? this.renderTranscribingStatus() : ''}
       </div>
     `;
   }
@@ -704,7 +800,7 @@ export class DialogMode extends LitElement {
       .control-bar {
         display: flex;
         align-items: center;
-        justify-content: center;
+        justify-content: flex-end;
         gap: var(--spacing-sm);
         width: 100%;
         max-width: 600px;
@@ -1287,18 +1383,21 @@ export class DialogMode extends LitElement {
           ` : nothing}
         </div>
 
-        ${(this.isRecording || this.currentRecording) ? this.renderRecordingSection() : nothing}
+        ${this.renderRecordingSection()}
 
-        ${this.isGeneratingFollowUp ? html`
+        ${this.isGeneratingFollowUp && !this.isTranscribing ? html`
           <div class="loading">
             <div class="spinner"></div>
             <p>Generating follow-up...</p>
           </div>
-        ` : this.showFollowUp ? html`
+        ` : nothing}
+        ${!this.isGeneratingFollowUp ? html`
           <button 
             class="btn btn-primary"
             @click=${this.nextDialog}
+            ?disabled=${this.isRecording || this.isTranscribing}
             style="margin-top: var(--spacing-md);"
+            title=${this.isRecording || this.isTranscribing ? 'Wait for recording/transcription to finish' : 'Skip to next dialog'}
           >
             Next Dialog
           </button>
