@@ -720,6 +720,83 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
+   * Record a pronunciation attempt for a sentence (tracks full history)
+   * This method:
+   * 1. Inserts into pronunciation_attempts table for history (with expected and transcribed text)
+   * 2. Updates the latest similarity_score in sentences table
+   * 3. Increments the pronunciation_count in sentences table
+   */
+  async recordPronunciationAttempt(
+    sentenceId: number, 
+    similarityScore: number, 
+    expectedText: string, 
+    transcribedText: string
+  ): Promise<void> {
+    const db = this.getDb();
+    
+    try {
+      // Use a transaction to ensure atomicity
+      db.transaction(() => {
+        // 1. Insert into pronunciation_attempts history table
+        const insertAttempt = db.prepare(`
+          INSERT INTO pronunciation_attempts (sentence_id, similarity_score, expected_text, transcribed_text)
+          VALUES (?, ?, ?, ?)
+        `);
+        insertAttempt.run(sentenceId, similarityScore, expectedText, transcribedText);
+
+        // 2. Update latest similarity_score and increment count in sentences table
+        const updateSentence = db.prepare(`
+          UPDATE sentences
+          SET similarity_score = ?,
+              pronunciation_count = COALESCE(pronunciation_count, 0) + 1
+          WHERE id = ?
+        `);
+        const result = updateSentence.run(similarityScore, sentenceId);
+        
+        if (result.changes === 0) {
+          throw new Error(`Sentence with ID ${sentenceId} not found`);
+        }
+      })();
+    } catch (error) {
+      throw new Error(`Failed to record pronunciation attempt: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get pronunciation history for a sentence
+   */
+  async getPronunciationHistory(sentenceId: number, limit?: number): Promise<Array<{
+    id: number;
+    sentenceId: number;
+    similarityScore: number;
+    expectedText: string;
+    transcribedText: string;
+    createdAt: Date;
+  }>> {
+    const db = this.getDb();
+    
+    try {
+      const query = limit 
+        ? `SELECT * FROM pronunciation_attempts WHERE sentence_id = ? ORDER BY created_at DESC LIMIT ?`
+        : `SELECT * FROM pronunciation_attempts WHERE sentence_id = ? ORDER BY created_at DESC`;
+      
+      const stmt = limit ? db.prepare(query) : db.prepare(query);
+      const rows = limit ? stmt.all(sentenceId, limit) : stmt.all(sentenceId) as any[];
+      
+      return rows.map(row => ({
+        id: row.id,
+        sentenceId: row.sentence_id,
+        similarityScore: row.similarity_score,
+        expectedText: row.expected_text,
+        transcribedText: row.transcribed_text,
+        createdAt: new Date(row.created_at)
+      }));
+    } catch (error) {
+      throw new Error(`Failed to get pronunciation history: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Insert a dialogue variant for a sentence
    */
   async insertDialogueVariant(sentenceId: number, variantSentence: string, variantTranslation: string): Promise<number> {

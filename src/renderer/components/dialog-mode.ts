@@ -742,6 +742,20 @@ export class DialogMode extends LitElement {
       };
       this.selectedOption = bestMatch.option;
 
+      // Record pronunciation attempt in database (tracks full history)
+      if (this.currentSentence?.id) {
+        try {
+          await window.electronAPI.database.recordPronunciationAttempt(
+            this.currentSentence.id,
+            bestMatch.comparison.similarity,
+            bestMatch.option.variantSentence, // Expected text (the variant that matched)
+            transcription.text // Transcribed text
+          );
+        } catch (error) {
+          console.warn('Failed to record pronunciation attempt:', error);
+        }
+      }
+
       // Store the recorded audio path for later playback
       if (this.currentRecording) {
         this.recordedAudioPath = this.currentRecording.filePath;

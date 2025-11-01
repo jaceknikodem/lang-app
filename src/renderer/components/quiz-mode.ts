@@ -2411,6 +2411,20 @@ export class QuizMode extends LitElement {
         ...comparison
       };
 
+      // Record pronunciation attempt in database (tracks full history)
+      if (this.currentQuestion?.sentence?.id) {
+        try {
+          await window.electronAPI.database.recordPronunciationAttempt(
+            this.currentQuestion.sentence.id,
+            comparison.similarity,
+            expectedSentence, // Expected text
+            transcriptionResult.text // Transcribed text
+          );
+        } catch (error) {
+          console.warn('Failed to record pronunciation attempt:', error);
+        }
+      }
+
       // If pronunciation score is >= 85%, increase word strength by 5 points
       if (comparison.similarity >= 0.85 && this.currentQuestion) {
         const word = this.currentQuestion.word;

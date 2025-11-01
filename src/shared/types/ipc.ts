@@ -40,6 +40,15 @@ export interface IPCBridge {
     updateSentenceLastShown: (sentenceId: number) => Promise<void>;
     updateSentenceAudioPath: (sentenceId: number, audioPath: string) => Promise<void>;
     incrementSentencePlayCount: (sentenceId: number) => Promise<void>;
+    recordPronunciationAttempt: (sentenceId: number, similarityScore: number, expectedText: string, transcribedText: string) => Promise<void>;
+    getPronunciationHistory: (sentenceId: number, limit?: number) => Promise<Array<{
+      id: number;
+      sentenceId: number;
+      similarityScore: number;
+      expectedText: string;
+      transcribedText: string;
+      createdAt: Date;
+    }>>;
     updateLastStudied: (wordId: number) => Promise<void>;
     getStudyStats: () => Promise<StudyStats>;
     recordStudySession: (wordsStudied: number) => Promise<void>;
@@ -255,6 +264,8 @@ export const IPC_CHANNELS = {
     UPDATE_SENTENCE_LAST_SHOWN: 'database:updateSentenceLastShown',
     UPDATE_SENTENCE_AUDIO_PATH: 'database:updateSentenceAudioPath',
     INCREMENT_SENTENCE_PLAY_COUNT: 'database:incrementSentencePlayCount',
+    RECORD_PRONUNCIATION_ATTEMPT: 'database:recordPronunciationAttempt',
+    GET_PRONUNCIATION_HISTORY: 'database:getPronunciationHistory',
     UPDATE_LAST_STUDIED: 'database:updateLastStudied',
     GET_STUDY_STATS: 'database:getStudyStats',
     RECORD_STUDY_SESSION: 'database:recordStudySession',

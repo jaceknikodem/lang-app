@@ -249,6 +249,36 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     }
   });
 
+  ipcMain.handle(IPC_CHANNELS.DATABASE.RECORD_PRONUNCIATION_ATTEMPT, async (event, sentenceId, similarityScore, expectedText, transcribedText) => {
+    try {
+      const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
+      // Validate similarity score is a number between 0 and 1
+      if (typeof similarityScore !== 'number' || similarityScore < 0 || similarityScore > 1) {
+        throw new Error('Similarity score must be a number between 0 and 1');
+      }
+      // Validate text fields are strings
+      if (typeof expectedText !== 'string' || typeof transcribedText !== 'string') {
+        throw new Error('Expected text and transcribed text must be strings');
+      }
+      console.log(`[Pronunciation] Recording attempt: sentenceId=${validatedSentenceId}, similarity=${similarityScore.toFixed(2)}`);
+      return await databaseLayer.recordPronunciationAttempt(validatedSentenceId, similarityScore, expectedText, transcribedText);
+    } catch (error) {
+      console.error('Error recording pronunciation attempt:', error);
+      throw new Error(`Failed to record pronunciation attempt: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_PRONUNCIATION_HISTORY, async (event, sentenceId, limit) => {
+    try {
+      const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
+      const validatedLimit = limit !== undefined ? Math.max(1, Math.floor(Number(limit))) : undefined;
+      return await databaseLayer.getPronunciationHistory(validatedSentenceId, validatedLimit);
+    } catch (error) {
+      console.error('Error getting pronunciation history:', error);
+      throw new Error(`Failed to get pronunciation history: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_AUDIO_PATH, async (event, sentenceId, audioPath) => {
     try {
       const validatedSentenceId = SentenceIdSchema.parse(sentenceId);

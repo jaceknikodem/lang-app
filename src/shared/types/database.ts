@@ -93,6 +93,15 @@ export interface DatabaseLayer {
   updateSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void>;
   updateSentenceTokens(sentenceId: number, tokens: any[]): Promise<void>;
   incrementSentencePlayCount(sentenceId: number): Promise<void>;
+  recordPronunciationAttempt(sentenceId: number, similarityScore: number, expectedText: string, transcribedText: string): Promise<void>;
+  getPronunciationHistory(sentenceId: number, limit?: number): Promise<Array<{
+    id: number;
+    sentenceId: number;
+    similarityScore: number;
+    expectedText: string;
+    transcribedText: string;
+    createdAt: Date;
+  }>>;
   
   // Dialogue variants management
   insertDialogueVariant(sentenceId: number, variantSentence: string, variantTranslation: string): Promise<number>;

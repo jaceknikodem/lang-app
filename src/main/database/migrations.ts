@@ -372,6 +372,44 @@ export class MigrationManager {
           // Cannot restore CHECK constraint without recreating table again
           // Leave constraint removed on rollback
         ]
+      },
+      {
+        version: 18,
+        name: 'add_similarity_score_to_sentences',
+        up: [
+          `ALTER TABLE sentences ADD COLUMN similarity_score REAL`
+        ],
+        down: [
+          // SQLite cannot drop columns; leaving similarity_score in place on rollback.
+        ]
+      },
+      {
+        version: 19,
+        name: 'add_pronunciation_tracking',
+        up: [
+          // Create pronunciation attempts history table
+          `CREATE TABLE IF NOT EXISTS pronunciation_attempts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
+            similarity_score REAL NOT NULL,
+            expected_text TEXT NOT NULL,
+            transcribed_text TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )`,
+          // Create index for efficient queries
+          `CREATE INDEX IF NOT EXISTS idx_pronunciation_attempts_sentence_id ON pronunciation_attempts(sentence_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_pronunciation_attempts_created_at ON pronunciation_attempts(created_at)`,
+          // Add pronunciation count column to sentences table
+          `ALTER TABLE sentences ADD COLUMN pronunciation_count INTEGER DEFAULT 0`,
+          // Initialize pronunciation_count from existing similarity_score data (if any)
+          `UPDATE sentences SET pronunciation_count = 1 WHERE similarity_score IS NOT NULL AND pronunciation_count IS NULL`
+        ],
+        down: [
+          `DROP INDEX IF EXISTS idx_pronunciation_attempts_created_at`,
+          `DROP INDEX IF EXISTS idx_pronunciation_attempts_sentence_id`,
+          `DROP TABLE IF EXISTS pronunciation_attempts`
+          // pronunciation_count column remains in sentences table on rollback
+        ]
       }
     ];
   }
