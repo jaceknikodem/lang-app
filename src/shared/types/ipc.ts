@@ -39,6 +39,7 @@ export interface IPCBridge {
     deleteSentence: (sentenceId: number) => Promise<void>;
     updateSentenceLastShown: (sentenceId: number) => Promise<void>;
     updateSentenceAudioPath: (sentenceId: number, audioPath: string) => Promise<void>;
+    incrementSentencePlayCount: (sentenceId: number) => Promise<void>;
     updateLastStudied: (wordId: number) => Promise<void>;
     getStudyStats: () => Promise<StudyStats>;
     recordStudySession: (wordsStudied: number) => Promise<void>;
@@ -226,6 +227,7 @@ export const IPC_CHANNELS = {
     DELETE_SENTENCE: 'database:deleteSentence',
     UPDATE_SENTENCE_LAST_SHOWN: 'database:updateSentenceLastShown',
     UPDATE_SENTENCE_AUDIO_PATH: 'database:updateSentenceAudioPath',
+    INCREMENT_SENTENCE_PLAY_COUNT: 'database:incrementSentencePlayCount',
     UPDATE_LAST_STUDIED: 'database:updateLastStudied',
     GET_STUDY_STATS: 'database:getStudyStats',
     RECORD_STUDY_SESSION: 'database:recordStudySession',

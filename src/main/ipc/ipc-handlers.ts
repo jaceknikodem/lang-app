@@ -236,6 +236,16 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     }
   });
 
+  ipcMain.handle(IPC_CHANNELS.DATABASE.INCREMENT_SENTENCE_PLAY_COUNT, async (event, sentenceId) => {
+    try {
+      const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
+      return await databaseLayer.incrementSentencePlayCount(validatedSentenceId);
+    } catch (error) {
+      console.error('Error incrementing sentence play count:', error);
+      throw new Error(`Failed to increment sentence play count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_AUDIO_PATH, async (event, sentenceId, audioPath) => {
     try {
       const validatedSentenceId = SentenceIdSchema.parse(sentenceId);

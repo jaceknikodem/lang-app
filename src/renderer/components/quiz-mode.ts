@@ -1891,15 +1891,30 @@ export class QuizMode extends LitElement {
         // Handle errors and cleanup
         this.currentAudioElement.addEventListener('ended', () => {
           this.currentAudioElement = null;
+          // Track sentence play count
+          if (this.currentQuestion?.sentence.id) {
+            void window.electronAPI.database.incrementSentencePlayCount(this.currentQuestion.sentence.id).catch(err => {
+              console.warn('Failed to increment sentence play count:', err);
+            });
+          }
         });
         
         this.currentAudioElement.addEventListener('error', (e) => {
           console.warn('Error playing cached audio, falling back to IPC:', e);
           this.currentAudioElement = null;
           // Fall back to IPC playback
-          void window.electronAPI.audio.playAudio(audioPath).catch(err => {
-            console.error('Failed to play audio via IPC:', err);
-          });
+          void window.electronAPI.audio.playAudio(audioPath)
+            .then(() => {
+              // Track sentence play count
+              if (this.currentQuestion?.sentence.id) {
+                void window.electronAPI.database.incrementSentencePlayCount(this.currentQuestion.sentence.id).catch(err => {
+                  console.warn('Failed to increment sentence play count:', err);
+                });
+              }
+            })
+            .catch(err => {
+              console.error('Failed to play audio via IPC:', err);
+            });
         });
         
         try {
@@ -1914,9 +1929,18 @@ export class QuizMode extends LitElement {
 
       // Not cached: Start IPC playback immediately (non-blocking, returns quickly)
       // IPC playback starts immediately and plays in background
-      void window.electronAPI.audio.playAudio(audioPath).catch(err => {
-        console.error('Failed to play audio via IPC:', err);
-      });
+      void window.electronAPI.audio.playAudio(audioPath)
+        .then(() => {
+          // Track sentence play count
+          if (this.currentQuestion?.sentence.id) {
+            void window.electronAPI.database.incrementSentencePlayCount(this.currentQuestion.sentence.id).catch(err => {
+              console.warn('Failed to increment sentence play count:', err);
+            });
+          }
+        })
+        .catch(err => {
+          console.error('Failed to play audio via IPC:', err);
+        });
     } catch (error) {
       console.error('Error playing audio:', error);
     }

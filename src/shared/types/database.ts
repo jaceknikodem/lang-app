@@ -92,6 +92,7 @@ export interface DatabaseLayer {
   updateSentenceLastShown(sentenceId: number): Promise<void>;
   updateSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void>;
   updateSentenceTokens(sentenceId: number, tokens: any[]): Promise<void>;
+  incrementSentencePlayCount(sentenceId: number): Promise<void>;
   
   // Dialogue variants management
   insertDialogueVariant(sentenceId: number, variantSentence: string, variantTranslation: string): Promise<number>;

@@ -308,6 +308,17 @@ export class MigrationManager {
         down: [
           `ALTER TABLE dialogue_variants DROP COLUMN continuation_audio`
         ]
+      },
+      {
+        version: 16,
+        name: 'add_play_count_to_sentences',
+        up: [
+          `ALTER TABLE sentences ADD COLUMN play_count INTEGER DEFAULT 0`,
+          `UPDATE sentences SET play_count = 0 WHERE play_count IS NULL`
+        ],
+        down: [
+          // SQLite cannot drop columns; leaving play_count in place on rollback.
+        ]
       }
     ];
   }

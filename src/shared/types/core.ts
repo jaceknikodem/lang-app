@@ -44,6 +44,7 @@ export interface Sentence {
   audioPath: string;
   createdAt: Date;
   lastShown?: Date;
+  playCount: number;
   contextBefore?: string;
   contextAfter?: string;
   contextBeforeTranslation?: string;

@@ -1792,6 +1792,12 @@ export class LearningMode extends LitElement {
           this.currentAudioElement = null;
           // Increment strength when audio finishes playing
           void this.incrementStrengthForWord(currentWord.id);
+          // Track sentence play count
+          if (currentSentence.id) {
+            void window.electronAPI.database.incrementSentencePlayCount(currentSentence.id).catch(err => {
+              console.warn('Failed to increment sentence play count:', err);
+            });
+          }
           // Auto-scroll to next sentence after 2 seconds if enabled
           if (this.autoScrollEnabled) {
             this.clearAutoScrollTimer();
@@ -1809,7 +1815,15 @@ export class LearningMode extends LitElement {
           this.currentAudioElement = null;
           // Fall back to IPC playback
           void window.electronAPI.audio.playAudio(currentAudioPath)
-            .then(() => void this.incrementStrengthForWord(currentWord.id))
+            .then(() => {
+              void this.incrementStrengthForWord(currentWord.id);
+              // Track sentence play count
+              if (currentSentence.id) {
+                void window.electronAPI.database.incrementSentencePlayCount(currentSentence.id).catch(err => {
+                  console.warn('Failed to increment sentence play count:', err);
+                });
+              }
+            })
             .catch(err => {
               console.error('Failed to play audio via IPC:', err);
             });
@@ -1828,7 +1842,15 @@ export class LearningMode extends LitElement {
       // Not cached: Start IPC playback immediately (non-blocking, returns quickly)
       // IPC playback starts immediately and plays in background
       void window.electronAPI.audio.playAudio(currentAudioPath)
-        .then(() => void this.incrementStrengthForWord(currentWord.id))
+        .then(() => {
+          void this.incrementStrengthForWord(currentWord.id);
+          // Track sentence play count
+          if (currentSentence.id) {
+            void window.electronAPI.database.incrementSentencePlayCount(currentSentence.id).catch(err => {
+              console.warn('Failed to increment sentence play count:', err);
+            });
+          }
+        })
         .catch(err => {
           // Don't log PLAYBACK_STOPPED errors
           if (err?.code !== 'PLAYBACK_STOPPED') {

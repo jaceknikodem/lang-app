@@ -702,6 +702,27 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
+   * Increment the play count for a sentence
+   */
+  async incrementSentencePlayCount(sentenceId: number): Promise<void> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare(`
+        UPDATE sentences
+        SET play_count = play_count + 1
+        WHERE id = ?
+      `);
+      const result = stmt.run(sentenceId);
+      if (result.changes === 0) {
+        throw new Error(`Sentence with ID ${sentenceId} not found`);
+      }
+    } catch (error) {
+      throw new Error(`Failed to increment sentence play count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Insert a dialogue variant for a sentence
    */
   async insertDialogueVariant(sentenceId: number, variantSentence: string, variantTranslation: string): Promise<number> {
@@ -1964,6 +1985,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       audioPath: row.audio_path || '',
       createdAt: new Date(row.created_at),
       lastShown: row.last_shown ? new Date(row.last_shown) : undefined,
+      playCount: row.play_count || 0,
       contextBefore: row.context_before || undefined,
       contextAfter: row.context_after || undefined,
       contextBeforeTranslation: row.context_before_translation || undefined,

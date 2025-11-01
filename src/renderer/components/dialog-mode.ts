@@ -319,6 +319,13 @@ export class DialogMode extends LitElement {
             console.log('[DialogMode] Playing trigger audio:', this.beforeSentenceAudio);
             await window.electronAPI.audio.playAudio(this.beforeSentenceAudio);
             console.log('[DialogMode] Trigger audio finished');
+            
+            // Track sentence play count
+            if (this.currentSentence?.id) {
+              void window.electronAPI.database.incrementSentencePlayCount(this.currentSentence.id).catch(err => {
+                console.warn('Failed to increment sentence play count:', err);
+              });
+            }
           } catch (error) {
             console.error('Failed to play trigger audio:', error);
             // Continue with next audio even if this one fails
@@ -370,6 +377,13 @@ export class DialogMode extends LitElement {
 
       // Play the trigger audio
       await window.electronAPI.audio.playAudio(this.beforeSentenceAudio);
+      
+      // Track sentence play count
+      if (this.currentSentence?.id) {
+        void window.electronAPI.database.incrementSentencePlayCount(this.currentSentence.id).catch(err => {
+          console.warn('Failed to increment sentence play count:', err);
+        });
+      }
     } catch (error) {
       console.error('Failed to play before sentence audio:', error);
     }
