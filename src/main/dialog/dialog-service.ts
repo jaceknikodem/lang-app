@@ -693,13 +693,5 @@ Preferred JSON format:
     }
   }
 
-  /**
-   * Ensure beforeSentence audio exists and return the path
-   */
-  async ensureBeforeSentenceAudio(sentenceId: number): Promise<string | null> {
-    // This method will be implemented by calling the audio service via IPC
-    // For now, we'll delegate to the main process
-    return null; // Will be handled by IPC handler
-  }
 }
 
