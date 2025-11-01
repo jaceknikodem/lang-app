@@ -74,6 +74,9 @@ export class LearningMode extends LitElement {
   @state()
   private autoScrollEnabled = false;
 
+  @state()
+  private playbackSpeed: number = 1.0; // 0.9x, 1x, 1.1x, 1.2x
+
   private sessionStartTime = Date.now();
   private keyboardUnsubscribe?: () => void;
   private lastRecordedSentenceId: number | null = null;
@@ -375,6 +378,51 @@ export class LearningMode extends LitElement {
       .auto-scroll-label {
         font-weight: 500;
         user-select: none;
+      }
+
+      .playback-speed-control {
+        display: flex;
+        align-items: center;
+        gap: calc(var(--spacing-xs) + 4px);
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+
+      .playback-speed-label {
+        font-weight: 500;
+        user-select: none;
+      }
+
+      .playback-speed-buttons {
+        display: flex;
+        gap: 2px;
+        background: var(--background-secondary);
+        border-radius: var(--border-radius-small);
+        padding: 2px;
+        border: 1px solid var(--border-color);
+      }
+
+      .playback-speed-button {
+        padding: 2px 8px;
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        border-radius: var(--border-radius-small);
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        min-width: 32px;
+      }
+
+      .playback-speed-button:hover {
+        background: var(--background-primary);
+        color: var(--text-primary);
+      }
+
+      .playback-speed-button.active {
+        background: var(--primary-color);
+        color: white;
       }
 
       @media (max-width: 768px) {
@@ -927,6 +975,15 @@ export class LearningMode extends LitElement {
     // Clear any existing timer when toggling off
     if (!this.autoScrollEnabled) {
       this.clearAutoScrollTimer();
+    }
+  }
+
+  private setPlaybackSpeed(speed: number): void {
+    this.playbackSpeed = speed;
+    
+    // Update currently playing audio if any
+    if (this.currentAudioElement) {
+      this.currentAudioElement.playbackRate = speed;
     }
   }
 
@@ -1669,6 +1726,9 @@ export class LearningMode extends LitElement {
       if (cachedAudio) {
         // Use HTML5 Audio API to play from memory
         this.currentAudioElement = new Audio(cachedAudio);
+        
+        // Set playback speed
+        this.currentAudioElement.playbackRate = this.playbackSpeed;
 
         // Handle errors and cleanup
         this.currentAudioElement.addEventListener('ended', () => {
@@ -2039,15 +2099,50 @@ export class LearningMode extends LitElement {
             <div class="progress-text">
               Overall: ${currentSentenceNumber} of ${totalSentences} sentences
             </div>
-            <div class="auto-scroll-toggle" style="margin-bottom: 0;">
-              <span class="auto-scroll-label" style="font-size: 12px;">Auto-scroll</span>
-              <div 
-                class="auto-scroll-switch ${this.autoScrollEnabled ? 'active' : ''}"
-                @click=${this.isLastSentence() ? undefined : this.toggleAutoScroll}
-                title=${this.isLastSentence() ? 'Auto-scroll disabled at end of session' : 'Auto-scroll to next sentence 2 seconds after audio stops'}
-                style="width: 40px; height: 20px; ${this.isLastSentence() ? 'opacity: 0.5; cursor: not-allowed;' : 'cursor: pointer;'}"
-              >
-                <div class="auto-scroll-slider" style="width: 16px; height: 16px; top: 2px; left: 2px;"></div>
+            <div style="display: flex; align-items: center; gap: var(--spacing-sm);">
+              <div class="playback-speed-control">
+                <span class="playback-speed-label">Speed</span>
+                <div class="playback-speed-buttons">
+                  <button
+                    class="playback-speed-button ${this.playbackSpeed === 0.8 ? 'active' : ''}"
+                    @click=${() => this.setPlaybackSpeed(0.8)}
+                    title="0.8x speed"
+                  >
+                    0.8x
+                  </button>
+                  <button
+                    class="playback-speed-button ${this.playbackSpeed === 1.0 ? 'active' : ''}"
+                    @click=${() => this.setPlaybackSpeed(1.0)}
+                    title="1x speed (normal)"
+                  >
+                    1x
+                  </button>
+                  <button
+                    class="playback-speed-button ${this.playbackSpeed === 1.2 ? 'active' : ''}"
+                    @click=${() => this.setPlaybackSpeed(1.2)}
+                    title="1.2x speed"
+                  >
+                    1.2x
+                  </button>
+                  <button
+                    class="playback-speed-button ${this.playbackSpeed === 1.4 ? 'active' : ''}"
+                    @click=${() => this.setPlaybackSpeed(1.4)}
+                    title="1.4x speed"
+                  >
+                    1.4x
+                  </button>
+                </div>
+              </div>
+              <div class="auto-scroll-toggle" style="margin-bottom: 0;">
+                <span class="auto-scroll-label" style="font-size: 12px;">Auto-scroll</span>
+                <div 
+                  class="auto-scroll-switch ${this.autoScrollEnabled ? 'active' : ''}"
+                  @click=${this.isLastSentence() ? undefined : this.toggleAutoScroll}
+                  title=${this.isLastSentence() ? 'Auto-scroll disabled at end of session' : 'Auto-scroll to next sentence 2 seconds after audio stops'}
+                  style="width: 40px; height: 20px; ${this.isLastSentence() ? 'opacity: 0.5; cursor: not-allowed;' : 'cursor: pointer;'}"
+                >
+                  <div class="auto-scroll-slider" style="width: 16px; height: 16px; top: 2px; left: 2px;"></div>
+                </div>
               </div>
             </div>
           </div>
