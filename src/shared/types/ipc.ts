@@ -184,9 +184,24 @@ export interface IPCBridge {
   // Dialog operations
   dialog: {
     selectSentence: () => Promise<Sentence | null>;
-    generateVariants: (sentenceId: number) => Promise<Array<{ sentence: string; translation: string }>>;
-    generateFollowUp: (sentenceId: number) => Promise<{ text: string; translation: string }>;
+    generateVariants: (sentenceId: number) => Promise<DialogueVariant[]>;
+    generateFollowUp: (variantId: number) => Promise<{ text: string; translation: string }>;
     ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
+    pregenerateSession: () => Promise<{
+      sentenceId: number;
+      sentence: string;
+      translation: string;
+      contextBefore?: string;
+      contextBeforeTranslation?: string;
+      beforeSentenceAudio?: string;
+      responseOptions: Array<{
+        id: number;
+        sentenceId: number;
+        variantSentence: string;
+        variantTranslation: string;
+        createdAt: Date;
+      }>;
+    } | null>;
   };
 }
 
@@ -305,6 +320,7 @@ export const IPC_CHANNELS = {
     SELECT_SENTENCE: 'dialog:selectSentence',
     GENERATE_VARIANTS: 'dialog:generateVariants',
     GENERATE_FOLLOW_UP: 'dialog:generateFollowUp',
-    ENSURE_BEFORE_SENTENCE_AUDIO: 'dialog:ensureBeforeSentenceAudio'
+    ENSURE_BEFORE_SENTENCE_AUDIO: 'dialog:ensureBeforeSentenceAudio',
+    PREGENERATE_SESSION: 'dialog:pregenerateSession'
   }
 } as const;

@@ -25,6 +25,24 @@ export interface QuizSessionState {
   createdAt: string;
 }
 
+export interface DialogSessionState {
+  id: string;
+  sentenceId: number;
+  sentence: string;
+  translation: string;
+  contextBefore?: string;
+  contextBeforeTranslation?: string;
+  beforeSentenceAudio?: string;
+  responseOptions: Array<{
+    id: number;
+    sentenceId: number;
+    variantSentence: string;
+    variantTranslation: string;
+    createdAt: string;
+  }>;
+  createdAt: string;
+}
+
 export interface SessionState {
   currentMode: 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'dialog' | 'progress' | 'settings';
   selectedTopic?: string;
@@ -41,6 +59,7 @@ export interface SessionState {
   };
   learningSession?: LearningSessionState;
   quizSession?: QuizSessionState;
+  dialogSession?: DialogSessionState;
   lastActivity: Date;
 }
 
@@ -435,6 +454,47 @@ export class SessionManager {
   }
 
   /**
+   * Get the current dialog session state if available
+   */
+  getDialogSession(): DialogSessionState | undefined {
+    return this.getCurrentSession().dialogSession;
+  }
+
+  /**
+   * Set the dialog session state
+   */
+  setDialogSession(session: DialogSessionState): void {
+    this.saveSession({ dialogSession: session });
+  }
+
+  /**
+   * Clear the dialog session state
+   */
+  clearDialogSession(): void {
+    const session = this.getCurrentSession();
+    if (!session.dialogSession) {
+      return;
+    }
+
+    const updatedSession: SessionState = {
+      ...session,
+      dialogSession: undefined,
+      lastActivity: new Date()
+    };
+    delete updatedSession.dialogSession;
+
+    const languageKey = this.getActiveLanguageKey();
+    this.sessionsByLanguage[languageKey] = updatedSession;
+    this.currentSession = updatedSession;
+
+    try {
+      this.persistSessions();
+    } catch (error) {
+      console.error('Failed to clear dialog session:', error);
+    }
+  }
+
+  /**
    * Get playback speed for current language (defaults to 1.0 if not set)
    */
   getPlaybackSpeed(): number {
@@ -539,6 +599,7 @@ export class SessionManager {
       quizProgress: sessionData.quizProgress,
       learningSession: sessionData.learningSession,
       quizSession: sessionData.quizSession,
+      dialogSession: sessionData.dialogSession,
       lastActivity: sessionData.lastActivity ? new Date(sessionData.lastActivity) : new Date()
     };
   }

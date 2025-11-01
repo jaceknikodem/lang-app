@@ -286,6 +286,18 @@ export class MigrationManager {
           `DROP INDEX IF EXISTS idx_dialogue_variants_sentence_id`,
           `DROP TABLE IF EXISTS dialogue_variants`
         ]
+      },
+      {
+        version: 14,
+        name: 'add_continuation_to_dialogue_variants',
+        up: [
+          `ALTER TABLE dialogue_variants ADD COLUMN continuation_text TEXT`,
+          `ALTER TABLE dialogue_variants ADD COLUMN continuation_translation TEXT`
+        ],
+        down: [
+          `ALTER TABLE dialogue_variants DROP COLUMN continuation_translation`,
+          `ALTER TABLE dialogue_variants DROP COLUMN continuation_text`
+        ]
       }
     ];
   }

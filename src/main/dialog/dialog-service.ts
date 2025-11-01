@@ -157,7 +157,7 @@ export class DialogService {
   async generateDialogueVariants(
     sentence: Sentence,
     existingVariants: DialogueVariant[]
-  ): Promise<Array<{ sentence: string; translation: string }>> {
+  ): Promise<DialogueVariant[]> {
     try {
       const language = await this.database.getCurrentLanguage();
       
@@ -178,10 +178,7 @@ export class DialogService {
       if (neededCount === 0 && maxToGenerate <= 0) {
         // We have enough variants cached (at max limit), just return 2 random ones
         const shuffled = [...existingVariants].sort(() => Math.random() - 0.5);
-        return shuffled.slice(0, 2).map(v => ({
-          sentence: v.variantSentence,
-          translation: v.variantTranslation
-        }));
+        return shuffled.slice(0, 2); // Return full DialogueVariant objects
       }
 
       // Generate new variants - generate up to maxVariantsPerSentence to cache for future use
@@ -317,10 +314,8 @@ export class DialogService {
       const allVariants = allStoredVariants.length > 0 ? allStoredVariants : [...existingVariants, ...storedVariants];
       const shuffled = [...allVariants].sort(() => Math.random() - 0.5);
       
-      return shuffled.slice(0, 2).map(v => ({
-        sentence: v.variantSentence,
-        translation: v.variantTranslation
-      }));
+      // Return full DialogueVariant objects with IDs
+      return shuffled.slice(0, 2);
     } catch (error) {
       console.error('Failed to generate dialogue variants:', error);
       // Return empty array on error
@@ -329,15 +324,68 @@ export class DialogService {
   }
 
   /**
-   * Generate follow-up continuation text with translation
+   * Generate follow-up continuation text with translation (cached per variant)
    */
-  async generateFollowUp(sentence: Sentence, language?: string): Promise<{ text: string; translation: string }> {
+  async generateFollowUp(variantId: number, language?: string): Promise<{ text: string; translation: string }> {
     try {
+      // Handle negative IDs (original sentence pseudo-variants)
+      const isOriginalSentence = variantId < 0;
+      let variant: DialogueVariant | null = null;
+      
+      if (isOriginalSentence) {
+        // For original sentence, create a variant entry if it doesn't exist
+        const sentenceId = Math.abs(variantId);
+        const sentence = await this.database.getSentenceById(sentenceId);
+        if (!sentence) {
+          console.error('[DialogService] Sentence not found for variant:', variantId);
+          return { text: '', translation: '' };
+        }
+        
+        // Check if a variant already exists for the original sentence
+        const existingVariants = await this.database.getDialogueVariantsBySentenceId(sentenceId);
+        const originalVariant = existingVariants.find(
+          v => v.variantSentence === sentence.sentence && v.variantTranslation === sentence.translation
+        );
+        
+        if (originalVariant) {
+          variant = originalVariant;
+        } else {
+          // Create a variant entry for the original sentence
+          const variantIdFromDb = await this.database.insertDialogueVariant(
+            sentenceId,
+            sentence.sentence,
+            sentence.translation
+          );
+          variant = await this.database.getDialogueVariantById(variantIdFromDb);
+          if (!variant) {
+            console.error('[DialogService] Failed to create variant for original sentence');
+            return { text: '', translation: '' };
+          }
+        }
+      } else {
+        // Regular variant - get from database
+        variant = await this.database.getDialogueVariantById(variantId);
+        if (!variant) {
+          console.error('[DialogService] Variant not found:', variantId);
+          return { text: '', translation: '' };
+        }
+      }
+
+      // Return cached continuation if available
+      if (variant.continuationText && variant.continuationTranslation) {
+        console.log('[DialogService] Using cached continuation for variant:', variant.id);
+        return {
+          text: variant.continuationText,
+          translation: variant.continuationTranslation
+        };
+      }
+
       const currentLanguage = language || await this.database.getCurrentLanguage();
       
+      // Use the variant sentence as context (what the user said), not the original sentence
       const prompt = this.createFollowUpPrompt(
-        sentence.sentence,
-        sentence.translation,
+        variant.variantSentence,
+        variant.variantTranslation,
         currentLanguage
       );
 
@@ -439,10 +487,27 @@ export class DialogService {
         // Could add translation logic here if needed
       }
 
-      return { 
+      const result = { 
         text: text.trim(), 
         translation: translation.trim() 
       };
+
+      // Cache the continuation for this variant (use actual variant ID, not the pseudo ID)
+      if (result.text && result.translation) {
+        try {
+          await this.database.updateDialogueVariantContinuation(
+            variant.id, // Use the actual database variant ID
+            result.text,
+            result.translation
+          );
+          console.log('[DialogService] Cached continuation for variant:', variant.id);
+        } catch (cacheError) {
+          console.error('[DialogService] Failed to cache continuation:', cacheError);
+          // Continue even if caching fails
+        }
+      }
+
+      return result;
     } catch (error) {
       console.error('Failed to generate follow-up:', error);
       return { text: '', translation: '' };
@@ -526,6 +591,85 @@ Preferred JSON format:
 
 If you cannot return JSON, return the ${languageName} text first, followed by a blank line, then the English translation.
 `;
+  }
+
+  /**
+   * Pre-generate a complete dialog session (sentence + variants + audio)
+   * This is meant to be called async on app startup to cache a session
+   */
+  async pregenerateSession(language?: string): Promise<{
+    sentenceId: number;
+    sentence: string;
+    translation: string;
+    contextBefore?: string;
+    contextBeforeTranslation?: string;
+    beforeSentenceAudio?: string;
+    responseOptions: Array<{
+      id: number;
+      sentenceId: number;
+      variantSentence: string;
+      variantTranslation: string;
+      createdAt: Date;
+    }>;
+  } | null> {
+    try {
+      // Select a sentence
+      const sentence = await this.selectSentence(language);
+      if (!sentence) {
+        return null;
+      }
+
+      // Generate variants
+      const existingVariants = await this.database.getDialogueVariantsBySentenceId(sentence.id);
+      const variants = await this.generateDialogueVariants(sentence, existingVariants);
+
+      // Create pseudo-variant for original sentence
+      const originalVariant = {
+        id: -sentence.id,
+        sentenceId: sentence.id,
+        variantSentence: sentence.sentence,
+        variantTranslation: sentence.translation,
+        createdAt: new Date()
+      };
+
+      // Combine response options
+      const responseOptions: DialogueVariant[] = [
+        originalVariant,
+        ...variants.slice(0, 2)
+      ].sort(() => Math.random() - 0.5);
+
+      // Audio will be generated separately via IPC handler
+      // We don't generate it here to avoid circular dependencies
+      // The IPC handler will handle audio generation after returning the session data
+
+      return {
+        sentenceId: sentence.id,
+        sentence: sentence.sentence,
+        translation: sentence.translation,
+        contextBefore: sentence.contextBefore,
+        contextBeforeTranslation: sentence.contextBeforeTranslation,
+        beforeSentenceAudio: undefined, // Will be set by IPC handler
+        responseOptions: responseOptions.map(v => ({
+          id: v.id,
+          sentenceId: v.sentenceId,
+          variantSentence: v.variantSentence,
+          variantTranslation: v.variantTranslation,
+          createdAt: v.createdAt
+        }))
+      };
+    } catch (error) {
+      console.error('[DialogService] Failed to pre-generate dialog session:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Ensure beforeSentence audio exists and return the path
+   */
+  async ensureBeforeSentenceAudio(sentenceId: number): Promise<string | null> {
+    // This method will be implemented by calling the audio service via IPC
+    // For now, we'll delegate to the main process
+    return null; // Will be handled by IPC handler
   }
 }
 

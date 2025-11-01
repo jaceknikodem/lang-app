@@ -745,7 +745,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         sentenceId: row.sentence_id,
         variantSentence: row.variant_sentence,
         variantTranslation: row.variant_translation,
-        createdAt: new Date(row.created_at)
+        createdAt: new Date(row.created_at),
+        continuationText: row.continuation_text || undefined,
+        continuationTranslation: row.continuation_translation || undefined
       }));
     } catch (error) {
       throw new Error(`Failed to get dialogue variants: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -768,6 +770,60 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       return result.count;
     } catch (error) {
       throw new Error(`Failed to get dialogue variant count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get dialogue variant by ID
+   */
+  async getDialogueVariantById(variantId: number): Promise<DialogueVariant | null> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare(`
+        SELECT * FROM dialogue_variants
+        WHERE id = ?
+      `);
+      
+      const row = stmt.get(variantId) as any;
+      if (!row) {
+        return null;
+      }
+      
+      return {
+        id: row.id,
+        sentenceId: row.sentence_id,
+        variantSentence: row.variant_sentence,
+        variantTranslation: row.variant_translation,
+        createdAt: new Date(row.created_at),
+        continuationText: row.continuation_text || undefined,
+        continuationTranslation: row.continuation_translation || undefined
+      };
+    } catch (error) {
+      throw new Error(`Failed to get dialogue variant: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Update continuation for a dialogue variant
+   */
+  async updateDialogueVariantContinuation(
+    variantId: number,
+    continuationText: string,
+    continuationTranslation: string
+  ): Promise<void> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare(`
+        UPDATE dialogue_variants
+        SET continuation_text = ?, continuation_translation = ?
+        WHERE id = ?
+      `);
+      
+      stmt.run(continuationText, continuationTranslation, variantId);
+    } catch (error) {
+      throw new Error(`Failed to update dialogue variant continuation: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

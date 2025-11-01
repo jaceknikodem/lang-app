@@ -134,4 +134,6 @@ export interface DialogueVariant {
   variantSentence: string;
   variantTranslation: string;
   createdAt: Date;
+  continuationText?: string;
+  continuationTranslation?: string;
 }

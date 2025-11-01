@@ -27,6 +27,9 @@ const WordIdSchema = z.number().int().positive();
 const WordIdsSchema = z.array(z.number().int().positive());
 const SentenceIdSchema = z.number().int().positive();
 const SentenceIdsSchema = z.array(z.number().int().positive());
+const VariantIdSchema = z.number().int().refine((val) => val !== 0, {
+  message: "Variant ID must be non-zero"
+}); // Allows positive and negative integers (for pseudo-variants with negative IDs)
 const StrengthSchema = z.number().int().min(0);
 const BooleanSchema = z.boolean();
 const LimitSchema = z.number().int().positive().max(1000);
@@ -1308,21 +1311,58 @@ function setupDialogHandlers(
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.DIALOG.GENERATE_FOLLOW_UP, async (event, sentenceId) => {
+  ipcMain.handle(IPC_CHANNELS.DIALOG.GENERATE_FOLLOW_UP, async (event, variantId) => {
     try {
-      const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
+      const validatedVariantId = VariantIdSchema.parse(variantId); // Use VariantIdSchema to allow negative IDs
       
-      // Get the sentence
-      const sentence = await databaseLayer.getSentenceById(validatedSentenceId);
-      if (!sentence) {
-        throw new Error(`Sentence with ID ${validatedSentenceId} not found`);
-      }
-
-      // Generate follow-up
-      return await dialogService.generateFollowUp(sentence);
+      // Generate follow-up (will check cache and generate if needed)
+      return await dialogService.generateFollowUp(validatedVariantId);
     } catch (error) {
       console.error('Error generating follow-up:', error);
       throw new Error(`Failed to generate follow-up: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DIALOG.PREGENERATE_SESSION, async (event) => {
+    try {
+      // Pre-generate a dialog session (non-blocking - can fail silently)
+      const session = await dialogService.pregenerateSession();
+      if (!session) {
+        return null;
+      }
+
+      // Generate audio if needed (non-blocking - don't fail if audio generation fails)
+      let beforeSentenceAudio: string | undefined;
+      if (session.contextBefore) {
+        try {
+          const audioPath = await audioService.generateAudio(
+            session.contextBefore,
+            await databaseLayer.getCurrentLanguage(),
+            '_before_sentence'
+          );
+          
+          // Check if audio was generated successfully
+          if (audioPath && await audioService.audioExists(audioPath)) {
+            beforeSentenceAudio = audioPath;
+          }
+        } catch (error) {
+          console.warn('[IPC] Failed to generate beforeSentence audio during pre-generation:', error);
+          // Continue without audio
+        }
+      }
+
+      // Convert Date objects to ISO strings for IPC transfer
+      return {
+        ...session,
+        beforeSentenceAudio,
+        responseOptions: session.responseOptions.map(v => ({
+          ...v,
+          createdAt: v.createdAt.toISOString()
+        }))
+      };
+    } catch (error) {
+      console.error('Error pre-generating dialog session:', error);
+      return null; // Don't throw - this is a background operation
     }
   });
 

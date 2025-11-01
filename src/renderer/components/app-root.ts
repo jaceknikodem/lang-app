@@ -348,6 +348,16 @@ export class AppRoot extends LitElement {
       await this.ensureLearningSession();
       console.log('Learning session ready');
 
+      // Pre-generate dialog session asynchronously (non-blocking)
+      setImmediate(async () => {
+        try {
+          await this.pregenerateDialogSession();
+        } catch (error) {
+          console.error('Failed to pre-generate dialog session:', error);
+          // Non-critical - continue without cached dialog session
+        }
+      });
+
       console.log('App initialization complete');
       this.isLoading = false;
     } catch (error) {
@@ -459,6 +469,21 @@ export class AppRoot extends LitElement {
     await this.refreshCurrentLanguage();
   };
 
+  /**
+   * Pre-generate dialog session after language changes
+   */
+  private async pregenerateDialogSessionAfterLanguageChange() {
+    // Wait a bit for the language change to fully propagate
+    setTimeout(async () => {
+      try {
+        await this.pregenerateDialogSession();
+      } catch (error) {
+        console.error('Failed to pre-generate dialog session after language change:', error);
+        // Non-critical - continue without cached dialog session
+      }
+    }, 1000);
+  }
+
   private async handleLanguageDropdownChange(event: Event) {
     const select = event.target as HTMLSelectElement;
     const selectedLanguage = select.value;
@@ -487,6 +512,9 @@ export class AppRoot extends LitElement {
       }));
 
       console.log('Language changed to:', this.currentLanguage);
+
+      // Pre-generate dialog session for the new language
+      this.pregenerateDialogSessionAfterLanguageChange();
     } catch (error) {
       console.error('Failed to change language:', error);
       // Revert the selection
@@ -780,5 +808,67 @@ export class AppRoot extends LitElement {
     }
   }
 
+  /**
+   * Pre-generate a dialog session and cache it in the session manager
+   */
+  private async pregenerateDialogSession(): Promise<void> {
+    try {
+      const sessionData = await window.electronAPI.dialog.pregenerateSession();
+      if (!sessionData) {
+        console.log('No dialog session could be pre-generated (no sentences available)');
+        return;
+      }
+
+      // Convert response options dates from ISO strings back to Date objects
+      const responseOptions = sessionData.responseOptions.map((v: {
+        id: number;
+        sentenceId: number;
+        variantSentence: string;
+        variantTranslation: string;
+        createdAt: string;
+      }) => ({
+        id: v.id,
+        sentenceId: v.sentenceId,
+        variantSentence: v.variantSentence,
+        variantTranslation: v.variantTranslation,
+        createdAt: new Date(v.createdAt)
+      }));
+
+      // Create dialog session state
+      const dialogSession: import('../utils/session-manager.js').DialogSessionState = {
+        id: `dialog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        sentenceId: sessionData.sentenceId,
+        sentence: sessionData.sentence,
+        translation: sessionData.translation,
+        contextBefore: sessionData.contextBefore,
+        contextBeforeTranslation: sessionData.contextBeforeTranslation,
+        beforeSentenceAudio: sessionData.beforeSentenceAudio,
+        responseOptions: responseOptions.map((v: {
+          id: number;
+          sentenceId: number;
+          variantSentence: string;
+          variantTranslation: string;
+          createdAt: Date;
+        }) => ({
+          id: v.id,
+          sentenceId: v.sentenceId,
+          variantSentence: v.variantSentence,
+          variantTranslation: v.variantTranslation,
+          createdAt: v.createdAt.toISOString()
+        })),
+        createdAt: new Date().toISOString()
+      };
+
+      // Cache in session manager
+      sessionManager.setDialogSession(dialogSession);
+      console.log('Dialog session pre-generated and cached:', {
+        sentenceId: dialogSession.sentenceId,
+        variantsCount: dialogSession.responseOptions.length
+      });
+    } catch (error) {
+      console.error('Failed to pre-generate dialog session:', error);
+      // Non-critical error - don't throw
+    }
+  }
 
 }

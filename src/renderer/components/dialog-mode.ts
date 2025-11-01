@@ -4,15 +4,13 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { Sentence } from '../../shared/types/core.js';
+import { Sentence, DialogueVariant } from '../../shared/types/core.js';
 import { sharedStyles } from '../styles/shared.js';
 import { useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
+import { sessionManager } from '../utils/session-manager.js';
 import type { RecordingOptions, RecordingSession } from '../../shared/types/audio.js';
 
-interface DialogueVariant {
-  sentence: string;
-  translation: string;
-}
+// DialogueVariant is now imported from shared/types/core.js
 
 interface TranscriptionResult {
   text: string;
@@ -167,6 +165,45 @@ export class DialogMode extends LitElement {
       this.showFollowUp = false;
       this.transcriptionResult = null;
 
+      // Check for cached dialog session first
+      const cachedSession = sessionManager.getDialogSession();
+      if (cachedSession) {
+        console.log('Using cached dialog session:', cachedSession.id);
+        
+        // Load from cache
+        const sentences = await window.electronAPI.database.getSentencesByIds([cachedSession.sentenceId]);
+        const sentence = sentences && sentences.length > 0 ? sentences[0] : null;
+        if (sentence) {
+          this.currentSentence = sentence;
+          this.beforeSentenceAudio = cachedSession.beforeSentenceAudio || null;
+          
+          // Convert cached response options back to DialogueVariant format
+          this.responseOptions = cachedSession.responseOptions.map(v => ({
+            id: v.id,
+            sentenceId: v.sentenceId,
+            variantSentence: v.variantSentence,
+            variantTranslation: v.variantTranslation,
+            createdAt: new Date(v.createdAt)
+          }));
+          
+          // Clear the cached session after using it (will be regenerated on next app start)
+          sessionManager.clearDialogSession();
+          
+          this.isLoading = false;
+          
+          // Auto-play trigger audio if available
+          if (this.beforeSentenceAudio) {
+            requestAnimationFrame(() => {
+              setTimeout(() => {
+                this.playBeforeSentence();
+              }, 300);
+            });
+          }
+          return;
+        }
+      }
+
+      // No cached session - generate new one
       // Step 1: Select a sentence with high word strengths
       const sentence = await window.electronAPI.dialog.selectSentence();
       
@@ -193,12 +230,18 @@ export class DialogMode extends LitElement {
       try {
         const variants = await window.electronAPI.dialog.generateVariants(sentence.id);
         
+        // Create a pseudo-variant for the original sentence (using negative ID to indicate it's the original)
+        const originalVariant: DialogueVariant = {
+          id: -sentence.id, // Negative ID to indicate it's the original sentence
+          sentenceId: sentence.id,
+          variantSentence: sentence.sentence,
+          variantTranslation: sentence.translation,
+          createdAt: new Date()
+        };
+        
         // Combine target sentence with variants
         this.responseOptions = [
-          {
-            sentence: sentence.sentence,
-            translation: sentence.translation
-          },
+          originalVariant,
           ...variants.slice(0, 2) // Take up to 2 variants
         ];
         
@@ -208,8 +251,11 @@ export class DialogMode extends LitElement {
         console.error('Failed to generate variants:', error);
         // Fallback: use only the target sentence
         this.responseOptions = [{
-          sentence: sentence.sentence,
-          translation: sentence.translation
+          id: -sentence.id,
+          sentenceId: sentence.id,
+          variantSentence: sentence.sentence,
+          variantTranslation: sentence.translation,
+          createdAt: new Date()
         }];
       }
 
@@ -277,6 +323,15 @@ export class DialogMode extends LitElement {
         },
         context: 'dialog',
         description: 'Play trigger audio'
+      },
+      // Toggle translation visibility
+      {
+        key: 't',
+        action: () => {
+          this.showTranslations = !this.showTranslations;
+        },
+        context: 'dialog',
+        description: 'Toggle English translation visibility'
       }
     ];
 
@@ -345,6 +400,10 @@ export class DialogMode extends LitElement {
       this.isRecording = false;
       this.clearRecordingTimer();
       this.clearRecordingStatusCheck();
+      
+      // Hide transcribing box when stopping recording
+      this.isTranscribing = false;
+      this.streamingTranscriptionText = null;
 
       if (completedSession && !completedSession.isRecording) {
         // Get the recording file path from the session
@@ -367,6 +426,9 @@ export class DialogMode extends LitElement {
       this.isRecording = false;
       this.clearRecordingTimer();
       this.clearRecordingStatusCheck();
+      // Hide transcribing box on error too
+      this.isTranscribing = false;
+      this.streamingTranscriptionText = null;
       this.error = `Failed to stop recording: ${error instanceof Error ? error.message : 'Unknown error'}`;
     }
   }
@@ -383,11 +445,17 @@ export class DialogMode extends LitElement {
       this.transcriptionResult = null;
       this.clearRecordingTimer();
       this.clearRecordingStatusCheck();
+      // Hide transcribing box when canceling
+      this.isTranscribing = false;
+      this.streamingTranscriptionText = null;
     } catch (error) {
       console.error('Error cancelling recording:', error);
       this.isRecording = false;
       this.clearRecordingTimer();
       this.clearRecordingStatusCheck();
+      // Hide transcribing box on error too
+      this.isTranscribing = false;
+      this.streamingTranscriptionText = null;
     }
   }
 
@@ -479,7 +547,7 @@ export class DialogMode extends LitElement {
         this.responseOptions.map(async (option) => {
           const comparison = await window.electronAPI.audio.compareTranscription(
             transcription.text,
-            option.sentence
+            option.variantSentence
           );
           return {
             option,
@@ -522,13 +590,14 @@ export class DialogMode extends LitElement {
   }
 
   private async generateFollowUp() {
-    if (!this.currentSentence || this.isGeneratingFollowUp) {
+    if (!this.selectedOption || this.isGeneratingFollowUp) {
       return;
     }
 
     try {
       this.isGeneratingFollowUp = true;
-      const followUp = await window.electronAPI.dialog.generateFollowUp(this.currentSentence.id);
+      // Use the selected variant's ID to get/cache continuation
+      const followUp = await window.electronAPI.dialog.generateFollowUp(this.selectedOption.id);
       // Handle both string (legacy) and object formats
       if (typeof followUp === 'string') {
         this.followUpText = followUp;
@@ -560,6 +629,11 @@ export class DialogMode extends LitElement {
 
   private renderRecordingSection() {
     if (!this.responseOptions.length) return '';
+
+    // Don't show transcribing box if there's no recording or transcribing happening
+    if (!this.isRecording && !this.currentRecording && !this.isTranscribing) {
+      return '';
+    }
 
     return html`
       <div class="recording-section">
@@ -777,18 +851,11 @@ export class DialogMode extends LitElement {
 
       .response-option {
         padding: var(--spacing-sm) var(--spacing-md);
-        cursor: pointer;
+        cursor: default;
         transition: all 0.2s ease;
         border-radius: var(--border-radius-small);
-      }
-
-      .response-option:hover {
-        background: var(--primary-light);
-      }
-
-      .response-option.selected {
-        background: var(--primary-light);
-        font-weight: 500;
+        border: 1px solid #ccc;
+        background: var(--background-primary);
       }
 
       .response-option .sentence {
@@ -1174,7 +1241,7 @@ export class DialogMode extends LitElement {
             <div class="dialog-bubble bubble-right">
               <div class="bubble-content">
                 <div class="bubble-text-container">
-                  <p class="bubble-text">${this.selectedOption.sentence}</p>
+                  <p class="bubble-text">${this.selectedOption.variantSentence}</p>
                   ${this.transcriptionResult ? html`
                     <span class="similarity-badge ${this.getSimilarityClass(this.transcriptionResult.similarity)}">
                       ${Math.round(this.transcriptionResult.similarity * 100)}%
@@ -1182,7 +1249,7 @@ export class DialogMode extends LitElement {
                   ` : nothing}
                 </div>
                 ${this.showTranslations ? html`
-                  <p class="bubble-translation">${this.selectedOption.translation}</p>
+                  <p class="bubble-translation">${this.selectedOption.variantTranslation}</p>
                 ` : nothing}
                 ${this.transcriptionResult.similarity < 0.75 ? html`
                   <button 
@@ -1198,15 +1265,12 @@ export class DialogMode extends LitElement {
           ` : this.responseOptions.length > 0 && !this.transcriptionResult ? html`
             <div class="response-options">
               ${this.responseOptions.map((option, index) => html`
-                <div 
-                  class="response-option ${this.selectedOption === option ? 'selected' : ''}"
-                  @click=${() => { this.selectedOption = option; }}
-              >
-                <p class="sentence">${option.sentence}</p>
-                ${this.showTranslations ? html`
-                  <p class="translation">${option.translation}</p>
-                ` : nothing}
-              </div>
+                <div class="response-option">
+                  <p class="sentence">${option.variantSentence}</p>
+                  ${this.showTranslations ? html`
+                    <p class="translation">${option.variantTranslation}</p>
+                  ` : nothing}
+                </div>
             `)}
           </div>
         ` : nothing}
