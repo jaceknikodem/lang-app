@@ -1437,12 +1437,14 @@ function setupDialogHandlers(
 
   ipcMain.handle(IPC_CHANNELS.DIALOG.PREGENERATE_SESSION, async (event) => {
     try {
-      // Pre-generate a dialog session (non-blocking - can fail silently)
-      const session = await dialogService.pregenerateSession();
-      if (!session) {
+      // Pre-generate a single dialog session using batch method
+      const sessions = await dialogService.pregenerateSessions(1);
+      if (sessions.length === 0) {
         return null;
       }
 
+      const session = sessions[0];
+      
       // Generate audio if needed (non-blocking - don't fail if audio generation fails)
       let beforeSentenceAudio: string | undefined;
       if (session.contextBefore) {
@@ -1475,6 +1477,54 @@ function setupDialogHandlers(
     } catch (error) {
       console.error('Error pre-generating dialog session:', error);
       return null; // Don't throw - this is a background operation
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DIALOG.PREGENERATE_SESSIONS, async (event, count: number) => {
+    try {
+      // Pre-generate multiple dialog sessions (non-blocking - can fail silently)
+      const sessions = await dialogService.pregenerateSessions(count);
+      if (sessions.length === 0) {
+        return [];
+      }
+
+      const currentLanguage = await databaseLayer.getCurrentLanguage();
+      const sessionsWithAudio = await Promise.all(sessions.map(async (session) => {
+        // Generate audio if needed (non-blocking - don't fail if audio generation fails)
+        let beforeSentenceAudio: string | undefined;
+        if (session.contextBefore) {
+          try {
+            const audioPath = await audioService.generateAudio(
+              session.contextBefore,
+              currentLanguage,
+              '_before_sentence'
+            );
+            
+            // Check if audio was generated successfully
+            if (audioPath && await audioService.audioExists(audioPath)) {
+              beforeSentenceAudio = audioPath;
+            }
+          } catch (error) {
+            console.warn(`[IPC] Failed to generate beforeSentence audio for session ${session.sentenceId}:`, error);
+            // Continue without audio
+          }
+        }
+
+        // Convert Date objects to ISO strings for IPC transfer
+        return {
+          ...session,
+          beforeSentenceAudio,
+          responseOptions: session.responseOptions.map(v => ({
+            ...v,
+            createdAt: v.createdAt.toISOString()
+          }))
+        };
+      }));
+
+      return sessionsWithAudio;
+    } catch (error) {
+      console.error('Error pre-generating dialog sessions:', error);
+      return []; // Don't throw - this is a background operation
     }
   });
 

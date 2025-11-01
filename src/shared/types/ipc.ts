@@ -204,6 +204,21 @@ export interface IPCBridge {
         createdAt: Date;
       }>;
     } | null>;
+    pregenerateSessions: (count: number) => Promise<Array<{
+      sentenceId: number;
+      sentence: string;
+      translation: string;
+      contextBefore?: string;
+      contextBeforeTranslation?: string;
+      beforeSentenceAudio?: string;
+      responseOptions: Array<{
+        id: number;
+        sentenceId: number;
+        variantSentence: string;
+        variantTranslation: string;
+        createdAt: Date;
+      }>;
+    }>>;
   };
 }
 
@@ -325,6 +340,7 @@ export const IPC_CHANNELS = {
     GENERATE_VARIANTS: 'dialog:generateVariants',
     GENERATE_FOLLOW_UP: 'dialog:generateFollowUp',
     ENSURE_BEFORE_SENTENCE_AUDIO: 'dialog:ensureBeforeSentenceAudio',
-    PREGENERATE_SESSION: 'dialog:pregenerateSession'
+    PREGENERATE_SESSION: 'dialog:pregenerateSession',
+    PREGENERATE_SESSIONS: 'dialog:pregenerateSessions'
   }
 } as const;

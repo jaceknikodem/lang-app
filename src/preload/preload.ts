@@ -294,7 +294,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ensureBeforeSentenceAudio: (sentenceId: number) => 
         ipcRenderer.invoke(IPC_CHANNELS.DIALOG.ENSURE_BEFORE_SENTENCE_AUDIO, sentenceId),
       pregenerateSession: () => 
-        ipcRenderer.invoke(IPC_CHANNELS.DIALOG.PREGENERATE_SESSION)
+        ipcRenderer.invoke(IPC_CHANNELS.DIALOG.PREGENERATE_SESSION),
+      pregenerateSessions: (count: number) =>
+        ipcRenderer.invoke(IPC_CHANNELS.DIALOG.PREGENERATE_SESSIONS, count)
     }
   });
 
@@ -469,6 +471,7 @@ declare global {
         generateFollowUp: (variantId: number) => Promise<{ text: string; translation: string; audio?: string }>;
         ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
         pregenerateSession: () => Promise<any | null>;
+        pregenerateSessions: (count: number) => Promise<any[]>;
       };
     };
   }

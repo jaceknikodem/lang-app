@@ -75,7 +75,7 @@ export class DialogService {
     this.database = database;
     this.llmClient = llmClient;
     this.config = {
-      minWordStrength: config?.minWordStrength ?? 50,
+      minWordStrength: config?.minWordStrength ?? 40,
       maxVariantsPerSentence: config?.maxVariantsPerSentence ?? 6,
       maxKnownWordsForVariants: config?.maxKnownWordsForVariants ?? 50
     };
@@ -124,16 +124,23 @@ export class DialogService {
    */
   async generateDialogueVariants(
     sentence: Sentence,
-    existingVariants: DialogueVariant[]
+    existingVariants: DialogueVariant[],
+    knownWords?: string[]
   ): Promise<DialogueVariant[]> {
     try {
       const language = await this.database.getCurrentLanguage();
       
-      // Get known words to use in variants
-      const allWords = await this.database.getAllWords(true, false, language);
-      const knownWords = allWords
-        .filter(w => w.known || (w.strength ?? 0) >= this.config.minWordStrength!)
-        .map(w => w.word);
+      // Get known words to use in variants (if not provided)
+      let wordsToUse: string[];
+      if (knownWords) {
+        wordsToUse = knownWords;
+      } else {
+        const allWords = await this.database.getAllWords(true, false, language);
+        wordsToUse = allWords
+          .filter(w => w.known || (w.strength ?? 0) >= this.config.minWordStrength!)
+          .slice(0, this.config.maxKnownWordsForVariants!)
+          .map(w => w.word);
+      }
 
       // Check how many variants we need (need 2, excluding original)
       const neededCount = Math.max(0, 2 - existingVariants.length);
@@ -161,7 +168,7 @@ export class DialogService {
         triggerSentence,
         triggerTranslation,
         language,
-        knownWords,
+        wordsToUse,
         generateCount
       );
 
@@ -559,10 +566,11 @@ Preferred JSON format:
   }
 
   /**
-   * Pre-generate a complete dialog session (sentence + variants + audio)
-   * This is meant to be called async on app startup to cache a session
+   * Pre-generate multiple dialog sessions (batch DB queries, sequential LLM calls)
+   * Batches database queries for efficiency but processes LLM-dependent operations sequentially
+   * to avoid flooding the LLM service
    */
-  async pregenerateSession(language?: string): Promise<{
+  async pregenerateSessions(count: number, language?: string): Promise<Array<{
     sentenceId: number;
     sentence: string;
     translation: string;
@@ -576,55 +584,112 @@ Preferred JSON format:
       variantTranslation: string;
       createdAt: Date;
     }>;
-  } | null> {
+  }>> {
+    if (count <= 0) {
+      return [];
+    }
+
     try {
-      // Select a sentence
-      const sentence = await this.selectSentence(language);
-      if (!sentence) {
-        return null;
+      const currentLanguage = language || await this.database.getCurrentLanguage();
+      
+      // Step 1: Batch query - get all sentences at once from database
+      const sentences = await this.database.getRandomDialogSentences(
+        count,
+        this.config.minWordStrength!,
+        currentLanguage
+      );
+
+      if (sentences.length === 0) {
+        console.log('[DialogService] No suitable sentences found for batch generation', {
+          language: currentLanguage,
+          minStrength: this.config.minWordStrength,
+          requestedCount: count
+        });
+        return [];
       }
 
-      // Generate variants
-      const existingVariants = await this.database.getDialogueVariantsBySentenceId(sentence.id);
-      const variants = await this.generateDialogueVariants(sentence, existingVariants);
+      // Step 2: Extract known words once (used for all variant generations)
+      const allWords = await this.database.getAllWords(true, false, currentLanguage);
+      const knownWords = allWords
+        .filter(w => w.known || (w.strength ?? 0) >= this.config.minWordStrength!)
+        .slice(0, this.config.maxKnownWordsForVariants!)
+        .map(w => w.word);
 
-      // Create pseudo-variant for original sentence
-      const originalVariant = {
-        id: -sentence.id,
-        sentenceId: sentence.id,
-        variantSentence: sentence.sentence,
-        variantTranslation: sentence.translation,
-        createdAt: new Date()
-      };
+      // Step 3: Batch query - get existing variants for all sentences at once
+      const sentenceIds = sentences.map(s => s.id);
+      const allExistingVariantsMap = new Map<number, DialogueVariant[]>();
+      
+      // Fetch existing variants for all sentences (can be done in parallel or batched)
+      await Promise.all(sentenceIds.map(async (sentenceId) => {
+        const variants = await this.database.getDialogueVariantsBySentenceId(sentenceId);
+        allExistingVariantsMap.set(sentenceId, variants);
+      }));
 
-      // Combine response options
-      const responseOptions: DialogueVariant[] = [
-        originalVariant,
-        ...variants.slice(0, 2)
-      ].sort(() => Math.random() - 0.5);
+      // Step 4: Process each sentence sequentially for LLM-dependent operations
+      // This avoids flooding the LLM service with concurrent requests
+      const sessions: Array<{
+        sentenceId: number;
+        sentence: string;
+        translation: string;
+        contextBefore?: string;
+        contextBeforeTranslation?: string;
+        beforeSentenceAudio?: string;
+        responseOptions: Array<{
+          id: number;
+          sentenceId: number;
+          variantSentence: string;
+          variantTranslation: string;
+          createdAt: Date;
+        }>;
+      }> = [];
 
-      // Audio will be generated separately via IPC handler
-      // We don't generate it here to avoid circular dependencies
-      // The IPC handler will handle audio generation after returning the session data
+      for (const sentence of sentences) {
+        try {
+          // Generate variants sequentially (LLM call)
+          const existingVariants = allExistingVariantsMap.get(sentence.id) || [];
+          const variants = await this.generateDialogueVariants(sentence, existingVariants, knownWords);
 
-      return {
-        sentenceId: sentence.id,
-        sentence: sentence.sentence,
-        translation: sentence.translation,
-        contextBefore: sentence.contextBefore,
-        contextBeforeTranslation: sentence.contextBeforeTranslation,
-        beforeSentenceAudio: undefined, // Will be set by IPC handler
-        responseOptions: responseOptions.map(v => ({
-          id: v.id,
-          sentenceId: v.sentenceId,
-          variantSentence: v.variantSentence,
-          variantTranslation: v.variantTranslation,
-          createdAt: v.createdAt
-        }))
-      };
+          // Create pseudo-variant for original sentence
+          const originalVariant = {
+            id: -sentence.id,
+            sentenceId: sentence.id,
+            variantSentence: sentence.sentence,
+            variantTranslation: sentence.translation,
+            createdAt: new Date()
+          };
+
+          // Combine response options
+          const responseOptions: DialogueVariant[] = [
+            originalVariant,
+            ...variants.slice(0, 2)
+          ].sort(() => Math.random() - 0.5);
+
+          sessions.push({
+            sentenceId: sentence.id,
+            sentence: sentence.sentence,
+            translation: sentence.translation,
+            contextBefore: sentence.contextBefore,
+            contextBeforeTranslation: sentence.contextBeforeTranslation,
+            beforeSentenceAudio: undefined, // Will be set by IPC handler
+            responseOptions: responseOptions.map(v => ({
+              id: v.id,
+              sentenceId: v.sentenceId,
+              variantSentence: v.variantSentence,
+              variantTranslation: v.variantTranslation,
+              createdAt: v.createdAt
+            }))
+          });
+        } catch (error) {
+          console.error(`[DialogService] Failed to generate variants for sentence ${sentence.id}:`, error);
+          // Continue with other sentences even if one fails
+        }
+      }
+
+      console.log(`[DialogService] Successfully pre-generated ${sessions.length} of ${count} requested dialog sessions`);
+      return sessions;
     } catch (error) {
-      console.error('[DialogService] Failed to pre-generate dialog session:', error);
-      return null;
+      console.error('[DialogService] Failed to pre-generate dialog sessions:', error);
+      return [];
     }
   }
 
