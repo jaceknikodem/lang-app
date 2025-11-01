@@ -80,12 +80,12 @@ export class LearningMode extends LitElement {
   private sessionStartTime = Date.now();
   private keyboardUnsubscribe?: () => void;
   private lastRecordedSentenceId: number | null = null;
+  private lastSeenSentenceId: number | null = null;
   private queueIntervalId: number | undefined;
   private jobListenerCleanup?: () => void;
   private infoTimeoutId: number | undefined;
   private isReloadingFromQueue = false;
   private currentSentenceDisplayLastSeen?: Date;
-  private lastSeenClearFrame: number | null = null;
   private autoScrollTimer: number | null = null;
   
   // Audio cache: Map of audioPath -> blob URL
@@ -502,10 +502,6 @@ export class LearningMode extends LitElement {
     this.stopJobMonitoring();
     this.clearInfoTimeout();
     this.clearAutoScrollTimer();
-    if (this.lastSeenClearFrame !== null) {
-      cancelAnimationFrame(this.lastSeenClearFrame);
-      this.lastSeenClearFrame = null;
-    }
     document.removeEventListener('language-changed', this.handleExternalLanguageChange);
   }
 
@@ -1050,39 +1046,41 @@ export class LearningMode extends LitElement {
       const currentSentence = this.getCurrentSentence();
       if (currentSentence && currentSentence.id !== this.lastRecordedSentenceId) {
         this.lastRecordedSentenceId = currentSentence.id;
-        // Optimistically update local state so UI shows "just now"
-      const wIndex = this.currentWordIndex;
-      const sIndex = this.currentSentenceIndex;
-      if (this.wordsWithSentences[wIndex]?.sentences[sIndex]) {
-        const previousLastShown = this.wordsWithSentences[wIndex].sentences[sIndex].lastShown;
-        this.currentSentenceDisplayLastSeen = previousLastShown ? new Date(previousLastShown) : undefined;
-        // Only update wordsWithSentences if the sentence object reference actually changed
-        // This prevents unnecessary re-renders that cause layout shifts
-        const currentSentence = this.wordsWithSentences[wIndex]?.sentences[sIndex];
-        if (currentSentence && currentSentence.lastShown?.getTime() !== new Date().getTime()) {
-          const updatedWords = this.wordsWithSentences.map((w, wi) => {
-            if (wi !== wIndex) return w;
-            const updatedSentences = w.sentences.map((s, si) =>
-              si === sIndex ? { ...s, lastShown: new Date() } : s
-            );
-            return { ...w, sentences: updatedSentences };
-          });
-          this.wordsWithSentences = updatedWords;
+        // Set displayLastSeen once when sentence changes - keep it stable to prevent re-renders
+        // This prevents unnecessary re-renders of the "Last seen" UI
+        const wIndex = this.currentWordIndex;
+        const sIndex = this.currentSentenceIndex;
+        if (this.wordsWithSentences[wIndex]?.sentences[sIndex]) {
+          const currentSentenceObj = this.wordsWithSentences[wIndex].sentences[sIndex];
+          const previousLastShown = currentSentenceObj.lastShown;
+          
+          // Only set displayLastSeen once per sentence change - don't update it again
+          // This ensures the UI doesn't recalculate/re-render unnecessarily
+          if (this.lastSeenSentenceId !== currentSentenceObj.id) {
+            this.lastSeenSentenceId = currentSentenceObj.id;
+            this.currentSentenceDisplayLastSeen = previousLastShown ? new Date(previousLastShown) : undefined;
+          }
+          
+          // Update sentence.lastShown optimistically (but only if it's different)
+          // Check if lastShown needs updating (not updated in the last second)
+          const now = Date.now();
+          const lastShownTime = previousLastShown?.getTime() ?? 0;
+          if (now - lastShownTime > 1000) {
+            const updatedWords = this.wordsWithSentences.map((w, wi) => {
+              if (wi !== wIndex) return w;
+              const updatedSentences = w.sentences.map((s, si) =>
+                si === sIndex ? { ...s, lastShown: new Date() } : s
+              );
+              return { ...w, sentences: updatedSentences };
+            });
+            this.wordsWithSentences = updatedWords;
+          }
         }
-
-        if (this.lastSeenClearFrame !== null) {
-          cancelAnimationFrame(this.lastSeenClearFrame);
-        }
-        this.lastSeenClearFrame = requestAnimationFrame(() => {
-          this.currentSentenceDisplayLastSeen = undefined;
-          this.lastSeenClearFrame = null;
-          // Don't call requestUpdate() - only update if something actually changed
-        });
-      }
-      // Fire and forget; no need to block UI
-      window.electronAPI.database
-        .updateSentenceLastShown(currentSentence.id)
-        .catch(err => console.warn('Failed to update sentence last_shown:', err));
+        
+        // Fire and forget; no need to block UI
+        window.electronAPI.database
+          .updateSentenceLastShown(currentSentence.id)
+          .catch(err => console.warn('Failed to update sentence last_shown:', err));
       }
 
       // Disable auto-scroll when we reach the last sentence
