@@ -177,6 +177,14 @@ export class WordGenerationRunner {
           const audioInfo = this.audioService.getAudioGenerationInfo();
           
           const sentenceParts = splitSentenceIntoParts(sentence.sentence);
+          console.log('[WordGenerationRunner] Storing sentence with context', {
+            word: word.word,
+            language,
+            hasContextBefore: !!sentence.contextBefore,
+            hasContextAfter: !!sentence.contextAfter,
+            contextBefore: sentence.contextBefore?.substring(0, 30),
+            contextAfter: sentence.contextAfter?.substring(0, 30)
+          });
           const sentenceId = await this.database.insertSentence(
             word.id,
             sentence.sentence,

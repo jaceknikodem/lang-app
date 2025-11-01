@@ -7,6 +7,7 @@ import { GeneratedWord, GeneratedSentence } from './core.js';
 export interface LLMClient {
   generateTopicWords(topic: string, language: string, count: number): Promise<GeneratedWord[]>;
   generateSentences(word: string, language: string, count: number, useContextSentences?: boolean, topic?: string): Promise<GeneratedSentence[]>;
+  generateContextSentences(sentence: string, translation: string, language: string): Promise<{ contextBefore?: string; contextAfter?: string; contextBeforeTranslation?: string; contextAfterTranslation?: string }>;
   generateResponse(prompt: string, model?: string): Promise<string>;
   isAvailable(): Promise<boolean>;
   getAvailableModels(): Promise<string[]>;

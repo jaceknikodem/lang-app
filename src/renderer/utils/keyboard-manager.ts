@@ -21,7 +21,8 @@ export class KeyboardManager {
 
   constructor() {
     this.handleKeyDown = this.handleKeyDown.bind(this);
-    document.addEventListener('keydown', this.handleKeyDown);
+    // Use capture phase to ensure we handle keys before other handlers (like button clicks)
+    document.addEventListener('keydown', this.handleKeyDown, true);
   }
 
   /**
@@ -71,7 +72,7 @@ export class KeyboardManager {
    * Destroy the keyboard manager
    */
   destroy(): void {
-    document.removeEventListener('keydown', this.handleKeyDown);
+    document.removeEventListener('keydown', this.handleKeyDown, true);
     this.bindings.clear();
   }
 
@@ -107,6 +108,7 @@ export class KeyboardManager {
 
     const binding = this.bindings.get(key);
     if (binding && (!binding.context || binding.context === this.currentContext)) {
+      // Prevent default to stop button clicks and form submissions
       event.preventDefault();
       event.stopPropagation();
       

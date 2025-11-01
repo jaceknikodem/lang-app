@@ -276,9 +276,6 @@ export class SettingsPanel extends LitElement {
   private showConfirmation = false;
 
   @state()
-  private contextSentencesEnabled = false;
-
-  @state()
   private autoplayAudioEnabled = false;
 
   @state()
@@ -355,9 +352,6 @@ export class SettingsPanel extends LitElement {
 
   private async loadSettings() {
     try {
-      const contextSetting = await window.electronAPI.database.getSetting('context_sentences');
-      this.contextSentencesEnabled = contextSetting === 'true';
-
       const autoplaySetting = await window.electronAPI.database.getSetting('autoplay_audio');
       this.autoplayAudioEnabled = autoplaySetting === 'true';
 
@@ -563,20 +557,6 @@ export class SettingsPanel extends LitElement {
       console.error('Failed to open backup directory:', error);
       // Could add a status message here if needed, but for this simple action
       // it's probably better to just log the error
-    }
-  }
-
-  private async toggleContextSentences(event: Event) {
-    const checkbox = event.target as HTMLInputElement;
-    this.contextSentencesEnabled = checkbox.checked;
-
-    try {
-      await window.electronAPI.database.setSetting('context_sentences', checkbox.checked ? 'true' : 'false');
-    } catch (error) {
-      console.error('Failed to save context sentences setting:', error);
-      // Revert the checkbox state if saving failed
-      this.contextSentencesEnabled = !checkbox.checked;
-      checkbox.checked = !checkbox.checked;
     }
   }
 
@@ -1118,21 +1098,6 @@ export class SettingsPanel extends LitElement {
 
         <div class="settings-section">
           <h3>Learning Preferences</h3>
-          <div class="checkbox-row">
-            <input 
-              type="checkbox" 
-              id="context-sentences"
-              .checked=${this.contextSentencesEnabled}
-              @change=${this.toggleContextSentences}
-            />
-            <label for="context-sentences">
-              <strong>Context Sentences</strong>
-              <div class="checkbox-description">
-                When generating sentences, include additional sentences before and after for better context understanding
-              </div>
-            </label>
-          </div>
-          
           <div class="checkbox-row">
             <input 
               type="checkbox" 

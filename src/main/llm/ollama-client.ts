@@ -93,6 +93,26 @@ const SentenceGenerationResponseSchema = z.union([
   )
 ]);
 
+const ContextSentenceSchema = z.object({
+  contextBefore: z.string().optional(),
+  contextAfter: z.string().optional(),
+  contextBeforeTranslation: z.string().optional(),
+  contextAfterTranslation: z.string().optional()
+});
+
+const ContextSentenceResponseSchema = z.union([
+  ContextSentenceSchema,
+  z.object({
+    response: ContextSentenceSchema
+  }).transform(obj => obj.response),
+  z.record(z.any()).transform(obj => ({
+    contextBefore: obj.contextBefore ? String(obj.contextBefore).trim() : undefined,
+    contextAfter: obj.contextAfter ? String(obj.contextAfter).trim() : undefined,
+    contextBeforeTranslation: obj.contextBeforeTranslation ? String(obj.contextBeforeTranslation).trim() : undefined,
+    contextAfterTranslation: obj.contextAfterTranslation ? String(obj.contextAfterTranslation).trim() : undefined
+  }))
+]);
+
 interface OllamaRequest {
   model: string;
   prompt: string;
@@ -301,6 +321,60 @@ export class OllamaClient implements LLMClient {
         throw this.createLLMError(error, 'Response validation failed', 'INVALID_RESPONSE', false);
       }
       throw this.createLLMError(error instanceof Error ? error : new Error(String(error)), 'Failed to generate sentences');
+    }
+  }
+
+  async generateContextSentences(sentence: string, translation: string, language: string): Promise<{ contextBefore?: string; contextAfter?: string; contextBeforeTranslation?: string; contextAfterTranslation?: string }> {
+    console.log('[OllamaClient] generateContextSentences called', {
+      language,
+      sentence: sentence.substring(0, 50) + '...',
+      translation: translation.substring(0, 50) + '...'
+    });
+    const prompt = this.createContextSentencesPrompt(sentence, translation, language);
+
+    try {
+      const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
+      console.log('[OllamaClient] Context generation response received', {
+        responseType: typeof response,
+        isObject: typeof response === 'object',
+        keys: typeof response === 'object' && response !== null ? Object.keys(response) : []
+      });
+
+      // Use Zod to parse and validate the response
+      const parseResult = ContextSentenceResponseSchema.safeParse(response);
+
+      if (!parseResult.success) {
+        console.error('=== CONTEXT SENTENCE VALIDATION FAILED ===');
+        console.error('Raw response:', JSON.stringify(response, null, 2));
+        console.error('Zod errors:', parseResult.error.issues.map(issue => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+          code: issue.code,
+          received: 'received' in issue ? issue.received : 'unknown'
+        })));
+
+        // Return empty context on validation failure instead of throwing
+        console.warn('Context sentence generation validation failed, returning empty context');
+        return {};
+      }
+
+      const context = parseResult.data;
+
+      // Filter out empty strings
+      return {
+        contextBefore: context.contextBefore && context.contextBefore.trim() ? context.contextBefore.trim() : undefined,
+        contextAfter: context.contextAfter && context.contextAfter.trim() ? context.contextAfter.trim() : undefined,
+        contextBeforeTranslation: context.contextBeforeTranslation && context.contextBeforeTranslation.trim() ? context.contextBeforeTranslation.trim() : undefined,
+        contextAfterTranslation: context.contextAfterTranslation && context.contextAfterTranslation.trim() ? context.contextAfterTranslation.trim() : undefined
+      };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        console.warn('Context sentence generation validation failed, returning empty context:', error);
+        return {};
+      }
+      // On any error, return empty context instead of throwing
+      console.warn('Context sentence generation failed, returning empty context:', error);
+      return {};
     }
   }
 
@@ -514,6 +588,32 @@ Rules:
 7. When natural and appropriate, include some known words from the provided list
 8. Don't force known words if they don't fit naturally
 9. Return ONLY the JSON array, nothing else${contextInstructions}`;
+  }
+
+  private createContextSentencesPrompt(sentence: string, translation: string, language: string): string {
+    return `CRITICAL: Return ONLY a JSON object, no explanations or extra text.
+
+Task: Given this sentence in ${language} and its English translation, suggest what sentence would make sense BEFORE and AFTER it to provide context for language learning.
+
+Sentence in ${language}: "${sentence}"
+English translation: "${translation}"
+
+Expected output format:
+{
+  "contextBefore": "sentence_before_in_${language.toLowerCase()}",
+  "contextAfter": "sentence_after_in_${language.toLowerCase()}",
+  "contextBeforeTranslation": "english_translation_of_before",
+  "contextAfterTranslation": "english_translation_of_after"
+}
+
+Rules:
+1. Context sentences should be short (3-10 words each)
+2. They should form a natural conversation or narrative flow with the given sentence
+3. The contextBefore should logically precede the given sentence
+4. The contextAfter should logically follow the given sentence
+5. Provide English translations for both context sentences
+6. The sentences should make sense when read together: [contextBefore] [given sentence] [contextAfter]
+7. Return ONLY the JSON object, nothing else`;
   }
 
   private async makeRequest(prompt: string, model?: string): Promise<any> {

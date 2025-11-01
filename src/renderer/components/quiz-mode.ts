@@ -2773,11 +2773,11 @@ export class QuizMode extends LitElement {
       similarityClass = 'excellent';
       feedbackClass = 'excellent';
       feedbackMessage = 'Excellent pronunciation! 🎉';
-    } else if (similarity >= 0.8) {
+    } else if (similarity >= 0.85) {
       similarityClass = 'good';
       feedbackClass = 'good';
       feedbackMessage = 'Good pronunciation! Keep it up! 👍';
-    } else if (similarity >= 0.6) {
+    } else if (similarity >= 0.75) {
       similarityClass = 'fair';
       feedbackClass = 'fair';
       feedbackMessage = 'Not bad! Try to match the original more closely. 🤔';
