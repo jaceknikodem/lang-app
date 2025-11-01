@@ -158,6 +158,14 @@ export interface DatabaseLayer {
     continuationAudios: string[];
   }>>;
 
+  // Scoring-specific operations
+  getNewWordCount(language?: string): Promise<number>;
+  getWeakWordCount(language?: string): Promise<number>;
+  getDialogueReadinessRatio(language?: string, minStrength?: number): Promise<number>;
+  getAveragePronunciationScore(language?: string): Promise<number>;
+  getAvailableSentencesCount(language?: string): Promise<number>;
+  getTimeSinceLastActivePractice(language?: string): Promise<number>;
+
   // Database lifecycle
   initialize(): Promise<void>;
   close(): Promise<void>;

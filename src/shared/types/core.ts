@@ -139,3 +139,11 @@ export interface DialogueVariant {
   continuationTranslation?: string;
   continuationAudio?: string;
 }
+
+export interface ModeScores {
+  addWords: number;
+  review: number;
+  quiz: number;
+  dialog: number;
+  flow: number;
+}

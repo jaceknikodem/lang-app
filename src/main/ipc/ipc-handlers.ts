@@ -87,6 +87,9 @@ export function setupIPCHandlers(
   // Flow handlers
   setupFlowHandlers(databaseLayer, audioService);
 
+  // Scoring handlers (if scoringService is provided, will be added in main.ts)
+  // setupScoringHandlers is called separately after scoring service initialization
+
   console.log('IPC handlers registered successfully');
 }
 
@@ -1689,6 +1692,25 @@ function setupFlowHandlers(
     } catch (error) {
       // File doesn't exist or other error
       return null;
+    }
+  });
+}
+
+/**
+ * Set up Scoring-related IPC handlers
+ */
+export function setupScoringHandlers(scoringService: import('../scoring/scoring-service.js').ScoringService): void {
+  ipcMain.handle(IPC_CHANNELS.SCORING.GET_SCORES, async (event, language?: string) => {
+    try {
+      if (language) {
+        const LanguageSchema = z.string().min(1).max(50);
+        LanguageSchema.parse(language);
+      }
+      
+      return await scoringService.calculateAllScores(language);
+    } catch (error) {
+      console.error('Error getting mode scores:', error);
+      throw new Error(`Failed to get mode scores: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
 }

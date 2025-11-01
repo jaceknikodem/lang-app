@@ -2,7 +2,7 @@
  * IPC bridge interfaces for secure communication between main and renderer processes
  */
 
-import { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest, DictionaryEntry, DialogueVariant } from './core.js';
+import { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest, DictionaryEntry, DialogueVariant, ModeScores } from './core.js';
 import { JobWordInfo, WordProcessingStatus } from './database.js';
 import { RecordingOptions, RecordingSession, TranscriptionOptions, TranscriptionResult, TranscriptionComparison } from './audio.js';
 
@@ -241,6 +241,11 @@ export interface IPCBridge {
     stitchAudio: (audioPaths: string[]) => Promise<string>;
     getFileStats: (filePath: string) => Promise<{ mtime: Date } | null>;
   };
+
+  // Scoring operations
+  scoring: {
+    getScores: (language?: string) => Promise<ModeScores>;
+  };
 }
 
 // IPC channel names
@@ -370,5 +375,8 @@ export const IPC_CHANNELS = {
     GET_FLOW_SENTENCES: 'flow:getFlowSentences',
     STITCH_AUDIO: 'flow:stitchAudio',
     GET_FILE_STATS: 'flow:getFileStats'
+  },
+  SCORING: {
+    GET_SCORES: 'scoring:getScores'
   }
 } as const;

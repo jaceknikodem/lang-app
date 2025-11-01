@@ -47,10 +47,14 @@ export class AppRoot extends LitElement {
   @state()
   private showFlowOverlay = false;
 
+  @state()
+  private autopilotEnabled = false;
+
   private routerUnsubscribe?: () => void;
   private keyboardUnsubscribe?: () => void;
   private flowAudioElement: HTMLAudioElement | null = null;
   private flowAudioPath: string | null = null;
+  private autopilotIntervalId: number | null = null;
 
   static styles = [
     sharedStyles,
@@ -216,6 +220,71 @@ export class AppRoot extends LitElement {
         background: var(--background-secondary);
       }
 
+      .autopilot-toggle-container {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        margin-left: auto;
+        margin-right: var(--spacing-xs);
+      }
+
+      .autopilot-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-weight: 500;
+      }
+
+      .autopilot-switch {
+        position: relative;
+        width: 44px;
+        height: 24px;
+        cursor: pointer;
+      }
+
+      .autopilot-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .autopilot-slider {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: var(--background-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 24px;
+        transition: 0.3s;
+      }
+
+      .autopilot-slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 2px;
+        bottom: 2px;
+        background-color: white;
+        border-radius: 50%;
+        transition: 0.3s;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      }
+
+      .autopilot-switch input:checked + .autopilot-slider {
+        background-color: var(--primary-color);
+        border-color: var(--primary-color);
+      }
+
+      .autopilot-switch input:checked + .autopilot-slider:before {
+        transform: translateX(20px);
+      }
+
+      .autopilot-switch:hover .autopilot-slider {
+        border-color: var(--primary-color);
+      }
+
       .content-area {
         flex: 1;
         display: flex;
@@ -328,6 +397,7 @@ export class AppRoot extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+    this.stopAutopilot();
     if (this.routerUnsubscribe) {
       this.routerUnsubscribe();
     }
@@ -645,6 +715,9 @@ export class AppRoot extends LitElement {
       case 'dialog':
         router.goToDialog();
         break;
+      case 'flow':
+        router.goToFlow();
+        break;
       case 'progress':
         router.goToProgress();
         break;
@@ -765,6 +838,73 @@ export class AppRoot extends LitElement {
     }
   }
 
+  private handleAutopilotToggle(event: Event) {
+    const target = event.target as HTMLInputElement;
+    this.autopilotEnabled = target.checked;
+    
+    if (this.autopilotEnabled) {
+      this.startAutopilot();
+    } else {
+      this.stopAutopilot();
+    }
+  }
+
+  private startAutopilot() {
+    // Stop existing interval if any
+    if (this.autopilotIntervalId) {
+      clearInterval(this.autopilotIntervalId);
+    }
+    
+    // Check scores immediately
+    this.checkScoresAndNavigate();
+    
+    // Then set up interval (every 10 seconds to match scoring service)
+    this.autopilotIntervalId = window.setInterval(() => {
+      this.checkScoresAndNavigate();
+    }, 10000);
+  }
+
+  private stopAutopilot() {
+    if (this.autopilotIntervalId) {
+      clearInterval(this.autopilotIntervalId);
+      this.autopilotIntervalId = null;
+    }
+  }
+
+  private async checkScoresAndNavigate() {
+    try {
+      const scores = await window.electronAPI.scoring.getScores(this.currentLanguage);
+      
+      // Find mode with highest score
+      const modeScores = [
+        { mode: 'topic-selection' as AppMode, score: scores.addWords },
+        { mode: 'learning' as AppMode, score: scores.review },
+        { mode: 'quiz' as AppMode, score: scores.quiz },
+        { mode: 'dialog' as AppMode, score: scores.dialog },
+        { mode: 'flow' as AppMode, score: scores.flow }
+      ];
+      
+      // Sort by score descending and get the highest
+      modeScores.sort((a, b) => b.score - a.score);
+      const highestMode = modeScores[0];
+      
+      // Only navigate if we're not already in that mode and score is > 0
+      const currentMode = router.getCurrentRoute().mode;
+      if (currentMode !== highestMode.mode && highestMode.score > 0) {
+        await this.handleNavigation(highestMode.mode);
+        
+        // If it's flow mode, also start playing
+        if (highestMode.mode === 'flow') {
+          setTimeout(async () => {
+            await this.handleFlowPlay();
+          }, 100);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking scores for autopilot:', error);
+    }
+  }
+
   private handleFlowPause() {
     if (this.flowAudioElement) {
       this.flowAudioElement.pause();
@@ -861,57 +1001,59 @@ export class AppRoot extends LitElement {
       <div class="app-container">
         <header class="app-header">
           <nav class="navigation">
-            <button 
-              class="nav-button flow-button"
-              @click=${() => this.handleFlowPlay()}
-              ?disabled=${this.isFlowPlaying}
-              title="Get into the Flow"
-            >
-              ▶
-            </button>
-            <button 
-              class="nav-button ${router.isCurrentMode('topic-selection') || router.isCurrentMode('word-selection') ? 'active' : ''}"
-              @click=${() => this.handleNavigation('topic-selection')}
-              title="Learn new words (Ctrl+1)"
-            >
-              Add new
-            </button>
-            <button 
-              class="nav-button ${router.isCurrentMode('learning') ? 'active' : ''}"
-              @click=${() => this.handleNavigation('learning')}
-              ?disabled=${this.hasExistingWords === false}
-              title="Review existing words (Ctrl+2)"
-            >
-              Review
-            </button>
-            <button 
-              class="nav-button ${router.isCurrentMode('quiz') ? 'active' : ''}"
-              @click=${() => this.handleNavigation('quiz')}
-              title="Take a quiz (Ctrl+3)"
-            >
-              Quiz
-            </button>
-            <button 
-              class="nav-button ${router.isCurrentMode('dialog') ? 'active' : ''}"
-              @click=${() => this.handleNavigation('dialog')}
-              title="Practice speaking (Ctrl+4)"
-            >
-              Dialog
-            </button>
-            <button 
-              class="nav-button ${router.isCurrentMode('progress') ? 'active' : ''}"
-              @click=${() => this.handleNavigation('progress')}
-              title="View progress (Ctrl+5)"
-            >
-              Progress
-            </button>
-            <button 
-              class="nav-button ${router.isCurrentMode('settings') ? 'active' : ''}"
-              @click=${() => this.handleNavigation('settings')}
-              title="Settings (Ctrl+6)"
-            >
-              Settings
-            </button>
+            ${!this.autopilotEnabled ? html`
+              <button 
+                class="nav-button flow-button"
+                @click=${() => this.handleFlowPlay()}
+                ?disabled=${this.isFlowPlaying}
+                title="Get into the Flow"
+              >
+                ▶
+              </button>
+              <button 
+                class="nav-button ${router.isCurrentMode('topic-selection') || router.isCurrentMode('word-selection') ? 'active' : ''}"
+                @click=${() => this.handleNavigation('topic-selection')}
+                title="Learn new words (Ctrl+1)"
+              >
+                Add new
+              </button>
+              <button 
+                class="nav-button ${router.isCurrentMode('learning') ? 'active' : ''}"
+                @click=${() => this.handleNavigation('learning')}
+                ?disabled=${this.hasExistingWords === false}
+                title="Review existing words (Ctrl+2)"
+              >
+                Review
+              </button>
+              <button 
+                class="nav-button ${router.isCurrentMode('quiz') ? 'active' : ''}"
+                @click=${() => this.handleNavigation('quiz')}
+                title="Take a quiz (Ctrl+3)"
+              >
+                Quiz
+              </button>
+              <button 
+                class="nav-button ${router.isCurrentMode('dialog') ? 'active' : ''}"
+                @click=${() => this.handleNavigation('dialog')}
+                title="Practice speaking (Ctrl+4)"
+              >
+                Dialog
+              </button>
+              <button 
+                class="nav-button ${router.isCurrentMode('progress') ? 'active' : ''}"
+                @click=${() => this.handleNavigation('progress')}
+                title="View progress (Ctrl+5)"
+              >
+                Progress
+              </button>
+              <button 
+                class="nav-button ${router.isCurrentMode('settings') ? 'active' : ''}"
+                @click=${() => this.handleNavigation('settings')}
+                title="Settings (Ctrl+6)"
+              >
+                Settings
+              </button>
+            ` : ''}
             ${this.currentLanguage ? html`
               <div class="language-dropdown">
                 <select 
@@ -928,6 +1070,18 @@ export class AppRoot extends LitElement {
                 </select>
               </div>
             ` : ''}
+            <div class="autopilot-toggle-container">
+              <span class="autopilot-label">Autopilot</span>
+              <label class="autopilot-switch">
+                <input 
+                  type="checkbox"
+                  .checked=${this.autopilotEnabled}
+                  @change=${this.handleAutopilotToggle}
+                  title="Autopilot: Automatically navigate to highest-scoring mode"
+                />
+                <span class="autopilot-slider"></span>
+              </label>
+            </div>
             <button 
               class="close-button"
               @click=${this.handleCloseApp}
@@ -981,6 +1135,9 @@ export class AppRoot extends LitElement {
 
       case 'dialog':
         return html`<dialog-mode></dialog-mode>`;
+
+      case 'flow':
+        return html`<flow-mode></flow-mode>`;
 
       case 'progress':
         return html`<progress-summary></progress-summary>`;

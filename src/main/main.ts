@@ -14,6 +14,8 @@ import { LLM_CONFIG } from '../shared/constants/index.js';
 import { WordGenerationRunner } from './jobs/word-generation-runner.js';
 import { IPC_CHANNELS } from '../shared/types/ipc.js';
 import { LemmatizationService } from './lemmatization/index.js';
+import { ScoringService } from './scoring/index.js';
+import { setupScoringHandlers } from './ipc/ipc-handlers.js';
 
 let mainWindow: BrowserWindow;
 let databaseLayer: SQLiteDatabaseLayer | undefined;
@@ -25,6 +27,7 @@ let lifecycleManager: LifecycleManager | undefined;
 let updateManager: UpdateManager | undefined;
 let wordGenerationRunner: WordGenerationRunner | undefined;
 let lemmatizationService: LemmatizationService | undefined;
+let scoringService: ScoringService | undefined;
 
 const forceLocalServices = process.env.E2E_FORCE_LOCAL_SERVICES === '1';
 
@@ -161,6 +164,9 @@ async function initializeServices(): Promise<void> {
       }
     });
 
+    // Initialize scoring service
+    scoringService = new ScoringService(databaseLayer);
+
     console.log('All services initialized successfully');
   } catch (error) {
     console.error('Failed to initialize services:', error);
@@ -288,7 +294,17 @@ app.whenReady().then(async () => {
     // Set up IPC handlers with initialized services
     setupIPCHandlers(databaseLayer!, llmClient!, contentGenerator!, audioService!, srsService!, lifecycleManager!, updateManager!, wordGenerationRunner, lemmatizationService);
 
+    // Set up scoring handlers (called separately since scoring service is optional during IPC setup)
+    if (scoringService) {
+      setupScoringHandlers(scoringService);
+    }
+
     wordGenerationRunner?.start();
+
+    // Start scoring service timer (calculates and logs scores every 10 seconds)
+    if (scoringService) {
+      scoringService.start();
+    }
     
     // Keep llmClient reference updated when provider switches
     const originalSwitchProvider = contentGenerator!.switchProvider.bind(contentGenerator!);
@@ -330,6 +346,11 @@ app.on('before-quit', async (event) => {
     try {
       // Stop word generation runner FIRST (before database is closed)
       await wordGenerationRunner?.stop();
+
+      // Stop scoring service
+      if (scoringService) {
+        scoringService.stop();
+      }
 
       // Stop audio service
       if (audioService) {

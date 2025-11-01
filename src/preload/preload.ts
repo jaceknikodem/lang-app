@@ -311,6 +311,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke(IPC_CHANNELS.FLOW.STITCH_AUDIO, audioPaths),
       getFileStats: (filePath: string) =>
         ipcRenderer.invoke(IPC_CHANNELS.FLOW.GET_FILE_STATS, filePath)
+    },
+
+    // Scoring operations
+    scoring: {
+      getScores: (language?: string) =>
+        ipcRenderer.invoke(IPC_CHANNELS.SCORING.GET_SCORES, language)
     }
   });
 
@@ -505,6 +511,9 @@ declare global {
         }>>;
         stitchAudio: (audioPaths: string[]) => Promise<string>;
         getFileStats: (filePath: string) => Promise<{ mtime: Date } | null>;
+      };
+      scoring: {
+        getScores: (language?: string) => Promise<any>;
       };
     };
   }

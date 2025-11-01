@@ -2271,4 +2271,233 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       .map(part => part.trim())
       .filter(Boolean);
   }
+
+  // Scoring-specific operations
+
+  /**
+   * Get count of new words (words where lastStudied IS NULL)
+   */
+  async getNewWordCount(language?: string): Promise<number> {
+    const db = this.getDb();
+    
+    try {
+      const currentLanguage = language || await this.getCurrentLanguage();
+      
+      const stmt = db.prepare(`
+        SELECT COUNT(*) as count FROM words 
+        WHERE language = ? 
+        AND known = FALSE 
+        AND ignored = FALSE 
+        AND last_studied IS NULL
+      `);
+      
+      const result = stmt.get(currentLanguage) as { count: number };
+      return result.count;
+    } catch (error) {
+      throw new Error(`Failed to get new word count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get count of weak words (strength < 30)
+   */
+  async getWeakWordCount(language?: string): Promise<number> {
+    const db = this.getDb();
+    
+    try {
+      const currentLanguage = language || await this.getCurrentLanguage();
+      
+      const stmt = db.prepare(`
+        SELECT COUNT(*) as count FROM words 
+        WHERE language = ? 
+        AND known = FALSE 
+        AND ignored = FALSE 
+        AND strength < 30
+      `);
+      
+      const result = stmt.get(currentLanguage) as { count: number };
+      return result.count;
+    } catch (error) {
+      throw new Error(`Failed to get weak word count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get dialogue readiness ratio (known vocab in cluster / total vocab in cluster)
+   * A "cluster" is words associated with sentences that have contextBefore (dialog sentences)
+   * Known vocab = words with known=true OR strength >= minStrength
+   */
+  async getDialogueReadinessRatio(language?: string, minStrength: number = 40): Promise<number> {
+    const db = this.getDb();
+    
+    try {
+      const currentLanguage = language || await this.getCurrentLanguage();
+      
+      // Get total unique words associated with dialog sentences (sentences with contextBefore)
+      const totalWordsStmt = db.prepare(`
+        SELECT COUNT(DISTINCT w.id) as count
+        FROM words w
+        INNER JOIN sentence_words sw ON w.id = sw.word_id
+        INNER JOIN sentences s ON sw.sentence_id = s.id
+        WHERE w.language = ?
+        AND w.ignored = FALSE
+        AND s.context_before IS NOT NULL
+        AND TRIM(s.context_before) != ''
+      `);
+      
+      const totalResult = totalWordsStmt.get(currentLanguage) as { count: number };
+      const totalWords = totalResult.count;
+      
+      if (totalWords === 0) {
+        return 0; // No dialog sentences yet
+      }
+      
+      // Get known words (known=true OR strength >= minStrength) associated with dialog sentences
+      const knownWordsStmt = db.prepare(`
+        SELECT COUNT(DISTINCT w.id) as count
+        FROM words w
+        INNER JOIN sentence_words sw ON w.id = sw.word_id
+        INNER JOIN sentences s ON sw.sentence_id = s.id
+        WHERE w.language = ?
+        AND w.ignored = FALSE
+        AND s.context_before IS NOT NULL
+        AND TRIM(s.context_before) != ''
+        AND (w.known = TRUE OR w.strength >= ?)
+      `);
+      
+      const knownResult = knownWordsStmt.get(currentLanguage, minStrength) as { count: number };
+      const knownWords = knownResult.count;
+      
+      return knownWords / totalWords;
+    } catch (error) {
+      throw new Error(`Failed to get dialogue readiness ratio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get average pronunciation score (0-10 scale)
+   * Calculated from pronunciation_attempts.similarity_score (0-1 scale), converted to 0-10
+   */
+  async getAveragePronunciationScore(language?: string): Promise<number> {
+    const db = this.getDb();
+    
+    try {
+      const currentLanguage = language || await this.getCurrentLanguage();
+      
+      // Get average similarity score from pronunciation_attempts
+      // Join with sentences and words to filter by language
+      const stmt = db.prepare(`
+        SELECT AVG(pa.similarity_score) as avg_score
+        FROM pronunciation_attempts pa
+        INNER JOIN sentences s ON pa.sentence_id = s.id
+        INNER JOIN sentence_words sw ON s.id = sw.sentence_id
+        INNER JOIN words w ON sw.word_id = w.id
+        WHERE w.language = ?
+      `);
+      
+      const result = stmt.get(currentLanguage) as { avg_score: number | null };
+      
+      if (result.avg_score === null) {
+        return 0; // No pronunciation attempts yet
+      }
+      
+      // Convert from 0-1 scale to 0-10 scale
+      return result.avg_score * 10;
+    } catch (error) {
+      throw new Error(`Failed to get average pronunciation score: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get count of available sentences for Flow mode (sentences with audio)
+   */
+  async getAvailableSentencesCount(language?: string): Promise<number> {
+    const db = this.getDb();
+    
+    try {
+      const currentLanguage = language || await this.getCurrentLanguage();
+      
+      // Count distinct sentences with audio for the language
+      const stmt = db.prepare(`
+        SELECT COUNT(DISTINCT s.id) as count
+        FROM sentences s
+        INNER JOIN sentence_words sw ON s.id = sw.sentence_id
+        INNER JOIN words w ON sw.word_id = w.id
+        WHERE w.language = ?
+        AND s.audio_path IS NOT NULL
+        AND TRIM(s.audio_path) != ''
+      `);
+      
+      const result = stmt.get(currentLanguage) as { count: number };
+      return result.count;
+    } catch (error) {
+      throw new Error(`Failed to get available sentences count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get time since last active practice (quiz or dialog) in hours
+   * Returns the most recent timestamp from:
+   * - Study sessions (quiz practice)
+   * - Word last_review or last_studied (quiz/dialog practice)
+   */
+  async getTimeSinceLastActivePractice(language?: string): Promise<number> {
+    const db = this.getDb();
+    
+    try {
+      const currentLanguage = language || await this.getCurrentLanguage();
+      const now = new Date();
+      
+      // Get most recent study session
+      const sessionStmt = db.prepare(`
+        SELECT MAX(when_studied) as last_session
+        FROM progress
+      `);
+      const sessionResult = sessionStmt.get() as { last_session: string | null };
+      
+      // Get most recent word review/study
+      // Use the later of last_review or last_studied for each word, then find the max
+      const wordStmt = db.prepare(`
+        SELECT MAX(
+          CASE 
+            WHEN last_review IS NULL THEN last_studied
+            WHEN last_studied IS NULL THEN last_review
+            WHEN last_review > last_studied THEN last_review
+            ELSE last_studied
+          END
+        ) as last_practice
+        FROM words
+        WHERE language = ?
+        AND (last_review IS NOT NULL OR last_studied IS NOT NULL)
+      `);
+      const wordResult = wordStmt.get(currentLanguage) as { last_practice: string | null };
+      
+      // Find the most recent timestamp
+      let lastPractice: Date | null = null;
+      
+      if (sessionResult.last_session) {
+        lastPractice = new Date(sessionResult.last_session);
+      }
+      
+      if (wordResult.last_practice) {
+        const wordDate = new Date(wordResult.last_practice);
+        if (!lastPractice || wordDate > lastPractice) {
+          lastPractice = wordDate;
+        }
+      }
+      
+      if (!lastPractice) {
+        // No practice recorded yet - return a very large number to penalize heavily
+        return 1000; // 1000 hours (~41 days)
+      }
+      
+      // Calculate hours since last practice
+      const diffMs = now.getTime() - lastPractice.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      
+      return diffHours;
+    } catch (error) {
+      throw new Error(`Failed to get time since last active practice: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 }
