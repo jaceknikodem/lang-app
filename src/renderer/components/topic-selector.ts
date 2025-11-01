@@ -25,7 +25,33 @@ export class TopicSelector extends LitElement {
   @state()
   private currentLanguage = '';
 
+  @state()
+  private suggestions: string[] = [];
+
   private keyboardUnsubscribe?: () => void;
+
+  private readonly ALL_TOPIC_SUGGESTIONS = [
+    'ordering perfect latte',
+    'playing Lego with your toddler',
+    'choosing ice cream flavors',
+    'bargaining at a flea market',
+    'finding a hidden speakeasy',
+    'learning to tango',
+    'ordering at a local eatery',
+    'chasing a runaway balloon',
+    'exploring a spice market',
+    'making the perfect aperitif',
+    'catching the last train',
+    'decoding street art',
+    'finding the best pastry',
+    'navigating a food truck festival',
+    'learning secret handshakes',
+    'discovering underground jazz',
+    'hunting for vintage vinyl',
+    'ordering at a cozy restaurant',
+    'making friends at a town square',
+    'finding lost treasures'
+  ];
 
   static styles = [
     sharedStyles,
@@ -161,6 +187,52 @@ export class TopicSelector extends LitElement {
         font-style: italic;
       }
 
+      .suggestions-section {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+      }
+
+      .suggestions-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin: 0;
+      }
+
+      .suggestions-container {
+        display: flex;
+        gap: var(--spacing-sm);
+        flex-wrap: wrap;
+      }
+
+      .suggestion-btn {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        background: var(--background-secondary);
+        color: var(--text-primary);
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+      }
+
+      .suggestion-btn:hover {
+        background: var(--primary-color);
+        color: white;
+        border-color: var(--primary-color);
+        transform: translateY(-1px);
+      }
+
+      .suggestion-btn:active {
+        transform: translateY(0);
+      }
+
+      .suggestion-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
       @media (max-width: 768px) {
         .input-row {
           flex-direction: column;
@@ -192,6 +264,7 @@ export class TopicSelector extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
     await this.loadCurrentLanguage();
+    this.selectRandomSuggestions();
     this.setupKeyboardBindings();
   }
 
@@ -213,6 +286,21 @@ export class TopicSelector extends LitElement {
 
   private capitalizeLanguage(language: string): string {
     return language.charAt(0).toUpperCase() + language.slice(1);
+  }
+
+  private selectRandomSuggestions() {
+    const shuffled = [...this.ALL_TOPIC_SUGGESTIONS].sort(() => Math.random() - 0.5);
+    this.suggestions = shuffled.slice(0, 3);
+  }
+
+  private handleSuggestionClick(suggestion: string) {
+    this.topic = suggestion;
+    this.error = ''; // Clear any errors
+    // Focus the input field to show the suggestion was applied
+    const input = this.shadowRoot?.querySelector('#topic-input') as HTMLInputElement;
+    if (input) {
+      input.focus();
+    }
   }
 
 
@@ -342,6 +430,23 @@ export class TopicSelector extends LitElement {
               `}
             </div>
           </div>
+          ${this.suggestions.length > 0 && !this.isGenerating ? html`
+            <div class="suggestions-section">
+              <p class="suggestions-label">Suggestions:</p>
+              <div class="suggestions-container">
+                ${this.suggestions.map(suggestion => html`
+                  <button
+                    class="suggestion-btn"
+                    @click=${() => this.handleSuggestionClick(suggestion)}
+                    ?disabled=${this.isGenerating}
+                    type="button"
+                  >
+                    ${suggestion}
+                  </button>
+                `)}
+              </div>
+            </div>
+          ` : ''}
         </div>
 
         ${this.error ? html`
