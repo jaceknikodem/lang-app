@@ -301,7 +301,7 @@ app.whenReady().then(async () => {
 
     wordGenerationRunner?.start();
 
-    // Start scoring service timer (calculates and logs scores every 10 seconds)
+    // Initialize scoring service (used on-demand via IPC handlers)
     if (scoringService) {
       scoringService.start();
     }

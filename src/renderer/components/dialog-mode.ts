@@ -844,6 +844,9 @@ export class DialogMode extends LitElement {
         // Non-critical error - continue without new session
       });
     });
+    
+    // Dispatch event for autopilot to check scores
+    window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
   }
 
   /**

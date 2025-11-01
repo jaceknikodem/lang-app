@@ -1615,6 +1615,9 @@ export class QuizMode extends LitElement {
     
     console.log(`[Quiz] ========== REVIEW COMPLETE ==========\n`);
 
+    // Dispatch event for autopilot to check scores
+    window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
+    
     // Automatically move to next question after a short delay
     setTimeout(() => {
       this.nextQuestion();

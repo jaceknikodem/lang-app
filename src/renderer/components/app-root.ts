@@ -850,24 +850,36 @@ export class AppRoot extends LitElement {
   }
 
   private startAutopilot() {
-    // Stop existing interval if any
-    if (this.autopilotIntervalId) {
-      clearInterval(this.autopilotIntervalId);
-    }
+    // Stop existing intervals if any
+    this.stopAutopilot();
     
     // Check scores immediately
     this.checkScoresAndNavigate();
     
-    // Then set up interval (every 10 seconds to match scoring service)
+    // Set up event listeners for specific actions
+    window.addEventListener('autopilot-check-trigger', this.handleAutopilotCheckTrigger);
+    
+    // Set up 30-second interval for flow mode
     this.autopilotIntervalId = window.setInterval(() => {
-      this.checkScoresAndNavigate();
-    }, 10000);
+      if (this.isFlowPlaying) {
+        this.checkScoresAndNavigate();
+      }
+    }, 30000);
   }
 
   private stopAutopilot() {
     if (this.autopilotIntervalId) {
       clearInterval(this.autopilotIntervalId);
       this.autopilotIntervalId = null;
+    }
+    
+    // Remove event listener
+    window.removeEventListener('autopilot-check-trigger', this.handleAutopilotCheckTrigger);
+  }
+
+  private handleAutopilotCheckTrigger = () => {
+    if (this.autopilotEnabled) {
+      this.checkScoresAndNavigate();
     }
   }
 

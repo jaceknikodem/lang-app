@@ -8,8 +8,6 @@ import { ModeScores } from '../../shared/types/core.js';
 
 export class ScoringService {
   private database: DatabaseLayer;
-  private intervalId: NodeJS.Timeout | null = null;
-  private readonly INTERVAL_MS = 10000; // 10 seconds
 
   constructor(database: DatabaseLayer) {
     this.database = database;
@@ -122,50 +120,18 @@ export class ScoringService {
   }
 
   /**
-   * Start the scoring timer that calculates and logs scores every 10 seconds
+   * Start the scoring service (scores are now calculated on-demand via IPC)
    */
   start(): void {
-    if (this.intervalId) {
-      console.warn('Scoring service already started');
-      return;
-    }
-
-    // Calculate immediately
-    this.calculateAndLog();
-
-    // Then set up interval
-    this.intervalId = setInterval(() => {
-      this.calculateAndLog();
-    }, this.INTERVAL_MS);
+    // Scoring service is now used on-demand via IPC handlers
+    // No periodic logging needed
   }
 
   /**
-   * Stop the scoring timer
+   * Stop the scoring service
    */
   stop(): void {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
-      console.log('Scoring service stopped');
-    }
-  }
-
-  /**
-   * Calculate scores and log them
-   */
-  private async calculateAndLog(): Promise<void> {
-    try {
-      const scores = await this.calculateAllScores();
-      console.log('[Mode Scores]', {
-        addWords: scores.addWords.toFixed(2),
-        review: scores.review.toFixed(2),
-        quiz: scores.quiz.toFixed(2),
-        dialog: scores.dialog.toFixed(2),
-        flow: scores.flow.toFixed(2)
-      });
-    } catch (error) {
-      console.error('Error calculating and logging scores:', error);
-    }
+    // No cleanup needed - service is used on-demand
   }
 
   /**

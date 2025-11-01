@@ -520,6 +520,9 @@ export class WordSelector extends LitElement {
         // Small delay to ensure database operations are fully committed
         await new Promise(resolve => setTimeout(resolve, 100));
         router.goToLearning();
+        
+        // Dispatch event for autopilot to check scores
+        window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
       } else {
         router.goToTopicSelection();
       }
