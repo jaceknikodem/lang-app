@@ -687,7 +687,39 @@ export class SentenceViewer extends LitElement {
     // Fallback to runtime tokenization for sentences without precomputed tokens
     const parts = this.sentence.sentenceParts ?? splitSentenceIntoParts(this.sentence.sentence);
 
-    const baseWords: WordInSentence[] = parts.map(text => {
+    // Extract words for lemmatization
+    const wordsToLemmatize: string[] = [];
+    const wordIndexMap: Map<number, string> = new Map();
+    
+    parts.forEach((text, index) => {
+      if (!/^\s+$/.test(text) && !/^[.,!?;:]+$/.test(text)) {
+        const dictionaryForm = text.trim().replace(/[.,!?;:]/g, '');
+        const cleanText = dictionaryForm.toLowerCase();
+        if (cleanText) {
+          wordsToLemmatize.push(cleanText);
+          wordIndexMap.set(index, cleanText);
+        }
+      }
+    });
+
+    // Lemmatize words
+    let lemmas: Record<string, string> = {};
+    if (wordsToLemmatize.length > 0) {
+      try {
+        lemmas = await window.electronAPI.lemmatization.lemmatizeWords(
+          wordsToLemmatize,
+          this.targetWord.language
+        );
+      } catch (error) {
+        console.warn('Failed to lemmatize words (non-critical):', error);
+        // Fallback: use words as their own lemmas
+        wordsToLemmatize.forEach(word => {
+          lemmas[word] = word;
+        });
+      }
+    }
+
+    const baseWords: WordInSentence[] = parts.map((text, index) => {
       if (/^\s+$/.test(text)) {
         return { text, isTargetWord: false };
       }
@@ -703,11 +735,18 @@ export class SentenceViewer extends LitElement {
         return { text, isTargetWord: false };
       }
 
-      const isTargetWord = cleanText === this.targetWord.word.toLowerCase();
+      // Get lemma for this word
+      const lemma = lemmas[cleanText] || cleanText;
 
-      const wordData = this.allWords.find(w =>
-        w.word.toLowerCase() === cleanText
-      );
+      // Compare using lemmatized versions
+      const targetWordLemma = lemmas[this.targetWord.word.toLowerCase()] || this.targetWord.word.toLowerCase();
+      const isTargetWord = lemma === targetWordLemma;
+
+      // Find word data by comparing lemmatized versions
+      const wordData = this.allWords.find(w => {
+        const wordLemma = lemmas[w.word.toLowerCase()] || w.word.toLowerCase();
+        return lemma === wordLemma || w.word.toLowerCase() === cleanText;
+      });
 
       const dictionaryKey = this.buildDictionaryKey(dictionaryForm);
 
@@ -720,7 +759,8 @@ export class SentenceViewer extends LitElement {
         isTargetWord,
         wordData,
         dictionaryForm,
-        dictionaryKey
+        dictionaryKey,
+        lemma
       };
     });
 
@@ -1097,7 +1137,26 @@ export class SentenceViewer extends LitElement {
       return '';
     }
     
+    // NOTE: This method is read-only - it only displays lemma if available from parseSentence().
+    // Lemmatization happens once during parseSentence(), not here.
+    // Old sentences (with precomputed tokens) won't have lemmas - that's expected.
+    
+    // Show lemmatized version first if available
+    const parts: string[] = [];
+    
+    if (wordInfo.lemma) {
+      const dictionaryForm = wordInfo.dictionaryForm || wordInfo.text.trim();
+      const cleanText = dictionaryForm.toLowerCase();
+      // Only show lemma if it's different from the original word
+      if (wordInfo.lemma.toLowerCase() !== cleanText) {
+        parts.push(`Lemma: ${wordInfo.lemma}`);
+      }
+    }
+    
     if (wordInfo.isTargetWord) {
+      if (parts.length > 0) {
+        return `${parts.join(' • ')} • Target word`;
+      }
       return 'Target word';
     }
 
@@ -1105,10 +1164,18 @@ export class SentenceViewer extends LitElement {
     
     if (!word) {
       if (!wordInfo.dictionaryKey) {
+        // No word data and no dictionary key - show lemma if available
+        if (parts.length > 0) {
+          return parts.join(' • ');
+        }
         return '';
       }
 
       if (this.dictionaryLookupInFlight.has(wordInfo.dictionaryKey)) {
+        // Dictionary lookup in progress - show lemma if available
+        if (parts.length > 0) {
+          return `${parts.join(' • ')} • Looking up dictionary…`;
+        }
         return 'Looking up dictionary…';
       }
 
@@ -1117,24 +1184,50 @@ export class SentenceViewer extends LitElement {
       if (cachedEntries === undefined) {
         // Trigger lookup if somehow missing (should already be queued)
         void this.ensureDictionaryEntry(wordInfo.dictionaryForm ?? '', wordInfo.dictionaryKey);
+        // Show lemma if available while looking up
+        if (parts.length > 0) {
+          return `${parts.join(' • ')} • Looking up dictionary…`;
+        }
         return 'Looking up dictionary…';
       }
 
       if (!cachedEntries || cachedEntries.length === 0) {
+        // No dictionary entries found - show lemma if available
+        if (parts.length > 0) {
+          return parts.join(' • ');
+        }
         return '';
       }
 
-      return this.formatDictionaryTooltip(cachedEntries);
+      // Show lemma first, then dictionary entries
+      const formatted = this.formatDictionaryTooltip(cachedEntries);
+      if (parts.length > 0) {
+        parts.push(formatted);
+        return parts.join(' • ');
+      }
+      return formatted;
     }
     
     if (word.ignored) {
+      if (parts.length > 0) {
+        parts.push(`Ignored: ${word.translation}`);
+        return parts.join(' • ');
+      }
       return `Ignored: ${word.translation}`;
     }
     
     if (word.known) {
+      if (parts.length > 0) {
+        parts.push(`Known: ${word.translation}`);
+        return parts.join(' • ');
+      }
       return `Known: ${word.translation}`;
     }
 
+    if (parts.length > 0) {
+      parts.push(`Learning (${word.strength}%): ${word.translation}`);
+      return parts.join(' • ');
+    }
     return `Learning (${word.strength}%): ${word.translation}`;
   }
 
@@ -1362,10 +1455,31 @@ export class SentenceViewer extends LitElement {
       return null;
     }
 
-    const normalized = rawWord.replace(/\s+/g, ' ');
-    const alreadyTracked = this.allWords.some(existing =>
-      existing.word.toLowerCase() === normalized.toLowerCase()
-    );
+    // Use lemmatized version if available, otherwise normalize the word
+    let wordToAdd: string;
+    if (wordInfo.lemma) {
+      wordToAdd = wordInfo.lemma;
+    } else {
+      // Fallback: try to lemmatize the word
+      try {
+        const lemmas = await window.electronAPI.lemmatization.lemmatizeWords(
+          [rawWord.toLowerCase()],
+          this.targetWord.language
+        );
+        wordToAdd = lemmas[rawWord.toLowerCase()] || rawWord.replace(/\s+/g, ' ');
+      } catch (error) {
+        console.warn('Failed to lemmatize word (non-critical):', error);
+        wordToAdd = rawWord.replace(/\s+/g, ' ');
+      }
+    }
+
+    const normalized = wordToAdd.replace(/\s+/g, ' ');
+    
+    // Check if word already exists (compare lemmatized versions)
+    const alreadyTracked = this.allWords.some(existing => {
+      const existingLower = existing.word.toLowerCase();
+      return existingLower === normalized.toLowerCase();
+    });
 
     if (alreadyTracked) {
       const existingWord = this.allWords.find(w => 

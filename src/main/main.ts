@@ -13,6 +13,7 @@ import { LifecycleManager, UpdateManager } from './lifecycle/index.js';
 import { LLM_CONFIG } from '../shared/constants/index.js';
 import { WordGenerationRunner } from './jobs/word-generation-runner.js';
 import { IPC_CHANNELS } from '../shared/types/ipc.js';
+import { LemmatizationService } from './lemmatization/index.js';
 
 let mainWindow: BrowserWindow;
 let databaseLayer: SQLiteDatabaseLayer | undefined;
@@ -23,6 +24,7 @@ let srsService: SRSService | undefined;
 let lifecycleManager: LifecycleManager | undefined;
 let updateManager: UpdateManager | undefined;
 let wordGenerationRunner: WordGenerationRunner | undefined;
+let lemmatizationService: LemmatizationService | undefined;
 
 const forceLocalServices = process.env.E2E_FORCE_LOCAL_SERVICES === '1';
 
@@ -152,6 +154,12 @@ async function initializeServices(): Promise<void> {
       }
     });
 
+    // Initialize lemmatization service
+    lemmatizationService = new LemmatizationService({
+      serverUrl: process.env.LEMMATIZATION_SERVER_URL || 'http://127.0.0.1:8888'
+    });
+    console.log('Lemmatization service initialized successfully');
+
     console.log('All services initialized successfully');
   } catch (error) {
     console.error('Failed to initialize services:', error);
@@ -277,7 +285,7 @@ app.whenReady().then(async () => {
     await initializeServices();
 
     // Set up IPC handlers with initialized services
-    setupIPCHandlers(databaseLayer!, llmClient!, contentGenerator!, audioService!, srsService!, lifecycleManager!, updateManager!, wordGenerationRunner);
+    setupIPCHandlers(databaseLayer!, llmClient!, contentGenerator!, audioService!, srsService!, lifecycleManager!, updateManager!, wordGenerationRunner, lemmatizationService);
 
     wordGenerationRunner?.start();
     

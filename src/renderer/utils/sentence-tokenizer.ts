@@ -6,6 +6,7 @@ export interface TokenizedWord {
   wordData?: Word;
   dictionaryForm?: string;
   dictionaryKey?: string;
+  lemma?: string; // Lemmatized version of the word
 }
 
 export interface TokenizeSentenceOptions {

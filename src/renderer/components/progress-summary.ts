@@ -438,6 +438,10 @@ export class ProgressSummary extends LitElement {
       await window.electronAPI.database.setCurrentLanguage(selectedLanguage);
       this.currentLanguage = selectedLanguage;
       sessionManager.setActiveLanguage(selectedLanguage);
+      
+      // Load lemmatization model for the new language (async, non-blocking)
+      void this.loadLemmatizationModel(selectedLanguage);
+      
       this.dispatchEvent(new CustomEvent('language-changed', {
         detail: { language: selectedLanguage },
         bubbles: true,
@@ -455,6 +459,19 @@ export class ProgressSummary extends LitElement {
 
   private capitalizeLanguage(language: string): string {
     return language.charAt(0).toUpperCase() + language.slice(1);
+  }
+
+  /**
+   * Load lemmatization model asynchronously (non-blocking)
+   */
+  private async loadLemmatizationModel(language: string): Promise<void> {
+    try {
+      console.log(`[Lemmatization] Loading model for language: ${language}`);
+      await window.electronAPI.lemmatization.loadModel(language);
+      console.log(`[Lemmatization] Model loaded successfully for ${language}`);
+    } catch (error) {
+      console.warn(`[Lemmatization] Failed to load model for ${language} (non-critical):`, error);
+    }
   }
 
   private getSupportedLanguages(): string[] {

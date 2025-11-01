@@ -263,12 +263,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.SRS.MARK_WORD_DIFFICULTY, wordId, difficulty),
     resetWordProgress: (wordId: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.SRS.RESET_WORD_PROGRESS, wordId),
-    getOverdueWords: (language?: string) => 
-      ipcRenderer.invoke(IPC_CHANNELS.SRS.GET_OVERDUE_WORDS, language),
-    initializeExistingWords: (language?: string) => 
-      ipcRenderer.invoke(IPC_CHANNELS.SRS.INITIALIZE_EXISTING_WORDS, language)
-  }
-});
+      getOverdueWords: (language?: string) => 
+        ipcRenderer.invoke(IPC_CHANNELS.SRS.GET_OVERDUE_WORDS, language),
+      initializeExistingWords: (language?: string) => 
+        ipcRenderer.invoke(IPC_CHANNELS.SRS.INITIALIZE_EXISTING_WORDS, language)
+    },
+
+    // Lemmatization operations
+    lemmatization: {
+      getStatus: () => 
+        ipcRenderer.invoke(IPC_CHANNELS.LEMMATIZATION.GET_STATUS),
+      loadModel: (language: string) => 
+        ipcRenderer.invoke(IPC_CHANNELS.LEMMATIZATION.LOAD_MODEL, language),
+      lemmatizeWords: (words: string[], language: string) => 
+        ipcRenderer.invoke(IPC_CHANNELS.LEMMATIZATION.LEMMATIZE_WORDS, words, language)
+    }
+  });
 
 // Type declaration for the exposed API
 declare global {
@@ -427,6 +437,11 @@ declare global {
         resetWordProgress: (wordId: number) => Promise<void>;
         getOverdueWords: (language?: string) => Promise<any[]>;
         initializeExistingWords: (language?: string) => Promise<number>;
+      };
+      lemmatization: {
+        getStatus: () => Promise<{ status: string; loadedModels: string[]; service: string } | null>;
+        loadModel: (language: string) => Promise<void>;
+        lemmatizeWords: (words: string[], language: string) => Promise<Record<string, string>>;
       };
     };
   }

@@ -668,7 +668,6 @@ Rules:
           cleanResponse = cleanResponse.substring(0, jsonEnd + 1);
         }
 
-        console.log('Original response:', data.response);
         console.log('Cleaned response:', cleanResponse);
 
         // Parse JSON

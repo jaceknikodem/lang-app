@@ -392,6 +392,9 @@ export class AppRoot extends LitElement {
 
     const languageToUse = this.currentLanguage || 'spanish';
     sessionManager.setActiveLanguage(languageToUse);
+    
+    // Load lemmatization model for the current language (async, non-blocking)
+    void this.loadLemmatizationModel(languageToUse);
   }
 
   private async ensureLearningSession() {
@@ -467,6 +470,10 @@ export class AppRoot extends LitElement {
 
       sessionManager.setActiveLanguage(selectedLanguage);
       this.sessionState = sessionManager.getCurrentSession();
+      
+      // Load lemmatization model for the new language (async, non-blocking)
+      void this.loadLemmatizationModel(selectedLanguage);
+      
       await this.checkExistingWords();
       await this.ensureLearningSession();
       this.requestUpdate();
@@ -488,6 +495,19 @@ export class AppRoot extends LitElement {
 
   private capitalizeLanguage(language: string): string {
     return language.charAt(0).toUpperCase() + language.slice(1);
+  }
+
+  /**
+   * Load lemmatization model asynchronously (non-blocking)
+   */
+  private async loadLemmatizationModel(language: string): Promise<void> {
+    try {
+      console.log(`[Lemmatization] Loading model for language: ${language}`);
+      await window.electronAPI.lemmatization.loadModel(language);
+      console.log(`[Lemmatization] Model loaded successfully for ${language}`);
+    } catch (error) {
+      console.warn(`[Lemmatization] Failed to load model for ${language} (non-critical):`, error);
+    }
   }
 
   private getLanguageFlag(language: string): string {

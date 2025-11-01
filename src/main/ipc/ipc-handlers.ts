@@ -12,6 +12,7 @@ import { LifecycleManager, UpdateManager } from '../lifecycle/index.js';
 import { SRSService } from '../srs/srs-service.js';
 import { WordGenerationRunner } from '../jobs/word-generation-runner.js';
 import { CreateWordRequest } from '../../shared/types/core.js';
+import { LemmatizationService } from '../lemmatization/index.js';
 
 // Validation schemas for input sanitization
 const CreateWordSchema = z.object({
@@ -45,7 +46,8 @@ export function setupIPCHandlers(
   srsService: SRSService,
   lifecycleManager?: LifecycleManager,
   updateManager?: UpdateManager,
-  wordGenerationRunner?: WordGenerationRunner
+  wordGenerationRunner?: WordGenerationRunner,
+  lemmatizationService?: LemmatizationService
 ): void {
   // Database handlers
   setupDatabaseHandlers(databaseLayer);
@@ -68,6 +70,11 @@ export function setupIPCHandlers(
   // Lifecycle handlers
   if (lifecycleManager && updateManager) {
     setupLifecycleHandlers(lifecycleManager, updateManager, audioService, wordGenerationRunner);
+  }
+
+  // Lemmatization handlers
+  if (lemmatizationService) {
+    setupLemmatizationHandlers(lemmatizationService);
   }
 
   console.log('IPC handlers registered successfully');
@@ -1210,5 +1217,48 @@ export function cleanupIPCHandlers(): void {
     ipcMain.removeAllListeners(channel);
   });
 
+  Object.values(IPC_CHANNELS.LEMMATIZATION).forEach(channel => {
+    ipcMain.removeAllListeners(channel);
+  });
+
   console.log('IPC handlers cleaned up');
+}
+
+/**
+ * Set up lemmatization-related IPC handlers
+ */
+function setupLemmatizationHandlers(lemmatizationService: LemmatizationService): void {
+  ipcMain.handle(IPC_CHANNELS.LEMMATIZATION.GET_STATUS, async (event) => {
+    try {
+      return await lemmatizationService.getStatus();
+    } catch (error) {
+      // Service is optional - return null status instead of throwing
+      console.warn('[Lemmatization] Error getting status (non-critical):', error);
+      return null;
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.LEMMATIZATION.LOAD_MODEL, async (event, language) => {
+    try {
+      const validatedLanguage = LanguageSchema.parse(language);
+      await lemmatizationService.loadModel(validatedLanguage);
+    } catch (error) {
+      // Service is optional - don't throw, just log
+      // loadModel already handles errors gracefully
+      console.warn('[Lemmatization] Error loading model (non-critical):', error);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.LEMMATIZATION.LEMMATIZE_WORDS, async (event, words, language) => {
+    try {
+      const validatedWords = z.array(z.string().min(1).max(200)).parse(words);
+      const validatedLanguage = LanguageSchema.parse(language);
+      return await lemmatizationService.lemmatizeWords(validatedWords, validatedLanguage);
+    } catch (error) {
+      // Service is optional - return empty object instead of throwing
+      // lemmatizeWords already handles errors gracefully and returns {}
+      console.warn('[Lemmatization] Error lemmatizing words (non-critical):', error);
+      return {};
+    }
+  });
 }

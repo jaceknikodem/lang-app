@@ -1,0 +1,15 @@
+[project]
+name = "stanza-lemmatization-service"
+version = "1.0.0"
+description = "FastAPI service wrapping Stanza for lemmatization"
+requires-python = ">=3.10,<3.11"
+dependencies = [
+    "fastapi==0.115.0",
+    "uvicorn[standard]==0.32.0",
+    "pydantic==2.9.0",
+    "stanza==1.7.0",
+]
+
+[project.scripts]
+stanza-service = "stanza_service:main"
+

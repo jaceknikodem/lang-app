@@ -109,6 +109,9 @@ export class LearningMode extends LitElement {
     
     // Reload all data for the new language
     try {
+      // Load lemmatization model for the new language (async, non-blocking)
+      void this.loadLemmatizationModel(newLanguage);
+      
       // Load all words for highlighting purposes
       await this.loadAllWords();
       
@@ -508,6 +511,24 @@ export class LearningMode extends LitElement {
       if (!this.currentLanguage) {
         this.currentLanguage = 'spanish';
       }
+    }
+    
+    const languageToUse = this.currentLanguage || 'spanish';
+    
+    // Load lemmatization model for the current language (async, non-blocking)
+    void this.loadLemmatizationModel(languageToUse);
+  }
+
+  /**
+   * Load lemmatization model asynchronously (non-blocking)
+   */
+  private async loadLemmatizationModel(language: string): Promise<void> {
+    try {
+      console.log(`[Lemmatization] Loading model for language: ${language}`);
+      await window.electronAPI.lemmatization.loadModel(language);
+      console.log(`[Lemmatization] Model loaded successfully for ${language}`);
+    } catch (error) {
+      console.warn(`[Lemmatization] Failed to load model for ${language} (non-critical):`, error);
     }
   }
 

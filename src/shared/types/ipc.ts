@@ -173,6 +173,13 @@ export interface IPCBridge {
     openBackupDirectory: () => Promise<void>;
     closeApp: () => Promise<void>;
   };
+
+  // Lemmatization operations (optional service - may not be available)
+  lemmatization: {
+    getStatus: () => Promise<{ status: string; loadedModels: string[]; service: string } | null>;
+    loadModel: (language: string) => Promise<void>;
+    lemmatizeWords: (words: string[], language: string) => Promise<Record<string, string>>;
+  };
 }
 
 // IPC channel names
@@ -280,5 +287,10 @@ export const IPC_CHANNELS = {
     GET_WORD_STATUS: 'jobs:getWordStatus',
     GET_QUEUE_SUMMARY: 'jobs:getQueueSummary',
     WORD_UPDATED: 'jobs:word-updated'
+  },
+  LEMMATIZATION: {
+    GET_STATUS: 'lemmatization:getStatus',
+    LOAD_MODEL: 'lemmatization:loadModel',
+    LEMMATIZE_WORDS: 'lemmatization:lemmatizeWords'
   }
 } as const;
