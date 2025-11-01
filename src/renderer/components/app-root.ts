@@ -159,6 +159,23 @@ export class AppRoot extends LitElement {
         cursor: not-allowed;
       }
 
+      .close-button {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border: 1px solid var(--error-color);
+        background: var(--background-primary);
+        color: var(--error-color);
+        border-radius: var(--border-radius-small);
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        margin-left: var(--spacing-sm);
+      }
+
+      .close-button:hover {
+        background: var(--error-light);
+      }
+
       .content-area {
         flex: 1;
         display: flex;
@@ -543,6 +560,14 @@ export class AppRoot extends LitElement {
     }
   }
 
+  private async handleCloseApp() {
+    try {
+      await window.electronAPI.lifecycle.closeApp();
+    } catch (error) {
+      console.error('Error closing app:', error);
+    }
+  }
+
 
 
   private setupKeyboardBindings() {
@@ -638,6 +663,13 @@ export class AppRoot extends LitElement {
               title="Settings (Ctrl+5)"
             >
               Settings
+            </button>
+            <button 
+              class="close-button"
+              @click=${this.handleCloseApp}
+              title="Close Application"
+            >
+              ✕ Close
             </button>
             ${this.currentLanguage ? html`
               <div class="language-dropdown">

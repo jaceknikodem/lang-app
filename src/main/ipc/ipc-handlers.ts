@@ -10,6 +10,7 @@ import { LLMClient, ContentGenerator, LLMFactory, LLMProvider } from '../llm/ind
 import { AudioService } from '../audio/audio-service.js';
 import { LifecycleManager, UpdateManager } from '../lifecycle/index.js';
 import { SRSService } from '../srs/srs-service.js';
+import { WordGenerationRunner } from '../jobs/word-generation-runner.js';
 import { CreateWordRequest } from '../../shared/types/core.js';
 
 // Validation schemas for input sanitization
@@ -43,7 +44,8 @@ export function setupIPCHandlers(
   audioService: AudioService,
   srsService: SRSService,
   lifecycleManager?: LifecycleManager,
-  updateManager?: UpdateManager
+  updateManager?: UpdateManager,
+  wordGenerationRunner?: WordGenerationRunner
 ): void {
   // Database handlers
   setupDatabaseHandlers(databaseLayer);
@@ -65,7 +67,7 @@ export function setupIPCHandlers(
 
   // Lifecycle handlers
   if (lifecycleManager && updateManager) {
-    setupLifecycleHandlers(lifecycleManager, updateManager);
+    setupLifecycleHandlers(lifecycleManager, updateManager, audioService, wordGenerationRunner);
   }
 
   console.log('IPC handlers registered successfully');
@@ -1061,7 +1063,12 @@ function setupJobHandlers(databaseLayer: SQLiteDatabaseLayer): void {
 /**
  * Set up lifecycle-related IPC handlers
  */
-function setupLifecycleHandlers(lifecycleManager: LifecycleManager, updateManager: UpdateManager): void {
+function setupLifecycleHandlers(
+  lifecycleManager: LifecycleManager,
+  updateManager: UpdateManager,
+  audioService?: AudioService,
+  wordGenerationRunner?: WordGenerationRunner
+): void {
   ipcMain.handle(IPC_CHANNELS.LIFECYCLE.CREATE_BACKUP, async (event) => {
     try {
       return await lifecycleManager.createBackup();
@@ -1134,6 +1141,46 @@ function setupLifecycleHandlers(lifecycleManager: LifecycleManager, updateManage
     } catch (error) {
       console.error('Error opening backup directory:', error);
       throw new Error(`Failed to open backup directory: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.LIFECYCLE.CLOSE_APP, async (event) => {
+    try {
+      console.log('Close app requested via IPC');
+      
+      // Stop word generation runner FIRST (before database is closed)
+      if (wordGenerationRunner) {
+        await wordGenerationRunner.stop();
+      }
+
+      // Stop audio service (stop any playing audio or active recordings)
+      if (audioService) {
+        audioService.stopAudio();
+        try {
+          const isRecording = await audioService.isRecording();
+          if (isRecording) {
+            await audioService.stopRecording();
+          }
+        } catch (error) {
+          console.warn('Error stopping recording during app close:', error);
+        }
+      }
+
+      // Clean up update manager
+      updateManager.cleanup();
+
+      // Clean up IPC handlers
+      cleanupIPCHandlers();
+
+      // Handle graceful shutdown (sets isShuttingDown flag and closes database)
+      await lifecycleManager.handleShutdown();
+
+      // Quit the app (before-quit handler will see isShuttingDown flag and skip cleanup)
+      app.quit();
+    } catch (error) {
+      console.error('Error during app close cleanup:', error);
+      // Still quit even if cleanup failed
+      app.quit();
     }
   });
 }

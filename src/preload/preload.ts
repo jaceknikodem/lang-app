@@ -210,7 +210,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openBackupDialog: () => 
       ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.OPEN_BACKUP_DIALOG),
     openBackupDirectory: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.OPEN_BACKUP_DIRECTORY)
+      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.OPEN_BACKUP_DIRECTORY),
+    closeApp: () => 
+      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.CLOSE_APP)
   },
 
   // Frequency word management
@@ -364,6 +366,7 @@ declare global {
         restartAll: () => Promise<void>;
         openBackupDialog: () => Promise<string | null>;
         openBackupDirectory: () => Promise<void>;
+        closeApp: () => Promise<void>;
       };
       frequency: {
         getProgress: (language: string) => Promise<{

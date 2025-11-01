@@ -277,7 +277,7 @@ app.whenReady().then(async () => {
     await initializeServices();
 
     // Set up IPC handlers with initialized services
-    setupIPCHandlers(databaseLayer!, llmClient!, contentGenerator!, audioService!, srsService!, lifecycleManager!, updateManager!);
+    setupIPCHandlers(databaseLayer!, llmClient!, contentGenerator!, audioService!, srsService!, lifecycleManager!, updateManager!, wordGenerationRunner);
 
     wordGenerationRunner?.start();
     
@@ -319,17 +319,31 @@ app.on('before-quit', async (event) => {
   if (lifecycleManager && !(lifecycleManager as any)['isShuttingDown']) {
     event.preventDefault();
     try {
+      // Stop word generation runner FIRST (before database is closed)
       await wordGenerationRunner?.stop();
 
-      // Clean up IPC handlers
-      cleanupIPCHandlers();
+      // Stop audio service
+      if (audioService) {
+        audioService.stopAudio();
+        try {
+          const isRecording = await audioService.isRecording();
+          if (isRecording) {
+            await audioService.stopRecording();
+          }
+        } catch (error) {
+          console.warn('Error stopping recording during before-quit:', error);
+        }
+      }
 
       // Clean up update manager
       if (updateManager) {
         updateManager.cleanup();
       }
 
-      // Handle graceful shutdown (includes database closure)
+      // Clean up IPC handlers
+      cleanupIPCHandlers();
+
+      // Handle graceful shutdown (includes database closure) - sets isShuttingDown flag
       await lifecycleManager.handleShutdown();
 
       app.quit();

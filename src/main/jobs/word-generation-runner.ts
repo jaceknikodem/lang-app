@@ -84,6 +84,15 @@ export class WordGenerationRunner {
 
         await this.handleJob(job);
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        // If database is closed/not connected, exit gracefully
+        if (errorMessage.includes('Database not connected') || errorMessage.includes('not connected')) {
+          console.log('[WordGenerationRunner] Database closed, stopping runner');
+          this.running = false;
+          break;
+        }
+        
         console.error('WordGenerationRunner loop error:', error);
         await this.delay(this.pollIntervalMs);
       }
