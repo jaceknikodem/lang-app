@@ -72,7 +72,6 @@ declare global {
         compareTranscription: (transcribed: string, expected: string) => Promise<any>;
         isSpeechRecognitionReady: () => Promise<boolean>;
         switchToElevenLabs: (apiKey: string) => Promise<void>;
-        switchToMinimax: (apiKey: string) => Promise<void>;
         switchToSystemTTS: () => Promise<void>;
       };
       jobs: {

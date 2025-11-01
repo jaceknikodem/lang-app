@@ -322,15 +322,6 @@ export class SettingsPanel extends LitElement {
   @state()
   private elevenLabsModel = 'eleven_flash_v2_5';
 
-  @state()
-  private minimaxApiKey = '';
-
-  @state()
-  private isMinimaxEnabled = false;
-
-  @state()
-  private minimaxModel = 'speech-2.6-hd';
-
 
 
 
@@ -367,9 +358,6 @@ export class SettingsPanel extends LitElement {
 
       // Load ElevenLabs settings
       await this.loadElevenLabsSettings();
-
-      // Load Minimax settings
-      await this.loadMinimaxSettings();
     } catch (error) {
       console.error('Failed to load settings:', error);
     }
@@ -473,31 +461,6 @@ export class SettingsPanel extends LitElement {
     }
   }
 
-  private async loadMinimaxSettings() {
-    try {
-      // Get Minimax API key
-      const apiKey = await window.electronAPI.database.getSetting('minimax_api_key');
-      this.minimaxApiKey = apiKey || '';
-
-      // Get Minimax model
-      const model = await window.electronAPI.database.getSetting('minimax_model');
-      this.minimaxModel = model || 'speech-2.6-hd';
-
-      // Check if Minimax is enabled (has API key and model is not disabled)
-      this.isMinimaxEnabled = !!(this.minimaxApiKey && this.minimaxApiKey.trim() && this.minimaxModel && this.minimaxModel !== 'disabled');
-
-      console.log('Minimax settings loaded:', {
-        hasApiKey: !!this.minimaxApiKey,
-        model: this.minimaxModel,
-        enabled: this.isMinimaxEnabled
-      });
-    } catch (error) {
-      console.error('Failed to load Minimax settings:', error);
-      this.minimaxApiKey = '';
-      this.minimaxModel = 'speech-2.6-hd';
-      this.isMinimaxEnabled = false;
-    }
-  }
 
 
 
@@ -719,24 +682,10 @@ export class SettingsPanel extends LitElement {
     const model = select.value;
 
     try {
-      // If selecting a Minimax model, update Minimax settings and disable ElevenLabs
-      if (model === 'speech-2.6-hd' || model === 'speech-2.6-turbo') {
-        await window.electronAPI.database.setSetting('minimax_model', model);
-        await window.electronAPI.database.setSetting('elevenlabs_model', 'disabled');
-        this.minimaxModel = model;
-        this.elevenLabsModel = 'disabled';
-        // Model is guaranteed to be a valid Minimax model at this point (not 'disabled')
-        this.isMinimaxEnabled = !!(this.minimaxApiKey && this.minimaxApiKey.trim());
-        this.isElevenLabsEnabled = false;
-      } else {
-        // Otherwise, update ElevenLabs settings and disable Minimax
-        await window.electronAPI.database.setSetting('elevenlabs_model', model);
-        await window.electronAPI.database.setSetting('minimax_model', 'disabled');
-        this.elevenLabsModel = model;
-        this.minimaxModel = 'disabled';
-        this.isElevenLabsEnabled = !!(this.elevenLabsApiKey && this.elevenLabsApiKey.trim() && model !== 'disabled');
-        this.isMinimaxEnabled = false;
-      }
+      // Update ElevenLabs settings
+      await window.electronAPI.database.setSetting('elevenlabs_model', model);
+      this.elevenLabsModel = model;
+      this.isElevenLabsEnabled = !!(this.elevenLabsApiKey && this.elevenLabsApiKey.trim() && model !== 'disabled');
 
       // Switch TTS based on current settings
       await this.switchTTSBasedOnSettings();
@@ -751,40 +700,16 @@ export class SettingsPanel extends LitElement {
 
   private getCurrentTTSModel(): string {
     // Return the currently active TTS model for the dropdown
-    if (this.isMinimaxEnabled && this.minimaxModel && this.minimaxModel !== 'disabled') {
-      return this.minimaxModel;
-    } else if (this.isElevenLabsEnabled && this.elevenLabsModel && this.elevenLabsModel !== 'disabled') {
+    if (this.isElevenLabsEnabled && this.elevenLabsModel && this.elevenLabsModel !== 'disabled') {
       return this.elevenLabsModel;
     }
     return 'disabled';
   }
 
-  private async updateMinimaxApiKey(event: Event) {
-    const input = event.target as HTMLInputElement;
-    const apiKey = input.value.trim();
-
-    try {
-      await window.electronAPI.database.setSetting('minimax_api_key', apiKey);
-      this.minimaxApiKey = apiKey;
-      this.isMinimaxEnabled = !!(apiKey && apiKey.length > 0 && this.minimaxModel && this.minimaxModel !== 'disabled');
-
-      // Switch TTS based on current settings
-      await this.switchTTSBasedOnSettings();
-
-      console.log('Minimax API key updated:', { enabled: this.isMinimaxEnabled });
-    } catch (error) {
-      console.error('Failed to save Minimax API key:', error);
-      // Revert the input value if saving failed
-      input.value = this.minimaxApiKey;
-    }
-  }
 
   private async switchTTSBasedOnSettings() {
-    // Check Minimax first (higher priority), then ElevenLabs, then system TTS
-    if (this.isMinimaxEnabled) {
-      // Switch to Minimax TTS
-      await window.electronAPI.audio.switchToMinimax(this.minimaxApiKey);
-    } else if (this.isElevenLabsEnabled) {
+    // Check ElevenLabs, then fall back to system TTS
+    if (this.isElevenLabsEnabled) {
       // Switch to ElevenLabs TTS
       await window.electronAPI.audio.switchToElevenLabs(this.elevenLabsApiKey);
     } else {
@@ -1041,10 +966,6 @@ export class SettingsPanel extends LitElement {
                 <option value="eleven_flash_v2_5">ElevenLabs Flash v2.5 (Fastest, most cost-effective)</option>
                 <option value="eleven_multilingual_v2">ElevenLabs Multilingual v2 (High quality, slower)</option>
               </optgroup>
-              <optgroup label="Minimax">
-                <option value="speech-2.6-hd">Minimax Speech 2.6 HD (Ultra-low latency, enhanced naturalness)</option>
-                <option value="speech-2.6-turbo">Minimax Speech 2.6 Turbo (Faster, more cost-effective)</option>
-              </optgroup>
             </select>
           </div>
 
@@ -1063,33 +984,12 @@ export class SettingsPanel extends LitElement {
               />
             </div>
           ` : ''}
-
-          ${this.minimaxModel !== 'disabled' ? html`
-            <div class="settings-row">
-              <div class="settings-description">
-                <strong>Minimax API Key</strong>
-                <p>Enter your Minimax API key to use AI voices</p>
-              </div>
-              <input 
-                type="password" 
-                class="text-input"
-                .value=${this.minimaxApiKey}
-                @blur=${this.updateMinimaxApiKey}
-                placeholder="Enter Minimax API key..."
-              />
-            </div>
-          ` : ''}
           
           <div class="model-info">
-            Status: ${this.isMinimaxEnabled ? 
-              html`<span style="color: #28a745;">✓ Minimax TTS Active (${this.minimaxModel})</span>` : 
-              this.isElevenLabsEnabled ? 
-                html`<span style="color: #28a745;">✓ ElevenLabs TTS Active (${this.elevenLabsModel})</span>` : 
-                html`<span style="color: #6c757d;">System TTS Active</span>`
+            Status: ${this.isElevenLabsEnabled ? 
+              html`<span style="color: #28a745;">✓ ElevenLabs TTS Active (${this.elevenLabsModel})</span>` : 
+              html`<span style="color: #6c757d;">System TTS Active</span>`
             }
-            ${this.minimaxModel !== 'disabled' && !this.minimaxApiKey ? html`
-              <br><span style="color: #dc3545;">⚠️ API key required for Minimax TTS</span>
-            ` : ''}
             ${this.elevenLabsModel !== 'disabled' && !this.elevenLabsApiKey ? html`
               <br><span style="color: #dc3545;">⚠️ API key required for ElevenLabs TTS</span>
             ` : ''}

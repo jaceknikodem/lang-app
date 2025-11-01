@@ -153,7 +153,6 @@ export interface IPCBridge {
     compareTranscription: (transcribed: string, expected: string) => Promise<TranscriptionComparison>;
     isSpeechRecognitionReady: () => Promise<boolean>;
     switchToElevenLabs: (apiKey: string) => Promise<void>;
-    switchToMinimax: (apiKey: string) => Promise<void>;
     switchToSystemTTS: () => Promise<void>;
   };
 
@@ -246,7 +245,6 @@ export const IPC_CHANNELS = {
     COMPARE_TRANSCRIPTION: 'audio:compareTranscription',
     IS_SPEECH_RECOGNITION_READY: 'audio:isSpeechRecognitionReady',
     SWITCH_TO_ELEVENLABS: 'audio:switchToElevenLabs',
-    SWITCH_TO_MINIMAX: 'audio:switchToMinimax',
     SWITCH_TO_SYSTEM_TTS: 'audio:switchToSystemTTS'
   },
   QUIZ: {

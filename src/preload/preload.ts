@@ -181,8 +181,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.IS_SPEECH_RECOGNITION_READY),
     switchToElevenLabs: (apiKey: string) => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.SWITCH_TO_ELEVENLABS, apiKey),
-    switchToMinimax: (apiKey: string) => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.SWITCH_TO_MINIMAX, apiKey),
     switchToSystemTTS: () => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.SWITCH_TO_SYSTEM_TTS)
   },
@@ -351,7 +349,6 @@ declare global {
         compareTranscription: (transcribed: string, expected: string) => Promise<any>;
         isSpeechRecognitionReady: () => Promise<boolean>;
         switchToElevenLabs: (apiKey: string) => Promise<void>;
-        switchToMinimax: (apiKey: string) => Promise<void>;
         switchToSystemTTS: () => Promise<void>;
       };
       quiz: {
