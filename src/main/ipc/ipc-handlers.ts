@@ -648,14 +648,28 @@ function setupAudioHandlers(audioService: AudioService): void {
   ipcMain.handle(IPC_CHANNELS.AUDIO.PLAY_AUDIO, async (event, audioPath) => {
     try {
       const validatedAudioPath = AudioPathSchema.parse(audioPath);
-      return await audioService.playAudio(validatedAudioPath);
+      // Catch PLAYBACK_STOPPED errors immediately with .catch() to prevent Electron logging
+      const playPromise = audioService.playAudio(validatedAudioPath).catch((error: any) => {
+        // Silently handle PLAYBACK_STOPPED errors - they're expected when audio is stopped
+        if (error?.code === 'PLAYBACK_STOPPED') {
+          // Return undefined instead of throwing to prevent Electron from logging the error
+          return undefined;
+        }
+        // Re-throw other errors
+        throw error;
+      });
+      
+      return await playPromise;
     } catch (error) {
       // Check if this is an AudioError with a code
       if (error instanceof Error && 'code' in error) {
         const audioError = error as { code: string };
-        // Don't log PLAYBACK_STOPPED errors - they're expected/intentional
+        // Don't log or re-throw PLAYBACK_STOPPED errors - they're expected/intentional
+        // This prevents Electron from logging "Error occurred in handler"
         if (audioError.code === 'PLAYBACK_STOPPED') {
-          throw error; // Re-throw as-is without logging
+          // Return undefined instead of re-throwing to prevent error logging
+          // The renderer side already handles this gracefully
+          return;
         }
         // For other AudioErrors, log and re-throw as-is
         console.error('Error playing audio:', error);
