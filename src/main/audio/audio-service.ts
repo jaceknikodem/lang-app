@@ -145,7 +145,7 @@ export class AudioService {
    * Generate audio for text with error handling and validation
    * Ensures the currently selected TTS engine is used for generation.
    */
-  async generateAudio(text: string, language?: string, word?: string): Promise<string> {
+  async generateAudio(text: string, language?: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number): Promise<string> {
     // Ensure we're using the currently selected TTS engine
     if (this.database) {
       await this.checkAndSwitchToAudioBackend(this.database);
@@ -161,7 +161,7 @@ export class AudioService {
       const targetLanguage = language ? language.toLowerCase() : undefined;
 
       // Generate audio and return path
-      const audioPath = await this.audioGenerator.generateAudio(text.trim(), targetLanguage, word);
+      const audioPath = await this.audioGenerator.generateAudio(text.trim(), targetLanguage, word, wordId, sentenceId, variantId);
 
       // Verify the file was actually created
       if (!await this.audioExists(audioPath)) {
@@ -488,7 +488,7 @@ export class AudioService {
    * Regenerate audio while ensuring the original file is only replaced on success.
    * Ensures the currently selected TTS engine is used for regeneration.
    */
-  async regenerateAudio(text: string, language?: string, word?: string, existingPath?: string): Promise<string> {
+  async regenerateAudio(text: string, language?: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, existingPath?: string): Promise<string> {
     // Ensure we're using the currently selected TTS engine
     if (this.database) {
       await this.checkAndSwitchToAudioBackend(this.database);
@@ -504,7 +504,7 @@ export class AudioService {
         await fsPromises.rename(existingPath, backupPath);
       }
 
-      const newPath = await this.generateAudio(text, language, word);
+      const newPath = await this.generateAudio(text, language, word, wordId, sentenceId, variantId);
 
       if (backupPath) {
         await fsPromises.unlink(backupPath).catch(() => {});
@@ -532,8 +532,8 @@ export class AudioService {
    * Generate audio for a sentence and return the path
    * Convenience method for sentence-specific audio generation
    */
-  async generateSentenceAudio(sentence: string, language?: string, word?: string): Promise<string> {
-    return this.generateAudio(sentence, language, word);
+  async generateSentenceAudio(sentence: string, language?: string, word?: string, wordId?: number, sentenceId?: number): Promise<string> {
+    return this.generateAudio(sentence, language, word, wordId, sentenceId, undefined);
   }
 
   /**
@@ -544,7 +544,9 @@ export class AudioService {
     url: string,
     sentence: string,
     language?: string,
-    word?: string
+    word?: string,
+    wordId?: number,
+    sentenceId?: number
   ): Promise<string> {
     if (!url || !sentence) {
       throw new Error('Audio URL and sentence text are required to download external audio.');
@@ -571,7 +573,7 @@ export class AudioService {
     }
 
     const extension = this.resolveExternalAudioExtension(response.headers.get('content-type'), url);
-    const audioPath = this.buildExternalAudioPath(sentence, targetLanguage, word, extension);
+    const audioPath = this.buildExternalAudioPath(sentence, targetLanguage, word, extension, wordId, sentenceId);
 
     if (await this.audioExists(audioPath)) {
       return audioPath;
@@ -592,12 +594,14 @@ export class AudioService {
    * Batch generate audio for multiple texts
    * Returns array of paths in same order as input
    */
-  async generateBatchAudio(texts: string[], language?: string, word?: string): Promise<string[]> {
+  async generateBatchAudio(texts: string[], language?: string, word?: string, wordId?: number, sentenceIds?: number[]): Promise<string[]> {
     const results: string[] = [];
 
-    for (const text of texts) {
+    for (let i = 0; i < texts.length; i++) {
+      const text = texts[i];
+      const sentenceId = sentenceIds && i < sentenceIds.length ? sentenceIds[i] : undefined;
       try {
-        const audioPath = await this.generateAudio(text, language, word);
+        const audioPath = await this.generateAudio(text, language, word, wordId, sentenceId, undefined);
         results.push(audioPath);
       } catch (error) {
         // Log error but continue with other texts
@@ -788,18 +792,22 @@ export class AudioService {
     };
   }
 
-  private buildExternalAudioPath(sentence: string, language: string, word: string | undefined, extension: string): string {
+  private buildExternalAudioPath(sentence: string, language: string, word: string | undefined, extension: string, wordId?: number, sentenceId?: number): string {
     const baseDirectory = join(process.cwd(), 'audio');
     const safeLanguage = sanitizeFilename(language || 'unknown');
-    const safeSentence = sanitizeFilename(sentence || 'sentence');
-    const safeWord = word ? sanitizeFilename(word) : undefined;
     const ext = extension.startsWith('.') ? extension : `.${extension}`;
 
-    if (safeWord) {
-      return join(baseDirectory, safeLanguage, safeWord, `${safeSentence}${ext}`);
+    if (wordId === undefined) {
+      throw new Error(`Word ID is required for audio file naming. Sentence: "${sentence}"`);
     }
 
-    return join(baseDirectory, safeLanguage, `${safeSentence}${ext}`);
+    if (sentenceId !== undefined) {
+      // Sentence audio: /audio/<lang>/<word_id>/<sentence_id>.<extension>
+      return join(baseDirectory, safeLanguage, `word_${wordId}`, `sentence_${sentenceId}${ext}`);
+    } else {
+      // Word audio: /audio/<lang>/<word_id>.<extension>
+      return join(baseDirectory, safeLanguage, `word_${wordId}${ext}`);
+    }
   }
 
   private resolveExternalAudioExtension(contentType: string | null | undefined, url: string): string {

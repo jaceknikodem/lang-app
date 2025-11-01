@@ -137,8 +137,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Audio operations
   audio: {
-    generateAudio: (text: string, language: string, word?: string) => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GENERATE_AUDIO, text, language, word),
+    generateAudio: (text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number) => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GENERATE_AUDIO, text, language, word, wordId, sentenceId, variantId),
     playAudio: (audioPath: string) => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.PLAY_AUDIO, audioPath),
     stopAudio: () => 
@@ -149,7 +149,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.NORMALIZE_AUDIO_VOLUME, audioPath, targetDb),
     loadAudioBase64: (audioPath: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.LOAD_AUDIO_BASE64, audioPath),
-    regenerateAudio: (options: { text: string; language?: string; word?: string; existingPath?: string }) =>
+    regenerateAudio: (options: { text: string; language?: string; word?: string; wordId?: number; sentenceId?: number; variantId?: number; existingPath?: string }) =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.REGENERATE_AUDIO, options),
     startRecording: (options?: any) => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.START_RECORDING, options),
@@ -387,13 +387,13 @@ declare global {
         getModelsForProvider: (provider: 'ollama' | 'gemini') => Promise<string[]>;
       };
       audio: {
-        generateAudio: (text: string, language?: string, word?: string) => Promise<string>;
+        generateAudio: (text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number) => Promise<string>;
         playAudio: (audioPath: string) => Promise<void>;
         stopAudio: () => Promise<void>;
         audioExists: (audioPath: string) => Promise<boolean>;
         normalizeAudioVolume: (audioPath: string, targetDb?: number) => Promise<string | null>;
         loadAudioBase64: (audioPath: string) => Promise<{ data: ArrayBuffer; mimeType: string } | null>;
-        regenerateAudio: (options: { text: string; language?: string; word?: string; existingPath?: string }) => Promise<{ audioPath: string }>;
+        regenerateAudio: (options: { text: string; language?: string; word?: string; wordId?: number; sentenceId?: number; variantId?: number; existingPath?: string }) => Promise<{ audioPath: string }>;
         startRecording: (options?: any) => Promise<any>;
         stopRecording: () => Promise<any>;
         cancelRecording: () => Promise<void>;

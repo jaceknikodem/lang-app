@@ -169,38 +169,54 @@ export class WordGenerationRunner {
           let audioService: string | undefined;
           let audioModel: string | undefined;
           
+          const sentenceParts = splitSentenceIntoParts(sentence.sentence);
+          const sentenceId = await this.database.insertSentence(
+            word.id,
+            sentence.sentence,
+            sentence.translation,
+            '', // Audio path will be set after generation with proper IDs
+            sentence.contextBefore,
+            sentence.contextAfter,
+            sentence.contextBeforeTranslation,
+            sentence.contextAfterTranslation,
+            sentenceParts,
+            undefined, // Will be set after audio generation
+            undefined, // Will be set after audio generation
+            undefined  // Will be set after audio generation
+          );
+
+          // Generate audio now that we have sentenceId
           if (sentence.audioUrl) {
             // Tatoeba sentence - download audio from external source
-            // Note: We don't generate audio for Tatoeba sentences
             const isTatoebaAudio = sentence.audioUrl.includes('tatoeba.org');
             console.log('Attempting to download external audio for sentence', {
               word: word.word,
               language,
               audioUrl: sentence.audioUrl,
-              isTatoeba: isTatoebaAudio
+              isTatoeba: isTatoebaAudio,
+              sentenceId
             });
             try {
               audioPath = await this.audioService.downloadSentenceAudioFromUrl(
                 sentence.audioUrl,
                 sentence.sentence,
                 language,
-                word.word
+                word.word,
+                word.id,
+                sentenceId
               );
               // Mark as Tatoeba if URL is from Tatoeba
               if (isTatoebaAudio) {
                 sentenceModel = 'tatoeba';
                 audioService = 'tatoeba';
-                audioModel = undefined; // Tatoeba doesn't have a specific model
+                audioModel = undefined;
               } else {
-                // Other external source - use LLM model for sentence, but mark audio source
                 sentenceModel = this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
                 audioService = 'external';
                 audioModel = undefined;
               }
             } catch (downloadError) {
               console.warn('Failed to download external audio:', downloadError);
-              // Don't generate fallback audio - leave audioPath empty
-              // User can regenerate audio manually if needed via the regenerate button
               audioPath = '';
               if (isTatoebaAudio) {
                 sentenceModel = 'tatoeba';
@@ -213,31 +229,52 @@ export class WordGenerationRunner {
               }
             }
           } else {
-            // LLM-generated sentence (Tatoeba is not used)
-            // Generate audio only for newly added words (this is the normal word addition flow)
-            // The regenerate button uses a separate flow (regenerateAudio), so this won't be called during regeneration
-            audioPath = await this.audioService.generateSentenceAudio(sentence.sentence, language, word.word);
-            sentenceModel = this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
-            const audioInfo = this.audioService.getAudioGenerationInfo();
-            audioService = audioInfo.service;
-            audioModel = audioInfo.model;
+            // LLM-generated sentence - generate audio with proper IDs
+            try {
+              audioPath = await this.audioService.generateSentenceAudio(
+                sentence.sentence,
+                language,
+                word.word,
+                word.id,
+                sentenceId
+              );
+              sentenceModel = this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
+              const audioInfo = this.audioService.getAudioGenerationInfo();
+              audioService = audioInfo.service;
+              audioModel = audioInfo.model;
+            } catch (error) {
+              console.warn('[WordGenerationRunner] Failed to generate audio:', error);
+              audioPath = '';
+              sentenceModel = this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
+              const audioInfo = this.audioService.getAudioGenerationInfo();
+              audioService = audioInfo.service;
+              audioModel = audioInfo.model;
+            }
           }
-          
-          const sentenceParts = splitSentenceIntoParts(sentence.sentence);
-          const sentenceId = await this.database.insertSentence(
-            word.id,
-            sentence.sentence,
-            sentence.translation,
-            audioPath,
-            sentence.contextBefore,
-            sentence.contextAfter,
-            sentence.contextBeforeTranslation,
-            sentence.contextAfterTranslation,
-            sentenceParts,
-            sentenceModel,
-            audioService,
-            audioModel
-          );
+
+          // Update sentence with audio path and metadata
+          if (audioPath) {
+            await this.database.updateSentenceAudioPath(sentenceId, audioPath);
+          }
+          // Update sentence metadata (model info) if available
+          if (sentenceModel !== undefined || audioService !== undefined || audioModel !== undefined) {
+            const db = (this.database as any).getDb();
+            if (db) {
+              const updateStmt = db.prepare(`
+                UPDATE sentences 
+                SET sentence_generation_model = COALESCE(?, sentence_generation_model),
+                    audio_generation_service = COALESCE(?, audio_generation_service),
+                    audio_generation_model = COALESCE(?, audio_generation_model)
+                WHERE id = ?
+              `);
+              updateStmt.run(
+                sentenceModel || null,
+                audioService || null,
+                audioModel || null,
+                sentenceId
+              );
+            }
+          }
 
           // Precompute sentence tokens with dictionary lookups and lemmatization
           try {
@@ -330,7 +367,15 @@ export class WordGenerationRunner {
       });
 
       try {
-        const audioPath = await this.audioService.generateSentenceAudio(sentence.sentence, language, wordText);
+        // Get word info to pass wordId
+        const word = await this.database.getWordById(wordId);
+        const audioPath = await this.audioService.generateSentenceAudio(
+          sentence.sentence,
+          language,
+          wordText,
+          wordId,
+          sentence.id
+        );
         await this.database.updateSentenceAudioPath(sentence.id, audioPath);
       } catch (error) {
         console.warn(`Failed to generate audio for existing sentence ${sentence.id}:`, error);

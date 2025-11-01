@@ -37,7 +37,7 @@ export class TTSAudioGenerator implements AudioGenerator {
    * Generate audio file for given text using system TTS
    * Returns path to generated audio file
    */
-  async generateAudio(text: string, language?: string, word?: string): Promise<string> {
+  async generateAudio(text: string, language?: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number): Promise<string> {
     if (!text || text.trim().length === 0) {
       throw this.createAudioError('GENERATION_FAILED', 'Text cannot be empty');
     }
@@ -54,7 +54,7 @@ export class TTSAudioGenerator implements AudioGenerator {
     }
     targetLanguage = targetLanguage || 'spanish';
 
-    const audioPath = this.getAudioPath(text, targetLanguage, word);
+    const audioPath = this.getAudioPath(text, targetLanguage, word, wordId, sentenceId, variantId);
 
     // Return existing file if it exists (caching)
     if (await this.audioExists(audioPath)) {
@@ -192,21 +192,34 @@ export class TTSAudioGenerator implements AudioGenerator {
   }
 
   /**
-   * Generate standardized audio file path based on text content
-   * Structure: /audio/<lang>/<word>/<sentence>.<extension>
+   * Generate standardized audio file path based on IDs
+   * Structure: 
+   *   - Continuation audio: /audio/<lang>/variant_<variant_id>.<extension>
+   *   - Before sentence audio: /audio/<lang>/word_<word_id>/before_sentence_<sentence_id>.<extension>
+   *   - Sentence audio: /audio/<lang>/<word_id>/<sentence_id>.<extension>
+   *   - Word audio: /audio/<lang>/<word_id>.<extension>
+   * Requires wordId for word/sentence audio, variantId for continuation audio
    */
-  private getAudioPath(text: string, language: string, word?: string): string {
-    // Create safe filename from text
-    const safeFilename = sanitizeFilename(text);
-
-    // If word is provided, use the new nested structure
-    if (word) {
-      const safeWord = sanitizeFilename(word);
-      return join(this.config.audioDirectory, language, safeWord, `${safeFilename}${this.config.fileExtension}`);
+  private getAudioPath(text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number): string {
+    if (variantId !== undefined) {
+      // Continuation audio: /audio/<lang>/variant_<variant_id>.<extension>
+      return join(this.config.audioDirectory, language, `variant_${variantId}${this.config.fileExtension}`);
     }
 
-    // For standalone words (no parent word context), place directly in language folder
-    return join(this.config.audioDirectory, language, `${safeFilename}${this.config.fileExtension}`);
+    if (wordId === undefined) {
+      throw this.createAudioError('INVALID_PATH', `Word ID or variant ID is required for audio file naming. Text: "${text}"`);
+    }
+
+    if (sentenceId !== undefined && word?.includes('_before_sentence')) {
+      // Before sentence audio: /audio/<lang>/word_<word_id>/before_sentence_<sentence_id>.<extension>
+      return join(this.config.audioDirectory, language, `word_${wordId}`, `before_sentence_${sentenceId}${this.config.fileExtension}`);
+    } else if (sentenceId !== undefined) {
+      // Sentence audio: /audio/<lang>/<word_id>/<sentence_id>.<extension>
+      return join(this.config.audioDirectory, language, `word_${wordId}`, `sentence_${sentenceId}${this.config.fileExtension}`);
+    } else {
+      // Word audio: /audio/<lang>/<word_id>.<extension>
+      return join(this.config.audioDirectory, language, `word_${wordId}${this.config.fileExtension}`);
+    }
   }
 
   /**

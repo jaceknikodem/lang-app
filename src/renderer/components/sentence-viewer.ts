@@ -1658,6 +1658,8 @@ export class SentenceViewer extends LitElement {
           text: this.sentence.sentence,
           language,
           word,
+          wordId: this.sentence.wordId || this.targetWord?.id,
+          sentenceId: this.sentence.id,
           existingPath: oldPath
         });
         regeneratedPath = result?.audioPath;
@@ -1670,11 +1672,13 @@ export class SentenceViewer extends LitElement {
 
         const fallbackWord = `${word || this.targetWord?.word || 'sentence'}-regen-${Date.now()}`;
 
-        // Generate new audio under a temporary scoped word to avoid clashes
+        // Generate new audio with proper IDs
         regeneratedPath = await window.electronAPI.audio.generateAudio(
           this.sentence.sentence,
           fallbackLanguage,
-          fallbackWord
+          word || this.targetWord?.word || undefined,
+          this.sentence.wordId || this.targetWord?.id || undefined,
+          this.sentence.id || undefined
         );
 
         if (oldPath && oldPath !== regeneratedPath) {

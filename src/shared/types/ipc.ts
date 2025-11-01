@@ -140,7 +140,7 @@ export interface IPCBridge {
 
   // Audio operations
     audio: {
-      generateAudio: (text: string, language?: string, word?: string) => Promise<string>;
+      generateAudio: (text: string, language?: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number) => Promise<string>;
       playAudio: (audioPath: string) => Promise<void>;
       stopAudio: () => Promise<void>;
       audioExists: (audioPath: string) => Promise<boolean>;
@@ -149,6 +149,9 @@ export interface IPCBridge {
         text: string;
         language?: string;
         word?: string;
+        wordId?: number;
+        sentenceId?: number;
+        variantId?: number;
         existingPath?: string;
       }) => Promise<{ audioPath: string }>;
       startRecording: (options?: RecordingOptions) => Promise<RecordingSession>;

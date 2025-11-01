@@ -681,13 +681,16 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
  * Set up audio-related IPC handlers
  */
 function setupAudioHandlers(audioService: AudioService): void {
-  ipcMain.handle(IPC_CHANNELS.AUDIO.GENERATE_AUDIO, async (event, text, language, word) => {
+  ipcMain.handle(IPC_CHANNELS.AUDIO.GENERATE_AUDIO, async (event, text, language, word, wordId, sentenceId, variantId) => {
     try {
       const validatedText = TextSchema.parse(text);
       const validatedLanguage = language ? LanguageSchema.parse(language) : undefined;
       const validatedWord = word ? TextSchema.parse(word) : undefined;
+      const validatedWordId = wordId !== undefined ? z.number().int().parse(wordId) : undefined;
+      const validatedSentenceId = sentenceId !== undefined ? z.number().int().positive().parse(sentenceId) : undefined;
+      const validatedVariantId = variantId !== undefined ? z.number().int().parse(variantId) : undefined;
 
-      return await audioService.generateAudio(validatedText, validatedLanguage, validatedWord);
+      return await audioService.generateAudio(validatedText, validatedLanguage, validatedWord, validatedWordId, validatedSentenceId, validatedVariantId);
     } catch (error) {
       console.error('Error generating audio:', error);
       throw new Error(`Failed to generate audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -777,6 +780,9 @@ function setupAudioHandlers(audioService: AudioService): void {
         text: TextSchema,
         language: LanguageSchema.optional(),
         word: TextSchema.optional(),
+        wordId: z.number().int().optional(),
+        sentenceId: z.number().int().positive().optional(),
+        variantId: z.number().int().optional(),
         existingPath: AudioPathSchema.optional()
       }).parse(payload ?? {});
 
@@ -784,6 +790,9 @@ function setupAudioHandlers(audioService: AudioService): void {
         validatedPayload.text,
         validatedPayload.language,
         validatedPayload.word,
+        validatedPayload.wordId,
+        validatedPayload.sentenceId,
+        validatedPayload.variantId,
         validatedPayload.existingPath
       );
 
@@ -1429,7 +1438,10 @@ function setupDialogHandlers(
             const audioPath = await audioService.generateAudio(
               followUp.text,
               currentLanguage,
-              `_continuation_${validatedVariantId}`
+              undefined,
+              undefined,
+              undefined,
+              validatedVariantId
             );
             
             if (audioPath) {
@@ -1458,7 +1470,10 @@ function setupDialogHandlers(
           const audioPath = await audioService.generateAudio(
             followUp.text,
             currentLanguage,
-            `_continuation_${validatedVariantId}`
+            undefined,
+            undefined,
+            undefined,
+            validatedVariantId
           );
           
           if (audioPath) {
@@ -1494,12 +1509,19 @@ function setupDialogHandlers(
       
       // Generate audio if needed (non-blocking - don't fail if audio generation fails)
       let beforeSentenceAudio: string | undefined;
-      if (session.contextBefore) {
+      if (session.contextBefore && session.sentenceId) {
         try {
+          // Get word ID from sentence
+          const sentence = await databaseLayer.getSentenceById(session.sentenceId);
+          if (!sentence) {
+            throw new Error(`Sentence with ID ${session.sentenceId} not found`);
+          }
           const audioPath = await audioService.generateAudio(
             session.contextBefore,
             await databaseLayer.getCurrentLanguage(),
-            '_before_sentence'
+            '_before_sentence',
+            sentence.wordId,
+            session.sentenceId
           );
           
           // Check if audio was generated successfully
@@ -1539,12 +1561,19 @@ function setupDialogHandlers(
       const sessionsWithAudio = await Promise.all(sessions.map(async (session) => {
         // Generate audio if needed (non-blocking - don't fail if audio generation fails)
         let beforeSentenceAudio: string | undefined;
-        if (session.contextBefore) {
+        if (session.contextBefore && session.sentenceId) {
           try {
+            // Get word ID from sentence
+            const sentence = await databaseLayer.getSentenceById(session.sentenceId);
+            if (!sentence) {
+              throw new Error(`Sentence with ID ${session.sentenceId} not found`);
+            }
             const audioPath = await audioService.generateAudio(
               session.contextBefore,
               currentLanguage,
-              '_before_sentence'
+              '_before_sentence',
+              sentence.wordId,
+              session.sentenceId
             );
             
             // Check if audio was generated successfully
@@ -1590,44 +1619,17 @@ function setupDialogHandlers(
         return null;
       }
 
-      // Check if audio already exists for beforeSentence
-      // We'll use a path pattern: audio/<lang>/_before_sentence_<sentence_id>.mp3
+      // Get word ID from sentence
       const language = await databaseLayer.getCurrentLanguage();
-      const audioPath = `audio/${language}/_before_sentence_${validatedSentenceId}.mp3`;
       
-      const exists = await audioService.audioExists(audioPath);
-      if (exists) {
-        return audioPath;
-      }
-
-      // Generate audio with ElevenLabs (or fall back to system TTS)
-      // Note: generateAudio creates text-based path, so we need to move it to ID-based path
-      const generatedPath = await audioService.generateAudio(
+      // Generate audio with wordId and sentenceId
+      const audioPath = await audioService.generateAudio(
         sentence.contextBefore,
         language,
-        '_before_sentence'
+        '_before_sentence',
+        sentence.wordId,
+        validatedSentenceId
       );
-
-      // If generated path doesn't match expected ID-based path, move/rename the file
-      if (generatedPath !== audioPath) {
-        // Ensure target directory exists
-        const targetDir = dirname(audioPath);
-        const absoluteTargetDir = join(process.cwd(), targetDir);
-        if (!existsSync(absoluteTargetDir)) {
-          mkdirSync(absoluteTargetDir, { recursive: true });
-        }
-        
-        // Move generated file to expected ID-based path
-        const absoluteGeneratedPath = join(process.cwd(), generatedPath);
-        const absoluteAudioPath = join(process.cwd(), audioPath);
-        
-        if (existsSync(absoluteGeneratedPath)) {
-          // Remove target if it exists (shouldn't happen, but be safe)
-          await fsPromises.unlink(absoluteAudioPath).catch(() => {});
-          // Move file to correct location
-          await fsPromises.rename(absoluteGeneratedPath, absoluteAudioPath);
-        }
-      }
 
       return audioPath;
     } catch (error) {
