@@ -2,7 +2,7 @@
  * IPC bridge interfaces for secure communication between main and renderer processes
  */
 
-import { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest, DictionaryEntry } from './core.js';
+import { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest, DictionaryEntry, DialogueVariant } from './core.js';
 import { JobWordInfo, WordProcessingStatus } from './database.js';
 import { RecordingOptions, RecordingSession, TranscriptionOptions, TranscriptionResult, TranscriptionComparison } from './audio.js';
 
@@ -180,6 +180,14 @@ export interface IPCBridge {
     loadModel: (language: string) => Promise<void>;
     lemmatizeWords: (words: string[], language: string) => Promise<Record<string, string>>;
   };
+
+  // Dialog operations
+  dialog: {
+    selectSentence: () => Promise<Sentence | null>;
+    generateVariants: (sentenceId: number) => Promise<Array<{ sentence: string; translation: string }>>;
+    generateFollowUp: (sentenceId: number) => Promise<{ text: string; translation: string }>;
+    ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
+  };
 }
 
 // IPC channel names
@@ -292,5 +300,11 @@ export const IPC_CHANNELS = {
     GET_STATUS: 'lemmatization:getStatus',
     LOAD_MODEL: 'lemmatization:loadModel',
     LEMMATIZE_WORDS: 'lemmatization:lemmatizeWords'
+  },
+  DIALOG: {
+    SELECT_SENTENCE: 'dialog:selectSentence',
+    GENERATE_VARIANTS: 'dialog:generateVariants',
+    GENERATE_FOLLOW_UP: 'dialog:generateFollowUp',
+    ENSURE_BEFORE_SENTENCE_AUDIO: 'dialog:ensureBeforeSentenceAudio'
   }
 } as const;

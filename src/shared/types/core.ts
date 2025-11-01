@@ -127,3 +127,11 @@ export interface QuizResult {
   correct: boolean;
   responseTime?: number;
 }
+
+export interface DialogueVariant {
+  id: number;
+  sentenceId: number;
+  variantSentence: string;
+  variantTranslation: string;
+  createdAt: Date;
+}

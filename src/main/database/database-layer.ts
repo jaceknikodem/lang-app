@@ -6,7 +6,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import { promises as fsPromises } from 'fs';
 import { DatabaseLayer, DatabaseConfig, JobWordInfo, WordGenerationJob, WordGenerationJobStatus, WordProcessingStatus } from '../../shared/types/database.js';
-import { Word, Sentence, StudyStats, CreateWordRequest, DictionaryEntry } from '../../shared/types/core.js';
+import { Word, Sentence, StudyStats, CreateWordRequest, DictionaryEntry, DialogueVariant } from '../../shared/types/core.js';
 import { DatabaseConnection } from './connection.js';
 import { MigrationManager } from './migrations.js';
 import { splitSentenceIntoParts, serializeSentenceParts, parseSentenceParts, serializeTokenizedTokens, parseTokenizedTokens } from '../../shared/utils/sentence.js';
@@ -698,6 +698,76 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       }
     } catch (error) {
       throw new Error(`Failed to update sentence tokens: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Insert a dialogue variant for a sentence
+   */
+  async insertDialogueVariant(sentenceId: number, variantSentence: string, variantTranslation: string): Promise<number> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare(`
+        INSERT INTO dialogue_variants (sentence_id, variant_sentence, variant_translation)
+        VALUES (?, ?, ?)
+      `);
+      
+      const result = stmt.run(sentenceId, variantSentence, variantTranslation);
+      return result.lastInsertRowid as number;
+    } catch (error) {
+      throw new Error(`Failed to insert dialogue variant: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get dialogue variants for a sentence
+   */
+  async getDialogueVariantsBySentenceId(sentenceId: number, limit?: number): Promise<DialogueVariant[]> {
+    const db = this.getDb();
+    
+    try {
+      let query = `
+        SELECT * FROM dialogue_variants
+        WHERE sentence_id = ?
+        ORDER BY created_at DESC
+      `;
+      
+      if (limit) {
+        query += ` LIMIT ?`;
+      }
+      
+      const stmt = limit ? db.prepare(query) : db.prepare(query);
+      const rows = limit ? stmt.all(sentenceId, limit) as any[] : stmt.all(sentenceId) as any[];
+      
+      return rows.map(row => ({
+        id: row.id,
+        sentenceId: row.sentence_id,
+        variantSentence: row.variant_sentence,
+        variantTranslation: row.variant_translation,
+        createdAt: new Date(row.created_at)
+      }));
+    } catch (error) {
+      throw new Error(`Failed to get dialogue variants: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get count of dialogue variants for a sentence
+   */
+  async getDialogueVariantCount(sentenceId: number): Promise<number> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare(`
+        SELECT COUNT(*) as count FROM dialogue_variants
+        WHERE sentence_id = ?
+      `);
+      
+      const result = stmt.get(sentenceId) as { count: number };
+      return result.count;
+    } catch (error) {
+      throw new Error(`Failed to get dialogue variant count: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

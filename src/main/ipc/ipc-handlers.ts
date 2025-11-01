@@ -13,6 +13,7 @@ import { SRSService } from '../srs/srs-service.js';
 import { WordGenerationRunner } from '../jobs/word-generation-runner.js';
 import { CreateWordRequest } from '../../shared/types/core.js';
 import { LemmatizationService } from '../lemmatization/index.js';
+import { DialogService } from '../dialog/index.js';
 
 // Validation schemas for input sanitization
 const CreateWordSchema = z.object({
@@ -76,6 +77,9 @@ export function setupIPCHandlers(
   if (lemmatizationService) {
     setupLemmatizationHandlers(lemmatizationService);
   }
+
+  // Dialog handlers
+  setupDialogHandlers(databaseLayer, llmClient, contentGenerator, audioService);
 
   console.log('IPC handlers registered successfully');
 }
@@ -1259,6 +1263,105 @@ function setupLemmatizationHandlers(lemmatizationService: LemmatizationService):
       // lemmatizeWords already handles errors gracefully and returns {}
       console.warn('[Lemmatization] Error lemmatizing words (non-critical):', error);
       return {};
+    }
+  });
+}
+
+/**
+ * Set up dialog-related IPC handlers
+ */
+function setupDialogHandlers(
+  databaseLayer: SQLiteDatabaseLayer,
+  llmClient: LLMClient,
+  contentGenerator: ContentGenerator,
+  audioService: AudioService
+): void {
+  const dialogService = new DialogService(databaseLayer, llmClient);
+
+  ipcMain.handle(IPC_CHANNELS.DIALOG.SELECT_SENTENCE, async (event) => {
+    try {
+      return await dialogService.selectSentence();
+    } catch (error) {
+      console.error('Error selecting sentence for dialog:', error);
+      throw new Error(`Failed to select sentence: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DIALOG.GENERATE_VARIANTS, async (event, sentenceId) => {
+    try {
+      const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
+      
+      // Get the sentence
+      const sentence = await databaseLayer.getSentenceById(validatedSentenceId);
+      if (!sentence) {
+        throw new Error(`Sentence with ID ${validatedSentenceId} not found`);
+      }
+
+      // Get existing variants
+      const existingVariants = await databaseLayer.getDialogueVariantsBySentenceId(validatedSentenceId);
+      
+      // Generate variants
+      return await dialogService.generateDialogueVariants(sentence, existingVariants);
+    } catch (error) {
+      console.error('Error generating dialogue variants:', error);
+      throw new Error(`Failed to generate variants: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DIALOG.GENERATE_FOLLOW_UP, async (event, sentenceId) => {
+    try {
+      const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
+      
+      // Get the sentence
+      const sentence = await databaseLayer.getSentenceById(validatedSentenceId);
+      if (!sentence) {
+        throw new Error(`Sentence with ID ${validatedSentenceId} not found`);
+      }
+
+      // Generate follow-up
+      return await dialogService.generateFollowUp(sentence);
+    } catch (error) {
+      console.error('Error generating follow-up:', error);
+      throw new Error(`Failed to generate follow-up: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DIALOG.ENSURE_BEFORE_SENTENCE_AUDIO, async (event, sentenceId) => {
+    try {
+      const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
+      
+      // Get the sentence
+      const sentence = await databaseLayer.getSentenceById(validatedSentenceId);
+      if (!sentence) {
+        throw new Error(`Sentence with ID ${validatedSentenceId} not found`);
+      }
+
+      // Check if beforeSentence exists
+      if (!sentence.contextBefore) {
+        return null;
+      }
+
+      // Check if audio already exists for beforeSentence
+      // We'll use a path pattern: audio/<lang>/_before_sentence_<sentence_id>.mp3
+      const language = await databaseLayer.getCurrentLanguage();
+      const audioPath = `audio/${language}/_before_sentence_${validatedSentenceId}.mp3`;
+      
+      const exists = await audioService.audioExists(audioPath);
+      if (exists) {
+        return audioPath;
+      }
+
+      // Generate audio with ElevenLabs (or fall back to system TTS)
+      const generatedPath = await audioService.generateAudio(
+        sentence.contextBefore,
+        language,
+        '_before_sentence'
+      );
+
+      return generatedPath;
+    } catch (error) {
+      console.error('Error ensuring before sentence audio:', error);
+      throw new Error(`Failed to ensure before sentence audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
 }

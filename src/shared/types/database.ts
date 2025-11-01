@@ -2,7 +2,7 @@
  * Database layer interfaces and types
  */
 
-import { Word, Sentence, StudyStats, CreateWordRequest, DictionaryEntry } from './core.js';
+import { Word, Sentence, StudyStats, CreateWordRequest, DictionaryEntry, DialogueVariant } from './core.js';
 
 export type WordProcessingStatus = 'queued' | 'processing' | 'ready' | 'failed';
 export type WordGenerationJobStatus = 'queued' | 'processing' | 'completed' | 'failed';
@@ -92,6 +92,11 @@ export interface DatabaseLayer {
   updateSentenceLastShown(sentenceId: number): Promise<void>;
   updateSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void>;
   updateSentenceTokens(sentenceId: number, tokens: any[]): Promise<void>;
+  
+  // Dialogue variants management
+  insertDialogueVariant(sentenceId: number, variantSentence: string, variantTranslation: string): Promise<number>;
+  getDialogueVariantsBySentenceId(sentenceId: number, limit?: number): Promise<DialogueVariant[]>;
+  getDialogueVariantCount(sentenceId: number): Promise<number>;
   
   // Progress tracking
   updateLastStudied(wordId: number): Promise<void>;

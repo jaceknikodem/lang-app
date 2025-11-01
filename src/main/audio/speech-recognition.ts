@@ -83,8 +83,29 @@ export class SpeechRecognitionService {
    * Fix WAV file headers using ffmpeg to ensure correct format
    * Converts to: 16kHz sample rate, mono (1 channel), PCM s16le format
    * Returns path to fixed file, or null if ffmpeg is not available
+   * Skips ffmpeg if the file is likely empty (small size)
    */
   private async fixWavFile(filePath: string): Promise<string> {
+    // Check if file exists and get its size
+    try {
+      const stats = await fs.promises.stat(filePath);
+      const fileSizeInBytes = stats.size;
+      
+      // Skip ffmpeg if file is too small (likely empty/silent recording)
+      // Threshold: 2KB (2048 bytes) - WAV header is typically 44 bytes, so this allows
+      // for a very short recording but catches empty files
+      const MIN_FILE_SIZE = 2048; // 2KB
+      
+      if (fileSizeInBytes < MIN_FILE_SIZE) {
+        console.log(`Skipping ffmpeg - file is too small (${fileSizeInBytes} bytes), likely empty audio`);
+        // Return the original file path if too small - let Whisper handle it or fail gracefully
+        return filePath;
+      }
+    } catch (error) {
+      console.error('Failed to check file size:', error);
+      // If we can't check size, proceed with ffmpeg (existing behavior)
+    }
+    
     // Create temporary file for the fixed WAV
     const fixedFilePath = filePath.replace(/\.wav$/i, '_fixed.wav');
     

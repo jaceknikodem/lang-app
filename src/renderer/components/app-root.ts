@@ -13,6 +13,7 @@ import './topic-selector.js';
 import './word-selector.js';
 import './learning-mode.js';
 import './quiz-mode.js';
+import './dialog-mode.js';
 import './progress-summary.js';
 import './settings-panel.js';
 
@@ -576,6 +577,9 @@ export class AppRoot extends LitElement {
         const direction = this.sessionState?.quizDirection || this.appState.quizDirection;
         router.goToQuiz(undefined, direction);
         break;
+      case 'dialog':
+        router.goToDialog();
+        break;
       case 'progress':
         router.goToProgress();
         break;
@@ -676,16 +680,23 @@ export class AppRoot extends LitElement {
               Quiz
             </button>
             <button 
+              class="nav-button ${router.isCurrentMode('dialog') ? 'active' : ''}"
+              @click=${() => this.handleNavigation('dialog')}
+              title="Practice speaking (Ctrl+4)"
+            >
+              Dialog
+            </button>
+            <button 
               class="nav-button ${router.isCurrentMode('progress') ? 'active' : ''}"
               @click=${() => this.handleNavigation('progress')}
-              title="View progress (Ctrl+4)"
+              title="View progress (Ctrl+5)"
             >
               Progress
             </button>
             <button 
               class="nav-button ${router.isCurrentMode('settings') ? 'active' : ''}"
               @click=${() => this.handleNavigation('settings')}
-              title="Settings (Ctrl+5)"
+              title="Settings (Ctrl+6)"
             >
               Settings
             </button>
@@ -749,6 +760,9 @@ export class AppRoot extends LitElement {
             .direction=${routeData?.direction || 'foreign-to-english'}
           ></quiz-mode>
         `;
+
+      case 'dialog':
+        return html`<dialog-mode></dialog-mode>`;
 
       case 'progress':
         return html`<progress-summary></progress-summary>`;

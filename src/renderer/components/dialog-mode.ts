@@ -1,0 +1,1246 @@
+/**
+ * Dialog mode component for conversational practice
+ */
+
+import { LitElement, html, css, nothing } from 'lit';
+import { customElement, state } from 'lit/decorators.js';
+import { Sentence } from '../../shared/types/core.js';
+import { sharedStyles } from '../styles/shared.js';
+import { useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
+import type { RecordingOptions, RecordingSession } from '../../shared/types/audio.js';
+
+interface DialogueVariant {
+  sentence: string;
+  translation: string;
+}
+
+interface TranscriptionResult {
+  text: string;
+  similarity: number;
+  normalizedTranscribed: string;
+  normalizedExpected: string;
+  expectedWords: Array<{ word: string; similarity: number; matched: boolean }>;
+  transcribedWords: string[];
+}
+
+@customElement('dialog-mode')
+export class DialogMode extends LitElement {
+  @state()
+  private isLoading = false;
+
+  @state()
+  private error: string | null = null;
+
+  @state()
+  private currentSentence: Sentence | null = null;
+
+  @state()
+  private beforeSentenceAudio: string | null = null;
+
+  @state()
+  private responseOptions: DialogueVariant[] = [];
+
+  @state()
+  private selectedOption: DialogueVariant | null = null;
+
+  @state()
+  private isRecording = false;
+
+  @state()
+  private recordingTime = 0;
+
+  @state()
+  private currentRecording: {
+    session: RecordingSession;
+    filePath: string;
+    duration: number;
+  } | null = null;
+
+  @state()
+  private transcriptionResult: TranscriptionResult | null = null;
+
+  @state()
+  private isTranscribing = false;
+
+  @state()
+  private streamingTranscriptionText: string | null = null;
+
+  @state()
+  private speechRecognitionReady = false;
+
+  @state()
+  private followUpText = '';
+
+  @state()
+  private followUpTranslation = '';
+
+  @state()
+  private showFollowUp = false;
+
+  @state()
+  private isGeneratingFollowUp = false;
+
+  @state()
+  private showTranslations = true;
+
+  private recordingTimer: number | null = null;
+  private recordingStatusCheckTimer: number | null = null;
+  private speechRecognitionCheckTimer: number | null = null;
+  private currentAudioElement: HTMLAudioElement | null = null;
+  private transcriptionProgressUnsubscribe: (() => void) | null = null;
+  private keyboardUnsubscribe?: () => void;
+
+  connectedCallback() {
+    super.connectedCallback();
+    this.loadDialogSession();
+    this.checkSpeechRecognitionReady();
+    
+    // Set up periodic checks
+    this.speechRecognitionCheckTimer = window.setInterval(() => {
+      this.checkSpeechRecognitionReady();
+    }, 5000);
+
+    // Set up transcription progress listener for streaming updates
+    this.transcriptionProgressUnsubscribe = window.electronAPI.audio.onTranscriptionProgress(
+      (payload) => {
+        if (payload.isFinal) {
+          // Final transcription received, clear streaming text
+          this.streamingTranscriptionText = null;
+        } else {
+          // Intermediate transcription update
+          this.streamingTranscriptionText = payload.text;
+          this.requestUpdate();
+        }
+      }
+    );
+
+    // Set up keyboard bindings
+    this.setupKeyboardBindings();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    
+    // Clean up transcription progress listener
+    if (this.transcriptionProgressUnsubscribe) {
+      this.transcriptionProgressUnsubscribe();
+      this.transcriptionProgressUnsubscribe = null;
+    }
+    
+    // Clean up recording timers
+    this.clearRecordingTimer();
+    this.clearRecordingStatusCheck();
+    if (this.speechRecognitionCheckTimer) {
+      clearInterval(this.speechRecognitionCheckTimer);
+      this.speechRecognitionCheckTimer = null;
+    }
+    
+    // Cancel any ongoing recording
+    if (this.isRecording) {
+      this.cancelRecording().catch(err => {
+        console.error('Error cancelling recording on disconnect:', err);
+      });
+    }
+    
+    // Clean up keyboard bindings
+    if (this.keyboardUnsubscribe) {
+      this.keyboardUnsubscribe();
+      this.keyboardUnsubscribe = undefined;
+    }
+    
+    // Clean up audio
+    if (this.currentAudioElement) {
+      this.currentAudioElement.pause();
+      this.currentAudioElement = null;
+    }
+  }
+
+  private async loadDialogSession() {
+    try {
+      this.isLoading = true;
+      this.error = null;
+      this.currentSentence = null;
+      this.responseOptions = [];
+      this.selectedOption = null;
+      this.followUpText = '';
+      this.followUpTranslation = '';
+      this.showFollowUp = false;
+      this.transcriptionResult = null;
+
+      // Step 1: Select a sentence with high word strengths
+      const sentence = await window.electronAPI.dialog.selectSentence();
+      
+      if (!sentence) {
+        this.error = 'No sentences available for dialog practice. Please learn more words first.';
+        this.isLoading = false;
+        return;
+      }
+
+      this.currentSentence = sentence;
+
+      // Step 2: Prepare trigger (beforeSentence audio)
+      if (sentence.contextBefore) {
+        try {
+          const audioPath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(sentence.id);
+          this.beforeSentenceAudio = audioPath || null;
+        } catch (error) {
+          console.warn('Failed to generate beforeSentence audio:', error);
+          this.beforeSentenceAudio = null;
+        }
+      }
+
+      // Step 3: Generate response options (target + 2 variants)
+      try {
+        const variants = await window.electronAPI.dialog.generateVariants(sentence.id);
+        
+        // Combine target sentence with variants
+        this.responseOptions = [
+          {
+            sentence: sentence.sentence,
+            translation: sentence.translation
+          },
+          ...variants.slice(0, 2) // Take up to 2 variants
+        ];
+        
+        // Shuffle options so target isn't always first
+        this.responseOptions.sort(() => Math.random() - 0.5);
+      } catch (error) {
+        console.error('Failed to generate variants:', error);
+        // Fallback: use only the target sentence
+        this.responseOptions = [{
+          sentence: sentence.sentence,
+          translation: sentence.translation
+        }];
+      }
+
+      this.isLoading = false;
+      
+      // Auto-play trigger audio if available (after component updates)
+      if (this.beforeSentenceAudio) {
+        // Use requestAnimationFrame to ensure component has rendered
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            this.playBeforeSentence();
+          }, 300);
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load dialog session:', error);
+      this.error = error instanceof Error ? error.message : 'Failed to load dialog session';
+      this.isLoading = false;
+    }
+  }
+
+  private async checkSpeechRecognitionReady() {
+    try {
+      this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
+    } catch (error) {
+      console.error('Failed to check speech recognition readiness:', error);
+      this.speechRecognitionReady = false;
+    }
+  }
+
+  private async playBeforeSentence() {
+    if (!this.beforeSentenceAudio) {
+      return;
+    }
+
+    try {
+      // Stop any currently playing audio
+      if (this.currentAudioElement) {
+        this.currentAudioElement.pause();
+      }
+
+      // Play the audio
+      await window.electronAPI.audio.playAudio(this.beforeSentenceAudio);
+    } catch (error) {
+      console.error('Failed to play before sentence audio:', error);
+    }
+  }
+
+  private setupKeyboardBindings() {
+    const bindings = [
+      // Recording
+      {
+        ...GlobalShortcuts.RECORD_PRONUNCIATION,
+        action: () => this.toggleRecording(),
+        context: 'dialog',
+        description: 'Toggle pronunciation recorder'
+      },
+      // Audio replay (speaker button)
+      {
+        key: CommonKeys.SPACE,
+        action: () => {
+          if (this.beforeSentenceAudio && !this.isRecording) {
+            this.playBeforeSentence();
+          }
+        },
+        context: 'dialog',
+        description: 'Play trigger audio'
+      }
+    ];
+
+    this.keyboardUnsubscribe = useKeyboardBindings(bindings);
+  }
+
+  private async toggleRecording() {
+    if (!this.speechRecognitionReady || !this.responseOptions.length) {
+      return;
+    }
+    
+    if (this.isRecording) {
+      await this.stopRecording();
+    } else {
+      await this.startRecording();
+    }
+  }
+
+  private async startRecording() {
+    if (this.isRecording || !this.speechRecognitionReady || !this.responseOptions.length) {
+      return;
+    }
+
+    try {
+      // Stop any currently playing audio
+      if (this.currentAudioElement) {
+        this.currentAudioElement.pause();
+      }
+
+      const recordingOptions: RecordingOptions = {
+        sampleRate: 16000,
+        channels: 1,
+        threshold: 0.5,
+        silence: '1.0',
+        endOnSilence: true
+      };
+
+      const session = await window.electronAPI.audio.startRecording(recordingOptions);
+      this.isRecording = true;
+      this.recordingTime = 0;
+      this.currentRecording = null;
+      this.transcriptionResult = null;
+      this.isTranscribing = false;
+      
+      // Start recording timer
+      this.recordingTimer = window.setInterval(() => {
+        this.recordingTime += 1;
+      }, 1000);
+
+      // Set up periodic check for recording status (in case of auto-stop)
+      this.setupRecordingStatusCheck();
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      this.isRecording = false;
+      this.error = `Failed to start recording: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    }
+  }
+
+  private async stopRecording() {
+    if (!this.isRecording) {
+      return;
+    }
+
+    try {
+      const completedSession = await window.electronAPI.audio.stopRecording();
+      this.isRecording = false;
+      this.clearRecordingTimer();
+      this.clearRecordingStatusCheck();
+
+      if (completedSession && !completedSession.isRecording) {
+        // Get the recording file path from the session
+        const filePath = completedSession.filePath;
+        
+        // Calculate duration if available
+        const duration = completedSession.duration || (Date.now() - completedSession.startTime) / 1000;
+
+        this.currentRecording = {
+          session: completedSession,
+          filePath,
+          duration
+        };
+
+        // Automatically perform speech recognition
+        await this.performSpeechRecognition();
+      }
+    } catch (error) {
+      console.error('Error stopping recording:', error);
+      this.isRecording = false;
+      this.clearRecordingTimer();
+      this.clearRecordingStatusCheck();
+      this.error = `Failed to stop recording: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    }
+  }
+
+  private async cancelRecording() {
+    if (!this.isRecording) {
+      return;
+    }
+
+    try {
+      await window.electronAPI.audio.cancelRecording();
+      this.isRecording = false;
+      this.currentRecording = null;
+      this.transcriptionResult = null;
+      this.clearRecordingTimer();
+      this.clearRecordingStatusCheck();
+    } catch (error) {
+      console.error('Error cancelling recording:', error);
+      this.isRecording = false;
+      this.clearRecordingTimer();
+      this.clearRecordingStatusCheck();
+    }
+  }
+
+  private clearRecordingTimer() {
+    if (this.recordingTimer) {
+      clearInterval(this.recordingTimer);
+      this.recordingTimer = null;
+    }
+  }
+
+  private setupRecordingStatusCheck() {
+    // Clear any existing status check timer
+    this.clearRecordingStatusCheck();
+
+    // Check recording status every 500ms to detect auto-stop
+    this.recordingStatusCheckTimer = window.setInterval(async () => {
+      if (this.isRecording) {
+        try {
+          const isStillRecording = await window.electronAPI.audio.isRecording();
+          if (!isStillRecording) {
+            // Recording was stopped automatically (likely due to silence)
+            await this.handleRecordingAutoStop();
+          }
+        } catch (error) {
+          console.error('Error checking recording status:', error);
+        }
+      }
+    }, 500);
+  }
+
+  private clearRecordingStatusCheck() {
+    if (this.recordingStatusCheckTimer) {
+      clearInterval(this.recordingStatusCheckTimer);
+      this.recordingStatusCheckTimer = null;
+    }
+  }
+
+  private async handleRecordingAutoStop() {
+    this.isRecording = false;
+    this.clearRecordingTimer();
+    this.clearRecordingStatusCheck();
+
+    try {
+      const completedSession = await window.electronAPI.audio.getCurrentRecordingSession();
+      
+      if (completedSession && !completedSession.isRecording) {
+        const filePath = completedSession.filePath;
+        const duration = completedSession.duration || (Date.now() - completedSession.startTime) / 1000;
+
+        this.currentRecording = {
+          session: completedSession,
+          filePath,
+          duration
+        };
+
+        // Automatically perform speech recognition
+        await this.performSpeechRecognition();
+      }
+    } catch (error) {
+      console.error('Error handling auto-stop:', error);
+      this.error = 'Recording stopped automatically but there was an error processing it.';
+      this.isRecording = false;
+    }
+  }
+
+  private async performSpeechRecognition() {
+    if (!this.currentRecording || !this.responseOptions.length || !this.speechRecognitionReady) {
+      return;
+    }
+
+    this.isTranscribing = true;
+    this.transcriptionResult = null;
+    this.streamingTranscriptionText = null;
+
+    try {
+      const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+
+      // Transcribe the recorded audio
+      const transcription = await window.electronAPI.audio.transcribeAudio(
+        this.currentRecording.filePath,
+        {
+          language: currentLanguage,
+          model: 'base'
+        }
+      );
+
+      // Compare with all three candidate sentences
+      const comparisons = await Promise.all(
+        this.responseOptions.map(async (option) => {
+          const comparison = await window.electronAPI.audio.compareTranscription(
+            transcription.text,
+            option.sentence
+          );
+          return {
+            option,
+            comparison
+          };
+        })
+      );
+
+      // Find the best match
+      const bestMatch = comparisons.reduce((best, current) => {
+        return current.comparison.similarity > best.comparison.similarity ? current : best;
+      }, comparisons[0]);
+
+      this.transcriptionResult = {
+        text: transcription.text,
+        ...bestMatch.comparison
+      };
+      this.selectedOption = bestMatch.option;
+
+      // If similarity is high enough (>= 0.75), mark as success and continue
+      if (bestMatch.comparison.similarity >= 0.75) {
+        // Generate follow-up continuation
+        await this.generateFollowUp();
+      }
+      // If similarity is too low, show "Try Again" button next to the similarity badge
+    } catch (error) {
+      console.error('Speech recognition failed:', error);
+      this.transcriptionResult = {
+        text: 'Speech recognition failed. Please try again.',
+        similarity: 0,
+        normalizedTranscribed: '',
+        normalizedExpected: '',
+        expectedWords: [],
+        transcribedWords: []
+      };
+    } finally {
+      this.isTranscribing = false;
+      this.streamingTranscriptionText = null;
+    }
+  }
+
+  private async generateFollowUp() {
+    if (!this.currentSentence || this.isGeneratingFollowUp) {
+      return;
+    }
+
+    try {
+      this.isGeneratingFollowUp = true;
+      const followUp = await window.electronAPI.dialog.generateFollowUp(this.currentSentence.id);
+      // Handle both string (legacy) and object formats
+      if (typeof followUp === 'string') {
+        this.followUpText = followUp;
+        this.followUpTranslation = '';
+      } else {
+        this.followUpText = followUp.text || '';
+        this.followUpTranslation = followUp.translation || '';
+      }
+      this.showFollowUp = true;
+    } catch (error) {
+      console.error('Failed to generate follow-up:', error);
+      this.followUpText = '';
+      this.followUpTranslation = '';
+    } finally {
+      this.isGeneratingFollowUp = false;
+    }
+  }
+
+  private async nextDialog() {
+    await this.loadDialogSession();
+  }
+
+  private getSimilarityClass(similarity: number): string {
+    if (similarity >= 0.95) return 'excellent';
+    if (similarity >= 0.85) return 'good';
+    if (similarity >= 0.75) return 'fair';
+    return 'poor';
+  }
+
+  private renderRecordingSection() {
+    if (!this.responseOptions.length) return '';
+
+    return html`
+      <div class="recording-section">
+        ${this.isRecording ? this.renderRecordingStatus() : ''}
+        ${this.isTranscribing ? this.renderTranscribingStatus() : ''}
+      </div>
+    `;
+  }
+
+  private renderRecordingStatus() {
+    const minutes = Math.floor(this.recordingTime / 60);
+    const seconds = this.recordingTime % 60;
+    const formattedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+    return html`
+      <div class="recording-status-container">
+        <div class="recording-status">
+          <div class="recording-indicator">
+            <div class="recording-dot"></div>
+            Recording... (auto-stop enabled)
+          </div>
+          <div class="recording-time">${formattedTime}</div>
+          <button 
+            class="cancel-recording-button"
+            @click=${this.cancelRecording}
+            title="Cancel recording"
+          >
+            ✕ Cancel
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderTranscribingStatus() {
+    return html`
+      <div class="recording-status-container">
+        <div class="recording-status">
+          <div class="transcribing-indicator">
+            <div class="spinner"></div>
+            Transcribing...
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  static styles = [
+    sharedStyles,
+    css`
+      :host {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .dialog-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-xl);
+        gap: var(--spacing-lg);
+        max-width: 800px;
+        margin: 0 auto;
+      }
+
+      .control-bar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--spacing-sm);
+        width: 100%;
+        max-width: 600px;
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--background-primary);
+        border-bottom: 1px solid var(--border-color);
+        margin-bottom: var(--spacing-md);
+      }
+
+      .dialog-bubbles {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-md);
+        width: 100%;
+        max-width: 600px;
+        margin: 0 auto;
+      }
+
+      .dialog-bubble {
+        padding: var(--spacing-md) var(--spacing-lg);
+        border-radius: 18px;
+        max-width: 75%;
+        position: relative;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      }
+
+      .bubble-left {
+        align-self: flex-start;
+        background: var(--background-secondary);
+        border-top-left-radius: 4px;
+      }
+
+      .bubble-right {
+        align-self: flex-end;
+        background: var(--primary-color);
+        color: white;
+        border-top-right-radius: 4px;
+      }
+
+      .bubble-content {
+        flex: 1;
+      }
+
+      .bubble-text-container {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        flex-wrap: wrap;
+      }
+
+      .bubble-text {
+        font-size: 16px;
+        margin: 0;
+        line-height: 1.5;
+        flex: 1;
+      }
+
+      .similarity-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-xs) var(--spacing-sm);
+        border-radius: var(--border-radius-small);
+        font-size: 12px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        min-width: 45px;
+        white-space: nowrap;
+      }
+
+      .similarity-badge.excellent {
+        background: var(--success-light);
+        color: var(--success-color);
+      }
+
+      .similarity-badge.good {
+        background: #d4edda;
+        color: #28a745;
+      }
+
+      .similarity-badge.fair {
+        background: #fff3cd;
+        color: #856404;
+      }
+
+      .similarity-badge.poor {
+        background: var(--error-light);
+        color: var(--error-color);
+      }
+
+      .bubble-right .similarity-badge {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+      }
+
+      .bubble-right .similarity-badge.excellent {
+        background: rgba(52, 199, 89, 0.3);
+        color: white;
+      }
+
+      .bubble-right .similarity-badge.good {
+        background: rgba(40, 167, 69, 0.3);
+        color: white;
+      }
+
+      .bubble-right .similarity-badge.fair {
+        background: rgba(255, 193, 7, 0.3);
+        color: white;
+      }
+
+      .bubble-right .similarity-badge.poor {
+        background: rgba(255, 59, 48, 0.3);
+        color: white;
+      }
+
+      .try-again-button {
+        font-size: 14px;
+        padding: var(--spacing-sm) var(--spacing-md);
+      }
+
+      .bubble-right .bubble-text {
+        color: white;
+      }
+
+      .bubble-translation {
+        font-size: 14px;
+        margin: var(--spacing-xs) 0 0 0;
+        opacity: 0.8;
+        font-style: italic;
+      }
+
+      .bubble-right .bubble-translation {
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      .response-options {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+        width: 100%;
+        max-width: 600px;
+        margin: var(--spacing-md) auto 0;
+      }
+
+      .response-option {
+        padding: var(--spacing-sm) var(--spacing-md);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border-radius: var(--border-radius-small);
+      }
+
+      .response-option:hover {
+        background: var(--primary-light);
+      }
+
+      .response-option.selected {
+        background: var(--primary-light);
+        font-weight: 500;
+      }
+
+      .response-option .sentence {
+        font-size: 18px;
+        margin: 0 0 var(--spacing-xs) 0;
+      }
+
+      .response-option .translation {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin: 0;
+      }
+
+      .recording-section {
+        margin-top: var(--spacing-md);
+        margin-bottom: var(--spacing-lg);
+      }
+
+      .recording-status-container {
+        padding: var(--spacing-md);
+        background: var(--background-primary);
+        border-radius: var(--border-radius);
+        border: 2px solid var(--error-color);
+        margin-bottom: var(--spacing-md);
+      }
+
+      .recording-status {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--spacing-sm);
+      }
+
+      .recording-indicator {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        font-size: 14px;
+        color: var(--error-color);
+        font-weight: 500;
+      }
+
+      .recording-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--error-color);
+        animation: pulse 1.5s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      .recording-time {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text-primary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .cancel-recording-button {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        border: 1px solid var(--border-color);
+        background: var(--background-secondary);
+        color: var(--text-primary);
+        border-radius: var(--border-radius);
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin-top: var(--spacing-xs);
+      }
+
+      .cancel-recording-button:hover {
+        background: var(--error-light);
+        border-color: var(--error-color);
+        color: var(--error-color);
+      }
+
+      .transcribing-indicator {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        font-size: 14px;
+        color: var(--text-primary);
+      }
+
+      .transcription-results {
+        margin-top: var(--spacing-md);
+        padding: var(--spacing-md);
+        background: var(--background-primary);
+        border-radius: var(--border-radius);
+        border: 1px solid var(--border-color);
+      }
+
+      .transcription-header {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: var(--spacing-md);
+        text-align: center;
+      }
+
+      .transcription-loading {
+        text-align: center;
+        padding: var(--spacing-lg);
+      }
+
+      .streaming-transcription {
+        margin-top: var(--spacing-md);
+      }
+
+      .transcription-text {
+        margin: var(--spacing-md) 0;
+      }
+
+      .transcription-text .label {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: var(--spacing-xs);
+      }
+
+      .transcription-text .text {
+        font-size: 16px;
+        color: var(--text-primary);
+      }
+
+      .color-coded-text {
+        line-height: 1.6;
+      }
+
+      .similarity-score {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        margin: var(--spacing-md) 0;
+        font-size: 14px;
+      }
+
+      .similarity-bar {
+        flex: 1;
+        height: 20px;
+        background: var(--background-secondary);
+        border-radius: var(--border-radius-small);
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+      }
+
+      .similarity-fill {
+        height: 100%;
+        transition: width 0.3s ease;
+      }
+
+      .similarity-fill.excellent {
+        background: var(--success-color);
+      }
+
+      .similarity-fill.good {
+        background: #28a745;
+      }
+
+      .similarity-fill.fair {
+        background: #ffc107;
+      }
+
+      .similarity-fill.poor {
+        background: var(--error-color);
+      }
+
+      .similarity-percentage {
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        min-width: 45px;
+      }
+
+      .pronunciation-feedback {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border-radius: var(--border-radius-small);
+        text-align: center;
+        font-weight: 500;
+        margin-top: var(--spacing-md);
+      }
+
+      .pronunciation-feedback.excellent {
+        background: var(--success-light);
+        color: var(--success-color);
+      }
+
+      .pronunciation-feedback.good {
+        background: #d4edda;
+        color: #28a745;
+      }
+
+      .pronunciation-feedback.fair {
+        background: #fff3cd;
+        color: #856404;
+      }
+
+      .pronunciation-feedback.poor {
+        background: var(--error-light);
+        color: var(--error-color);
+      }
+
+      .record-button {
+        background: var(--background-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        padding: var(--spacing-xs) var(--spacing-sm);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 16px;
+        color: var(--text-primary);
+      }
+
+      .record-button:hover {
+        background: var(--primary-light);
+        border-color: var(--primary-color);
+      }
+
+      .record-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .record-button.recording {
+        background: var(--error-light);
+        border-color: var(--error-color);
+        color: var(--error-color);
+      }
+
+      .record-button.recording:hover {
+        background: var(--error-color);
+        color: white;
+      }
+
+      .audio-replay-button {
+        background: var(--background-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-small);
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        color: var(--text-primary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .audio-replay-button:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+        background: var(--primary-light);
+      }
+
+      .audio-replay-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .toggle-button {
+        background: var(--background-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-small);
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        color: var(--text-primary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--spacing-xs);
+        margin-left: auto;
+      }
+
+      .toggle-button:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+        background: var(--primary-light);
+      }
+
+      .toggle-label {
+        font-size: 11px;
+        font-weight: 500;
+      }
+
+
+      .loading {
+        text-align: center;
+        padding: var(--spacing-xl);
+      }
+    `
+  ];
+
+  render() {
+    if (this.error) {
+      return html`
+        <div class="dialog-container">
+          <div class="error-message">
+            <p>${this.error}</p>
+          </div>
+        </div>
+      `;
+    }
+
+    if (this.isLoading || !this.currentSentence) {
+      return html`
+        <div class="dialog-container">
+          <div class="loading">
+            <div class="spinner"></div>
+            <p>Loading dialog session...</p>
+          </div>
+        </div>
+      `;
+    }
+
+    return html`
+      <div class="dialog-container">
+        <div class="control-bar">
+          ${this.beforeSentenceAudio ? html`
+            <button 
+              class="audio-replay-button" 
+              @click=${this.playBeforeSentence}
+              ?disabled=${this.isRecording}
+              title="Replay trigger audio"
+              aria-label="Replay trigger audio"
+            >
+              <span aria-hidden="true">🔊</span>
+            </button>
+          ` : nothing}
+          ${this.responseOptions.length > 0 && !this.transcriptionResult ? html`
+            ${this.isRecording ? html`
+              <button 
+                class="record-button recording"
+                @click=${this.stopRecording}
+                title="Stop recording"
+                aria-label="Stop recording"
+              >
+                <span aria-hidden="true">⏹</span>
+              </button>
+            ` : html`
+              <button 
+                class="record-button"
+                @click=${this.startRecording}
+                ?disabled=${!this.speechRecognitionReady}
+                title=${this.speechRecognitionReady ? 'Start recording' : 'Speech recognition not ready'}
+                aria-label="Start recording"
+              >
+                <span aria-hidden="true">🎤</span>
+              </button>
+            `}
+          ` : nothing}
+          <button 
+            class="toggle-button"
+            @click=${() => { this.showTranslations = !this.showTranslations; }}
+            title=${this.showTranslations ? 'Hide translations' : 'Show translations'}
+            aria-label=${this.showTranslations ? 'Hide translations' : 'Show translations'}
+          >
+            <span aria-hidden="true">${this.showTranslations ? '👁' : '👁‍🗨'}</span>
+            <span class="toggle-label">${this.showTranslations ? 'Hide EN' : 'Show EN'}</span>
+          </button>
+        </div>
+
+        <div class="dialog-bubbles">
+          ${this.currentSentence.contextBefore ? html`
+            <div class="dialog-bubble bubble-left">
+              <div class="bubble-content">
+                <p class="bubble-text">${this.currentSentence.contextBefore}</p>
+                ${this.showTranslations && this.currentSentence.contextBeforeTranslation ? html`
+                  <p class="bubble-translation">${this.currentSentence.contextBeforeTranslation}</p>
+                ` : nothing}
+              </div>
+            </div>
+          ` : nothing}
+
+          ${this.transcriptionResult && this.selectedOption ? html`
+            <div class="dialog-bubble bubble-right">
+              <div class="bubble-content">
+                <div class="bubble-text-container">
+                  <p class="bubble-text">${this.selectedOption.sentence}</p>
+                  ${this.transcriptionResult ? html`
+                    <span class="similarity-badge ${this.getSimilarityClass(this.transcriptionResult.similarity)}">
+                      ${Math.round(this.transcriptionResult.similarity * 100)}%
+                    </span>
+                  ` : nothing}
+                </div>
+                ${this.showTranslations ? html`
+                  <p class="bubble-translation">${this.selectedOption.translation}</p>
+                ` : nothing}
+                ${this.transcriptionResult.similarity < 0.75 ? html`
+                  <button 
+                    class="btn btn-primary try-again-button"
+                    @click=${this.startRecording}
+                    style="margin-top: var(--spacing-sm); width: 100%;"
+                  >
+                    Try Again
+                  </button>
+                ` : nothing}
+              </div>
+            </div>
+          ` : this.responseOptions.length > 0 && !this.transcriptionResult ? html`
+            <div class="response-options">
+              ${this.responseOptions.map((option, index) => html`
+                <div 
+                  class="response-option ${this.selectedOption === option ? 'selected' : ''}"
+                  @click=${() => { this.selectedOption = option; }}
+              >
+                <p class="sentence">${option.sentence}</p>
+                ${this.showTranslations ? html`
+                  <p class="translation">${option.translation}</p>
+                ` : nothing}
+              </div>
+            `)}
+          </div>
+        ` : nothing}
+
+          ${this.showFollowUp && this.followUpText ? html`
+            <div class="dialog-bubble bubble-left">
+              <div class="bubble-content">
+                <p class="bubble-text">${this.followUpText}</p>
+                ${this.showTranslations && this.followUpTranslation ? html`
+                  <p class="bubble-translation">${this.followUpTranslation}</p>
+                ` : nothing}
+              </div>
+            </div>
+          ` : nothing}
+        </div>
+
+        ${(this.isRecording || this.currentRecording) ? this.renderRecordingSection() : nothing}
+
+        ${this.isGeneratingFollowUp ? html`
+          <div class="loading">
+            <div class="spinner"></div>
+            <p>Generating follow-up...</p>
+          </div>
+        ` : this.showFollowUp ? html`
+          <button 
+            class="btn btn-primary"
+            @click=${this.nextDialog}
+            style="margin-top: var(--spacing-md);"
+          >
+            Next Dialog
+          </button>
+        ` : nothing}
+      </div>
+    `;
+  }
+}
+

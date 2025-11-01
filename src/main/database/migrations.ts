@@ -266,6 +266,26 @@ export class MigrationManager {
         down: [
           // SQLite cannot drop columns; leaving sentence_tokens in place on rollback.
         ]
+      },
+      {
+        version: 13,
+        name: 'add_dialogue_variants_table',
+        up: [
+          `CREATE TABLE IF NOT EXISTS dialogue_variants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
+            variant_sentence TEXT NOT NULL,
+            variant_translation TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_dialogue_variants_sentence_id ON dialogue_variants(sentence_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_dialogue_variants_created_at ON dialogue_variants(created_at)`
+        ],
+        down: [
+          `DROP INDEX IF EXISTS idx_dialogue_variants_created_at`,
+          `DROP INDEX IF EXISTS idx_dialogue_variants_sentence_id`,
+          `DROP TABLE IF EXISTS dialogue_variants`
+        ]
       }
     ];
   }

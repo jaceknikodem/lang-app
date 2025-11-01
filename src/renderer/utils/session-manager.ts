@@ -26,7 +26,7 @@ export interface QuizSessionState {
 }
 
 export interface SessionState {
-  currentMode: 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'progress' | 'settings';
+  currentMode: 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'dialog' | 'progress' | 'settings';
   selectedTopic?: string;
   quizDirection: 'foreign-to-english' | 'english-to-foreign';
   playbackSpeed?: number;

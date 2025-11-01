@@ -163,14 +163,15 @@ export class WordGenerationRunner {
             continue;
           }
 
-          let audioPath: string;
+          let audioPath: string = '';
           const isTatoebaSentence = Boolean(sentence.audioUrl);
           let sentenceModel: string | undefined;
           let audioService: string | undefined;
           let audioModel: string | undefined;
           
           if (sentence.audioUrl) {
-            // Tatoeba sentence - check if URL is from Tatoeba
+            // Tatoeba sentence - download audio from external source
+            // Note: We don't generate audio for Tatoeba sentences
             const isTatoebaAudio = sentence.audioUrl.includes('tatoeba.org');
             console.log('Attempting to download external audio for sentence', {
               word: word.word,
@@ -197,16 +198,24 @@ export class WordGenerationRunner {
                 audioModel = undefined;
               }
             } catch (downloadError) {
-              console.warn('Failed to download external audio, falling back to TTS:', downloadError);
-              audioPath = await this.audioService.generateSentenceAudio(sentence.sentence, language, word.word);
-              // Fallback to TTS - use normal metadata
-              sentenceModel = 'tatoeba'; // Still mark sentence as Tatoeba
-              const audioInfo = this.audioService.getAudioGenerationInfo();
-              audioService = audioInfo.service;
-              audioModel = audioInfo.model;
+              console.warn('Failed to download external audio:', downloadError);
+              // Don't generate fallback audio - leave audioPath empty
+              // User can regenerate audio manually if needed via the regenerate button
+              audioPath = '';
+              if (isTatoebaAudio) {
+                sentenceModel = 'tatoeba';
+                audioService = 'tatoeba';
+                audioModel = undefined;
+              } else {
+                sentenceModel = this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
+                audioService = 'external';
+                audioModel = undefined;
+              }
             }
           } else {
-            // LLM-generated sentence
+            // LLM-generated sentence (Tatoeba is not used)
+            // Generate audio only for newly added words (this is the normal word addition flow)
+            // The regenerate button uses a separate flow (regenerateAudio), so this won't be called during regeneration
             audioPath = await this.audioService.generateSentenceAudio(sentence.sentence, language, word.word);
             sentenceModel = this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
             const audioInfo = this.audioService.getAudioGenerationInfo();

@@ -277,6 +277,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke(IPC_CHANNELS.LEMMATIZATION.LOAD_MODEL, language),
       lemmatizeWords: (words: string[], language: string) => 
         ipcRenderer.invoke(IPC_CHANNELS.LEMMATIZATION.LEMMATIZE_WORDS, words, language)
+    },
+
+    // Dialog operations
+    dialog: {
+      selectSentence: () => 
+        ipcRenderer.invoke(IPC_CHANNELS.DIALOG.SELECT_SENTENCE),
+      generateVariants: (sentenceId: number) => 
+        ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_VARIANTS, sentenceId),
+      generateFollowUp: (sentenceId: number) => 
+        ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_FOLLOW_UP, sentenceId),
+      ensureBeforeSentenceAudio: (sentenceId: number) => 
+        ipcRenderer.invoke(IPC_CHANNELS.DIALOG.ENSURE_BEFORE_SENTENCE_AUDIO, sentenceId)
     }
   });
 
@@ -442,6 +454,12 @@ declare global {
         getStatus: () => Promise<{ status: string; loadedModels: string[]; service: string } | null>;
         loadModel: (language: string) => Promise<void>;
         lemmatizeWords: (words: string[], language: string) => Promise<Record<string, string>>;
+      };
+      dialog: {
+        selectSentence: () => Promise<any | null>;
+        generateVariants: (sentenceId: number) => Promise<Array<{ sentence: string; translation: string }>>;
+        generateFollowUp: (sentenceId: number) => Promise<{ text: string; translation: string }>;
+        ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
       };
     };
   }
