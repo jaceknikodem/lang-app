@@ -92,9 +92,55 @@ export class DialogMode extends LitElement {
   private currentAudioElement: HTMLAudioElement | null = null;
   private transcriptionProgressUnsubscribe: (() => void) | null = null;
   private keyboardUnsubscribe?: () => void;
+  private currentLanguage = '';
+
+  private handleExternalLanguageChange = async (event: Event) => {
+    const detail = (event as CustomEvent<{ language?: string }>).detail;
+    const newLanguage = detail?.language;
+
+    if (!newLanguage || newLanguage === this.currentLanguage) {
+      return;
+    }
+
+    this.currentLanguage = newLanguage;
+    
+    // Update session manager with new language to ensure it uses correct language's session
+    sessionManager.setActiveLanguage(newLanguage);
+    
+    // Cancel any ongoing recording or transcription
+    if (this.isRecording) {
+      await this.cancelRecording();
+    }
+    
+    // Reset dialog state
+    this.transcriptionResult = null;
+    this.selectedOption = null;
+    this.followUpText = '';
+    this.followUpTranslation = '';
+    this.followUpAudio = null;
+    this.showFollowUp = false;
+    this.isGeneratingFollowUp = false;
+    this.isTranscribing = false;
+    this.streamingTranscriptionText = null;
+    this.recordedAudioPath = null;
+    
+    // Reload dialog session for the new language
+    await this.loadDialogSession();
+  };
 
   connectedCallback() {
     super.connectedCallback();
+    
+    // Listen for language changes
+    document.addEventListener('language-changed', this.handleExternalLanguageChange);
+    
+    // Load current language
+    window.electronAPI.database.getCurrentLanguage().then(language => {
+      this.currentLanguage = language;
+    }).catch(err => {
+      console.error('Failed to load current language:', err);
+    });
+    
     this.loadDialogSession();
     this.checkSpeechRecognitionReady();
     
@@ -123,6 +169,9 @@ export class DialogMode extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+    
+    // Remove language change listener
+    document.removeEventListener('language-changed', this.handleExternalLanguageChange);
     
     // Clean up transcription progress listener
     if (this.transcriptionProgressUnsubscribe) {
