@@ -78,6 +78,8 @@ export class DialogMode extends LitElement {
   @state()
   private showFollowUp = false;
 
+  private recordedAudioPath: string | null = null;
+
   @state()
   private isGeneratingFollowUp = false;
 
@@ -168,6 +170,7 @@ export class DialogMode extends LitElement {
       this.followUpAudio = null;
       this.showFollowUp = false;
       this.transcriptionResult = null;
+      this.recordedAudioPath = null;
 
       // Check for cached dialog session first
       const cachedSession = sessionManager.getCurrentDialogSession();
@@ -291,6 +294,66 @@ export class DialogMode extends LitElement {
   }
 
   private async playBeforeSentence() {
+    // If continuation is generated, play all 3 in sequence: trigger, user recording, continuation
+    if (this.showFollowUp && this.recordedAudioPath && this.followUpAudio) {
+      try {
+        // Stop any currently playing audio (both HTML5 and system audio)
+        if (this.currentAudioElement) {
+          this.currentAudioElement.pause();
+          this.currentAudioElement = null;
+        }
+        // Stop system audio playback to ensure clean sequential playback
+        // Stop multiple times to ensure any queued auto-play is cancelled
+        try {
+          await window.electronAPI.audio.stopAudio();
+          await new Promise(resolve => setTimeout(resolve, 200));
+          await window.electronAPI.audio.stopAudio(); // Stop again to catch any late-starting audio
+          await new Promise(resolve => setTimeout(resolve, 200));
+        } catch (stopError) {
+          // Ignore errors when stopping (might not be playing)
+        }
+
+        // Play trigger audio and wait for it to complete
+        if (this.beforeSentenceAudio) {
+          try {
+            console.log('[DialogMode] Playing trigger audio:', this.beforeSentenceAudio);
+            await window.electronAPI.audio.playAudio(this.beforeSentenceAudio);
+            console.log('[DialogMode] Trigger audio finished');
+          } catch (error) {
+            console.error('Failed to play trigger audio:', error);
+            // Continue with next audio even if this one fails
+          }
+        }
+
+        // Play user's recording and wait for it to complete
+        if (this.recordedAudioPath) {
+          try {
+            console.log('[DialogMode] Playing user recording:', this.recordedAudioPath);
+            await window.electronAPI.audio.playAudio(this.recordedAudioPath);
+            console.log('[DialogMode] User recording finished');
+          } catch (error) {
+            console.error('Failed to play user recording:', error);
+            // Continue with next audio even if this one fails
+          }
+        }
+
+        // Play continuation audio and wait for it to complete
+        if (this.followUpAudio) {
+          try {
+            console.log('[DialogMode] Playing continuation audio:', this.followUpAudio);
+            await window.electronAPI.audio.playAudio(this.followUpAudio);
+            console.log('[DialogMode] Continuation audio finished');
+          } catch (error) {
+            console.error('Failed to play continuation audio:', error);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to play dialog sequence:', error);
+      }
+      return;
+    }
+
+    // Before user speaks: just play trigger audio
     if (!this.beforeSentenceAudio) {
       return;
     }
@@ -301,7 +364,7 @@ export class DialogMode extends LitElement {
         this.currentAudioElement.pause();
       }
 
-      // Play the audio
+      // Play the trigger audio
       await window.electronAPI.audio.playAudio(this.beforeSentenceAudio);
     } catch (error) {
       console.error('Failed to play before sentence audio:', error);
@@ -600,6 +663,11 @@ export class DialogMode extends LitElement {
         ...bestMatch.comparison
       };
       this.selectedOption = bestMatch.option;
+
+      // Store the recorded audio path for later playback
+      if (this.currentRecording) {
+        this.recordedAudioPath = this.currentRecording.filePath;
+      }
 
       // If similarity is high enough (>= 0.75), mark as success and continue
       // (follow-up will be generated after transcription is marked as complete)
