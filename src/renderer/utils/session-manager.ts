@@ -254,6 +254,52 @@ export class SessionManager {
   }
 
   /**
+   * Append new sentences to the active learning session (preserves original order)
+   */
+  appendSentencesToLearningSession(sentenceIds: number[], audioPaths?: string[]): void {
+    if (!sentenceIds.length) {
+      return;
+    }
+
+    const session = this.getCurrentSession();
+    if (!session.learningSession) {
+      // If no session exists, we can't append sentences without words
+      console.warn('Cannot append sentences to learning session: no active session exists');
+      return;
+    }
+
+    const existingSentenceIds = new Set(session.learningSession.sentenceIds || []);
+    const mergedSentenceIds = [...(session.learningSession.sentenceIds || [])];
+    const mergedAudioPaths = [...(session.learningSession.audioPaths || [])];
+
+    // Append sentence IDs that don't already exist, along with their audio paths
+    for (let i = 0; i < sentenceIds.length; i++) {
+      const sentenceId = sentenceIds[i];
+      const audioPath = audioPaths?.[i];
+
+      if (!existingSentenceIds.has(sentenceId)) {
+        mergedSentenceIds.push(sentenceId);
+        mergedAudioPaths.push(audioPath || '');
+        existingSentenceIds.add(sentenceId);
+      } else {
+        // Update audio path if sentence already exists and we have a new audio path
+        const existingIndex = mergedSentenceIds.indexOf(sentenceId);
+        if (audioPath && existingIndex !== -1) {
+          mergedAudioPaths[existingIndex] = audioPath;
+        }
+      }
+    }
+
+    this.saveSession({
+      learningSession: {
+        ...session.learningSession,
+        sentenceIds: mergedSentenceIds,
+        audioPaths: mergedAudioPaths.length > 0 ? mergedAudioPaths : undefined
+      }
+    });
+  }
+
+  /**
    * Mark the active learning session as completed without wiping other state
    */
   markLearningSessionComplete(): void {

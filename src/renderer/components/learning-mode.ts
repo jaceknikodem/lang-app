@@ -952,6 +952,10 @@ export class LearningMode extends LitElement {
 
           const existingWordIndex = this.wordsWithSentences.findIndex(w => w.id === word.id);
 
+          // Extract sentence IDs and audio paths for session manager update
+          const sentenceIds = preparedSentences.map(s => s.id);
+          const audioPaths = preparedSentences.map(s => s.audioPath || '');
+
           if (existingWordIndex !== -1) {
             this.wordsWithSentences = this.wordsWithSentences.map((existing, index) =>
               index === existingWordIndex
@@ -961,6 +965,11 @@ export class LearningMode extends LitElement {
             this.selectedWords = this.selectedWords.map(existing =>
               existing.id === word.id ? word : existing
             );
+            
+            // Update session manager with new sentences
+            if (sentenceIds.length > 0) {
+              sessionManager.appendSentencesToLearningSession(sentenceIds, audioPaths);
+            }
           } else {
             sessionManager.appendWordsToLearningSession([word.id]);
             this.selectedWords = [...this.selectedWords, word];
@@ -968,6 +977,11 @@ export class LearningMode extends LitElement {
               ...this.wordsWithSentences,
               { ...word, sentences: preparedSentences }
             ];
+            
+            // Update session manager with new sentences
+            if (sentenceIds.length > 0) {
+              sessionManager.appendSentencesToLearningSession(sentenceIds, audioPaths);
+            }
           }
         } else {
           await this.loadAllWords();
