@@ -287,6 +287,137 @@ export class AudioService {
   }
 
   /**
+   * Stitch multiple audio files together with 2 seconds silence between them
+   * Uses ffmpeg to concatenate audio files
+   * Returns path to the stitched audio file
+   */
+  async stitchAudio(audioPaths: string[]): Promise<string | null> {
+    try {
+      if (!audioPaths || audioPaths.length === 0) {
+        return null;
+      }
+
+      // Filter out paths that don't exist
+      const existingPaths: string[] = [];
+      for (const path of audioPaths) {
+        if (await this.audioExists(path)) {
+          existingPaths.push(path);
+        }
+      }
+
+      if (existingPaths.length === 0) {
+        return null;
+      }
+
+      // Limit to 200 files
+      if (existingPaths.length > 200) {
+        console.log(`Limiting audio files to 200 (had ${existingPaths.length})`);
+        existingPaths.splice(200);
+      }
+
+      // Create a 2 second silence audio file
+      const { execFile } = require('child_process');
+      const { promisify } = require('util');
+      const execFileAsync = promisify(execFile);
+      const { join } = require('path');
+      const { existsSync, mkdirSync, writeFileSync, unlinkSync } = require('fs');
+
+      const audioDir = join(process.cwd(), 'audio');
+      const silencePath = join(audioDir, 'silence.wav');
+
+      // Create or regenerate silence file (2 seconds, 16kHz, mono, WAV)
+      // Delete existing file to ensure it's regenerated with correct duration
+      if (existsSync(silencePath)) {
+        try {
+          unlinkSync(silencePath);
+        } catch (error) {
+          console.warn('Failed to delete old silence file:', error);
+        }
+      }
+
+      try {
+        if (!existsSync(audioDir)) {
+          mkdirSync(audioDir, { recursive: true });
+        }
+
+        await execFileAsync('ffmpeg', [
+          '-f', 'lavfi',
+          '-i', 'anullsrc=r=16000:cl=mono',
+          '-t', '2',
+          '-acodec', 'pcm_s16le',
+          '-y',
+          silencePath
+        ], {
+          timeout: 5000,
+          maxBuffer: 1024 * 1024
+        });
+      } catch (error) {
+        console.error('Failed to create silence file:', error);
+        return null;
+      }
+
+      // Create output file path
+      const outputPath = join(audioDir, 'flow_stitched.mp3');
+
+      // Build list of audio files to concatenate (with silence between each)
+      const inputList: string[] = [];
+      for (let i = 0; i < existingPaths.length; i++) {
+        inputList.push(existingPaths[i]);
+        if (i < existingPaths.length - 1) {
+          inputList.push(silencePath);
+        }
+      }
+
+      // Create a temporary file list for ffmpeg concat demuxer
+      const fileListPath = join(audioDir, 'flow_concat_list.txt');
+      
+      // Write file list for concat demuxer (escape single quotes in paths)
+      const fileListContent = inputList.map(path => `file '${path.replace(/'/g, "'\\''")}'`).join('\n');
+      writeFileSync(fileListPath, fileListContent);
+
+      try {
+        // Use ffmpeg concat demuxer to concatenate files
+        await execFileAsync('ffmpeg', [
+          '-f', 'concat',
+          '-safe', '0',
+          '-i', fileListPath,
+          '-c', 'copy',
+          '-y',
+          outputPath
+        ], {
+          timeout: 60000, // 60 seconds timeout for long audio
+          maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+        });
+
+        // Clean up temporary file list
+        try {
+          unlinkSync(fileListPath);
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+
+        // Verify output file was created
+        if (await this.audioExists(outputPath)) {
+          return outputPath;
+        }
+      } catch (error) {
+        // Clean up temporary file list on error
+        try {
+          unlinkSync(fileListPath);
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+        throw error;
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error stitching audio:', error);
+      return null;
+    }
+  }
+
+  /**
    * Check if audio file exists
    */
   async audioExists(audioPath: string): Promise<boolean> {

@@ -220,6 +220,18 @@ export interface IPCBridge {
       }>;
     }>>;
   };
+
+  // Flow operations
+  flow: {
+    getFlowSentences: () => Promise<Array<{
+      sentence: Sentence;
+      words: Word[];
+      beforeSentenceAudio?: string;
+      continuationAudios: string[];
+    }>>;
+    stitchAudio: (audioPaths: string[]) => Promise<string>;
+    getFileStats: (filePath: string) => Promise<{ mtime: Date } | null>;
+  };
 }
 
 // IPC channel names
@@ -342,5 +354,10 @@ export const IPC_CHANNELS = {
     ENSURE_BEFORE_SENTENCE_AUDIO: 'dialog:ensureBeforeSentenceAudio',
     PREGENERATE_SESSION: 'dialog:pregenerateSession',
     PREGENERATE_SESSIONS: 'dialog:pregenerateSessions'
+  },
+  FLOW: {
+    GET_FLOW_SENTENCES: 'flow:getFlowSentences',
+    STITCH_AUDIO: 'flow:stitchAudio',
+    GET_FILE_STATS: 'flow:getFileStats'
   }
 } as const;

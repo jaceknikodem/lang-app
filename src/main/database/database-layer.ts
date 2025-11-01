@@ -1103,6 +1103,90 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
+   * Get all sentences with audio for Flow feature
+   * Includes sentences, connected words, before sentence audio paths, and continuation audio paths
+   */
+  async getFlowSentences(language?: string): Promise<Array<{
+    sentence: Sentence;
+    words: Word[];
+    beforeSentenceAudio?: string;
+    continuationAudios: string[];
+  }>> {
+    const db = this.getDb();
+    
+    try {
+      const currentLanguage = language || await this.getCurrentLanguage();
+      
+      // Get all sentences for the language that have audio
+      // Join with words through sentence_words junction table to filter by language
+      const stmt = db.prepare(`
+        SELECT DISTINCT s.* 
+        FROM sentences s
+        INNER JOIN sentence_words sw ON s.id = sw.sentence_id
+        INNER JOIN words w ON sw.word_id = w.id
+        WHERE w.language = ?
+          AND s.audio_path IS NOT NULL
+          AND TRIM(s.audio_path) != ''
+        ORDER BY s.id ASC
+      `);
+      
+      const sentenceRows = stmt.all(currentLanguage) as any[];
+      const sentences = sentenceRows.map(row => this.mapRowToSentence(row));
+      
+      const result: Array<{
+        sentence: Sentence;
+        words: Word[];
+        beforeSentenceAudio?: string;
+        continuationAudios: string[];
+      }> = [];
+      
+      // For each sentence, get connected words and audio paths
+      for (const sentence of sentences) {
+        // Get all words connected to this sentence
+        const wordIdsStmt = db.prepare(`
+          SELECT word_id FROM sentence_words WHERE sentence_id = ?
+        `);
+        const wordIds = wordIdsStmt.all(sentence.id) as Array<{ word_id: number }>;
+        
+        const words: Word[] = [];
+        if (wordIds.length > 0) {
+          const placeholders = wordIds.map(() => '?').join(',');
+          const wordsStmt = db.prepare(`
+            SELECT * FROM words 
+            WHERE id IN (${placeholders}) AND language = ?
+          `);
+          const wordRows = wordsStmt.all(...wordIds.map(w => w.word_id), currentLanguage) as any[];
+          words.push(...wordRows.map(row => this.mapRowToWord(row)));
+        }
+        
+        // Check for before sentence audio (pattern: audio/<lang>/_before_sentence_<sentence_id>.mp3)
+        const beforeSentenceAudioPath = `audio/${currentLanguage}/_before_sentence_${sentence.id}.mp3`;
+        
+        // Get dialogue variants and their continuation audio
+        const variantsStmt = db.prepare(`
+          SELECT continuation_audio FROM dialogue_variants
+          WHERE sentence_id = ? AND continuation_audio IS NOT NULL AND TRIM(continuation_audio) != ''
+        `);
+        const variantRows = variantsStmt.all(sentence.id) as Array<{ continuation_audio: string }>;
+        const continuationAudios = variantRows
+          .map(row => row.continuation_audio)
+          .filter((audio): audio is string => !!audio && audio.trim() !== '');
+        
+        result.push({
+          sentence,
+          words,
+          beforeSentenceAudio: beforeSentenceAudioPath, // We'll check existence later
+          continuationAudios
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      throw new Error(`Failed to get flow sentences: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Get a random sentence suitable for dialog practice
    * Filters by: language, minStrength, ignored=false, and contextBefore exists
    * All filtering and random selection happens at the database level for efficiency

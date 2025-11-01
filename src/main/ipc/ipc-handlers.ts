@@ -84,6 +84,9 @@ export function setupIPCHandlers(
   // Dialog handlers
   setupDialogHandlers(databaseLayer, llmClient, contentGenerator, audioService);
 
+  // Flow handlers
+  setupFlowHandlers(databaseLayer, audioService);
+
   console.log('IPC handlers registered successfully');
 }
 
@@ -1276,6 +1279,14 @@ export function cleanupIPCHandlers(): void {
     ipcMain.removeAllListeners(channel);
   });
 
+  Object.values(IPC_CHANNELS.DIALOG).forEach(channel => {
+    ipcMain.removeAllListeners(channel);
+  });
+
+  Object.values(IPC_CHANNELS.FLOW).forEach(channel => {
+    ipcMain.removeAllListeners(channel);
+  });
+
   console.log('IPC handlers cleaned up');
 }
 
@@ -1564,6 +1575,90 @@ function setupDialogHandlers(
     } catch (error) {
       console.error('Error ensuring before sentence audio:', error);
       throw new Error(`Failed to ensure before sentence audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+}
+
+/**
+ * Set up Flow-related IPC handlers
+ */
+function setupFlowHandlers(
+  databaseLayer: SQLiteDatabaseLayer,
+  audioService: AudioService
+): void {
+  ipcMain.handle(IPC_CHANNELS.FLOW.GET_FLOW_SENTENCES, async (event) => {
+    try {
+      const flowSentences = await databaseLayer.getFlowSentences();
+      
+      // Check which audio files actually exist and filter accordingly
+      const result = await Promise.all(
+        flowSentences.map(async (item) => {
+          // Check if before sentence audio exists
+          let beforeSentenceAudio: string | undefined;
+          if (item.beforeSentenceAudio) {
+            const exists = await audioService.audioExists(item.beforeSentenceAudio);
+            if (exists) {
+              beforeSentenceAudio = item.beforeSentenceAudio;
+            }
+          }
+
+          // Check which continuation audio files exist
+          const existingContinuationAudios: string[] = [];
+          for (const audioPath of item.continuationAudios) {
+            const exists = await audioService.audioExists(audioPath);
+            if (exists) {
+              existingContinuationAudios.push(audioPath);
+            }
+          }
+
+          return {
+            sentence: item.sentence,
+            words: item.words,
+            beforeSentenceAudio,
+            continuationAudios: existingContinuationAudios
+          };
+        })
+      );
+
+      return result;
+    } catch (error) {
+      console.error('Error getting flow sentences:', error);
+      throw new Error(`Failed to get flow sentences: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.FLOW.STITCH_AUDIO, async (event, audioPaths: string[]) => {
+    try {
+      const AudioPathsSchema = z.array(z.string().min(1).max(500));
+      const validatedPaths = AudioPathsSchema.parse(audioPaths);
+      
+      const stitchedPath = await audioService.stitchAudio(validatedPaths);
+      
+      if (!stitchedPath) {
+        throw new Error('Failed to stitch audio files');
+      }
+      
+      return stitchedPath;
+    } catch (error) {
+      console.error('Error stitching audio:', error);
+      throw new Error(`Failed to stitch audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.FLOW.GET_FILE_STATS, async (event, filePath: string) => {
+    try {
+      const FilePathSchema = z.string().min(1).max(500);
+      const validatedPath = FilePathSchema.parse(filePath);
+      
+      const { stat } = require('fs').promises;
+      const stats = await stat(validatedPath);
+      
+      return {
+        mtime: stats.mtime
+      };
+    } catch (error) {
+      // File doesn't exist or other error
+      return null;
     }
   });
 }

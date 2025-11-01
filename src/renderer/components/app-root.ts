@@ -14,13 +14,14 @@ import './word-selector.js';
 import './learning-mode.js';
 import './quiz-mode.js';
 import './dialog-mode.js';
+import './flow-mode.js';
 import './progress-summary.js';
 import './settings-panel.js';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
   @state()
-  private currentRoute: RouteState = { mode: 'learning' };
+  private currentRoute: RouteState = { mode: 'progress' };
 
   @state()
   private appState: AppState = {
@@ -40,8 +41,16 @@ export class AppRoot extends LitElement {
   @state()
   private currentLanguage = '';
 
+  @state()
+  private isFlowPlaying = false;
+
+  @state()
+  private showFlowOverlay = false;
+
   private routerUnsubscribe?: () => void;
   private keyboardUnsubscribe?: () => void;
+  private flowAudioElement: HTMLAudioElement | null = null;
+  private flowAudioPath: string | null = null;
 
   static styles = [
     sharedStyles,
@@ -159,6 +168,31 @@ export class AppRoot extends LitElement {
       .nav-button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
+      }
+
+      .flow-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.95);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        cursor: pointer;
+      }
+
+      .flow-pause-icon {
+        font-size: 200px;
+        color: white;
+        opacity: 0.9;
+        user-select: none;
+      }
+
+      .flow-pause-icon:hover {
+        opacity: 1;
       }
 
       .close-button {
@@ -570,7 +604,10 @@ export class AppRoot extends LitElement {
     // Update session manager with current route state
     const routeData = router.getRouteData();
 
-    sessionManager.updateCurrentMode(this.currentRoute.mode);
+    // Only update mode if it's not 'flow' (flow doesn't have a session state)
+    if (this.currentRoute.mode !== 'flow') {
+      sessionManager.updateCurrentMode(this.currentRoute.mode as 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'dialog' | 'progress' | 'settings');
+    }
 
     if (routeData?.topic) {
       sessionManager.updateSelectedTopic(routeData.topic);
@@ -625,6 +662,134 @@ export class AppRoot extends LitElement {
     }
   }
 
+  private async handleFlowPlay() {
+    if (this.isFlowPlaying) {
+      this.handleFlowPause();
+      return;
+    }
+
+    try {
+      this.isFlowPlaying = true;
+
+      // Check if we need to re-stitch (file doesn't exist or is older than 2 hours)
+      let needsStitching = true;
+      const defaultAudioPath = 'audio/flow_stitched.mp3';
+      
+      // Check if cached file exists and is recent (within 2 hours)
+      const pathToCheck = this.flowAudioPath || defaultAudioPath;
+      const stats = await window.electronAPI.flow.getFileStats(pathToCheck);
+      if (stats) {
+        const fileAge = Date.now() - stats.mtime.getTime();
+        const twoHours = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+        if (fileAge < twoHours) {
+          this.flowAudioPath = pathToCheck;
+          needsStitching = false;
+        }
+      }
+
+      // Load flow sentences and stitch if needed
+      if (needsStitching) {
+        const sentences = await window.electronAPI.flow.getFlowSentences();
+        
+        // Collect all audio paths (limited to 200)
+        const audioPaths: string[] = [];
+        for (const item of sentences) {
+          if (item.beforeSentenceAudio) {
+            audioPaths.push(item.beforeSentenceAudio);
+          }
+          if (item.sentence.audioPath) {
+            audioPaths.push(item.sentence.audioPath);
+          }
+          audioPaths.push(...item.continuationAudios);
+          
+          // Stop collecting at 200 files
+          if (audioPaths.length >= 200) {
+            break;
+          }
+        }
+
+        // Limit to 200 files
+        if (audioPaths.length > 200) {
+          audioPaths.splice(200);
+        }
+
+        if (audioPaths.length === 0) {
+          alert('No audio files found. Please generate some sentences with audio first.');
+          this.isFlowPlaying = false;
+          return;
+        }
+
+        // Stitch audio files
+        this.flowAudioPath = await window.electronAPI.flow.stitchAudio(audioPaths);
+        if (!this.flowAudioPath) {
+          alert('Failed to stitch audio files. Please ensure ffmpeg is installed.');
+          this.isFlowPlaying = false;
+          return;
+        }
+      }
+
+      // Load and play audio
+      if (!this.flowAudioPath) {
+        throw new Error('Audio path not available');
+      }
+
+      const audioData = await window.electronAPI.audio.loadAudioBase64(this.flowAudioPath);
+      if (!audioData) {
+        throw new Error('Failed to load audio file');
+      }
+
+      // Create blob URL
+      const blob = new Blob([audioData.data], { type: audioData.mimeType });
+      const blobUrl = URL.createObjectURL(blob);
+
+      // Create audio element
+      this.flowAudioElement = new Audio(blobUrl);
+      
+      // Set up event handlers
+      this.flowAudioElement.addEventListener('ended', () => {
+        this.handleFlowStop();
+      });
+
+      this.flowAudioElement.addEventListener('error', (e) => {
+        console.error('Error playing flow audio:', e);
+        this.handleFlowStop();
+      });
+
+      // Show overlay and play
+      this.showFlowOverlay = true;
+      await this.flowAudioElement.play();
+    } catch (error) {
+      console.error('Error playing flow audio:', error);
+      alert(`Failed to play audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      this.handleFlowStop();
+    }
+  }
+
+  private handleFlowPause() {
+    if (this.flowAudioElement) {
+      this.flowAudioElement.pause();
+      this.isFlowPlaying = false;
+      this.showFlowOverlay = false;
+    }
+  }
+
+  private handleFlowStop() {
+    if (this.flowAudioElement) {
+      this.flowAudioElement.pause();
+      this.flowAudioElement.currentTime = 0;
+      
+      // Clean up blob URL
+      const src = this.flowAudioElement.src;
+      if (src.startsWith('blob:')) {
+        URL.revokeObjectURL(src);
+      }
+      
+      this.flowAudioElement = null;
+    }
+    this.isFlowPlaying = false;
+    this.showFlowOverlay = false;
+  }
+
 
 
   private setupKeyboardBindings() {
@@ -654,6 +819,17 @@ export class AppRoot extends LitElement {
         ...GlobalShortcuts.SETTINGS,
         action: () => this.handleNavigation('settings'),
         context: 'global'
+      },
+      // Flow pause shortcut (space bar)
+      {
+        key: ' ',
+        action: () => {
+          if (this.showFlowOverlay && this.isFlowPlaying) {
+            this.handleFlowPause();
+          }
+        },
+        context: 'global',
+        description: 'Pause Flow audio'
       }
     ];
 
@@ -685,6 +861,14 @@ export class AppRoot extends LitElement {
       <div class="app-container">
         <header class="app-header">
           <nav class="navigation">
+            <button 
+              class="nav-button flow-button"
+              @click=${() => this.handleFlowPlay()}
+              ?disabled=${this.isFlowPlaying}
+              title="Get into the Flow"
+            >
+              ▶
+            </button>
             <button 
               class="nav-button ${router.isCurrentMode('topic-selection') || router.isCurrentMode('word-selection') ? 'active' : ''}"
               @click=${() => this.handleNavigation('topic-selection')}
@@ -760,6 +944,12 @@ export class AppRoot extends LitElement {
           </div>
         </main>
       </div>
+
+      ${this.showFlowOverlay ? html`
+        <div class="flow-overlay" @click=${() => this.handleFlowPause()}>
+          <div class="flow-pause-icon">⏸</div>
+        </div>
+      ` : ''}
     `;
   }
 

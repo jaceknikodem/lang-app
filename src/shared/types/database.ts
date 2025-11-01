@@ -141,6 +141,14 @@ export interface DatabaseLayer {
   completeWordGenerationJob(jobId: number): Promise<void>;
   failWordGenerationJob(jobId: number, error: string): Promise<void>;
 
+  // Flow feature operations
+  getFlowSentences(language?: string): Promise<Array<{
+    sentence: Sentence;
+    words: Word[];
+    beforeSentenceAudio?: string;
+    continuationAudios: string[];
+  }>>;
+
   // Database lifecycle
   initialize(): Promise<void>;
   close(): Promise<void>;

@@ -297,6 +297,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke(IPC_CHANNELS.DIALOG.PREGENERATE_SESSION),
       pregenerateSessions: (count: number) =>
         ipcRenderer.invoke(IPC_CHANNELS.DIALOG.PREGENERATE_SESSIONS, count)
+    },
+
+    // Flow operations
+    flow: {
+      getFlowSentences: () =>
+        ipcRenderer.invoke(IPC_CHANNELS.FLOW.GET_FLOW_SENTENCES),
+      stitchAudio: (audioPaths: string[]) =>
+        ipcRenderer.invoke(IPC_CHANNELS.FLOW.STITCH_AUDIO, audioPaths),
+      getFileStats: (filePath: string) =>
+        ipcRenderer.invoke(IPC_CHANNELS.FLOW.GET_FILE_STATS, filePath)
     }
   });
 
@@ -472,6 +482,16 @@ declare global {
         ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
         pregenerateSession: () => Promise<any | null>;
         pregenerateSessions: (count: number) => Promise<any[]>;
+      };
+      flow: {
+        getFlowSentences: () => Promise<Array<{
+          sentence: any;
+          words: any[];
+          beforeSentenceAudio?: string;
+          continuationAudios: string[];
+        }>>;
+        stitchAudio: (audioPaths: string[]) => Promise<string>;
+        getFileStats: (filePath: string) => Promise<{ mtime: Date } | null>;
       };
     };
   }
