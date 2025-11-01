@@ -284,11 +284,28 @@ export class LifecycleManager {
   }
 
   /**
-   * Restart all - clear all data and audio files
+   * Restart all - clear all data and audio files (but preserve settings)
    */
   async restartAll(): Promise<void> {
     try {
       console.log('Starting complete data reset...');
+      
+      // Backup all settings before deleting database
+      const settingsBackup: Record<string, string> = {};
+      try {
+        // Access the database connection through the database layer
+        // We use a type assertion to access the private getDb method
+        // This is safe here since we're in the lifecycle manager which is tightly coupled
+        const db = (this.config.databaseLayer as any).getDb();
+        const stmt = db.prepare('SELECT key, value FROM settings');
+        const rows = stmt.all() as Array<{ key: string; value: string }>;
+        for (const row of rows) {
+          settingsBackup[row.key] = row.value;
+        }
+        console.log(`Backed up ${Object.keys(settingsBackup).length} settings`);
+      } catch (error) {
+        console.log('No settings to backup (this is normal for first run)');
+      }
       
       // Close database connection first
       if (this.config.databaseLayer) {
@@ -304,13 +321,22 @@ export class LifecycleManager {
         console.log('No database file to remove (this is normal)');
       }
       
-      // Remove all audio files
+      // Remove all audio files recursively (including subdirectories)
       const audioDir = path.join(process.cwd(), 'audio');
       try {
-        const audioFiles = await fs.readdir(audioDir);
-        for (const file of audioFiles) {
-          if (file !== '.gitkeep') { // Keep the .gitkeep file
-            await fs.unlink(path.join(audioDir, file));
+        const entries = await fs.readdir(audioDir, { withFileTypes: true });
+        for (const entry of entries) {
+          const entryPath = path.join(audioDir, entry.name);
+          if (entry.name === '.gitkeep') {
+            // Keep the .gitkeep file
+            continue;
+          }
+          if (entry.isDirectory()) {
+            // Recursively remove directory
+            await fs.rm(entryPath, { recursive: true, force: true });
+          } else {
+            // Remove file
+            await fs.unlink(entryPath);
           }
         }
         console.log('Audio files removed');
@@ -320,6 +346,14 @@ export class LifecycleManager {
       
       // Reinitialize database
       await this.config.databaseLayer.initialize();
+      
+      // Restore all settings
+      if (Object.keys(settingsBackup).length > 0) {
+        for (const [key, value] of Object.entries(settingsBackup)) {
+          await this.config.databaseLayer.setSetting(key, value);
+        }
+        console.log(`Restored ${Object.keys(settingsBackup).length} settings`);
+      }
       
       console.log('Complete data reset completed successfully');
     } catch (error) {
