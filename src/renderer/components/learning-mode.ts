@@ -1540,12 +1540,6 @@ export class LearningMode extends LitElement {
         context: 'learning',
         description: 'Previous sentence'
       },
-      {
-        key: CommonKeys.ENTER,
-        action: () => this.handleNextAction(),
-        context: 'learning',
-        description: 'Next sentence / Finish learning'
-      },
       // Word actions
       {
         ...GlobalShortcuts.MARK_KNOWN,
@@ -1589,19 +1583,6 @@ export class LearningMode extends LitElement {
         action: () => this.handlePlayCurrentAudio(),
         context: 'learning',
         description: 'Replay sentence audio'
-      },
-      // Navigation shortcuts
-      {
-        key: CommonKeys.HOME,
-        action: () => this.goToFirstSentence(),
-        context: 'learning',
-        description: 'Go to first sentence'
-      },
-      {
-        key: CommonKeys.END,
-        action: () => this.goToLastSentence(),
-        context: 'learning',
-        description: 'Go to last sentence'
       },
     ];
 

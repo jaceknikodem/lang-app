@@ -1975,7 +1975,7 @@ export class SentenceViewer extends LitElement {
             @click=${this.handleNext}
             ?disabled=${this.isProcessing}
           >
-            ${this.isLastSentence ? 'Finish' : 'Next'} <span class="keyboard-hint">(Enter)</span>
+            ${this.isLastSentence ? 'Finish' : 'Next'} <span class="keyboard-hint">(→)</span>
           </button>
         </div>
       </div>
