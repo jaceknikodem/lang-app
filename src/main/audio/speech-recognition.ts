@@ -463,10 +463,13 @@ export class SpeechRecognitionService {
     transcribedWords: string[];
   } {
     // Normalize text for comparison
+    // Preserve Unicode letters (including accented characters) and numbers
+    // Supports: Spanish (á, é, í, ó, ú, ñ), Polish (ą, ć, ę, ł, ń, ó, ś, ź, ż),
+    // Italian (à, è, ì, ò, ù), Portuguese (á, à, â, ã, é, ê, í, ó, ô, õ, ú, ç), etc.
     const normalizeText = (text: string): string => {
       return text
         .toLowerCase()
-        .replace(/[^\w\s]/g, '') // Remove punctuation
+        .replace(/[^\p{L}\p{N}\s]/gu, '') // Remove punctuation but keep Unicode letters and numbers
         .replace(/\s+/g, ' ') // Normalize whitespace
         .trim();
     };
