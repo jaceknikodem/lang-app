@@ -475,9 +475,7 @@ export class SentenceViewer extends LitElement {
       const newParsedWords = this.convertPrecomputedTokensToWords(this.sentence.tokenizedTokens);
       this.parsedWords = newParsedWords;
       this.lastProcessedSentenceId = this.sentence?.id;
-      
-      // Enhance precomputed tokens with lemmatization (async, non-blocking)
-      void this.lemmatizePrecomputedTokens(newParsedWords);
+      // Lemmatization is already done during sentence generation, so we just use precomputed tokens
     } else {
       // No precomputed tokens - need async tokenization
       void this.parseSentence();
@@ -569,6 +567,7 @@ export class SentenceViewer extends LitElement {
       
       if (hasPrecomputedTokens) {
         // With precomputed tokens, only do synchronous conversion
+        // Lemmatization is already done during sentence generation, so we just use precomputed tokens
         if (sentenceIdChanged) {
           this.lastProcessedSentenceId = currentSentenceId;
           // Convert precomputed tokens synchronously - no async work
@@ -577,8 +576,6 @@ export class SentenceViewer extends LitElement {
           if (hasChanged) {
             this.parsedWords = newParsedWords;
           }
-          // Trigger lemmatization for new sentence
-          void this.lemmatizePrecomputedTokens(newParsedWords);
         } else if (allWordsChanged) {
           // Only word statuses might have changed - update without re-tokenizing
           this.lastAllWordsArrayReference = this.allWords;
@@ -677,10 +674,8 @@ export class SentenceViewer extends LitElement {
     // Check if we have precomputed tokens - use them if available
     if (this.sentence.tokenizedTokens && this.sentence.tokenizedTokens.length > 0) {
       // Convert synchronously to avoid re-render jitter
+      // Lemmatization is already done during sentence generation, so we just use precomputed tokens
       const newParsedWords = this.convertPrecomputedTokensToWords(this.sentence.tokenizedTokens);
-      
-      // Enhance with lemmatization for precomputed tokens (async, non-blocking)
-      void this.lemmatizePrecomputedTokens(newParsedWords);
       
       // Only update if it actually changed to prevent unnecessary re-renders
       if (requestId === this.tokenizationRequestId) {
@@ -694,41 +689,8 @@ export class SentenceViewer extends LitElement {
     }
 
     // Fallback to runtime tokenization for sentences without precomputed tokens
+    // Note: Lemmatization only happens during sentence generation, not here
     const parts = this.sentence.sentenceParts ?? splitSentenceIntoParts(this.sentence.sentence);
-
-    // Extract words for lemmatization
-    const wordsToLemmatize: string[] = [];
-    const wordIndexMap: Map<number, string> = new Map();
-    
-    parts.forEach((text, index) => {
-      if (!/^\s+$/.test(text) && !/^[.,!?;:]+$/.test(text)) {
-        const dictionaryForm = text.trim().replace(/[.,!?;:]/g, '');
-        const cleanText = dictionaryForm.toLowerCase();
-        if (cleanText) {
-          wordsToLemmatize.push(cleanText);
-          wordIndexMap.set(index, cleanText);
-        }
-      }
-    });
-
-    // Lemmatize words
-    let lemmas: Record<string, string> = {};
-    if (wordsToLemmatize.length > 0) {
-      try {
-        console.log(`[Lemmatization] Lemmatizing ${wordsToLemmatize.length} words for sentence:`, wordsToLemmatize.slice(0, 5).join(', '));
-        lemmas = await window.electronAPI.lemmatization.lemmatizeWords(
-          wordsToLemmatize,
-          this.targetWord.language
-        );
-        console.log(`[Lemmatization] Received lemmas:`, Object.keys(lemmas).length, 'words lemmatized');
-      } catch (error) {
-        console.warn('[Lemmatization] Failed to lemmatize words (non-critical):', error);
-        // Fallback: use words as their own lemmas
-        wordsToLemmatize.forEach(word => {
-          lemmas[word] = word;
-        });
-      }
-    }
 
     const baseWords: WordInSentence[] = parts.map((text, index) => {
       if (/^\s+$/.test(text)) {
@@ -746,18 +708,12 @@ export class SentenceViewer extends LitElement {
         return { text, isTargetWord: false };
       }
 
-      // Get lemma for this word
-      const lemma = lemmas[cleanText] || cleanText;
+      // Check if this is the target word (compare by lemma since words are stored by lemma)
+      const targetWordLower = this.targetWord.word.toLowerCase();
+      const isTargetWord = cleanText === targetWordLower; // Runtime tokenization doesn't have lemma, so compare directly
 
-      // Compare using lemmatized versions
-      const targetWordLemma = lemmas[this.targetWord.word.toLowerCase()] || this.targetWord.word.toLowerCase();
-      const isTargetWord = lemma === targetWordLemma;
-
-      // Find word data by comparing lemmatized versions
-      const wordData = this.allWords.find(w => {
-        const wordLemma = lemmas[w.word.toLowerCase()] || w.word.toLowerCase();
-        return lemma === wordLemma || w.word.toLowerCase() === cleanText;
-      });
+      // Find word data from allWords (compare directly since runtime tokenization doesn't have lemma)
+      const wordData = this.allWords.find(w => w.word.toLowerCase() === cleanText);
 
       const dictionaryKey = this.buildDictionaryKey(dictionaryForm);
 
@@ -770,8 +726,8 @@ export class SentenceViewer extends LitElement {
         isTargetWord,
         wordData,
         dictionaryForm,
-        dictionaryKey,
-        lemma
+        dictionaryKey
+        // Note: No lemma here - lemmatization only happens during sentence generation
       };
     });
 
@@ -804,7 +760,16 @@ export class SentenceViewer extends LitElement {
         return { ...word, wordData: updatedWord };
       }
       
-      // Check by dictionary form
+      // Compare using lemma if available (words are stored by lemma)
+      if (word.lemma) {
+        const wordLemma = word.lemma.toLowerCase();
+        if (wordLemma === normalizedUpdatedWord) {
+          foundMatch = true;
+          return { ...word, wordData: updatedWord };
+        }
+      }
+      
+      // Fallback: Check by dictionary form
       if (word.dictionaryForm) {
         const normalizedDictForm = normalizeText(word.dictionaryForm);
         if (normalizedDictForm === normalizedUpdatedWord) {
@@ -813,7 +778,7 @@ export class SentenceViewer extends LitElement {
         }
       }
       
-      // Check by normalized text content (strip punctuation for comparison)
+      // Fallback: Check by normalized text content (strip punctuation for comparison)
       const normalizedText = normalizeText(word.text);
       if (normalizedText === normalizedUpdatedWord) {
         foundMatch = true;
@@ -859,13 +824,21 @@ export class SentenceViewer extends LitElement {
       if (!token) return word;
       
       // Update wordData reference if it changed
+      // Compare using lemma if available (words are stored by lemma)
       let wordData: Word | undefined;
       if (token.wordId) {
         wordData = this.allWords.find(w => w.id === token.wordId);
       }
-      if (!wordData && token.dictionaryForm) {
-        const cleanText = token.dictionaryForm.toLowerCase();
-        wordData = this.allWords.find(w => w.word.toLowerCase() === cleanText);
+      if (!wordData) {
+        if (token.lemma) {
+          // Use lemma for comparison since words in database are stored by lemma
+          const tokenLemma = token.lemma.toLowerCase();
+          wordData = this.allWords.find(w => w.word.toLowerCase() === tokenLemma);
+        } else if (token.dictionaryForm) {
+          // Fallback to dictionary form if no lemma available
+          const cleanText = token.dictionaryForm.toLowerCase();
+          wordData = this.allWords.find(w => w.word.toLowerCase() === cleanText);
+        }
       }
       
       // Check if wordData actually changed (by ID, not by reference)
@@ -938,15 +911,28 @@ export class SentenceViewer extends LitElement {
         wordData = this.allWords.find(w => w.id === token.wordId);
       }
 
-      // Also check by dictionary form in case word wasn't in database when precomputed
-      if (!wordData && token.dictionaryForm) {
-        const cleanText = token.dictionaryForm.toLowerCase();
-        wordData = this.allWords.find(w => w.word.toLowerCase() === cleanText);
+      // Compare using lemma if available (words are stored by lemma)
+      if (!wordData) {
+        if (token.lemma) {
+          // Use lemma for comparison since words in database are stored by lemma
+          const tokenLemma = token.lemma.toLowerCase();
+          wordData = this.allWords.find(w => w.word.toLowerCase() === tokenLemma);
+        } else if (token.dictionaryForm) {
+          // Fallback to dictionary form if no lemma available
+          const cleanText = token.dictionaryForm.toLowerCase();
+          wordData = this.allWords.find(w => w.word.toLowerCase() === cleanText);
+        }
       }
 
-      // Update isTargetWord based on current target word
-      const cleanText = token.dictionaryForm?.toLowerCase() || '';
-      const isTargetWord = cleanText === this.targetWord.word.toLowerCase() || token.isTargetWord;
+      // Update isTargetWord based on current target word (compare using lemma if available)
+      const targetWordLower = this.targetWord.word.toLowerCase();
+      let isTargetWord = token.isTargetWord;
+      if (token.lemma) {
+        isTargetWord = token.lemma.toLowerCase() === targetWordLower || isTargetWord;
+      } else if (token.dictionaryForm) {
+        const cleanText = token.dictionaryForm?.toLowerCase() || '';
+        isTargetWord = cleanText === targetWordLower || isTargetWord;
+      }
 
       // Populate dictionary cache from precomputed entries
       if (token.dictionaryKey && token.dictionaryEntries) {
@@ -958,62 +944,10 @@ export class SentenceViewer extends LitElement {
         isTargetWord,
         wordData,
         dictionaryForm: token.dictionaryForm,
-        dictionaryKey: token.dictionaryKey
+        dictionaryKey: token.dictionaryKey,
+        lemma: token.lemma // Use lemma from precomputed tokens (added during sentence generation)
       };
     });
-  }
-
-  private async lemmatizePrecomputedTokens(parsedWords: WordInSentence[]): Promise<void> {
-    if (!this.targetWord?.language) {
-      console.warn('[Lemmatization] No target word language available, skipping lemmatization');
-      return;
-    }
-    
-    // Extract words that need lemmatization
-    const wordsToLemmatize: string[] = [];
-    const wordIndexMap = new Map<number, string>();
-    
-    parsedWords.forEach((wordInfo, index) => {
-      if (wordInfo.dictionaryForm && !wordInfo.lemma) {
-        const cleanText = wordInfo.dictionaryForm.toLowerCase();
-        if (cleanText) {
-          wordsToLemmatize.push(cleanText);
-          wordIndexMap.set(index, cleanText);
-        }
-      }
-    });
-    
-    // Lemmatize words if needed
-    if (wordsToLemmatize.length > 0) {
-      try {
-        console.log(`[Lemmatization] Lemmatizing ${wordsToLemmatize.length} words from precomputed tokens for language: ${this.targetWord.language}`);
-        console.log(`[Lemmatization] Words to lemmatize:`, wordsToLemmatize.slice(0, 10).join(', '));
-        const lemmas = await window.electronAPI.lemmatization.lemmatizeWords(
-          wordsToLemmatize,
-          this.targetWord.language
-        );
-        
-        console.log(`[Lemmatization] Received ${Object.keys(lemmas).length} lemmas from API`);
-        
-        // Update parsed words with lemmas
-        const updatedWords = parsedWords.map((wordInfo, index) => {
-          const word = wordIndexMap.get(index);
-          if (word && lemmas[word]) {
-            return { ...wordInfo, lemma: lemmas[word] };
-          }
-          return wordInfo;
-        });
-        
-        // Update state with lemmas
-        this.parsedWords = updatedWords;
-        this.requestUpdate();
-        console.log(`[Lemmatization] Updated ${Object.keys(lemmas).length} words with lemmas from precomputed tokens`);
-      } catch (error) {
-        console.warn('[Lemmatization] Failed to lemmatize precomputed tokens (non-critical):', error);
-      }
-    } else {
-      console.log(`[Lemmatization] No words to lemmatize (all already have lemmas or no dictionary forms)`);
-    }
   }
 
   private async enhanceSentenceWithDictionary(requestId: number): Promise<void> {
