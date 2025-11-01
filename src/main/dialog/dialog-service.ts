@@ -63,6 +63,7 @@ const FollowUpResponseSchema = z.union([
 export interface DialogServiceConfig {
   minWordStrength?: number;
   maxVariantsPerSentence?: number;
+  maxKnownWordsForVariants?: number;
 }
 
 export class DialogService {
@@ -75,75 +76,42 @@ export class DialogService {
     this.llmClient = llmClient;
     this.config = {
       minWordStrength: config?.minWordStrength ?? 50,
-      maxVariantsPerSentence: config?.maxVariantsPerSentence ?? 6
+      maxVariantsPerSentence: config?.maxVariantsPerSentence ?? 6,
+      maxKnownWordsForVariants: config?.maxKnownWordsForVariants ?? 50
     };
   }
 
   /**
    * Select a sentence where word strengths are high
+   * All filtering and random selection is handled at the database level for efficiency
    */
   async selectSentence(language?: string): Promise<Sentence | null> {
     try {
       const currentLanguage = language || await this.database.getCurrentLanguage();
       
-      // Get all words that have sentences (including known words)
-      // This ensures we only consider words that actually have sentences
-      const wordsWithSentences = await this.database.getWordsWithSentences(
-        true,  // includeKnown = true - we want to include known words too
-        false, // includeIgnored = false
+      // Single database query handles all filtering and random selection:
+      // - Filters by language, strength >= minWordStrength, ignored = FALSE
+      // - Filters by contextBefore exists and is not empty
+      // - Randomly selects one result
+      const sentence = await this.database.getRandomDialogSentence(
+        this.config.minWordStrength!,
         currentLanguage
       );
-
-      // Filter to only strong words (>= minWordStrength)
-      const strongWords = wordsWithSentences.filter(
-        word => (word.strength ?? 0) >= this.config.minWordStrength!
-      );
-
-      if (strongWords.length === 0) {
-        console.log('[DialogService] No strong words with sentences found', {
+      
+      if (!sentence) {
+        console.log('[DialogService] No suitable sentences found for dialog', {
           language: currentLanguage,
-          minStrength: this.config.minWordStrength,
-          totalWordsWithSentences: wordsWithSentences.length
+          minStrength: this.config.minWordStrength
         });
         return null;
       }
-
-      // Get sentences for these words and pick one randomly
-      const candidateSentences: Sentence[] = [];
       
-      // Shuffle to get more variety
-      const shuffledWords = [...strongWords].sort(() => Math.random() - 0.5);
-      
-      for (const word of shuffledWords.slice(0, 20)) { // Check up to 20 words
-        const sentences = await this.database.getSentencesByWord(word.id);
-        if (sentences.length > 0) {
-          // Filter to only sentences that have contextBefore (beforeSentence)
-          const sentencesWithContextBefore = sentences.filter(s => s.contextBefore && s.contextBefore.trim().length > 0);
-          
-          if (sentencesWithContextBefore.length > 0) {
-            // Pick a random sentence from sentences with contextBefore
-            const randomSentence = sentencesWithContextBefore[Math.floor(Math.random() * sentencesWithContextBefore.length)];
-            candidateSentences.push(randomSentence);
-          }
-        }
-      }
-
-      if (candidateSentences.length === 0) {
-        console.log('[DialogService] No sentences with contextBefore found', {
-          language: currentLanguage,
-          strongWordsCount: strongWords.length
-        });
-        return null;
-      }
-
-      // Pick a random sentence from candidates
-      const selected = candidateSentences[Math.floor(Math.random() * candidateSentences.length)];
       console.log('[DialogService] Selected sentence for dialog', {
-        sentenceId: selected.id,
-        wordId: selected.wordId,
-        candidateCount: candidateSentences.length
+        sentenceId: sentence.id,
+        wordId: sentence.wordId
       });
-      return selected;
+      
+      return sentence;
     } catch (error) {
       console.error('[DialogService] Failed to select sentence for dialog:', error);
       return null;
@@ -165,13 +133,12 @@ export class DialogService {
       const allWords = await this.database.getAllWords(true, false, language);
       const knownWords = allWords
         .filter(w => w.known || (w.strength ?? 0) >= this.config.minWordStrength!)
-        .slice(0, 50) // Limit to top 50 known words
         .map(w => w.word);
 
       // Check how many variants we need (need 2, excluding original)
       const neededCount = Math.max(0, 2 - existingVariants.length);
       
-      // Check how many more variants we can store (max 10 per sentence)
+      // Check how many more variants we can store.
       const currentCount = existingVariants.length;
       const maxToGenerate = Math.max(0, this.config.maxVariantsPerSentence! - currentCount);
       
@@ -183,8 +150,8 @@ export class DialogService {
 
       // Generate new variants - generate up to maxVariantsPerSentence to cache for future use
       // But at minimum, generate enough to have 2 options
-      // Generate 5 at a time for efficiency (or up to maxToGenerate if less than 5)
-      const generateCount = Math.max(neededCount, Math.min(5, maxToGenerate));
+      // Generate as many as needed at a time for efficiency.
+      const generateCount = Math.max(neededCount, Math.min(this.config.maxVariantsPerSentence! + 1, maxToGenerate));
       
       // Use contextBefore (trigger sentence) instead of the sentence itself
       const triggerSentence = sentence.contextBefore || sentence.sentence;
@@ -588,8 +555,6 @@ Preferred JSON format:
   "text": "${languageName} continuation text here",
   "translation": "English translation here"
 }
-
-If you cannot return JSON, return the ${languageName} text first, followed by a blank line, then the English translation.
 `;
   }
 

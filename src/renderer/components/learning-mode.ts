@@ -2182,9 +2182,6 @@ export class LearningMode extends LitElement {
             <div class="progress-text">
               <span class="word-counter">Word ${this.currentWordIndex + 1} of ${this.wordsWithSentences.length}</span>
             </div>
-            <div class="progress-text">
-              Overall: ${currentSentenceNumber} of ${totalSentences} sentences
-            </div>
             <div style="display: flex; align-items: center; gap: var(--spacing-sm);">
               <div class="playback-speed-control">
                 <span class="playback-speed-label">Speed</span>

@@ -1105,6 +1105,46 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
+  /**
+   * Get a random sentence suitable for dialog practice
+   * Filters by: language, minStrength, ignored=false, and contextBefore exists
+   * All filtering and random selection happens at the database level for efficiency
+   */
+  async getRandomDialogSentence(minStrength: number, language?: string): Promise<Sentence | null> {
+    const db = this.getDb();
+    
+    try {
+      const currentLanguage = language || await this.getCurrentLanguage();
+      
+      // Single query: join words -> sentence_words -> sentences
+      // Filter by: language, strength >= minStrength, ignored = FALSE, contextBefore exists and is not empty
+      // Randomly select one result
+      const stmt = db.prepare(`
+        SELECT s.* 
+        FROM sentences s
+        INNER JOIN sentence_words sw ON s.id = sw.sentence_id
+        INNER JOIN words w ON sw.word_id = w.id
+        WHERE w.language = ?
+          AND w.strength >= ?
+          AND w.ignored = FALSE
+          AND s.context_before IS NOT NULL
+          AND TRIM(s.context_before) != ''
+        ORDER BY RANDOM()
+        LIMIT 1
+      `);
+      
+      const row = stmt.get(currentLanguage, minStrength) as any;
+      
+      if (!row) {
+        return null;
+      }
+      
+      return this.mapRowToSentence(row);
+    } catch (error) {
+      throw new Error(`Failed to get random dialog sentence: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   // Settings management operations
 
   /**

@@ -37,7 +37,7 @@ export interface DatabaseLayer {
   markWordIgnored(wordId: number, ignored: boolean): Promise<void>;
   getWordsToStudy(limit: number, language?: string): Promise<Word[]>;
   getWordsByStrength(minStrength: number, maxStrength: number, limit?: number, language?: string): Promise<Word[]>;
-  getAllWords(includeKnown?: boolean, includeIgnored?: boolean, language?: string): Promise<Word[]>;
+  getAllWords(includeKnown?: boolean, includeIgnored?: boolean, language?: string, maxWords?: number): Promise<Word[]>;
   getWordsWithSentences(includeKnown?: boolean, includeIgnored?: boolean, language?: string): Promise<Word[]>;
   getWordsWithSentencesOrderedByStrength(includeKnown?: boolean, includeIgnored?: boolean, language?: string): Promise<Word[]>;
   getWordById(wordId: number): Promise<Word | null>;
@@ -110,6 +110,9 @@ export interface DatabaseLayer {
   // Quiz-specific operations
   getWeakestWords(limit: number, language?: string): Promise<Word[]>;
   getRandomSentenceForWord(wordId: number): Promise<Sentence | null>;
+  
+  // Dialog-specific operations
+  getRandomDialogSentence(minStrength: number, language?: string): Promise<Sentence | null>;
   
   // Settings management
   getSetting(key: string): Promise<string | null>;
