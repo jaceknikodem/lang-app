@@ -1653,6 +1653,34 @@ export class LearningMode extends LitElement {
   }
 
   /**
+   * Ensure before sentence audio is loaded for a given sentence
+   */
+  private async ensureBeforeSentenceAudioLoaded(sentence: Sentence): Promise<void> {
+    if (!sentence.contextBefore || !sentence.id) {
+      return; // No before sentence text
+    }
+
+    try {
+      // Ensure before sentence audio exists
+      const beforeSentenceAudioPath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(sentence.id);
+      if (!beforeSentenceAudioPath) {
+        return; // No audio generated
+      }
+
+      // If already cached, we're done
+      if (this.audioCache.has(beforeSentenceAudioPath)) {
+        return;
+      }
+
+      // Load into cache
+      await this.loadAudioIntoCache(beforeSentenceAudioPath);
+    } catch (error) {
+      console.warn(`Failed to load before sentence audio:`, error);
+      // Continue anyway - will generate/load on demand
+    }
+  }
+
+  /**
    * Ensure current sentence's audio is loaded and ready
    * Prioritizes current audio for instant playback
    */
@@ -1671,6 +1699,11 @@ export class LearningMode extends LitElement {
 
     try {
       await this.loadAudioIntoCache(audioPath);
+      
+      // Also ensure before sentence audio is loaded if it exists
+      if (currentSentence.contextBefore) {
+        await this.ensureBeforeSentenceAudioLoaded(currentSentence);
+      }
     } catch (error) {
       console.warn(`Failed to load current sentence audio:`, error);
       // Continue anyway - will fall back to IPC playback
@@ -1725,13 +1758,35 @@ export class LearningMode extends LitElement {
    */
   private async preloadReviewAudio(wordsWithSentences: WordWithSentences[]): Promise<void> {
     try {
-      // Collect all audio paths from all sentences
+      // Collect all audio paths from all sentences (both main and before sentence audio)
       const audioPaths: string[] = [];
+      const beforeSentencePromises: Promise<string | null>[] = [];
+      
       for (const wordWithSentences of wordsWithSentences) {
         for (const sentence of wordWithSentences.sentences) {
+          // Collect main sentence audio
           if (sentence.audioPath && !this.audioCache.has(sentence.audioPath)) {
             audioPaths.push(sentence.audioPath);
           }
+          
+          // Collect before sentence audio if it exists
+          if (sentence.contextBefore && sentence.id) {
+            beforeSentencePromises.push(
+              window.electronAPI.dialog.ensureBeforeSentenceAudio(sentence.id)
+                .catch(err => {
+                  console.warn(`Failed to ensure before sentence audio for sentence ${sentence.id}:`, err);
+                  return null;
+                })
+            );
+          }
+        }
+      }
+      
+      // Get before sentence audio paths
+      const beforeSentenceAudioPaths = await Promise.all(beforeSentencePromises);
+      for (const beforeAudioPath of beforeSentenceAudioPaths) {
+        if (beforeAudioPath && !this.audioCache.has(beforeAudioPath) && !audioPaths.includes(beforeAudioPath)) {
+          audioPaths.push(beforeAudioPath);
         }
       }
       
@@ -1739,7 +1794,7 @@ export class LearningMode extends LitElement {
         return;
       }
       
-      console.log(`Pre-loading ${audioPaths.length} audio files into cache for review mode...`);
+      console.log(`Pre-loading ${audioPaths.length} audio files (including before sentence audio) into cache for review mode...`);
       
       // Load all audio files in parallel (small files, so parallel loading is fine)
       const loadPromises = audioPaths.map(async (audioPath) => {
@@ -1756,6 +1811,66 @@ export class LearningMode extends LitElement {
     } catch (error) {
       console.error('Error preloading audio:', error);
       // Don't fail review if audio caching fails - will fall back to file system
+    }
+  }
+
+  /**
+   * Play before sentence audio if it exists
+   * Returns a promise that resolves when audio finishes playing (or immediately if no audio)
+   */
+  private async playBeforeSentenceAudio(sentence: Sentence): Promise<void> {
+    if (!sentence.contextBefore || !sentence.id) {
+      return; // No before sentence text
+    }
+
+    try {
+      // Ensure before sentence audio exists
+      const beforeSentenceAudioPath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(sentence.id);
+      if (!beforeSentenceAudioPath) {
+        return; // No audio generated
+      }
+
+      // Load into cache if not already cached
+      if (!this.audioCache.has(beforeSentenceAudioPath)) {
+        await this.loadAudioIntoCache(beforeSentenceAudioPath).catch(err => {
+          console.warn(`Failed to load before sentence audio into cache: ${err}`);
+        });
+      }
+
+      // Play before sentence audio
+      const cachedBeforeAudio = this.audioCache.get(beforeSentenceAudioPath);
+      if (cachedBeforeAudio) {
+        // Use HTML5 Audio API to play from memory
+        const beforeAudioElement = new Audio(cachedBeforeAudio);
+        beforeAudioElement.playbackRate = this.playbackSpeed;
+
+        // Wait for before sentence audio to finish
+        await new Promise<void>((resolve, reject) => {
+          beforeAudioElement.addEventListener('ended', () => {
+            resolve();
+          });
+          beforeAudioElement.addEventListener('error', (e) => {
+            console.warn('Error playing before sentence cached audio, falling back to IPC:', e);
+            // Fall back to IPC playback
+            window.electronAPI.audio.playAudio(beforeSentenceAudioPath)
+              .then(() => resolve())
+              .catch(reject);
+          });
+          beforeAudioElement.play().catch(playError => {
+            console.warn('Failed to play before sentence cached audio, falling back to IPC:', playError);
+            // Fall back to IPC playback
+            window.electronAPI.audio.playAudio(beforeSentenceAudioPath)
+              .then(() => resolve())
+              .catch(reject);
+          });
+        });
+      } else {
+        // Not cached: Use IPC playback
+        await window.electronAPI.audio.playAudio(beforeSentenceAudioPath);
+      }
+    } catch (error) {
+      console.warn('Failed to play before sentence audio:', error);
+      // Continue with main sentence audio even if before sentence audio fails
     }
   }
 
@@ -1777,6 +1892,9 @@ export class LearningMode extends LitElement {
 
       // Stop any currently playing audio (both cached and IPC)
       await this.stopCachedAudio();
+
+      // Play before sentence audio first if it exists
+      await this.playBeforeSentenceAudio(currentSentence);
 
       // Now play current sentence audio
       const cachedAudio = this.audioCache.get(currentAudioPath);

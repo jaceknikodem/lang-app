@@ -1575,6 +1575,19 @@ export class SentenceViewer extends LitElement {
       // Parent component stops audio immediately before navigation,
       // so we can play directly without stopping again
       
+      // Play before sentence audio first if it exists
+      if (this.sentence.contextBefore && this.sentence.id) {
+        try {
+          const beforeSentenceAudioPath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(this.sentence.id);
+          if (beforeSentenceAudioPath) {
+            await window.electronAPI.audio.playAudio(beforeSentenceAudioPath);
+          }
+        } catch (error) {
+          console.warn('Failed to play before sentence audio:', error);
+          // Continue with main sentence audio even if before sentence audio fails
+        }
+      }
+      
       // Play audio and wait for completion (promise now resolves when audio finishes)
       try {
         await window.electronAPI.audio.playAudio(this.sentence.audioPath);
