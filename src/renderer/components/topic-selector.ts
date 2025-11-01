@@ -50,7 +50,28 @@ export class TopicSelector extends LitElement {
     'hunting for vintage vinyl',
     'ordering at a cozy restaurant',
     'making friends at a town square',
-    'finding lost treasures'
+    'finding lost treasures',
+    'booking a last-minute hotel',
+    'negotiating taxi fare',
+    'asking for directions at night',
+    'ordering street food safely',
+    'finding a local pharmacy',
+    'buying souvenirs for family',
+    'chatting with a friendly barista',
+    'exploring a weekend market',
+    'asking about local customs',
+    'ordering the house specialty',
+    'finding the best viewpoint',
+    'negotiating at a souvenir shop',
+    'asking for restaurant recommendations',
+    'booking a local tour',
+    'finding free WiFi spots',
+    'ordering drinks at a beach bar',
+    'asking about opening hours',
+    'finding a good coffee shop',
+    'negotiating room prices',
+    'asking about local transportation',
+    'ordering vegetarian options'
   ];
 
   static styles = [
