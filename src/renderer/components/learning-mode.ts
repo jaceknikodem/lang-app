@@ -902,8 +902,21 @@ export class LearningMode extends LitElement {
 
     if (update.processingStatus === 'ready') {
       try {
+        // Ensure currentLanguage is loaded before checking
+        if (!this.currentLanguage) {
+          await this.loadCurrentLanguage();
+        }
+
         const word = await window.electronAPI.database.getWordById(update.wordId);
         if (word) {
+          // Check if the word's language matches the currently active language
+          if (this.currentLanguage && word.language !== this.currentLanguage) {
+            console.log(`[LearningMode] Skipping UI update for word ${word.word} (${word.language}) - active language is ${this.currentLanguage}`);
+            // Still update allWords for consistency, but don't modify the review mode UI
+            this.allWords = [...this.allWords.filter(existing => existing.id !== word.id), word];
+            return;
+          }
+
           this.allWords = [...this.allWords.filter(existing => existing.id !== word.id), word];
 
           const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
