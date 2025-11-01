@@ -1,244 +1,141 @@
 # Local Language Learning App
 
-A privacy-first desktop language learning application that operates entirely offline. The app helps users learn vocabulary through contextual sentences rather than isolated words, focusing on spoken-style comprehension and natural language patterns.
+A privacy-first desktop language learning application that operates entirely offline. Learn vocabulary through contextual sentences with full audio support, spaced repetition, and conversational practice.
 
-**Core Philosophy**: Learn vocabulary in context, not isolation. Every word is presented within natural sentences with full audio support, creating an immersive learning experience that stays completely on your device.
+## Features
 
-## Core Benefits
-
-- Casual review plus quiz mode with an advanced repetition system that adapts as you go
-- Learn every word inside rich sentences with optional supporting context
-- Prompt with any topic or let the app teach you the most frequent vocabulary
-- Fully cached experience so you can study completely offline
-- Multi-lingual content generation tailored to your target language
-- Generate fresh sentences that prioritize words you already know
-- Instant pop-ups that unpack a word’s meaning without leaving the flow
-- Async content generation keeps the interface responsive and smooth
-- Regenerate audio on demand whenever you need a new pronunciation
-- Add any word to your learning set the moment it catches your attention
-- Mark vocabulary as ignored or already known to focus future sessions
-- Customize generation with local models, Google Gemini, or ElevenLabs voices
-- Local backups keep your progress safe and portable
-- No account, email, or sign-up—your software, on your hardware
-
-## Target Users
-
-Language learners who prioritize privacy, prefer audio-based learning, and want focused vocabulary building through contextual understanding rather than rote memorization. Perfect for learners who want to:
-
-- Study completely offline without accounts or data sharing
-- Focus on listening comprehension and natural speech patterns
-- Learn vocabulary through meaningful context rather than flashcards
-- Have an adaptive system that focuses on their weakest areas
-
-## Core Learning Flow
-
-1. **Optional Topic Selection**: Choose specific topics for targeted vocabulary building
-2. **LLM-Generated Content**: AI creates word lists with contextual sentences in your target language
-3. **Interactive Review**: Listen to sentences, mark word familiarity, and build understanding
-4. **Adaptive Quizzing**: System prioritizes your weakest vocabulary for focused practice
-5. **Bidirectional Testing**: Quiz modes work both ways (foreign→English and English→foreign)
-
-## Key Features
-
+- **Contextual Learning**: Every word presented in natural sentences with audio
+- **Spaced Repetition**: FSRS and Classic algorithms for adaptive learning
+- **Speech Practice**: Practice pronunciation with Whisper models for speech recognition
+- **Micro Dialogues**: Interactive conversational practice with variant generation and follow-ups
+- **Multiple LLM Providers**: Local Ollama or Google Gemini API
+- **TTS Options**: System TTS, ElevenLabs, or custom audio
+- **Lemmatization**: Automatic word form recognition via Stanza service
 - **Privacy-First**: Complete offline operation, no accounts, no data collection
-- **Contextual Learning**: Every word presented in natural, meaningful sentences
-- **Audio-Centric**: System TTS for pronunciation and listening comprehension
-- **Adaptive Intelligence**: Automatic difficulty adjustment based on your performance
-- **Zero Typing**: Pure click-based interaction for distraction-free learning
-- **Persistent Progress**: SQLite database maintains all learning state locally
-- **Dual Model Support**: Choose separate small/big models for optimal performance (word generation vs sentence generation)
+- **Adaptive Intelligence**: Automatically focuses on your weakest vocabulary
+- **Bidirectional Quizzing**: Test both directions (foreign→English and English→foreign)
 
-## Technology Stack
+## Tech Stack
 
-### Core Technologies
-- **Runtime**: Electron (Node.js desktop app framework)
-- **Language**: TypeScript for type safety and better developer experience
-- **Frontend**: Lit web components for reactive UI without heavy framework overhead
-- **Database**: SQLite for local data persistence
-- **LLM Integration**: Ollama HTTP client for local language model access
-- **Audio**: macOS system TTS (`say` command) for speech generation
-- **Speech Recognition**: Whisper.cpp server for audio transcription
+- **Runtime**: Electron (TypeScript)
+- **Frontend**: Lit web components
+- **Database**: SQLite (better-sqlite3)
+- **LLM**: Ollama (local) or Google Gemini API (cloud)
+- **Audio**: macOS TTS, ElevenLabs API, or Whisper.cpp
+- **Lemmatization**: Stanza (Python/FastAPI)
+- **SRS**: FSRS and Classic algorithms
 
-### Key Dependencies
-- **Database**: `sqlite3` or `better-sqlite3` for SQLite operations
-- **Validation**: `zod` for runtime type checking of LLM responses
-- **Build**: `electron-builder` for cross-platform packaging
-- **Testing**: `playwright` for E2E testing of Electron app
+## Dependencies
 
-## Project Structure
+### Node.js Dependencies
+- `better-sqlite3` - SQLite database
+- `lit` - Web components framework
+- `zod` - Runtime type validation
+- `whisper-node` - Speech recognition
+- `node-record-lpcm16` - Audio recording
 
-```
-├── src/
-│   ├── main/                 # Electron main process
-│   │   ├── database/         # SQLite operations and schema
-│   │   ├── llm/             # Ollama client and prompt templates
-│   │   ├── audio/           # TTS generation and audio management
-│   │   ├── ipc/             # IPC bridge and API surface
-│   │   └── main.ts          # Main process entry point
-│   ├── renderer/            # Electron renderer process (UI)
-│   │   ├── components/      # Lit web components
-│   │   ├── styles/          # CSS and styling
-│   │   ├── utils/           # Frontend utilities
-│   │   └── index.html       # Main HTML entry
-│   ├── shared/              # Shared types and interfaces
-│   │   ├── types/           # TypeScript interfaces
-│   │   └── constants/       # Shared constants
-│   └── preload/             # Electron preload scripts
-├── audio/                   # Generated TTS audio files
-├── data/                    # SQLite database files
-├── tests/                   # Test files
-│   ├── unit/               # Unit tests
-│   └── e2e/                # End-to-end tests
-└── build/                   # Build configuration and assets
-```
-
-## Prerequisites
-
-- **Node.js**: Version 18+ for Electron compatibility
-- **macOS**: Required for system TTS integration (`say` command)
-- **Homebrew**: Package manager for installing dependencies
-- **Ollama**: Local language model for inference (default)
-- **Whisper.cpp**: Speech recognition server for audio transcription
-- **ElevenLabs API Key** (optional): For high-quality TTS audio (free account provides 600-700 audio sentences)
-- **Google Gemini API Key** (optional): For cloud-based LLM as alternative to local Ollama
-
-### Required Dependencies
-
-Install the following dependencies using Homebrew:
-
+### System Dependencies
 ```bash
 # Install Ollama for local LLM inference
 brew install ollama
 
-# Install whisper-cpp for speech recognition
+# Install Whisper.cpp for speech recognition
 brew install whisper-cpp
 ```
 
-### Model Downloads
-
-After installing the dependencies, download the required models:
-
+### Python Dependencies (Lemmatization)
+Requires Python 3.10 and `uv` package manager:
 ```bash
-# Download and run a language model (e.g., Llama 3.2)
-ollama pull llama3.2
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Download Whisper model for speech recognition
-# Create models directory and download from Hugging Face
-mkdir -p models
-cd models
-
-# Download the tiny model - good balance of speed and accuracy
-curl -L -o ggml-small.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
-
-cd ..
+# Setup lemmatization service
+cd src/main/lemmatization
+uv python install 3.10
+uv sync
 ```
 
-### Service Setup
+### Models
 
-#### Ollama Service
-
-Ensure Ollama is running before starting the application:
-
+**Ollama Models** (for local inference):
 ```bash
-# Start Ollama service (runs on port 11434 by default)
-ollama serve
-```
-
-You can verify Ollama is running by visiting `http://localhost:11434` in your browser.
-
-#### Whisper Server
-
-The app uses a Whisper.cpp server for speech recognition. Start the Whisper server before using transcription features:
-
-```bash
-whisper-server --model <MODEL_PATH> --threads 8 --flash-attn --no-context --suppress-nst --port 8080
-```
-
-Replace `<MODEL_PATH>` with the path to your Whisper model file.
-
-**Processing Speed** (for two-second audio clips):
-- **Tiny model**: ~150ms per audio clip
-- **Small model**: ~250ms per audio clip (recommended)
-- **Large-turbo model**: ~900ms per audio clip
-
-The Whisper server will be accessible at `http://127.0.0.1:8080` and the app will automatically connect to it for transcription.
-
-### LLM Provider Options
-
-The app supports two LLM providers:
-
-#### 1. Ollama (Local, Default)
-- **Pros**: Complete privacy, no internet required, no API costs
-- **Cons**: Requires local setup and model downloads
-- **Setup**: Install Ollama and download models locally
-
-```bash
-# For word generation (fast, lightweight)
+# Fast word generation
 ollama pull granite4:tiny-h
 
-# For sentence generation (better quality)
+# Quality sentence generation
 ollama pull llama3.2:3b
 ```
 
-#### 2. Google Gemini (Cloud)
-- **Pros**: No local setup, high-quality generation, fast responses
-- **Cons**: Requires internet connection, API costs, data sent to Google
-- **Setup**: Get API key from [Google AI Studio](https://aistudio.google.com/api-keys)
+**Whisper Model** (for speech recognition):
+```bash
+mkdir -p models
+cd models
+curl -L -o ggml-small.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
+```
 
-**Available Models:**
-- **gemini-2.0-flash-exp**: Latest experimental model, fastest response times
-- **gemini-1.5-pro**: High quality, best for complex sentence generation
-- **gemini-1.5-flash**: Fast, good balance of speed and quality
-- **gemini-1.5-flash-8b**: Fastest and most cost-effective option
-- **gemini-1.0-pro**: Legacy model, stable and reliable
+**Stanza Models** (loaded automatically when needed):
+- Spanish, Italian, Portuguese, Polish, Indonesian
 
-**Recommended Setup:**
-- **Word Generation**: `gemini-1.5-flash-8b` (fastest, most cost-effective)
-- **Sentence Generation**: `gemini-1.5-pro` (highest quality for complex sentences)
+### Services
 
-Configure your preferred provider in the app's Settings panel under "Language Model (LLM)" section.
+**Ollama** (default LLM):
+```bash
+ollama serve
+# Runs on http://localhost:11434
+```
 
-### Switching Between Providers
+**Whisper Server** (speech practice/recognition):
+```bash
+whisper-server --model models/ggml-small.bin --threads 8 --port 8080
+```
 
-1. **Open Settings**: Click the settings icon in the app
-2. **Navigate to LLM Section**: Find "Language Model (LLM)" section
-3. **Select Provider**: Choose between "Ollama (Local)" or "Google Gemini (Cloud)"
-4. **Configure API Key** (Gemini only): Enter your Gemini API key when switching to cloud provider
-5. **Select Models**: Choose appropriate models for word and sentence generation
+**Stanza Service** (lemmatization):
+```bash
+cd src/main/lemmatization
+uv run python stanza-service.py
+# Runs on http://127.0.0.1:8888
+```
 
-The app will automatically switch providers and reload available models. You can switch back and forth at any time without losing your learning progress.
+## Setup
 
-## Architecture
+1. Install Node.js 18+
+2. Install dependencies: `npm install`
+3. Install system dependencies (Ollama, Whisper)
+4. Download required models
+5. Start services (Ollama, Whisper, Stanza)
+6. Run the app: `npm run dev`
 
-### Process Architecture
-- **Main Process**: Handles all system interactions (database, LLM, TTS)
-- **Renderer Process**: Sandboxed UI layer with Lit components  
-- **IPC Bridge**: Secure communication between main and renderer processes
-- **Local-first**: No external network dependencies except local Ollama instance
+## Development
 
-### Component Architecture
+```bash
+# Development mode
+npm run dev
 
-#### Main Process Components
-- **DatabaseLayer**: SQLite CRUD operations, schema management
-- **LLMClient**: Ollama HTTP client, prompt generation
-- **AudioGenerator**: TTS integration, file caching
-- **IPCBridge**: Secure API exposure to renderer
+# Build
+npm run build
 
-#### Renderer Components
-- **app-root**: Main application shell and routing
-- **learning-mode**: Sentence review and word interaction
-- **quiz-mode**: Assessment interface with bidirectional quizzing
-- **topic-selector**: Optional topic input for vocabulary generation
-- **progress-summary**: Study statistics and progress tracking
+# Run tests
+npm run test:all
 
-### Data Flow Patterns
-1. **UI → IPC → Main Process**: All user actions flow through secure IPC
-2. **Database-first**: All state changes immediately persisted to SQLite
-3. **Component isolation**: Each Lit component manages its own reactive state
-4. **Error boundaries**: Each major component handles its own error states
+# Package for distribution
+npm run dist
+```
 
-### Security Boundaries
-- **Renderer sandbox**: No direct filesystem or system access
-- **IPC validation**: All cross-process data validated with Zod schemas
-- **Local-only**: No external network access except localhost Ollama
-- **File restrictions**: Audio files limited to designated directory
+## Project Structure
+
+```
+src/
+├── main/          # Electron main process
+│   ├── database/  # SQLite operations
+│   ├── llm/       # Ollama/Gemini clients
+│   ├── audio/     # TTS and audio management
+│   ├── dialog/    # Conversational practice
+│   ├── srs/       # Spaced repetition algorithms
+│   └── lemmatization/  # Stanza service integration
+├── renderer/      # UI components (Lit)
+└── shared/        # Shared types and utilities
+```
+
+## License
+
+MIT
