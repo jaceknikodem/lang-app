@@ -716,6 +716,6 @@ export class AudioService {
    */
   private isAudioError(error: unknown): error is AudioError {
     return error instanceof Error && 'code' in error &&
-      ['GENERATION_FAILED', 'PLAYBACK_FAILED', 'FILE_NOT_FOUND', 'INVALID_PATH', 'RECORDING_FAILED', 'FILE_OPERATION_FAILED'].includes((error as AudioError).code);
+      ['GENERATION_FAILED', 'PLAYBACK_FAILED', 'PLAYBACK_STOPPED', 'FILE_NOT_FOUND', 'INVALID_PATH', 'RECORDING_FAILED', 'FILE_OPERATION_FAILED', 'API_ERROR'].includes((error as AudioError).code);
   }
 }

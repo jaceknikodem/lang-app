@@ -650,6 +650,18 @@ function setupAudioHandlers(audioService: AudioService): void {
       const validatedAudioPath = AudioPathSchema.parse(audioPath);
       return await audioService.playAudio(validatedAudioPath);
     } catch (error) {
+      // Check if this is an AudioError with a code
+      if (error instanceof Error && 'code' in error) {
+        const audioError = error as { code: string };
+        // Don't log PLAYBACK_STOPPED errors - they're expected/intentional
+        if (audioError.code === 'PLAYBACK_STOPPED') {
+          throw error; // Re-throw as-is without logging
+        }
+        // For other AudioErrors, log and re-throw as-is
+        console.error('Error playing audio:', error);
+        throw error; // Re-throw AudioError as-is to preserve code
+      }
+      // For non-AudioError errors, wrap and log
       console.error('Error playing audio:', error);
       throw new Error(`Failed to play audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
