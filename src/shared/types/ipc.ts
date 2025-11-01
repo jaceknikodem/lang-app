@@ -185,7 +185,7 @@ export interface IPCBridge {
   dialog: {
     selectSentence: () => Promise<Sentence | null>;
     generateVariants: (sentenceId: number) => Promise<DialogueVariant[]>;
-    generateFollowUp: (variantId: number) => Promise<{ text: string; translation: string }>;
+    generateFollowUp: (variantId: number) => Promise<{ text: string; translation: string; audio?: string }>;
     ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
     pregenerateSession: () => Promise<{
       sentenceId: number;

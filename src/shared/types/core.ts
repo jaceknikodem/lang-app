@@ -136,4 +136,5 @@ export interface DialogueVariant {
   createdAt: Date;
   continuationText?: string;
   continuationTranslation?: string;
+  continuationAudio?: string;
 }

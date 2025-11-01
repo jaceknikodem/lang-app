@@ -73,6 +73,9 @@ export class DialogMode extends LitElement {
   private followUpTranslation = '';
 
   @state()
+  private followUpAudio: string | null = null;
+
+  @state()
   private showFollowUp = false;
 
   @state()
@@ -162,6 +165,7 @@ export class DialogMode extends LitElement {
       this.selectedOption = null;
       this.followUpText = '';
       this.followUpTranslation = '';
+      this.followUpAudio = null;
       this.showFollowUp = false;
       this.transcriptionResult = null;
 
@@ -301,6 +305,24 @@ export class DialogMode extends LitElement {
       await window.electronAPI.audio.playAudio(this.beforeSentenceAudio);
     } catch (error) {
       console.error('Failed to play before sentence audio:', error);
+    }
+  }
+
+  private async playFollowUpAudio() {
+    if (!this.followUpAudio) {
+      return;
+    }
+
+    try {
+      // Stop any currently playing audio
+      if (this.currentAudioElement) {
+        this.currentAudioElement.pause();
+      }
+
+      // Play the audio
+      await window.electronAPI.audio.playAudio(this.followUpAudio);
+    } catch (error) {
+      console.error('Failed to play follow-up audio:', error);
     }
   }
 
@@ -623,11 +645,22 @@ export class DialogMode extends LitElement {
       if (typeof followUp === 'string') {
         this.followUpText = followUp;
         this.followUpTranslation = '';
+        this.followUpAudio = null;
       } else {
         this.followUpText = followUp.text || '';
         this.followUpTranslation = followUp.translation || '';
+        this.followUpAudio = followUp.audio || null;
       }
       this.showFollowUp = true;
+      
+      // Auto-play continuation audio if available
+      if (this.followUpAudio) {
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            this.playFollowUpAudio();
+          }, 300);
+        });
+      }
     } catch (error) {
       console.error('Failed to generate follow-up:', error);
       this.followUpText = '';

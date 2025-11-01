@@ -298,6 +298,16 @@ export class MigrationManager {
           `ALTER TABLE dialogue_variants DROP COLUMN continuation_translation`,
           `ALTER TABLE dialogue_variants DROP COLUMN continuation_text`
         ]
+      },
+      {
+        version: 15,
+        name: 'add_continuation_audio_to_dialogue_variants',
+        up: [
+          `ALTER TABLE dialogue_variants ADD COLUMN continuation_audio TEXT`
+        ],
+        down: [
+          `ALTER TABLE dialogue_variants DROP COLUMN continuation_audio`
+        ]
       }
     ];
   }

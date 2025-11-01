@@ -747,7 +747,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         variantTranslation: row.variant_translation,
         createdAt: new Date(row.created_at),
         continuationText: row.continuation_text || undefined,
-        continuationTranslation: row.continuation_translation || undefined
+        continuationTranslation: row.continuation_translation || undefined,
+        continuationAudio: row.continuation_audio || undefined
       }));
     } catch (error) {
       throw new Error(`Failed to get dialogue variants: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -797,7 +798,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         variantTranslation: row.variant_translation,
         createdAt: new Date(row.created_at),
         continuationText: row.continuation_text || undefined,
-        continuationTranslation: row.continuation_translation || undefined
+        continuationTranslation: row.continuation_translation || undefined,
+        continuationAudio: row.continuation_audio || undefined
       };
     } catch (error) {
       throw new Error(`Failed to get dialogue variant: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -810,18 +812,19 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   async updateDialogueVariantContinuation(
     variantId: number,
     continuationText: string,
-    continuationTranslation: string
+    continuationTranslation: string,
+    continuationAudio?: string
   ): Promise<void> {
     const db = this.getDb();
     
     try {
       const stmt = db.prepare(`
         UPDATE dialogue_variants
-        SET continuation_text = ?, continuation_translation = ?
+        SET continuation_text = ?, continuation_translation = ?, continuation_audio = ?
         WHERE id = ?
       `);
       
-      stmt.run(continuationText, continuationTranslation, variantId);
+      stmt.run(continuationText, continuationTranslation, continuationAudio || null, variantId);
     } catch (error) {
       throw new Error(`Failed to update dialogue variant continuation: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }

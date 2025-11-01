@@ -1316,7 +1316,71 @@ function setupDialogHandlers(
       const validatedVariantId = VariantIdSchema.parse(variantId); // Use VariantIdSchema to allow negative IDs
       
       // Generate follow-up (will check cache and generate if needed)
-      return await dialogService.generateFollowUp(validatedVariantId);
+      const followUp = await dialogService.generateFollowUp(validatedVariantId);
+      
+      // Generate audio on-demand if continuation text exists and no audio is cached yet
+      // Only cache audio for actual variants (positive IDs), not pseudo-variants (negative IDs)
+      let continuationAudio: string | undefined;
+      if (followUp.text && followUp.text.trim().length > 0 && validatedVariantId > 0) {
+        try {
+          // Check if audio already exists in database
+          const variant = await databaseLayer.getDialogueVariantById(validatedVariantId);
+          if (variant && variant.continuationAudio) {
+            // Audio already exists, use cached path
+            continuationAudio = variant.continuationAudio;
+          } else {
+            // Generate audio on-demand
+            const currentLanguage = await databaseLayer.getCurrentLanguage();
+            const audioPath = await audioService.generateAudio(
+              followUp.text,
+              currentLanguage,
+              `_continuation_${validatedVariantId}`
+            );
+            
+            if (audioPath) {
+              continuationAudio = audioPath;
+              
+              // Update database with audio path (update continuation with audio path)
+              // This also ensures the continuation text/translation are cached
+              await databaseLayer.updateDialogueVariantContinuation(
+                validatedVariantId,
+                followUp.text,
+                followUp.translation,
+                audioPath
+              );
+              console.log('[IPC] Generated and cached continuation audio:', audioPath);
+            }
+          }
+        } catch (audioError) {
+          console.error('[IPC] Failed to generate continuation audio:', audioError);
+          // Continue without audio - non-critical
+        }
+      } else if (followUp.text && followUp.text.trim().length > 0 && validatedVariantId < 0) {
+        // For pseudo-variants (negative IDs), generate audio but don't cache in database
+        // The audio file will still be cached on disk via audioService.generateAudio
+        try {
+          const currentLanguage = await databaseLayer.getCurrentLanguage();
+          const audioPath = await audioService.generateAudio(
+            followUp.text,
+            currentLanguage,
+            `_continuation_${validatedVariantId}`
+          );
+          
+          if (audioPath) {
+            continuationAudio = audioPath;
+            console.log('[IPC] Generated continuation audio for pseudo-variant (not cached in DB):', audioPath);
+          }
+        } catch (audioError) {
+          console.error('[IPC] Failed to generate continuation audio for pseudo-variant:', audioError);
+          // Continue without audio - non-critical
+        }
+      }
+      
+      return {
+        text: followUp.text,
+        translation: followUp.translation,
+        audio: continuationAudio
+      };
     } catch (error) {
       console.error('Error generating follow-up:', error);
       throw new Error(`Failed to generate follow-up: ${error instanceof Error ? error.message : 'Unknown error'}`);

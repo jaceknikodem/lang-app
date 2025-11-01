@@ -98,7 +98,7 @@ export interface DatabaseLayer {
   getDialogueVariantsBySentenceId(sentenceId: number, limit?: number): Promise<DialogueVariant[]>;
   getDialogueVariantCount(sentenceId: number): Promise<number>;
   getDialogueVariantById(variantId: number): Promise<DialogueVariant | null>;
-  updateDialogueVariantContinuation(variantId: number, continuationText: string, continuationTranslation: string): Promise<void>;
+  updateDialogueVariantContinuation(variantId: number, continuationText: string, continuationTranslation: string, continuationAudio?: string): Promise<void>;
   
   // Progress tracking
   updateLastStudied(wordId: number): Promise<void>;

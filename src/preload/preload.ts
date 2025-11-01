@@ -460,7 +460,7 @@ declare global {
       dialog: {
         selectSentence: () => Promise<any | null>;
         generateVariants: (sentenceId: number) => Promise<any[]>;
-        generateFollowUp: (variantId: number) => Promise<{ text: string; translation: string }>;
+        generateFollowUp: (variantId: number) => Promise<{ text: string; translation: string; audio?: string }>;
         ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
         pregenerateSession: () => Promise<any | null>;
       };
