@@ -88,6 +88,11 @@ export class LearningMode extends LitElement {
   private currentSentenceDisplayLastSeen?: Date;
   private autoScrollTimer: number | null = null;
   
+  // Track which words have already had their strength incremented in this session
+  // This prevents double incrementing when multiple audio files play (before-sentence + main)
+  // or when navigating next/previous
+  private wordsIncrementedThisSession: Set<number> = new Set();
+  
   // Audio cache: Map of audioPath -> blob URL
   // Using Blob URLs instead of data URLs for better performance (no base64 encoding/decoding)
   private audioCache: Map<string, string> = new Map(); // audioPath -> blob URL
@@ -453,6 +458,9 @@ export class LearningMode extends LitElement {
     super.connectedCallback();
     document.addEventListener('language-changed', this.handleExternalLanguageChange);
     
+    // Reset session tracking for fresh session
+    this.wordsIncrementedThisSession.clear();
+    
     await this.loadCurrentLanguage();
     
     // Setup keyboard bindings
@@ -667,6 +675,9 @@ export class LearningMode extends LitElement {
       this.isLoading = false;
       return;
     }
+
+    // Reset session tracking when loading a new set of words
+    this.wordsIncrementedThisSession.clear();
 
     this.isLoading = true;
     this.error = '';
@@ -2143,10 +2154,21 @@ export class LearningMode extends LitElement {
   }
 
   private async incrementStrengthForWord(wordId: number): Promise<void> {
+    // Only increment strength once per session per word
+    // This prevents double incrementing when:
+    // - Multiple audio files play (before-sentence + main sentence)
+    // - Navigating next/previous triggers audio playback
+    if (this.wordsIncrementedThisSession.has(wordId)) {
+      return;
+    }
+
     const word = this.wordsWithSentences.find(w => w.id === wordId);
     if (!word) {
       return;
     }
+
+    // Mark this word as incremented for this session
+    this.wordsIncrementedThisSession.add(wordId);
 
     const currentStrength = typeof word.strength === 'number' ? word.strength : 0;
     const newStrength = currentStrength + 1;
