@@ -3,11 +3,13 @@ import { ContentGenerator } from '../llm/content-generator.js';
 import { AudioService } from '../audio/audio-service.js';
 import { splitSentenceIntoParts } from '../../shared/utils/sentence.js';
 import { precomputeSentenceTokens } from '../database/sentence-preprocessor.js';
+import type { LemmatizationService } from '../lemmatization/index.js';
 
 export interface WordGenerationRunnerOptions {
   database: DatabaseLayer;
   contentGenerator: ContentGenerator;
   audioService: AudioService;
+  lemmatizationService?: LemmatizationService;
   pollIntervalMs?: number;
   maxAttempts?: number;
   retryBackoffMs?: number;
@@ -23,6 +25,7 @@ export class WordGenerationRunner {
   private readonly database: DatabaseLayer;
   private readonly contentGenerator: ContentGenerator;
   private readonly audioService: AudioService;
+  private readonly lemmatizationService?: LemmatizationService;
   private readonly pollIntervalMs: number;
   private readonly maxAttempts: number;
   private readonly retryBackoffMs: number;
@@ -36,6 +39,7 @@ export class WordGenerationRunner {
     this.database = options.database;
     this.contentGenerator = options.contentGenerator;
     this.audioService = options.audioService;
+    this.lemmatizationService = options.lemmatizationService;
     this.pollIntervalMs = options.pollIntervalMs ?? 3000;
     this.maxAttempts = options.maxAttempts ?? 3;
     this.retryBackoffMs = options.retryBackoffMs ?? 2000;
@@ -226,7 +230,7 @@ export class WordGenerationRunner {
             audioModel
           );
 
-          // Precompute sentence tokens with dictionary lookups
+          // Precompute sentence tokens with dictionary lookups and lemmatization
           try {
             const allWords = await this.database.getAllWords(false, false, language);
             const tokenizedTokens = await precomputeSentenceTokens({
@@ -235,7 +239,8 @@ export class WordGenerationRunner {
               allWords,
               lookupDictionary: (word: string, lang?: string) => this.database.lookupDictionary(word, lang || language),
               language,
-              maxPhraseWords: 3
+              maxPhraseWords: 3,
+              lemmatizationService: this.lemmatizationService
             });
             
             await this.database.updateSentenceTokens(sentenceId, tokenizedTokens);

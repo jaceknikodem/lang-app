@@ -65,6 +65,7 @@ export interface PrecomputedToken {
   dictionaryForm?: string;
   dictionaryKey?: string;
   dictionaryEntries?: DictionaryEntry[]; // Fully cached dictionary lookup results
+  lemma?: string; // Lemmatized form of the word (base form)
 }
 
 

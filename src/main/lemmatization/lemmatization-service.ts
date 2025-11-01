@@ -128,6 +128,8 @@ export class LemmatizationService {
     try {
       const languageCode = this.mapLanguageToCode(language);
       
+      console.log(`[Lemmatization] Calling lemmatize_words API: ${words.length} words for ${languageCode} (${language})`);
+      
       const response = await fetch(`${this.serverUrl}/lemmatize_words`, {
         method: 'POST',
         headers: {
@@ -137,8 +139,10 @@ export class LemmatizationService {
           words: words,
           language: languageCode
         }),
-        signal: AbortSignal.timeout(5000) // 5 second timeout
+        signal: AbortSignal.timeout(10000) // 10 second timeout (lemmatization can take a moment)
       });
+      
+      console.log(`[Lemmatization] lemmatize_words API response status: ${response.status}`);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: `HTTP error! status: ${response.status}` }));

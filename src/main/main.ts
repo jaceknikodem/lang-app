@@ -142,10 +142,17 @@ async function initializeServices(): Promise<void> {
     srsService = new SRSService(databaseLayer);
     console.log('SRS service initialized successfully');
 
+    // Initialize lemmatization service first (before WordGenerationRunner)
+    lemmatizationService = new LemmatizationService({
+      serverUrl: process.env.LEMMATIZATION_SERVER_URL || 'http://127.0.0.1:8888'
+    });
+    console.log('Lemmatization service initialized successfully');
+
     wordGenerationRunner = new WordGenerationRunner({
       database: databaseLayer,
       contentGenerator,
       audioService,
+      lemmatizationService,
       desiredSentenceCount: 3,
       onWordUpdated: update => {
         BrowserWindow.getAllWindows().forEach(window => {
@@ -153,12 +160,6 @@ async function initializeServices(): Promise<void> {
         });
       }
     });
-
-    // Initialize lemmatization service
-    lemmatizationService = new LemmatizationService({
-      serverUrl: process.env.LEMMATIZATION_SERVER_URL || 'http://127.0.0.1:8888'
-    });
-    console.log('Lemmatization service initialized successfully');
 
     console.log('All services initialized successfully');
   } catch (error) {

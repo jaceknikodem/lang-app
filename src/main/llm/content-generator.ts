@@ -251,8 +251,6 @@ export class ContentGenerator {
       `generate vocabulary for topic: ${topicText || 'general'}`
     );
 
-    console.log(`LLM returned ${words?.length || 0} words:`, words);
-
     // Validate and filter results
     const validWords = this.validateGeneratedWords(words);
 

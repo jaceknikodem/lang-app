@@ -475,6 +475,9 @@ export class SentenceViewer extends LitElement {
       const newParsedWords = this.convertPrecomputedTokensToWords(this.sentence.tokenizedTokens);
       this.parsedWords = newParsedWords;
       this.lastProcessedSentenceId = this.sentence?.id;
+      
+      // Enhance precomputed tokens with lemmatization (async, non-blocking)
+      void this.lemmatizePrecomputedTokens(newParsedWords);
     } else {
       // No precomputed tokens - need async tokenization
       void this.parseSentence();
@@ -574,6 +577,8 @@ export class SentenceViewer extends LitElement {
           if (hasChanged) {
             this.parsedWords = newParsedWords;
           }
+          // Trigger lemmatization for new sentence
+          void this.lemmatizePrecomputedTokens(newParsedWords);
         } else if (allWordsChanged) {
           // Only word statuses might have changed - update without re-tokenizing
           this.lastAllWordsArrayReference = this.allWords;
@@ -673,6 +678,10 @@ export class SentenceViewer extends LitElement {
     if (this.sentence.tokenizedTokens && this.sentence.tokenizedTokens.length > 0) {
       // Convert synchronously to avoid re-render jitter
       const newParsedWords = this.convertPrecomputedTokensToWords(this.sentence.tokenizedTokens);
+      
+      // Enhance with lemmatization for precomputed tokens (async, non-blocking)
+      void this.lemmatizePrecomputedTokens(newParsedWords);
+      
       // Only update if it actually changed to prevent unnecessary re-renders
       if (requestId === this.tokenizationRequestId) {
         const hasChanged = this.hasParsedWordsChanged(newParsedWords, this.parsedWords);
@@ -706,12 +715,14 @@ export class SentenceViewer extends LitElement {
     let lemmas: Record<string, string> = {};
     if (wordsToLemmatize.length > 0) {
       try {
+        console.log(`[Lemmatization] Lemmatizing ${wordsToLemmatize.length} words for sentence:`, wordsToLemmatize.slice(0, 5).join(', '));
         lemmas = await window.electronAPI.lemmatization.lemmatizeWords(
           wordsToLemmatize,
           this.targetWord.language
         );
+        console.log(`[Lemmatization] Received lemmas:`, Object.keys(lemmas).length, 'words lemmatized');
       } catch (error) {
-        console.warn('Failed to lemmatize words (non-critical):', error);
+        console.warn('[Lemmatization] Failed to lemmatize words (non-critical):', error);
         // Fallback: use words as their own lemmas
         wordsToLemmatize.forEach(word => {
           lemmas[word] = word;
@@ -952,6 +963,59 @@ export class SentenceViewer extends LitElement {
     });
   }
 
+  private async lemmatizePrecomputedTokens(parsedWords: WordInSentence[]): Promise<void> {
+    if (!this.targetWord?.language) {
+      console.warn('[Lemmatization] No target word language available, skipping lemmatization');
+      return;
+    }
+    
+    // Extract words that need lemmatization
+    const wordsToLemmatize: string[] = [];
+    const wordIndexMap = new Map<number, string>();
+    
+    parsedWords.forEach((wordInfo, index) => {
+      if (wordInfo.dictionaryForm && !wordInfo.lemma) {
+        const cleanText = wordInfo.dictionaryForm.toLowerCase();
+        if (cleanText) {
+          wordsToLemmatize.push(cleanText);
+          wordIndexMap.set(index, cleanText);
+        }
+      }
+    });
+    
+    // Lemmatize words if needed
+    if (wordsToLemmatize.length > 0) {
+      try {
+        console.log(`[Lemmatization] Lemmatizing ${wordsToLemmatize.length} words from precomputed tokens for language: ${this.targetWord.language}`);
+        console.log(`[Lemmatization] Words to lemmatize:`, wordsToLemmatize.slice(0, 10).join(', '));
+        const lemmas = await window.electronAPI.lemmatization.lemmatizeWords(
+          wordsToLemmatize,
+          this.targetWord.language
+        );
+        
+        console.log(`[Lemmatization] Received ${Object.keys(lemmas).length} lemmas from API`);
+        
+        // Update parsed words with lemmas
+        const updatedWords = parsedWords.map((wordInfo, index) => {
+          const word = wordIndexMap.get(index);
+          if (word && lemmas[word]) {
+            return { ...wordInfo, lemma: lemmas[word] };
+          }
+          return wordInfo;
+        });
+        
+        // Update state with lemmas
+        this.parsedWords = updatedWords;
+        this.requestUpdate();
+        console.log(`[Lemmatization] Updated ${Object.keys(lemmas).length} words with lemmas from precomputed tokens`);
+      } catch (error) {
+        console.warn('[Lemmatization] Failed to lemmatize precomputed tokens (non-critical):', error);
+      }
+    } else {
+      console.log(`[Lemmatization] No words to lemmatize (all already have lemmas or no dictionary forms)`);
+    }
+  }
+
   private async enhanceSentenceWithDictionary(requestId: number): Promise<void> {
     if (!this.sentence?.sentence || !this.targetWord) {
       return;
@@ -1059,22 +1123,35 @@ export class SentenceViewer extends LitElement {
     const lookupPromise = (async () => {
       try {
         this.dictionaryLookupInFlight.add(dictionaryKey);
-        const entries = await window.electronAPI.database.lookupDictionary(
-          word,
-          languageOverride ?? this.targetWord?.language
-        );
+        
+        // Add timeout to prevent hanging lookups
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Dictionary lookup timeout')), 10000); // 10 second timeout
+        });
+        
+        const entries = await Promise.race([
+          window.electronAPI.database.lookupDictionary(
+            word,
+            languageOverride ?? this.targetWord?.language
+          ),
+          timeoutPromise
+        ]);
+        
         const normalizedEntries = Array.isArray(entries) && entries.length > 0 ? entries : null;
-        // Update cache without triggering re-render (dictionaryCache is not @state)
+        // Update cache
         this.dictionaryCache[dictionaryKey] = normalizedEntries;
         return normalizedEntries;
       } catch (error) {
         console.error('Failed to load dictionary entries:', error);
-        // Update cache without triggering re-render
+        // Cache null to indicate lookup failed/no results
         this.dictionaryCache[dictionaryKey] = null;
         return null;
       } finally {
+        // Always clear the in-flight flag, even on timeout or error
         this.dictionaryLookupInFlight.delete(dictionaryKey);
         delete this.dictionaryLookupPromises[dictionaryKey];
+        // Force a re-render to update tooltips after lookup completes (or fails)
+        this.requestUpdate();
       }
     })();
 
@@ -1183,7 +1260,11 @@ export class SentenceViewer extends LitElement {
 
       if (cachedEntries === undefined) {
         // Trigger lookup if somehow missing (should already be queued)
-        void this.ensureDictionaryEntry(wordInfo.dictionaryForm ?? '', wordInfo.dictionaryKey);
+        // But don't keep it marked as in-flight indefinitely
+        const wasInFlight = this.dictionaryLookupInFlight.has(wordInfo.dictionaryKey!);
+        if (!wasInFlight) {
+          void this.ensureDictionaryEntry(wordInfo.dictionaryForm ?? '', wordInfo.dictionaryKey);
+        }
         // Show lemma if available while looking up
         if (parts.length > 0) {
           return `${parts.join(' • ')} • Looking up dictionary…`;
@@ -1192,7 +1273,7 @@ export class SentenceViewer extends LitElement {
       }
 
       if (!cachedEntries || cachedEntries.length === 0) {
-        // No dictionary entries found - show lemma if available
+        // No dictionary entries found (or lookup failed) - show lemma if available
         if (parts.length > 0) {
           return parts.join(' • ');
         }

@@ -6,6 +6,7 @@
 import { Word, DictionaryEntry, PrecomputedToken } from '../../shared/types/core.js';
 import { tokenizeSentenceWithDictionary } from '../../renderer/utils/sentence-tokenizer.js';
 import type { TokenizedWord } from '../../renderer/utils/sentence-tokenizer.js';
+import type { LemmatizationService } from '../lemmatization/index.js';
 
 export interface PrecomputeSentenceTokensParams {
   sentence: string;
@@ -14,6 +15,7 @@ export interface PrecomputeSentenceTokensParams {
   lookupDictionary: (word: string, language?: string) => Promise<DictionaryEntry[]>;
   language?: string;
   maxPhraseWords?: number;
+  lemmatizationService?: LemmatizationService;
 }
 
 /**
@@ -44,7 +46,7 @@ export async function precomputeSentenceTokens(
 
   // Convert TokenizedWord[] to PrecomputedToken[]
   // Extract dictionary entries from cache and attach to tokens
-  const precomputedTokens: PrecomputedToken[] = words.map((token: TokenizedWord) => {
+  let precomputedTokens: PrecomputedToken[] = words.map((token: TokenizedWord) => {
     const precomputed: PrecomputedToken = {
       text: token.text,
       isTargetWord: token.isTargetWord,
@@ -67,6 +69,49 @@ export async function precomputeSentenceTokens(
 
     return precomputed;
   });
+
+  // Lemmatize words if service is available
+  if (params.lemmatizationService && language) {
+    try {
+      // Extract unique words that need lemmatization
+      const wordsToLemmatize: string[] = [];
+      const wordToTokenMap = new Map<string, number[]>();
+      
+      precomputedTokens.forEach((token, index) => {
+        if (token.dictionaryForm && !token.lemma) {
+          const cleanText = token.dictionaryForm.toLowerCase().trim();
+          if (cleanText) {
+            if (!wordToTokenMap.has(cleanText)) {
+              wordsToLemmatize.push(cleanText);
+              wordToTokenMap.set(cleanText, []);
+            }
+            wordToTokenMap.get(cleanText)!.push(index);
+          }
+        }
+      });
+
+      if (wordsToLemmatize.length > 0) {
+        console.log(`[Lemmatization] Lemmatizing ${wordsToLemmatize.length} words during sentence preprocessing for language: ${language}`);
+        const lemmas = await params.lemmatizationService.lemmatizeWords(wordsToLemmatize, language);
+        
+        // Apply lemmas to tokens
+        wordToTokenMap.forEach((indices, word) => {
+          const lemma = lemmas[word];
+          if (lemma) {
+            indices.forEach(index => {
+              precomputedTokens[index].lemma = lemma;
+            });
+          }
+        });
+        
+        const lemmaCount = Object.keys(lemmas).length;
+        console.log(`[Lemmatization] Applied ${lemmaCount} lemmas to precomputed tokens`);
+      }
+    } catch (error) {
+      console.warn('[Lemmatization] Failed to lemmatize words during preprocessing (non-critical):', error);
+      // Continue without lemmas - sentence will still work
+    }
+  }
 
   return precomputedTokens;
 }
