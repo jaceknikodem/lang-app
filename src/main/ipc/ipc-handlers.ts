@@ -14,6 +14,9 @@ import { WordGenerationRunner } from '../jobs/word-generation-runner.js';
 import { CreateWordRequest } from '../../shared/types/core.js';
 import { LemmatizationService } from '../lemmatization/index.js';
 import { DialogService } from '../dialog/index.js';
+import { existsSync, mkdirSync } from 'fs';
+import { promises as fsPromises } from 'fs';
+import { dirname, join } from 'path';
 
 // Validation schemas for input sanitization
 const CreateWordSchema = z.object({
@@ -1598,13 +1601,35 @@ function setupDialogHandlers(
       }
 
       // Generate audio with ElevenLabs (or fall back to system TTS)
+      // Note: generateAudio creates text-based path, so we need to move it to ID-based path
       const generatedPath = await audioService.generateAudio(
         sentence.contextBefore,
         language,
         '_before_sentence'
       );
 
-      return generatedPath;
+      // If generated path doesn't match expected ID-based path, move/rename the file
+      if (generatedPath !== audioPath) {
+        // Ensure target directory exists
+        const targetDir = dirname(audioPath);
+        const absoluteTargetDir = join(process.cwd(), targetDir);
+        if (!existsSync(absoluteTargetDir)) {
+          mkdirSync(absoluteTargetDir, { recursive: true });
+        }
+        
+        // Move generated file to expected ID-based path
+        const absoluteGeneratedPath = join(process.cwd(), generatedPath);
+        const absoluteAudioPath = join(process.cwd(), audioPath);
+        
+        if (existsSync(absoluteGeneratedPath)) {
+          // Remove target if it exists (shouldn't happen, but be safe)
+          await fsPromises.unlink(absoluteAudioPath).catch(() => {});
+          // Move file to correct location
+          await fsPromises.rename(absoluteGeneratedPath, absoluteAudioPath);
+        }
+      }
+
+      return audioPath;
     } catch (error) {
       console.error('Error ensuring before sentence audio:', error);
       throw new Error(`Failed to ensure before sentence audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
