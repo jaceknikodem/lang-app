@@ -73,7 +73,12 @@ export class QuizMode extends LitElement {
   private isTranscribing = false;
 
   @state()
+  private streamingTranscriptionText: string | null = null;
+
+  @state()
   private speechRecognitionReady = false;
+
+  private transcriptionProgressUnsubscribe: (() => void) | null = null;
 
   @state()
   private autoplayEnabled = false;
@@ -1211,11 +1216,33 @@ export class QuizMode extends LitElement {
     // Setup keyboard bindings
     this.setupKeyboardBindings();
 
-    // Initialize speech recognition
-    await this.initializeSpeechRecognition();
+    // Set up transcription progress listener for streaming updates
+    this.transcriptionProgressUnsubscribe = window.electronAPI.audio.onTranscriptionProgress(
+      (payload) => {
+        if (payload.isFinal) {
+          // Final transcription received, clear streaming text
+          this.streamingTranscriptionText = null;
+        } else {
+          // Intermediate transcription update
+          this.streamingTranscriptionText = payload.text;
+          this.requestUpdate();
+        }
+      }
+    );
+
+    // Initialize speech recognition asynchronously (non-blocking, Whisper is optional)
+    // Don't await - let it run in background so quiz can start even if Whisper is unavailable
+    this.initializeSpeechRecognition().catch(err => {
+      console.warn('Speech recognition initialization failed (non-blocking):', err);
+    });
     
     // Start periodic check of speech recognition readiness (includes server availability)
     this.startSpeechRecognitionCheck();
+    
+    // Also check immediately in case Whisper is already available
+    this.checkSpeechRecognitionReady().catch(err => {
+      console.warn('Initial speech recognition check failed:', err);
+    });
 
     // Load autoplay preference
     await this.loadAutoplaySetting();
@@ -1243,6 +1270,12 @@ export class QuizMode extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+    
+    // Clean up transcription progress listener
+    if (this.transcriptionProgressUnsubscribe) {
+      this.transcriptionProgressUnsubscribe();
+      this.transcriptionProgressUnsubscribe = null;
+    }
     
     // Clean up recording timers
     this.clearRecordingTimer();
@@ -2308,6 +2341,7 @@ export class QuizMode extends LitElement {
 
     this.isTranscribing = true;
     this.transcriptionResult = null;
+    this.streamingTranscriptionText = null;
 
     try {
       // Get the expected sentence based on quiz direction
@@ -2329,7 +2363,7 @@ export class QuizMode extends LitElement {
         transcriptionLanguage
       });
 
-      // Transcribe the recorded audio
+      // Transcribe the recorded audio (streaming API)
       const transcriptionResult = await window.electronAPI.audio.transcribeAudio(
         this.currentRecording.filePath,
         {
@@ -2700,12 +2734,23 @@ export class QuizMode extends LitElement {
         <div class="transcription-results">
           <div class="transcription-loading">
             <div class="spinner"></div>
-            Analyzing your pronunciation...
-            ${!this.speechRecognitionReady ? html`
-              <div style="margin-top: var(--spacing-sm); font-size: 14px; color: var(--text-secondary);">
-                First-time setup: This may take 1-2 minutes while speech recognition compiles...
+            ${this.streamingTranscriptionText ? html`
+              <div class="streaming-transcription">
+                <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">
+                  Transcribing...
+                </div>
+                <div style="font-size: 16px; font-style: italic; color: var(--text-primary);">
+                  "${this.streamingTranscriptionText}"
+                </div>
               </div>
-            ` : ''}
+            ` : html`
+              Analyzing your pronunciation...
+              ${!this.speechRecognitionReady ? html`
+                <div style="margin-top: var(--spacing-sm); font-size: 14px; color: var(--text-secondary);">
+                  First-time setup: This may take 1-2 minutes while speech recognition compiles...
+                </div>
+              ` : ''}
+            `}
           </div>
         </div>
       `;

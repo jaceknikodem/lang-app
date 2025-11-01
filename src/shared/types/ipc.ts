@@ -241,6 +241,7 @@ export const IPC_CHANNELS = {
     GET_RECORDING_INFO: 'audio:getRecordingInfo',
     INITIALIZE_SPEECH_RECOGNITION: 'audio:initializeSpeechRecognition',
     TRANSCRIBE_AUDIO: 'audio:transcribeAudio',
+    TRANSCRIBE_AUDIO_PROGRESS: 'audio:transcribeAudioProgress',
     COMPARE_TRANSCRIPTION: 'audio:compareTranscription',
     IS_SPEECH_RECOGNITION_READY: 'audio:isSpeechRecognitionReady',
     SWITCH_TO_ELEVENLABS: 'audio:switchToElevenLabs',

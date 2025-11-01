@@ -800,8 +800,28 @@ function setupAudioHandlers(audioService: AudioService): void {
         logprob_threshold: z.number().optional(),
         no_speech_threshold: z.number().optional()
       }).parse(options) : undefined;
+
+      // Create progress callback that sends IPC events
+      const transcriptionOptions = validatedOptions ? {
+        ...validatedOptions,
+        onProgress: (text: string, isFinal: boolean) => {
+          // Send progress updates via IPC event
+          event.sender.send(IPC_CHANNELS.AUDIO.TRANSCRIBE_AUDIO_PROGRESS, {
+            text,
+            isFinal
+          });
+        }
+      } : {
+        onProgress: (text: string, isFinal: boolean) => {
+          // Send progress updates via IPC event
+          event.sender.send(IPC_CHANNELS.AUDIO.TRANSCRIBE_AUDIO_PROGRESS, {
+            text,
+            isFinal
+          });
+        }
+      };
       
-      return await audioService.transcribeAudio(validatedFilePath, validatedOptions);
+      return await audioService.transcribeAudio(validatedFilePath, transcriptionOptions);
     } catch (error) {
       console.error('Error transcribing audio:', error);
       throw new Error(`Failed to transcribe audio: ${error instanceof Error ? error.message : 'Unknown error'}`);

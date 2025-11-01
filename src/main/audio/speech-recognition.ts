@@ -5,6 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as http from 'http';
 import { app } from 'electron';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
@@ -26,6 +27,7 @@ export interface TranscriptionOptions {
   compression_ratio_threshold?: number;
   logprob_threshold?: number;
   no_speech_threshold?: number;
+  onProgress?: (text: string, isFinal: boolean) => void;
 }
 
 export interface TranscriptionResult {
@@ -46,7 +48,6 @@ export interface SpeechRecognitionError extends Error {
 
 export class SpeechRecognitionService {
   private whisperServerUrl: string = 'http://127.0.0.1:8080';
-  private isInitialized: boolean = false;
 
   // Map app language names to Whisper language codes
   private readonly LANGUAGE_CODE_MAP: Record<string, string> = {
@@ -108,30 +109,20 @@ export class SpeechRecognitionService {
   }
 
   /**
-   * Initialize the speech recognition service
+   * Check if Whisper server is available
+   * This is now just a convenience wrapper around isServerAvailable()
    */
   async initialize(): Promise<void> {
-    if (this.isInitialized) {
-      return;
-    }
-
     try {
-      console.log('Initializing speech recognition service...');
-      console.log(`Connecting to Whisper server at: ${this.whisperServerUrl}`);
-      
-      // Check if Whisper server is available
+      console.log('Checking Whisper server availability...');
       const available = await this.isServerAvailable();
       if (!available) {
         throw new Error('Whisper server is not available at http://localhost:8080. Please ensure the server is running and responds with HTTP 200 to GET requests.');
       }
-
-      this.isInitialized = true;
-      console.log('Speech recognition service initialized successfully');
-      console.log(`Using Whisper server: ${this.whisperServerUrl}`);
-      
+      console.log('Whisper server is available');
     } catch (error) {
-      console.error('Speech recognition initialization failed:', error);
-      const speechError = new Error(`Failed to initialize speech recognition: ${error instanceof Error ? error.message : 'Unknown error'}`) as SpeechRecognitionError;
+      console.error('Speech recognition check failed:', error);
+      const speechError = new Error(`Whisper server not available: ${error instanceof Error ? error.message : 'Unknown error'}`) as SpeechRecognitionError;
       speechError.code = 'WHISPER_NOT_AVAILABLE';
       throw speechError;
     }
@@ -141,11 +132,15 @@ export class SpeechRecognitionService {
    * Transcribe audio file to text using Whisper HTTP server
    */
   async transcribeAudio(filePath: string, options: TranscriptionOptions = {}): Promise<TranscriptionResult> {
-    if (!this.isInitialized) {
-      await this.initialize();
-    }
-
     try {
+      // Check server availability before transcribing
+      const available = await this.isServerAvailable();
+      if (!available) {
+        const error = new Error('Whisper server is not available') as SpeechRecognitionError;
+        error.code = 'WHISPER_NOT_AVAILABLE';
+        throw error;
+      }
+
       // Validate input file
       if (!fs.existsSync(filePath)) {
         const error = new Error(`Audio file not found: ${filePath}`) as SpeechRecognitionError;
@@ -215,7 +210,7 @@ export class SpeechRecognitionService {
       let transcriptionResult: string | null = null;
 
       try {
-        console.log('Sending request to Whisper server...');
+        console.log('Sending request to Whisper server (streaming mode)...');
         const startTime = Date.now();
         
         // Use native FormData with fetch - fetch will automatically set Content-Type with boundary
@@ -225,9 +220,6 @@ export class SpeechRecognitionService {
           body: formData
         });
 
-        const elapsed = Date.now() - startTime;
-        console.log(`Whisper server responded in ${elapsed}ms`);
-
         if (!response.ok) {
           const errorText = await response.text();
           console.error(`Whisper server ${url} returned ${response.status}: ${errorText}`);
@@ -235,21 +227,101 @@ export class SpeechRecognitionService {
         }
 
         const responseContentType = response.headers.get('content-type');
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
         
-        // Handle JSON response (as requested via response_format=json)
-        if (responseContentType && responseContentType.includes('application/json')) {
-          const json = await response.json();
-          transcriptionResult = json.text || '';
-        } else {
-          // Fallback to plain text if not JSON
-          transcriptionResult = await response.text();
+        if (!reader) {
+          throw new Error('Response body is not readable');
         }
+
+        let buffer = '';
+        let accumulatedText = '';
+
+        // Stream the response as it arrives
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) {
+            break;
+          }
+
+          // Decode the chunk and add to buffer
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+
+          // Try to parse JSON incrementally as buffer grows
+          if (responseContentType && responseContentType.includes('application/json')) {
+            try {
+              // Attempt to parse the current buffer as JSON
+              const json = JSON.parse(buffer);
+              if (json.text && json.text !== accumulatedText) {
+                // New text received, emit progress update
+                accumulatedText = json.text;
+                if (options.onProgress) {
+                  options.onProgress(accumulatedText, false);
+                }
+              }
+            } catch (e) {
+              // JSON is incomplete, continue accumulating chunks
+              // This is expected for streaming JSON responses
+            }
+          } else {
+            // Plain text streaming - emit chunks as they arrive
+            accumulatedText = buffer;
+            if (options.onProgress) {
+              options.onProgress(accumulatedText, false);
+            }
+          }
+        }
+
+        // Final parsing - the buffer should now contain complete JSON
+        if (responseContentType && responseContentType.includes('application/json')) {
+          try {
+            const json = JSON.parse(buffer);
+            transcriptionResult = json.text || '';
+            // Emit final update if different from last progress update
+            if (options.onProgress && transcriptionResult && transcriptionResult !== accumulatedText) {
+              options.onProgress(transcriptionResult, true);
+            } else if (options.onProgress && transcriptionResult) {
+              // Finalize the last update
+              options.onProgress(transcriptionResult, true);
+            }
+          } catch (parseError) {
+            // If we accumulated text during streaming, use it
+            if (accumulatedText) {
+              transcriptionResult = accumulatedText;
+              if (options.onProgress && transcriptionResult) {
+                options.onProgress(transcriptionResult, true);
+              }
+            } else {
+              throw new Error('Failed to parse Whisper server response as JSON');
+            }
+          }
+        } else {
+          // Plain text - use accumulated buffer
+          transcriptionResult = buffer;
+          if (options.onProgress && transcriptionResult && transcriptionResult !== accumulatedText) {
+            options.onProgress(transcriptionResult, true);
+          } else if (options.onProgress && transcriptionResult) {
+            options.onProgress(transcriptionResult, true);
+          }
+        }
+
+        // Fallback: use accumulated text if parsing failed
+        if (!transcriptionResult && accumulatedText) {
+          transcriptionResult = accumulatedText;
+        }
+
+        const elapsed = Date.now() - startTime;
+        console.log(`Whisper server streaming completed in ${elapsed}ms`);
 
         if (!transcriptionResult || transcriptionResult.trim().length === 0) {
           throw new Error('Whisper server returned empty transcription result');
         }
 
-        console.log(`Successfully transcribed using Whisper server endpoint: /inference`);
+        console.log(`Successfully transcribed using Whisper server endpoint: /inference (streaming)`);
+        transcriptionResult = transcriptionResult.trim();
+        
       } catch (fetchError) {
         console.error(`Error calling Whisper server endpoint /inference:`, fetchError);
         throw new Error(`Failed to transcribe audio via Whisper server: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`);
@@ -434,39 +506,46 @@ export class SpeechRecognitionService {
   }
 
   /**
-   * Check if service is initialized
-   */
-  isServiceInitialized(): boolean {
-    return this.isInitialized;
-  }
-
-  /**
    * Check if Whisper server is available on localhost:8080
    * Performs a simple GET request to "/" endpoint and checks for HTTP 200
    * Returns true if available, false otherwise
+   * Uses a short timeout to avoid blocking when server is unavailable
    */
   async isServerAvailable(): Promise<boolean> {
+    // Use Node's http module for reliability in Electron main process
+    const host = '127.0.0.1';
+    const port = 8080;
+    
     try {
-      // Only check localhost:8080 (not the configured URL)
-      const checkUrl = 'http://localhost:8080';
-      
-      const response = await fetch(`${checkUrl}/`, {
-        method: 'GET',
-        signal: AbortSignal.timeout(3000) // 3 second timeout
+      const result = await new Promise<boolean>((resolve) => {
+        const req = http.request({
+          hostname: host,
+          port: port,
+          path: '/',
+          method: 'GET',
+          timeout: 2000 // 2 second timeout
+        }, (res) => {
+          const isAvailable = res.statusCode === 200;
+          resolve(isAvailable);
+        });
+        
+        req.on('error', (error) => {
+          console.log(`Failed to connect to http://${host}:${port}:`, error.message);
+          resolve(false);
+        });
+        
+        req.on('timeout', () => {
+          console.log(`Whisper server check timed out for http://${host}:${port}`);
+          req.destroy();
+          resolve(false);
+        });
+        
+        req.end();
       });
       
-      // Server is available if it returns HTTP 200
-      const available = response.status === 200;
-      
-      if (available) {
-        console.log(`Whisper server is available at ${checkUrl}`);
-      } else {
-        console.log(`Whisper server at ${checkUrl} returned status ${response.status}, expected 200`);
-      }
-      
-      return available;
+      return result;
     } catch (error) {
-      console.log(`Whisper server at http://localhost:8080 is not available: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.log(`Error checking http://${host}:${port}:`, error instanceof Error ? error.message : String(error));
       return false;
     }
   }

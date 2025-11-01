@@ -163,6 +163,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.INITIALIZE_SPEECH_RECOGNITION),
     transcribeAudio: (filePath: string, options?: any) => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.TRANSCRIBE_AUDIO, filePath, options),
+    onTranscriptionProgress: (
+      callback: (payload: { text: string; isFinal: boolean }) => void
+    ) => {
+      const channel = IPC_CHANNELS.AUDIO.TRANSCRIBE_AUDIO_PROGRESS;
+      const listener = (_event: Electron.IpcRendererEvent, payload: { text: string; isFinal: boolean }) => {
+        callback(payload);
+      };
+      ipcRenderer.on(channel, listener);
+      return () => {
+        ipcRenderer.removeListener(channel, listener);
+      };
+    },
     compareTranscription: (transcribed: string, expected: string) => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.COMPARE_TRANSCRIPTION, transcribed, expected),
     isSpeechRecognitionReady: () => 
@@ -331,6 +343,9 @@ declare global {
         getRecordingInfo: (filePath: string) => Promise<{ size: number; duration?: number } | null>;
         initializeSpeechRecognition: () => Promise<void>;
         transcribeAudio: (filePath: string, options?: any) => Promise<any>;
+        onTranscriptionProgress: (
+          callback: (payload: { text: string; isFinal: boolean }) => void
+        ) => () => void;
         compareTranscription: (transcribed: string, expected: string) => Promise<any>;
         isSpeechRecognitionReady: () => Promise<boolean>;
         switchToElevenLabs: (apiKey: string) => Promise<void>;
