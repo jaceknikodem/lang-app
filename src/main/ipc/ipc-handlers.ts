@@ -674,6 +674,18 @@ function setupAudioHandlers(audioService: AudioService): void {
     }
   });
 
+  ipcMain.handle(IPC_CHANNELS.AUDIO.NORMALIZE_AUDIO_VOLUME, async (event, audioPath, targetDb) => {
+    try {
+      const validatedAudioPath = AudioPathSchema.parse(audioPath);
+      const validatedTargetDb = typeof targetDb === 'number' ? targetDb : 5; // Default to 5dB amplification
+      return await audioService.normalizeAudioVolume(validatedAudioPath, validatedTargetDb);
+    } catch (error) {
+      console.error('Error normalizing audio volume:', error);
+      // Return original path if normalization fails
+      return audioPath;
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.AUDIO.LOAD_AUDIO_BASE64, async (event, audioPath) => {
     try {
       const validatedAudioPath = AudioPathSchema.parse(audioPath);

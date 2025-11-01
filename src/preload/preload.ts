@@ -139,6 +139,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.STOP_AUDIO),
     audioExists: (audioPath: string) => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.AUDIO_EXISTS, audioPath),
+    normalizeAudioVolume: (audioPath: string, targetDb?: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.NORMALIZE_AUDIO_VOLUME, audioPath, targetDb),
     loadAudioBase64: (audioPath: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.LOAD_AUDIO_BASE64, audioPath),
     regenerateAudio: (options: { text: string; language?: string; word?: string; existingPath?: string }) =>
@@ -355,6 +357,7 @@ declare global {
         playAudio: (audioPath: string) => Promise<void>;
         stopAudio: () => Promise<void>;
         audioExists: (audioPath: string) => Promise<boolean>;
+        normalizeAudioVolume: (audioPath: string, targetDb?: number) => Promise<string | null>;
         loadAudioBase64: (audioPath: string) => Promise<{ data: ArrayBuffer; mimeType: string } | null>;
         regenerateAudio: (options: { text: string; language?: string; word?: string; existingPath?: string }) => Promise<{ audioPath: string }>;
         startRecording: (options?: any) => Promise<any>;

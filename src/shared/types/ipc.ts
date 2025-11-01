@@ -129,24 +129,25 @@ export interface IPCBridge {
   };
 
   // Audio operations
-  audio: {
-    generateAudio: (text: string, language?: string, word?: string) => Promise<string>;
-    playAudio: (audioPath: string) => Promise<void>;
-    stopAudio: () => Promise<void>;
-    audioExists: (audioPath: string) => Promise<boolean>;
-    regenerateAudio: (options: {
-      text: string;
-      language?: string;
-      word?: string;
-      existingPath?: string;
-    }) => Promise<{ audioPath: string }>;
-    startRecording: (options?: RecordingOptions) => Promise<RecordingSession>;
-    stopRecording: () => Promise<RecordingSession | null>;
-    cancelRecording: () => Promise<void>;
-    getCurrentRecordingSession: () => Promise<RecordingSession | null>;
-    isRecording: () => Promise<boolean>;
-    getAvailableRecordingDevices: () => Promise<string[]>;
-    deleteRecording: (filePath: string) => Promise<void>;
+    audio: {
+      generateAudio: (text: string, language?: string, word?: string) => Promise<string>;
+      playAudio: (audioPath: string) => Promise<void>;
+      stopAudio: () => Promise<void>;
+      audioExists: (audioPath: string) => Promise<boolean>;
+      normalizeAudioVolume: (audioPath: string, targetDb?: number) => Promise<string | null>;
+      regenerateAudio: (options: {
+        text: string;
+        language?: string;
+        word?: string;
+        existingPath?: string;
+      }) => Promise<{ audioPath: string }>;
+      startRecording: (options?: RecordingOptions) => Promise<RecordingSession>;
+      stopRecording: () => Promise<RecordingSession | null>;
+      cancelRecording: () => Promise<void>;
+      getCurrentRecordingSession: () => Promise<RecordingSession | null>;
+      isRecording: () => Promise<boolean>;
+      getAvailableRecordingDevices: () => Promise<string[]>;
+      deleteRecording: (filePath: string) => Promise<void>;
     getRecordingInfo: (filePath: string) => Promise<{ size: number; duration?: number } | null>;
     initializeSpeechRecognition: () => Promise<void>;
     transcribeAudio: (filePath: string, options?: TranscriptionOptions) => Promise<TranscriptionResult>;
@@ -254,13 +255,14 @@ export const IPC_CHANNELS = {
     GET_AVAILABLE_PROVIDERS: 'llm:getAvailableProviders',
     GET_MODELS_FOR_PROVIDER: 'llm:getModelsForProvider'
   },
-  AUDIO: {
-    GENERATE_AUDIO: 'audio:generateAudio',
-    PLAY_AUDIO: 'audio:playAudio',
-    STOP_AUDIO: 'audio:stopAudio',
-    AUDIO_EXISTS: 'audio:audioExists',
-    LOAD_AUDIO_BASE64: 'audio:loadAudioBase64',
-    REGENERATE_AUDIO: 'audio:regenerateAudio',
+    AUDIO: {
+      GENERATE_AUDIO: 'audio:generateAudio',
+      PLAY_AUDIO: 'audio:playAudio',
+      STOP_AUDIO: 'audio:stopAudio',
+      AUDIO_EXISTS: 'audio:audioExists',
+      NORMALIZE_AUDIO_VOLUME: 'audio:normalizeAudioVolume',
+      LOAD_AUDIO_BASE64: 'audio:loadAudioBase64',
+      REGENERATE_AUDIO: 'audio:regenerateAudio',
     START_RECORDING: 'audio:startRecording',
     STOP_RECORDING: 'audio:stopRecording',
     CANCEL_RECORDING: 'audio:cancelRecording',

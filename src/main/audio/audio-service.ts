@@ -222,6 +222,71 @@ export class AudioService {
   }
 
   /**
+   * Normalize/amplify audio volume for playback
+   * Uses ffmpeg to amplify the audio to a target volume level
+   */
+  async normalizeAudioVolume(audioPath: string, targetDb: number = 0): Promise<string | null> {
+    try {
+      if (!audioPath || typeof audioPath !== 'string') {
+        return null;
+      }
+
+      // Check if file exists
+      if (!await this.audioExists(audioPath)) {
+        console.warn('Audio file not found for normalization:', audioPath);
+        return null;
+      }
+
+      // Create normalized version path
+      const parsedPath = require('path').parse(audioPath);
+      const normalizedPath = require('path').join(
+        parsedPath.dir,
+        `${parsedPath.name}_normalized${parsedPath.ext}`
+      );
+
+      // Check if normalized version already exists
+      if (await this.audioExists(normalizedPath)) {
+        return normalizedPath;
+      }
+
+      // Use ffmpeg to normalize audio volume
+      // -af "volume=5dB" amplifies by 5dB (adjust as needed)
+      // -af "loudnorm" normalizes to standard loudness (EBU R128)
+      // We'll use volume filter with amplification for simplicity
+      const { execFile } = require('child_process');
+      const { promisify } = require('util');
+      const execFileAsync = promisify(execFile);
+
+      try {
+        await execFileAsync('ffmpeg', [
+          '-i', audioPath,
+          '-af', `volume=${targetDb}dB`, // Amplify by targetDb (default 0 = normalize to 0dB)
+          '-y', // Overwrite output file
+          normalizedPath
+        ], {
+          timeout: 10000,
+          maxBuffer: 1024 * 1024
+        });
+
+        // Verify normalized file was created
+        if (await this.audioExists(normalizedPath)) {
+          return normalizedPath;
+        }
+      } catch (ffmpegError) {
+        console.warn('Failed to normalize audio with ffmpeg, using original:', ffmpegError);
+        // Return original if normalization fails
+        return audioPath;
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error normalizing audio volume:', error);
+      // Return original if normalization fails
+      return audioPath;
+    }
+  }
+
+  /**
    * Check if audio file exists
    */
   async audioExists(audioPath: string): Promise<boolean> {

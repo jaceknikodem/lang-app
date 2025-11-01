@@ -325,11 +325,15 @@ export class DialogMode extends LitElement {
           }
         }
 
-        // Play user's recording and wait for it to complete
+        // Play user's recording (normalized for better volume) and wait for it to complete
         if (this.recordedAudioPath) {
           try {
-            console.log('[DialogMode] Playing user recording:', this.recordedAudioPath);
-            await window.electronAPI.audio.playAudio(this.recordedAudioPath);
+            // Normalize/amplify the recording for better playback volume (5dB amplification)
+            const normalizedPath = await window.electronAPI.audio.normalizeAudioVolume(this.recordedAudioPath, 5);
+            const audioPathToPlay = normalizedPath || this.recordedAudioPath;
+            
+            console.log('[DialogMode] Playing user recording:', audioPathToPlay);
+            await window.electronAPI.audio.playAudio(audioPathToPlay);
             console.log('[DialogMode] User recording finished');
           } catch (error) {
             console.error('Failed to play user recording:', error);

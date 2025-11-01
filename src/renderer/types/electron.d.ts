@@ -57,6 +57,7 @@ declare global {
         playAudio: (audioPath: string) => Promise<void>;
         stopAudio: () => Promise<void>;
         audioExists: (audioPath: string) => Promise<boolean>;
+        normalizeAudioVolume: (audioPath: string, targetDb?: number) => Promise<string | null>;
         loadAudioBase64: (audioPath: string) => Promise<{ data: ArrayBuffer; mimeType: string } | null>;
         regenerateAudio: (options: { text: string; language?: string; word?: string; existingPath?: string }) => Promise<string>;
         startRecording: (options?: any) => Promise<any>;
