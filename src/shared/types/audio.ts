@@ -30,7 +30,7 @@ export interface AudioConfig {
 }
 
 export interface AudioError extends Error {
-  code: 'GENERATION_FAILED' | 'PLAYBACK_FAILED' | 'FILE_NOT_FOUND' | 'INVALID_PATH' | 'RECORDING_FAILED' | 'FILE_OPERATION_FAILED' | 'API_ERROR';
+  code: 'GENERATION_FAILED' | 'PLAYBACK_FAILED' | 'PLAYBACK_STOPPED' | 'FILE_NOT_FOUND' | 'INVALID_PATH' | 'RECORDING_FAILED' | 'FILE_OPERATION_FAILED' | 'API_ERROR';
   audioPath?: string;
 }
 

@@ -1454,8 +1454,11 @@ export class SentenceViewer extends LitElement {
         // Ignore errors when stopping
       });
       
-      // Play audio immediately (non-blocking - returns quickly)
-      void window.electronAPI.audio.playAudio(this.sentence.audioPath).then(() => {
+      // Play audio and wait for completion (promise now resolves when audio finishes)
+      try {
+        await window.electronAPI.audio.playAudio(this.sentence.audioPath);
+        
+        // Audio finished playing successfully
         this.dispatchEvent(new CustomEvent('sentence-audio-played', {
           detail: {
             sentenceId: this.sentence.id,
@@ -1464,16 +1467,31 @@ export class SentenceViewer extends LitElement {
           bubbles: true,
           composed: true
         }));
-      }).catch(err => {
+        
+        // Dispatch completion event
+        this.dispatchEvent(new CustomEvent('sentence-audio-completed', {
+          detail: {
+            sentenceId: this.sentence.id,
+            wordId: this.targetWord.id
+          },
+          bubbles: true,
+          composed: true
+        }));
+      } catch (err: any) {
+        // If error is because audio was stopped, don't log as error
+        if (err?.code === 'PLAYBACK_STOPPED') {
+          // Audio was intentionally stopped, ignore
+          return;
+        }
         console.error('Failed to play audio:', err);
-      });
+      }
     } catch (error) {
       console.error('Failed to play audio:', error);
     } finally {
-      // Reset after a delay to prevent rapid clicking
+      // Reset after a short delay to prevent rapid clicking
       setTimeout(() => {
         this.isPlayingAudio = false;
-      }, 500);
+      }, 100);
     }
   }
 

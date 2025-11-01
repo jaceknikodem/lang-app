@@ -71,6 +71,9 @@ export class LearningMode extends LitElement {
   @state()
   private failureMessageExpiresAt: number | null = null;
 
+  @state()
+  private autoScrollEnabled = false;
+
   private sessionStartTime = Date.now();
   private keyboardUnsubscribe?: () => void;
   private lastRecordedSentenceId: number | null = null;
@@ -80,6 +83,7 @@ export class LearningMode extends LitElement {
   private isReloadingFromQueue = false;
   private currentSentenceDisplayLastSeen?: Date;
   private lastSeenClearFrame: number | null = null;
+  private autoScrollTimer: number | null = null;
   
   // Audio cache: Map of audioPath -> blob URL
   // Using Blob URLs instead of data URLs for better performance (no base64 encoding/decoding)
@@ -330,6 +334,49 @@ export class LearningMode extends LitElement {
         flex-wrap: wrap;
       }
 
+      .auto-scroll-toggle {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
+
+      .auto-scroll-switch {
+        position: relative;
+        width: 50px;
+        height: 24px;
+        background: var(--border-color);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+
+      .auto-scroll-switch.active {
+        background: var(--primary-color);
+      }
+
+      .auto-scroll-slider {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 20px;
+        height: 20px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
+
+      .auto-scroll-switch.active .auto-scroll-slider {
+        transform: translateX(22px);
+      }
+
+      .auto-scroll-label {
+        font-weight: 500;
+        user-select: none;
+      }
+
       @media (max-width: 768px) {
         .progress-info {
           flex-direction: column;
@@ -397,6 +444,7 @@ export class LearningMode extends LitElement {
 
     this.stopJobMonitoring();
     this.clearInfoTimeout();
+    this.clearAutoScrollTimer();
     if (this.lastSeenClearFrame !== null) {
       cancelAnimationFrame(this.lastSeenClearFrame);
       this.lastSeenClearFrame = null;
@@ -867,6 +915,21 @@ export class LearningMode extends LitElement {
     }
   }
 
+  private clearAutoScrollTimer(): void {
+    if (this.autoScrollTimer !== null) {
+      window.clearTimeout(this.autoScrollTimer);
+      this.autoScrollTimer = null;
+    }
+  }
+
+  private toggleAutoScroll(): void {
+    this.autoScrollEnabled = !this.autoScrollEnabled;
+    // Clear any existing timer when toggling off
+    if (!this.autoScrollEnabled) {
+      this.clearAutoScrollTimer();
+    }
+  }
+
   protected updated(changed: Map<string, unknown>) {
     // When the visible sentence changes, record last viewed time
     if (
@@ -910,6 +973,12 @@ export class LearningMode extends LitElement {
       window.electronAPI.database
         .updateSentenceLastShown(currentSentence.id)
         .catch(err => console.warn('Failed to update sentence last_shown:', err));
+      }
+
+      // Disable auto-scroll when we reach the last sentence
+      if (this.isLastSentence() && this.autoScrollEnabled) {
+        this.autoScrollEnabled = false;
+        this.clearAutoScrollTimer();
       }
     }
   }
@@ -1208,6 +1277,9 @@ export class LearningMode extends LitElement {
   }
 
   private goToPreviousSentence() {
+    // Clear auto-scroll timer when manually navigating
+    this.clearAutoScrollTimer();
+    
     if (this.currentSentenceIndex > 0) {
       this.currentSentenceIndex--;
     } else if (this.currentWordIndex > 0) {
@@ -1221,6 +1293,9 @@ export class LearningMode extends LitElement {
   }
 
   private async goToNextSentence() {
+    // Clear auto-scroll timer when manually navigating
+    this.clearAutoScrollTimer();
+    
     const currentWord = this.getCurrentWord();
     if (!currentWord) return;
 
@@ -1600,6 +1675,16 @@ export class LearningMode extends LitElement {
           this.currentAudioElement = null;
           // Increment strength when audio finishes playing
           void this.incrementStrengthForWord(currentWord.id);
+          // Auto-scroll to next sentence after 2 seconds if enabled
+          if (this.autoScrollEnabled) {
+            this.clearAutoScrollTimer();
+            this.autoScrollTimer = window.setTimeout(() => {
+              if (!this.isLastSentence()) {
+                void this.goToNextSentence();
+              }
+              this.autoScrollTimer = null;
+            }, 2000);
+          }
         });
 
         this.currentAudioElement.addEventListener('error', (e) => {
@@ -1646,6 +1731,9 @@ export class LearningMode extends LitElement {
    * Stop currently playing cached audio
    */
   private stopCachedAudio(): void {
+    // Clear auto-scroll timer when stopping audio
+    this.clearAutoScrollTimer();
+    
     if (this.currentAudioElement) {
       this.currentAudioElement.pause();
       this.currentAudioElement.currentTime = 0;
@@ -1664,6 +1752,21 @@ export class LearningMode extends LitElement {
     }
 
     void this.incrementStrengthForWord(wordId);
+  }
+
+  private handleSentenceAudioCompleted(event: CustomEvent<{ wordId?: number }>) {
+    // Auto-scroll to next sentence after audio finishes (2.5 seconds delay)
+    // The extra 0.5 seconds accounts for the buffer in the audio generator
+    // plus gives users a moment to process what they just heard
+    if (this.autoScrollEnabled) {
+      this.clearAutoScrollTimer();
+      this.autoScrollTimer = window.setTimeout(() => {
+        if (!this.isLastSentence()) {
+          void this.goToNextSentence();
+        }
+        this.autoScrollTimer = null;
+      }, 2500); // 2.5 seconds delay after audio completes
+    }
   }
 
   private handleSentenceAudioRegenerated(event: CustomEvent<{ sentenceId: number; audioPath: string }>) {
@@ -1936,6 +2039,17 @@ export class LearningMode extends LitElement {
             <div class="progress-text">
               Overall: ${currentSentenceNumber} of ${totalSentences} sentences
             </div>
+            <div class="auto-scroll-toggle" style="margin-bottom: 0;">
+              <span class="auto-scroll-label" style="font-size: 12px;">Auto-scroll</span>
+              <div 
+                class="auto-scroll-switch ${this.autoScrollEnabled ? 'active' : ''}"
+                @click=${this.isLastSentence() ? undefined : this.toggleAutoScroll}
+                title=${this.isLastSentence() ? 'Auto-scroll disabled at end of session' : 'Auto-scroll to next sentence 2 seconds after audio stops'}
+                style="width: 40px; height: 20px; ${this.isLastSentence() ? 'opacity: 0.5; cursor: not-allowed;' : 'cursor: pointer;'}"
+              >
+                <div class="auto-scroll-slider" style="width: 16px; height: 16px; top: 2px; left: 2px;"></div>
+              </div>
+            </div>
           </div>
           <div class="progress-bar">
             <div class="progress-fill" style="width: ${progressPercent}%"></div>
@@ -1956,6 +2070,7 @@ export class LearningMode extends LitElement {
           @remove-sentence=${this.handleRemoveCurrentSentence}
           @show-other-sentence=${this.handleShowOtherSentence}
           @sentence-audio-played=${this.handleSentenceAudioPlayed}
+          @sentence-audio-completed=${this.handleSentenceAudioCompleted}
           @sentence-audio-regenerated=${this.handleSentenceAudioRegenerated}
           @word-added-from-sentence=${this.handleWordAddedFromSentence}
           @word-addition-error=${this.handleWordAdditionError}

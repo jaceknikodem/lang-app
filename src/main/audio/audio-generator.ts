@@ -16,6 +16,7 @@ export class TTSAudioGenerator implements AudioGenerator {
   private config: AudioConfig;
   private database?: DatabaseLayer;
   private currentAudioProcess?: any; // Track current audio process
+  private currentPlayPromise?: { resolve: () => void; reject: (error: any) => void }; // Track current play promise
 
   constructor(config?: Partial<AudioConfig>, database?: DatabaseLayer) {
     this.config = {
@@ -92,6 +93,7 @@ export class TTSAudioGenerator implements AudioGenerator {
 
   /**
    * Play audio file using system command
+   * Returns a promise that resolves when audio playback completes
    */
   async playAudio(audioPath: string): Promise<void> {
     if (!await this.audioExists(audioPath)) {
@@ -106,22 +108,53 @@ export class TTSAudioGenerator implements AudioGenerator {
       const { spawn } = await import('child_process');
       this.currentAudioProcess = spawn('afplay', [audioPath]);
       
-      // Set up process event handlers but don't wait for completion
-      this.currentAudioProcess.on('close', (code: number) => {
-        if (this.currentAudioProcess) {
-          this.currentAudioProcess = undefined;
+      // Return a promise that resolves when the audio finishes playing
+      return new Promise<void>((resolve, reject) => {
+        if (!this.currentAudioProcess) {
+          reject(this.createAudioError('PLAYBACK_FAILED', 'Audio process not created', audioPath));
+          return;
         }
-      });
-      
-      this.currentAudioProcess.on('error', (error: Error) => {
-        console.warn('Audio playback error:', error);
-        if (this.currentAudioProcess) {
-          this.currentAudioProcess = undefined;
-        }
-      });
 
-      // Return immediately without waiting for completion
-      // This allows for non-blocking audio playback
+        // Store promise callbacks so stopAudio can reject if needed
+        this.currentPlayPromise = { resolve, reject };
+
+        // Resolve when audio finishes playing
+        this.currentAudioProcess.on('close', (code: number) => {
+          const process = this.currentAudioProcess;
+          const promise = this.currentPlayPromise;
+          this.currentAudioProcess = undefined;
+          this.currentPlayPromise = undefined;
+          
+          // Add a small buffer delay to ensure audio has fully stopped playing
+          // This prevents race conditions where the process exits slightly before audio finishes
+          setTimeout(() => {
+            if (code === 0) {
+              // Audio played successfully
+              if (promise) {
+                promise.resolve();
+              }
+            } else {
+              // Audio playback exited with error code
+              if (promise) {
+                promise.reject(this.createAudioError('PLAYBACK_FAILED', `Audio playback exited with code ${code}`, audioPath));
+              }
+            }
+          }, 200); // 200ms buffer to ensure audio fully finishes
+        });
+        
+        // Reject on process error
+        this.currentAudioProcess.on('error', (error: Error) => {
+          console.warn('Audio playback error:', error);
+          const process = this.currentAudioProcess;
+          this.currentAudioProcess = undefined;
+          const promise = this.currentPlayPromise;
+          this.currentPlayPromise = undefined;
+          
+          if (promise) {
+            promise.reject(this.createAudioError('PLAYBACK_FAILED', `Audio playback error: ${error.message}`, audioPath));
+          }
+        });
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown playback error';
       throw this.createAudioError('PLAYBACK_FAILED', `Audio playback failed: ${message}`, audioPath);
@@ -136,6 +169,13 @@ export class TTSAudioGenerator implements AudioGenerator {
       try {
         console.log('Stopping current audio process...');
         this.currentAudioProcess.kill('SIGTERM');
+        
+        // Reject any pending play promise
+        if (this.currentPlayPromise) {
+          this.currentPlayPromise.reject(this.createAudioError('PLAYBACK_STOPPED', 'Audio playback was stopped', ''));
+          this.currentPlayPromise = undefined;
+        }
+        
         this.currentAudioProcess = undefined;
         console.log('Audio process stopped successfully');
       } catch (error) {
