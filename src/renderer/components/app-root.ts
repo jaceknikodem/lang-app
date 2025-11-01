@@ -82,6 +82,7 @@ export class AppRoot extends LitElement {
         display: flex;
         gap: var(--spacing-sm);
         align-items: center;
+        flex: 1;
       }
 
       .language-dropdown {
@@ -160,20 +161,24 @@ export class AppRoot extends LitElement {
       }
 
       .close-button {
-        padding: var(--spacing-sm) var(--spacing-md);
-        border: 1px solid var(--error-color);
-        background: var(--background-primary);
-        color: var(--error-color);
+        padding: var(--spacing-xs) var(--spacing-sm);
+        border: none;
+        background: transparent;
+        color: var(--text-tertiary);
         border-radius: var(--border-radius-small);
         cursor: pointer;
-        font-size: 12px;
-        font-weight: 500;
+        font-size: 18px;
+        font-weight: 300;
+        line-height: 1;
         transition: all 0.2s ease;
-        margin-left: var(--spacing-sm);
+        margin-left: auto;
+        opacity: 0.5;
       }
 
       .close-button:hover {
-        background: var(--error-light);
+        color: var(--text-secondary);
+        opacity: 0.8;
+        background: var(--background-secondary);
       }
 
       .content-area {
@@ -664,13 +669,6 @@ export class AppRoot extends LitElement {
             >
               Settings
             </button>
-            <button 
-              class="close-button"
-              @click=${this.handleCloseApp}
-              title="Close Application"
-            >
-              ✕ Close
-            </button>
             ${this.currentLanguage ? html`
               <div class="language-dropdown">
                 <select 
@@ -687,6 +685,13 @@ export class AppRoot extends LitElement {
                 </select>
               </div>
             ` : ''}
+            <button 
+              class="close-button"
+              @click=${this.handleCloseApp}
+              title="Close Application"
+            >
+              ×
+            </button>
           </nav>
         </header>
 
