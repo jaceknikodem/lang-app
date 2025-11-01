@@ -103,6 +103,7 @@ export class LemmatizationService {
 
       const data = await response.json();
       
+      // This shows up multiple times in logs, that's OK, we don't actually loaded twice on the server.
       if (data.status === 'already_loaded') {
         console.log(`[Lemmatization] Stanza model for ${languageCode} (${language}) already loaded`);
       } else {

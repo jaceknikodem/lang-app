@@ -319,6 +319,59 @@ export class MigrationManager {
         down: [
           // SQLite cannot drop columns; leaving play_count in place on rollback.
         ]
+      },
+      {
+        version: 17,
+        name: 'remove_strength_check_constraint',
+        up: [
+          // SQLite doesn't support ALTER TABLE to remove CHECK constraints
+          // We need to recreate the table without the constraint
+          // IMPORTANT: Disable foreign key checks to prevent cascading deletes
+          `PRAGMA foreign_keys = OFF`,
+          // Create new table without CHECK constraint
+          `CREATE TABLE IF NOT EXISTS words_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            word TEXT NOT NULL,
+            language TEXT NOT NULL DEFAULT 'spanish',
+            translation TEXT NOT NULL,
+            audio_path TEXT,
+            strength INTEGER DEFAULT 0,
+            known BOOLEAN DEFAULT FALSE,
+            ignored BOOLEAN DEFAULT FALSE,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_studied DATETIME,
+            interval_days INTEGER DEFAULT 1,
+            ease_factor REAL DEFAULT 2.5,
+            last_review DATETIME,
+            next_due DATETIME,
+            fsrs_difficulty REAL DEFAULT 5.0,
+            fsrs_stability REAL DEFAULT 1.0,
+            fsrs_lapses INTEGER DEFAULT 0,
+            fsrs_last_rating INTEGER,
+            fsrs_version TEXT DEFAULT 'fsrs-baseline',
+            processing_status TEXT DEFAULT 'ready',
+            sentence_count INTEGER DEFAULT 0
+          )`,
+          // Copy all data from old table to new table
+          `INSERT INTO words_new SELECT * FROM words`,
+          // Drop old table (safe now because foreign keys are disabled)
+          `DROP TABLE words`,
+          // Rename new table to original name
+          `ALTER TABLE words_new RENAME TO words`,
+          // Re-enable foreign key checks
+          `PRAGMA foreign_keys = ON`,
+          // Recreate indexes
+          `CREATE INDEX IF NOT EXISTS idx_words_strength ON words(strength)`,
+          `CREATE INDEX IF NOT EXISTS idx_words_last_studied ON words(last_studied)`,
+          `CREATE INDEX IF NOT EXISTS idx_words_known_ignored ON words(known, ignored)`,
+          `CREATE INDEX IF NOT EXISTS idx_words_next_due ON words(next_due)`,
+          `CREATE INDEX IF NOT EXISTS idx_words_srs_review ON words(next_due, strength)`,
+          `CREATE INDEX IF NOT EXISTS idx_words_fsrs_state ON words(fsrs_stability, fsrs_difficulty)`
+        ],
+        down: [
+          // Cannot restore CHECK constraint without recreating table again
+          // Leave constraint removed on rollback
+        ]
       }
     ];
   }
