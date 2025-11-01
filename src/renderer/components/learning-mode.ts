@@ -1123,6 +1123,24 @@ export class LearningMode extends LitElement {
     return currentWord?.sentences[this.currentSentenceIndex] || null;
   }
 
+  private getPreviousSentence(): Sentence | null {
+    // Check if we can go back within the current word
+    if (this.currentSentenceIndex > 0) {
+      const currentWord = this.getCurrentWord();
+      return currentWord?.sentences[this.currentSentenceIndex - 1] || null;
+    }
+    
+    // Otherwise, check the previous word's last sentence
+    if (this.currentWordIndex > 0) {
+      const previousWord = this.wordsWithSentences[this.currentWordIndex - 1];
+      if (previousWord && previousWord.sentences.length > 0) {
+        return previousWord.sentences[previousWord.sentences.length - 1];
+      }
+    }
+    
+    return null;
+  }
+
   private getTotalSentences(): number {
     return this.wordsWithSentences.reduce((total, word) => total + word.sentences.length, 0);
   }
@@ -1758,6 +1776,7 @@ export class LearningMode extends LitElement {
 
   /**
    * Play audio immediately - don't wait for loading
+   * When called manually (e.g., via space key), plays only the current sentence
    */
   private async handlePlayCurrentAudio() {
     if (this.isLoading || this.error || this.showCompletion) return;
@@ -1769,13 +1788,20 @@ export class LearningMode extends LitElement {
     }
 
     try {
-      const audioPath = currentSentence.audioPath;
+      const currentAudioPath = currentSentence.audioPath;
 
-      // Stop any currently playing audio
+      // Stop any currently playing audio (both cached and IPC)
       this.stopCachedAudio();
+      try {
+        await window.electronAPI.audio.stopAudio();
+        // Small delay to ensure audio is fully stopped
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (err) {
+        // Ignore errors when stopping
+      }
 
-      // Try to use cached audio first (instant playback)
-      const cachedAudio = this.audioCache.get(audioPath);
+      // Now play current sentence audio
+      const cachedAudio = this.audioCache.get(currentAudioPath);
       if (cachedAudio) {
         // Use HTML5 Audio API to play from memory
         this.currentAudioElement = new Audio(cachedAudio);
@@ -1804,7 +1830,7 @@ export class LearningMode extends LitElement {
           console.warn('Error playing cached audio, falling back to IPC:', e);
           this.currentAudioElement = null;
           // Fall back to IPC playback
-          void window.electronAPI.audio.playAudio(audioPath)
+          void window.electronAPI.audio.playAudio(currentAudioPath)
             .then(() => void this.incrementStrengthForWord(currentWord.id))
             .catch(err => {
               console.error('Failed to play audio via IPC:', err);
@@ -1823,15 +1849,18 @@ export class LearningMode extends LitElement {
 
       // Not cached: Start IPC playback immediately (non-blocking, returns quickly)
       // IPC playback starts immediately and plays in background
-      void window.electronAPI.audio.playAudio(audioPath)
+      void window.electronAPI.audio.playAudio(currentAudioPath)
         .then(() => void this.incrementStrengthForWord(currentWord.id))
         .catch(err => {
-          console.error('Failed to play audio via IPC:', err);
+          // Don't log PLAYBACK_STOPPED errors
+          if (err?.code !== 'PLAYBACK_STOPPED') {
+            console.error('Failed to play audio via IPC:', err);
+          }
         });
       
       // Load audio into cache in background for next time (non-blocking)
-      if (!this.audioCache.has(audioPath)) {
-        void this.loadAudioIntoCache(audioPath).catch(err => {
+      if (!this.audioCache.has(currentAudioPath)) {
+        void this.loadAudioIntoCache(currentAudioPath).catch(err => {
           console.warn(`Failed to load audio into cache: ${err}`);
         });
       }
