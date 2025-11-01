@@ -132,6 +132,9 @@ export class LearningMode extends LitElement {
       // Try to restore learning session from session manager (after words are loaded)
       this.restoreSessionProgress();
       
+      // Restore playback speed for the new language
+      this.loadPlaybackSpeed();
+      
       // Refresh queue summary
       await this.refreshQueueSummary();
     } catch (error) {
@@ -474,6 +477,9 @@ export class LearningMode extends LitElement {
     
     // Try to restore learning session from session manager (after words are loaded)
     this.restoreSessionProgress();
+
+    // Load playback speed from session manager
+    this.loadPlaybackSpeed();
 
     this.startJobMonitoring();
   }
@@ -1015,9 +1021,22 @@ export class LearningMode extends LitElement {
   private setPlaybackSpeed(speed: number): void {
     this.playbackSpeed = speed;
     
+    // Save to session manager (per-language)
+    sessionManager.setPlaybackSpeed(speed);
+    
     // Update currently playing audio if any
     if (this.currentAudioElement) {
       this.currentAudioElement.playbackRate = speed;
+    }
+  }
+
+  private loadPlaybackSpeed(): void {
+    // Load playback speed from session manager (per-language)
+    this.playbackSpeed = sessionManager.getPlaybackSpeed();
+    
+    // Update currently playing audio if any
+    if (this.currentAudioElement) {
+      this.currentAudioElement.playbackRate = this.playbackSpeed;
     }
   }
 

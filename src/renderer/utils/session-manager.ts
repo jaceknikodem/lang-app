@@ -29,6 +29,7 @@ export interface SessionState {
   currentMode: 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'progress' | 'settings';
   selectedTopic?: string;
   quizDirection: 'foreign-to-english' | 'english-to-foreign';
+  playbackSpeed?: number;
   learningProgress?: {
     currentWordIndex: number;
     currentSentenceIndex: number;
@@ -433,6 +434,21 @@ export class SessionManager {
     this.saveSession({ selectedTopic: topic });
   }
 
+  /**
+   * Get playback speed for current language (defaults to 1.0 if not set)
+   */
+  getPlaybackSpeed(): number {
+    const session = this.getCurrentSession();
+    return session.playbackSpeed ?? 1.0;
+  }
+
+  /**
+   * Set playback speed for current language
+   */
+  setPlaybackSpeed(speed: number): void {
+    this.saveSession({ playbackSpeed: speed });
+  }
+
 
 
   /**
@@ -518,6 +534,7 @@ export class SessionManager {
       currentMode: sessionData.currentMode ?? 'topic-selection',
       quizDirection: sessionData.quizDirection ?? 'foreign-to-english',
       selectedTopic: sessionData.selectedTopic,
+      playbackSpeed: sessionData.playbackSpeed,
       learningProgress: sessionData.learningProgress,
       quizProgress: sessionData.quizProgress,
       learningSession: sessionData.learningSession,
