@@ -647,16 +647,10 @@ export class SentenceViewer extends LitElement {
 
   private async handleAutoPlay() {
     try {
-      // Stop any currently playing audio (non-blocking)
-      void window.electronAPI.audio.stopAudio().catch(() => {
-        // Ignore errors when stopping
-      });
-      
-      // Start playing immediately (don't wait for stopping or loading)
-      // Use minimal delay just to ensure previous audio stops
-      setTimeout(() => {
-        void this.handlePlayAudio();
-      }, 50);
+      // Parent component stops audio before navigation, but add a small delay
+      // to ensure the stop has fully completed before starting new playback
+      await new Promise(resolve => setTimeout(resolve, 100));
+      void this.handlePlayAudio();
     } catch (error) {
       console.warn('Failed to handle auto-play:', error);
     }
@@ -1578,10 +1572,8 @@ export class SentenceViewer extends LitElement {
     this.isPlayingAudio = true;
 
     try {
-      // Stop any currently playing audio (non-blocking)
-      void window.electronAPI.audio.stopAudio().catch(() => {
-        // Ignore errors when stopping
-      });
+      // Parent component stops audio immediately before navigation,
+      // so we can play directly without stopping again
       
       // Play audio and wait for completion (promise now resolves when audio finishes)
       try {

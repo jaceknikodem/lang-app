@@ -493,7 +493,7 @@ export class LearningMode extends LitElement {
     }
 
     // Clean up audio cache and playing audio
-    this.stopCachedAudio();
+    void this.stopCachedAudio();
     // Revoke all blob URLs to free memory
     this.blobUrlCache.forEach(blobUrl => URL.revokeObjectURL(blobUrl));
     this.audioCache.clear();
@@ -1219,7 +1219,7 @@ export class LearningMode extends LitElement {
 
   private handlePreviousSentence() {
     if (this.isLoading || this.error || this.showCompletion || this.isProcessing) return;
-    this.goToPreviousSentence();
+    void this.goToPreviousSentence();
   }
 
   private handleNextSentence(event?: CustomEvent) {
@@ -1402,9 +1402,12 @@ export class LearningMode extends LitElement {
     }
   }
 
-  private goToPreviousSentence() {
+  private async goToPreviousSentence() {
     // Clear auto-scroll timer when manually navigating
     this.clearAutoScrollTimer();
+    
+    // Stop any currently playing audio immediately before navigation
+    await this.stopCachedAudio();
     
     if (this.currentSentenceIndex > 0) {
       this.currentSentenceIndex--;
@@ -1421,6 +1424,9 @@ export class LearningMode extends LitElement {
   private async goToNextSentence() {
     // Clear auto-scroll timer when manually navigating
     this.clearAutoScrollTimer();
+    
+    // Stop any currently playing audio immediately before navigation
+    await this.stopCachedAudio();
     
     const currentWord = this.getCurrentWord();
     if (!currentWord) return;
@@ -1770,14 +1776,7 @@ export class LearningMode extends LitElement {
       const currentAudioPath = currentSentence.audioPath;
 
       // Stop any currently playing audio (both cached and IPC)
-      this.stopCachedAudio();
-      try {
-        await window.electronAPI.audio.stopAudio();
-        // Small delay to ensure audio is fully stopped
-        await new Promise(resolve => setTimeout(resolve, 100));
-      } catch (err) {
-        // Ignore errors when stopping
-      }
+      await this.stopCachedAudio();
 
       // Now play current sentence audio
       const cachedAudio = this.audioCache.get(currentAudioPath);
@@ -1851,7 +1850,7 @@ export class LearningMode extends LitElement {
   /**
    * Stop currently playing cached audio
    */
-  private stopCachedAudio(): void {
+  private async stopCachedAudio(): Promise<void> {
     // Clear auto-scroll timer when stopping audio
     this.clearAutoScrollTimer();
     
@@ -1860,10 +1859,14 @@ export class LearningMode extends LitElement {
       this.currentAudioElement.currentTime = 0;
       this.currentAudioElement = null;
     }
-    // Also stop any IPC audio playback
-    window.electronAPI.audio.stopAudio().catch(() => {
-      // Ignore errors when stopping
-    });
+    // Also stop any IPC audio playback and wait for it to complete
+    try {
+      await window.electronAPI.audio.stopAudio();
+      // Small delay to ensure audio fully stops before starting new one
+      await new Promise(resolve => setTimeout(resolve, 100));
+    } catch (err) {
+      // Ignore errors when stopping (might not be playing)
+    }
   }
 
   private handleSentenceAudioPlayed(event: CustomEvent<{ wordId?: number }>) {
