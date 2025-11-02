@@ -119,7 +119,7 @@ export class TTSAudioGenerator implements AudioGenerator {
         this.currentPlayPromise = { resolve, reject };
 
         // Resolve when audio finishes playing
-        this.currentAudioProcess.on('close', (code: number) => {
+        this.currentAudioProcess.on('close', (code: number | null) => {
           const process = this.currentAudioProcess;
           const promise = this.currentPlayPromise;
           this.currentAudioProcess = undefined;
@@ -128,7 +128,9 @@ export class TTSAudioGenerator implements AudioGenerator {
           // Add a small buffer delay to ensure audio has fully stopped playing
           // This prevents race conditions where the process exits slightly before audio finishes
           setTimeout(() => {
-            if (code === 0) {
+            // Treat exit code 0 (success) and null (signal termination, often normal) as success
+            // Null can occur when the process is terminated by a signal after successful completion
+            if (code === 0 || code === null) {
               // Audio played successfully
               if (promise) {
                 promise.resolve();

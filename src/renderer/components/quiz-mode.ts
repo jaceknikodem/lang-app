@@ -1412,8 +1412,13 @@ export class QuizMode extends LitElement {
     this.error = null;
 
     try {
-      // Use the weakest words loaded from database
-      const wordsToQuiz = this.selectedWords;
+      // Filter out known words - we don't want to quiz on words marked as known
+      const wordsToQuiz = this.selectedWords.filter(word => !word.known);
+
+      if (wordsToQuiz.length === 0) {
+        this.error = 'No words available for quiz. All selected words are marked as known.';
+        return;
+      }
 
       // Generate quiz questions from words
       const questions: QuizQuestion[] = [];
