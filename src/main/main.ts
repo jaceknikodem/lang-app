@@ -311,7 +311,11 @@ app.whenReady().then(async () => {
 
     // Set up scoring handlers (called separately since scoring service is optional during IPC setup)
     if (scoringService) {
+      console.log('Setting up scoring handlers...');
       setupScoringHandlers(scoringService);
+      console.log('Scoring handlers setup complete');
+    } else {
+      console.warn('Warning: scoringService is undefined, scoring handlers not registered');
     }
 
     wordGenerationRunner?.start();

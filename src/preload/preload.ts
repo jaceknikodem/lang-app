@@ -317,8 +317,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     // Scoring operations
     scoring: {
-      getScores: (language?: string) =>
-        ipcRenderer.invoke(IPC_CHANNELS.SCORING.GET_SCORES, language)
+      getNextMode: (options: { currentMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null; language: string | null; initialTakeover: boolean }) =>
+        ipcRenderer.invoke(IPC_CHANNELS.SCORING.GET_NEXT_MODE, options)
     }
   });
 
@@ -515,7 +515,7 @@ declare global {
         getFileStats: (filePath: string) => Promise<{ mtime: Date } | null>;
       };
       scoring: {
-        getScores: (language?: string) => Promise<any>;
+        getNextMode: (options: { currentMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null; language: string | null; initialTakeover: boolean }) => Promise<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null>;
       };
     };
   }

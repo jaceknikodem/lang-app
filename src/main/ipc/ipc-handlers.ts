@@ -1767,17 +1767,31 @@ function setupFlowHandlers(
  * Set up Scoring-related IPC handlers
  */
 export function setupScoringHandlers(scoringService: import('../scoring/scoring-service.js').ScoringService): void {
-  ipcMain.handle(IPC_CHANNELS.SCORING.GET_SCORES, async (event, language?: string) => {
+  ipcMain.handle(IPC_CHANNELS.SCORING.GET_NEXT_MODE, async (event, options: { currentMode: string | null; language: string | null; initialTakeover: boolean }) => {
     try {
-      if (language) {
-        const LanguageSchema = z.string().min(1).max(50);
-        LanguageSchema.parse(language);
+      // Validate options - all are required
+      if (options.currentMode !== null) {
+        const ModeSchema = z.enum(['topic-selection', 'learning', 'quiz', 'dialog', 'flow']);
+        ModeSchema.parse(options.currentMode);
       }
       
-      return await scoringService.calculateAllScores(language);
+      if (options.language !== null) {
+        const LanguageSchema = z.string().min(1).max(50);
+        LanguageSchema.parse(options.language);
+      }
+      
+      z.boolean().parse(options.initialTakeover);
+      
+      return await scoringService.getNextMode({
+        currentMode: options.currentMode as 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null,
+        language: options.language,
+        initialTakeover: options.initialTakeover
+      });
     } catch (error) {
-      console.error('Error getting mode scores:', error);
-      throw new Error(`Failed to get mode scores: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error getting next mode:', error);
+      throw new Error(`Failed to get next mode: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
+  
+  console.log(`Scoring IPC handler registered: ${IPC_CHANNELS.SCORING.GET_NEXT_MODE}`);
 }

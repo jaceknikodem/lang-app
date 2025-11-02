@@ -5,7 +5,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
-import { router } from '../utils/router.js';
+import { router, AppMode } from '../utils/router.js';
 import { Word, StudyStats } from '../../shared/types/core.js';
 import { useKeyboardBindings, CommonKeys } from '../utils/keyboard-manager.js';
 import { sessionManager } from '../utils/session-manager.js';
@@ -282,28 +282,48 @@ export class SessionComplete extends LitElement {
     this.isLoading = true;
 
     try {
-      switch (this.sessionSummary.nextRecommendation) {
-        case 'take-quiz':
-          router.goToQuiz(this.sessionSummary.completedWords);
-          break;
-        case 'continue-learning':
-          router.goToLearning(this.sessionSummary.completedWords);
-          break;
-        case 'practice-weak':
-          const weakWords = await window.electronAPI.quiz.getWeakestWords(10);
-          if (weakWords.length > 0) {
-            router.goToLearning(weakWords);
-          } else {
+      // Get current language
+      const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+      
+      // Get current mode based on session type
+      const currentMode: AppMode = this.sessionSummary.type === 'quiz' ? 'quiz' : 'learning';
+      
+      // Get next mode from scoring service (scores are calculated internally and never exposed)
+      const nextMode = await window.electronAPI.scoring.getNextMode({
+        currentMode: currentMode as 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null,
+        language: currentLanguage || null,
+        initialTakeover: false
+      });
+      
+      if (nextMode) {
+        // Navigate to the recommended mode
+        switch (nextMode) {
+          case 'topic-selection':
             router.goToTopicSelection();
-          }
-          break;
-        case 'new-topic':
-        default:
-          router.goToTopicSelection();
-          break;
+            break;
+          case 'learning':
+            router.goToLearning(this.sessionSummary.completedWords);
+            break;
+          case 'quiz':
+            router.goToQuiz(this.sessionSummary.completedWords);
+            break;
+          case 'dialog':
+            router.goToDialog();
+            break;
+          case 'flow':
+            router.goToFlow();
+            break;
+          default:
+            router.goToTopicSelection();
+            break;
+        }
+      } else {
+        // Fallback to topic selection if no valid mode found or navigation not recommended
+        router.goToTopicSelection();
       }
     } catch (error) {
-      console.error('Failed to execute recommended action:', error);
+      console.error('Failed to get next mode and navigate:', error);
+      // Fallback to topic selection on error
       router.goToTopicSelection();
     } finally {
       this.isLoading = false;

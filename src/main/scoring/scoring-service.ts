@@ -8,6 +8,7 @@ import { ModeScores } from '../../shared/types/core.js';
 
 export class ScoringService {
   private database: DatabaseLayer;
+  private previousMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null = null;
 
   constructor(database: DatabaseLayer) {
     this.database = database;
@@ -117,6 +118,101 @@ export class ScoringService {
       dialog,
       flow
     };
+  }
+
+  /**
+   * Get the next recommended mode based on scores with navigation decision logic
+   * Scores are calculated internally and never exposed to callers.
+   * 
+   * This method tracks the previous mode internally to prevent bouncing between modes.
+   * It excludes both the previous mode and current mode (if not initialTakeover) from selection,
+   * and only returns a mode if the highest scoring mode is at least 1 point better than the current mode
+   * (unless initialTakeover is true).
+   */
+  async getNextMode(options: {
+    currentMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null;
+    language: string | null;
+    initialTakeover: boolean;
+  }): Promise<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null> {
+    try {
+      const currentMode = options.currentMode ?? undefined;
+      const language = options.language ?? undefined;
+      const initialTakeover = options.initialTakeover;
+
+      // Calculate scores internally (never exposed)
+      const scores = await this.calculateAllScores(language);
+
+      // Map scores to modes
+      const modeScores = [
+        { mode: 'topic-selection' as const, score: scores.addWords },
+        { mode: 'learning' as const, score: scores.review },
+        { mode: 'quiz' as const, score: scores.quiz },
+        { mode: 'dialog' as const, score: scores.dialog },
+        { mode: 'flow' as const, score: scores.flow }
+      ];
+
+      // Get current mode score
+      const currentModeScore = currentMode 
+        ? (modeScores.find(m => m.mode === currentMode)?.score ?? 0)
+        : 0;
+
+      // Build exclude modes list - always exclude previous mode
+      // On initial takeover, only exclude previous mode (allow current mode)
+      // Otherwise, exclude both current mode and previous mode
+      const excludeModes: Array<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'> = [];
+      
+      if (this.previousMode) {
+        excludeModes.push(this.previousMode);
+      }
+      
+      if (!initialTakeover && currentMode) {
+        excludeModes.push(currentMode);
+      }
+
+      // Filter out excluded modes
+      const availableModes = modeScores.filter(m => !excludeModes.includes(m.mode));
+
+      if (availableModes.length === 0) {
+        return null;
+      }
+
+      // Sort by score descending and get the highest available mode
+      availableModes.sort((a, b) => b.score - a.score);
+      const highestMode = availableModes[0];
+
+      // Only proceed if score > 0
+      if (highestMode.score === 0) {
+        return null;
+      }
+
+      // Calculate score difference
+      const scoreDifference = highestMode.score - currentModeScore;
+
+      // Determine if navigation should happen
+      // On initial takeover, navigate if there's any mode with score > 0, regardless of current mode
+      // Otherwise, only navigate if highest mode score is at least 1 point higher than current mode score
+      const shouldNavigate = initialTakeover
+        ? (highestMode.score > 0 && highestMode.mode !== currentMode)
+        : (highestMode.score > 0 && scoreDifference >= 1);
+
+      // Only return the mode if navigation should happen
+      if (!shouldNavigate) {
+        return null;
+      }
+
+      // Update previous mode when navigation will happen
+      if (currentMode) {
+        this.previousMode = currentMode;
+      }
+
+      // Log all scores in one line for debugging
+      console.log(`Mode scores: topic-selection=${scores.addWords}, learning=${scores.review}, quiz=${scores.quiz}, dialog=${scores.dialog}, flow=${scores.flow} -> navigating to ${highestMode.mode}`);
+
+      return highestMode.mode;
+    } catch (error) {
+      console.error('Error getting next mode:', error);
+      return null;
+    }
   }
 
   /**

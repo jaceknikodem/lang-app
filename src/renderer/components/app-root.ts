@@ -62,7 +62,6 @@ export class AppRoot extends LitElement {
   private flowAudioElement: HTMLAudioElement | null = null;
   private flowAudioPath: string | null = null;
   private autopilotIntervalId: number | null = null;
-  private previousAutopilotMode: AppMode | null = null; // Track previous mode navigated to via autopilot
 
   static styles = [
     sharedStyles,
@@ -1094,108 +1093,38 @@ export class AppRoot extends LitElement {
     }
   }
 
-  /**
-   * Navigate to the highest-scoring mode based on scoring mechanism (without enabling autopilot)
-   */
-  private async navigateToHighestScoringMode() {
-    try {
-      const scores = await window.electronAPI.scoring.getScores(this.currentLanguage);
-      
-      // Log scores in one line
-      console.log(`Mode scores: topic-selection=${scores.addWords}, learning=${scores.review}, quiz=${scores.quiz}, dialog=${scores.dialog}, flow=${scores.flow}`);
-      
-      // Find mode with highest score
-      const modeScores = [
-        { mode: 'topic-selection' as AppMode, score: scores.addWords },
-        { mode: 'learning' as AppMode, score: scores.review },
-        { mode: 'quiz' as AppMode, score: scores.quiz },
-        { mode: 'dialog' as AppMode, score: scores.dialog },
-        { mode: 'flow' as AppMode, score: scores.flow }
-      ];
-      
-      // Sort by score descending and get the highest mode
-      modeScores.sort((a, b) => b.score - a.score);
-      const highestMode = modeScores[0];
-      
-      // Navigate to the highest-scoring mode if it has a score > 0
-      if (highestMode.score > 0) {
-        console.log(`Navigating to highest-scoring mode: ${highestMode.mode} (score: ${highestMode.score})`);
-        await this.handleNavigation(highestMode.mode);
-        
-        // If it's flow mode, also start playing
-        if (highestMode.mode === 'flow') {
-          setTimeout(async () => {
-            await this.handleFlowPlay();
-          }, 100);
-        }
-      } else {
-        // If all scores are 0, navigate to topic-selection
-        console.log('All mode scores are 0, navigating to topic-selection');
-        await this.handleNavigation('topic-selection');
-      }
-    } catch (error) {
-      console.error('Error determining highest-scoring mode:', error);
-      // On error, navigate to topic-selection
-      await this.handleNavigation('topic-selection');
-    }
-  }
-
   private async checkScoresAndNavigate(initialTakeover = false) {
     try {
-      const scores = await window.electronAPI.scoring.getScores(this.currentLanguage);
-      
-      // Log scores in one line
-      console.log(`Autopilot scores: topic-selection=${scores.addWords}, learning=${scores.review}, quiz=${scores.quiz}, dialog=${scores.dialog}, flow=${scores.flow}`);
-      
-      // Find mode with highest score
-      const modeScores = [
-        { mode: 'topic-selection' as AppMode, score: scores.addWords },
-        { mode: 'learning' as AppMode, score: scores.review },
-        { mode: 'quiz' as AppMode, score: scores.quiz },
-        { mode: 'dialog' as AppMode, score: scores.dialog },
-        { mode: 'flow' as AppMode, score: scores.flow }
-      ];
-      
-      // Get current mode and its score
+      // Get current mode - only pass valid scoring modes to the service
       const currentMode = router.getCurrentRoute().mode;
-      const currentModeScore = modeScores.find(m => m.mode === currentMode)?.score ?? 0;
+      const validScoringModes: Set<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'> = new Set(['topic-selection', 'learning', 'quiz', 'dialog', 'flow']);
+      const isScoringMode = (mode: AppMode): mode is 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' => {
+        return validScoringModes.has(mode as any);
+      };
       
-      // Filter out current mode and previous autopilot mode to prevent bouncing
-      // On initial takeover, allow navigating even if it's the current mode (if there's a better one)
-      const availableModes = initialTakeover 
-        ? modeScores.filter(m => m.mode !== this.previousAutopilotMode)
-        : modeScores.filter(m => 
-            m.mode !== currentMode && m.mode !== this.previousAutopilotMode
-          );
+      // Only pass current mode if it's a valid scoring mode
+      const currentScoringMode = isScoringMode(currentMode) ? currentMode : undefined;
       
-      if (availableModes.length === 0) {
-        // No valid modes to navigate to (all excluded)
+      // Get next mode from scoring service (scores are calculated internally and never exposed)
+      const nextMode = await window.electronAPI.scoring.getNextMode({
+        currentMode: currentScoringMode ?? null,
+        language: this.currentLanguage || null,
+        initialTakeover: initialTakeover ?? false
+      });
+      
+      // If no mode returned, navigation is not recommended
+      if (!nextMode) {
         return;
       }
       
-      // Sort by score descending and get the highest available mode
-      availableModes.sort((a, b) => b.score - a.score);
-      const highestMode = availableModes[0];
+      // Navigate to the recommended mode
+      await this.handleNavigation(nextMode);
       
-      // On initial takeover, navigate if there's any mode with score > 0, regardless of current mode
-      // Otherwise, only navigate if highest mode score is at least 1 point higher than current mode score
-      const scoreDifference = highestMode.score - currentModeScore;
-      const shouldNavigate = initialTakeover
-        ? (highestMode.score > 0 && highestMode.mode !== currentMode)
-        : (highestMode.score > 0 && scoreDifference >= 1);
-      
-      if (shouldNavigate) {
-        // Update previous autopilot mode before navigating
-        this.previousAutopilotMode = currentMode;
-        
-        await this.handleNavigation(highestMode.mode);
-        
-        // If it's flow mode, also start playing
-        if (highestMode.mode === 'flow') {
-          setTimeout(async () => {
-            await this.handleFlowPlay();
-          }, 100);
-        }
+      // If it's flow mode, also start playing
+      if (nextMode === 'flow') {
+        setTimeout(async () => {
+          await this.handleFlowPlay();
+        }, 100);
       }
     } catch (error) {
       console.error('Error checking scores for autopilot:', error);

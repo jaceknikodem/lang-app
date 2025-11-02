@@ -220,7 +220,7 @@ export interface IPCBridge {
 
   // Scoring operations
   scoring: {
-    getScores: (language?: string) => Promise<ModeScores>;
+    getNextMode: (options: { currentMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null; language: string | null; initialTakeover: boolean }) => Promise<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null>;
   };
 }
 
@@ -353,6 +353,6 @@ export const IPC_CHANNELS = {
     GET_FILE_STATS: 'flow:getFileStats'
   },
   SCORING: {
-    GET_SCORES: 'scoring:getScores'
+    GET_NEXT_MODE: 'scoring:getNextMode'
   }
 } as const;
