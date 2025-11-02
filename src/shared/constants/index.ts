@@ -53,3 +53,35 @@ export const UI_CONFIG = {
     STRONG: 75
   }
 } as const;
+
+export const STRENGTH_BOOST_CONFIG = {
+  /** Strength boost when a sentence is played */
+  SENTENCE_PLAYED: 1,
+  /** Strength boost thresholds for pronunciation quality */
+  PRONUNCIATION_BOOSTS: {
+    /** Minimum similarity score (0-1) to qualify for any boost */
+    MIN_SIMILARITY: 0.85,
+    /** Boost amount for good pronunciation (85-89%) */
+    GOOD: 2,
+    /** Boost amount for very good pronunciation (90-94%) */
+    VERY_GOOD: 3,
+    /** Boost amount for excellent pronunciation (95%+) */
+    EXCELLENT: 4
+  },
+  /**
+   * Calculate pronunciation boost based on similarity score (0-1)
+   * Returns boost amount: 2-4 based on how well the sentence was pronounced
+   */
+  getPronunciationBoost(similarity: number): number {
+    if (similarity < this.PRONUNCIATION_BOOSTS.MIN_SIMILARITY) {
+      return 0;
+    }
+    if (similarity >= 0.95) {
+      return this.PRONUNCIATION_BOOSTS.EXCELLENT; // 4 points
+    }
+    if (similarity >= 0.90) {
+      return this.PRONUNCIATION_BOOSTS.VERY_GOOD; // 3 points
+    }
+    return this.PRONUNCIATION_BOOSTS.GOOD; // 2 points
+  }
+};

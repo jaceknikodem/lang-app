@@ -8,6 +8,7 @@ import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
 import { Word, Sentence } from '../../shared/types/core.js';
+import { STRENGTH_BOOST_CONFIG } from '../../shared/constants/index.js';
 import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 import './sentence-viewer.js';
 import './session-complete.js';
@@ -2243,7 +2244,7 @@ export class LearningMode extends LitElement {
     this.wordsIncrementedThisSession.add(wordId);
 
     const currentStrength = typeof word.strength === 'number' ? word.strength : 0;
-    const newStrength = currentStrength + 1;
+    const newStrength = currentStrength + STRENGTH_BOOST_CONFIG.SENTENCE_PLAYED;
     this.applyStrengthUpdate(wordId, newStrength);
 
     try {

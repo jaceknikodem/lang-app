@@ -5,6 +5,7 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { Word, Sentence, QuizQuestion, QuizSession, QuizResult } from '../../shared/types/core.js';
+import { STRENGTH_BOOST_CONFIG } from '../../shared/constants/index.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { sessionManager, type QuizSessionState } from '../utils/session-manager.js';
@@ -2431,25 +2432,29 @@ export class QuizMode extends LitElement {
         }
       }
 
-      // If pronunciation score is >= 85%, increase word strength by 5 points
-      if (comparison.similarity >= 0.85 && this.currentQuestion) {
+      // Apply pronunciation boost based on similarity score (2-4 points depending on quality)
+      if (this.currentQuestion) {
         const word = this.currentQuestion.word;
-        const currentStrength = word.strength ?? 20;
-        const newStrength = Math.min(100, currentStrength + 5);
+        const boost = STRENGTH_BOOST_CONFIG.getPronunciationBoost(comparison.similarity);
         
-        try {
-          console.log(`[Pronunciation] Good pronunciation detected (${Math.round(comparison.similarity * 100)}%). Increasing word strength: ${currentStrength} → ${newStrength}`);
-          await window.electronAPI.database.updateWordStrength(word.id, newStrength);
-          await window.electronAPI.database.updateLastStudied(word.id);
+        if (boost > 0) {
+          const currentStrength = word.strength ?? 20;
+          const newStrength = Math.min(100, currentStrength + boost);
           
-          // Refresh the word data to get updated strength
-          const updatedWord = await window.electronAPI.database.getWordById(word.id);
-          if (updatedWord) {
-            this.currentQuestion.word = updatedWord;
-            this.requestUpdate(); // Trigger UI update to show new strength
+          try {
+            console.log(`[Pronunciation] Good pronunciation detected (${Math.round(comparison.similarity * 100)}%). Increasing word strength: ${currentStrength} → ${newStrength} (+${boost})`);
+            await window.electronAPI.database.updateWordStrength(word.id, newStrength);
+            await window.electronAPI.database.updateLastStudied(word.id);
+            
+            // Refresh the word data to get updated strength
+            const updatedWord = await window.electronAPI.database.getWordById(word.id);
+            if (updatedWord) {
+              this.currentQuestion.word = updatedWord;
+              this.requestUpdate(); // Trigger UI update to show new strength
+            }
+          } catch (error) {
+            console.error('Failed to update word strength after good pronunciation:', error);
           }
-        } catch (error) {
-          console.error('Failed to update word strength after good pronunciation:', error);
         }
       }
 
