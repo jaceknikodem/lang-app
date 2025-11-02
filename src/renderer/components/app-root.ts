@@ -877,10 +877,13 @@ export class AppRoot extends LitElement {
         throw new Error('Audio path not available');
       }
 
+      console.log(`[Flow] Loading audio file: ${this.flowAudioPath}`);
       const audioData = await window.electronAPI.audio.loadAudioBase64(this.flowAudioPath);
       if (!audioData) {
-        throw new Error('Failed to load audio file');
+        throw new Error(`Failed to load audio file: ${this.flowAudioPath}`);
       }
+
+      console.log(`[Flow] Audio loaded: ${audioData.data.byteLength} bytes, MIME type: ${audioData.mimeType}`);
 
       // Create blob URL
       const blob = new Blob([audioData.data], { type: audioData.mimeType });
@@ -895,7 +898,11 @@ export class AppRoot extends LitElement {
       });
 
       this.flowAudioElement.addEventListener('error', (e) => {
-        console.error('Error playing flow audio:', e);
+        const audioEl = e.target as HTMLAudioElement;
+        const errorCode = audioEl?.error?.code;
+        const errorMessage = audioEl?.error?.message || 'Unknown error';
+        console.error(`[Flow] Error playing audio: code=${errorCode}, message=${errorMessage}, path=${this.flowAudioPath}`, e);
+        console.error(`[Flow] Audio element state: src=${audioEl?.src}, readyState=${audioEl?.readyState}, networkState=${audioEl?.networkState}`);
         this.handleFlowStop();
       });
 

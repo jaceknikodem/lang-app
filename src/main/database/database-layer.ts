@@ -1356,12 +1356,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const currentLanguage = language || await this.getCurrentLanguage();
       
       // Get all sentences for the language that have audio
-      // Join with words through sentence_words junction table to filter by language
+      // Use sentences.word_id directly instead of requiring sentence_words entries
       const stmt = db.prepare(`
-        SELECT DISTINCT s.* 
+        SELECT s.* 
         FROM sentences s
-        INNER JOIN sentence_words sw ON s.id = sw.sentence_id
-        INNER JOIN words w ON sw.word_id = w.id
+        INNER JOIN words w ON s.word_id = w.id
         WHERE w.language = ?
           AND s.audio_path IS NOT NULL
           AND TRIM(s.audio_path) != ''
@@ -1380,13 +1379,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       // For each sentence, get connected words and audio paths
       for (const sentence of sentences) {
-        // Get all words connected to this sentence
+        // Get all words connected to this sentence from sentence_words (if any)
         const wordIdsStmt = db.prepare(`
           SELECT word_id FROM sentence_words WHERE sentence_id = ?
         `);
         const wordIds = wordIdsStmt.all(sentence.id) as Array<{ word_id: number }>;
         
         const words: Word[] = [];
+        const wordIdSet = new Set<number>();
+        
+        // Add words from sentence_words junction table
         if (wordIds.length > 0) {
           const placeholders = wordIds.map(() => '?').join(',');
           const wordsStmt = db.prepare(`
@@ -1394,7 +1396,19 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
             WHERE id IN (${placeholders}) AND language = ?
           `);
           const wordRows = wordsStmt.all(...wordIds.map(w => w.word_id), currentLanguage) as any[];
-          words.push(...wordRows.map(row => this.mapRowToWord(row)));
+          for (const row of wordRows) {
+            const word = this.mapRowToWord(row);
+            words.push(word);
+            wordIdSet.add(word.id);
+          }
+        }
+        
+        // Always include the primary word (sentence.word_id) if it's in the correct language and not already included
+        if (sentence.wordId && !wordIdSet.has(sentence.wordId)) {
+          const primaryWord = await this.getWordById(sentence.wordId);
+          if (primaryWord && primaryWord.language === currentLanguage) {
+            words.push(primaryWord);
+          }
         }
         
         // Check for before sentence audio (pattern: <lang>/word_<word_id>/before_sentence_<sentence_id>.<ext>)

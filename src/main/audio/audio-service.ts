@@ -351,7 +351,7 @@ export class AudioService {
 
         await execFileAsync('ffmpeg', [
           '-f', 'lavfi',
-          '-i', 'anullsrc=r=16000:cl=mono',
+          '-i', 'anullsrc=r=44100:cl=stereo',
           '-t', '2',
           '-acodec', 'pcm_s16le',
           '-y',
@@ -367,6 +367,34 @@ export class AudioService {
 
       // Create output file path
       const outputPath = join(audioDir, 'flow_stitched.mp3');
+
+      // Check if output file exists and is recent (within 2 hours) to use cache
+      const { stat, unlink } = require('fs').promises;
+      let usingCache = false;
+      try {
+        const stats = await stat(outputPath);
+        const fileAge = Date.now() - stats.mtime.getTime();
+        const twoHours = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+        if (fileAge < twoHours) {
+          usingCache = true;
+          console.log(`[Flow] Using cached stitched audio file (age: ${Math.round(fileAge / 1000 / 60)} minutes)`);
+          return AudioService.getRelativeAudioPath(outputPath);
+        } else {
+          // Cache expired, delete old file to regenerate
+          console.log(`[Flow] Cache expired (age: ${Math.round(fileAge / 1000 / 60)} minutes), will regenerate`);
+          try {
+            await unlink(outputPath);
+          } catch (e) {
+            // Ignore deletion errors
+          }
+        }
+      } catch (error) {
+        // File doesn't exist, need to create it
+      }
+
+      if (!usingCache) {
+        console.log(`[Flow] Creating new stitched audio file with ${existingPaths.length} audio files`);
+      }
 
       // Build list of audio files to concatenate (with silence between each)
       const inputList: string[] = [];
@@ -385,18 +413,25 @@ export class AudioService {
       writeFileSync(fileListPath, fileListContent);
 
       try {
-        // Use ffmpeg concat demuxer to concatenate files
+        // Use ffmpeg concat demuxer to concatenate files with re-encoding
+        // Force resample all inputs to 44.1kHz stereo before encoding to avoid midstream changes
+        console.log(`[Flow] Stitching audio files with re-encoding (this may take a moment)...`);
         await execFileAsync('ffmpeg', [
           '-f', 'concat',
           '-safe', '0',
           '-i', fileListPath,
-          '-c', 'copy',
+          '-af', 'aresample=44100:resampler=soxr:ochl=stereo', // Force resample to 44.1kHz stereo
+          '-c:a', 'libmp3lame', // Encode to MP3
+          '-b:a', '128k', // Bitrate
+          '-ar', '44100', // Sample rate (should match aresample output)
+          '-ac', '2', // Stereo (should match aresample output)
           '-y',
           outputPath
         ], {
-          timeout: 60000, // 60 seconds timeout for long audio
+          timeout: 120000, // 120 seconds timeout for long audio (re-encoding takes longer)
           maxBuffer: 10 * 1024 * 1024 // 10MB buffer
         });
+        console.log(`[Flow] Audio stitching complete: ${outputPath}`);
 
         // Clean up temporary file list
         try {
@@ -453,15 +488,18 @@ export class AudioService {
   async loadAudioBase64(audioPath: string): Promise<{ data: ArrayBuffer; mimeType: string } | null> {
     try {
       if (!audioPath || typeof audioPath !== 'string') {
+        console.warn(`[AudioService] Invalid audio path: ${audioPath}`);
         return null;
       }
 
       // Resolve relative path to absolute path
       const absolutePath = AudioService.resolveAudioPath(audioPath);
+      console.log(`[AudioService] Loading audio: ${audioPath} -> ${absolutePath}`);
 
       // Optimized: Read file directly - if it doesn't exist, readFile will throw
       // This eliminates redundant file existence check (one less async I/O)
       const fileBuffer = await fsPromises.readFile(absolutePath);
+      console.log(`[AudioService] Audio file loaded: ${fileBuffer.length} bytes from ${absolutePath}`);
       
       // Determine MIME type from file extension
       const ext = extname(absolutePath).toLowerCase();
@@ -493,7 +531,7 @@ export class AudioService {
       };
     } catch (error) {
       // If file doesn't exist, readFile throws - catch and return null
-      console.warn(`Error loading audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error(`[AudioService] Error loading audio file ${audioPath}:`, error);
       return null;
     }
   }

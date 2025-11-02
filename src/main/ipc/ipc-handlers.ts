@@ -1692,6 +1692,8 @@ function setupFlowHandlers(
       const AudioPathsSchema = z.array(z.string().min(1).max(500));
       const validatedPaths = AudioPathsSchema.parse(audioPaths);
       
+      console.log(`[Flow] Stitching ${validatedPaths.length} audio files`);
+      
       const stitchedPath = await audioService.stitchAudio(validatedPaths);
       
       if (!stitchedPath) {
