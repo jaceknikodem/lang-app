@@ -78,6 +78,9 @@ export class LearningMode extends LitElement {
   @state()
   private playbackSpeed: number = 1.0; // 0.9x, 1x, 1.1x, 1.2x
 
+  @state()
+  private currentPlayingAudio: 'before' | 'main' | null = null;
+
   private sessionStartTime = Date.now();
   private keyboardUnsubscribe?: () => void;
   private lastRecordedSentenceId: number | null = null;
@@ -100,6 +103,7 @@ export class LearningMode extends LitElement {
   private blobUrlCache: Map<string, string> = new Map(); // audioPath -> blob URL (for cleanup)
   // HTML5 Audio instances for playing cached audio
   private currentAudioElement: HTMLAudioElement | null = null;
+  private beforeAudioElement: HTMLAudioElement | null = null;
   private handleExternalLanguageChange = async (event: Event) => {
     const detail = (event as CustomEvent<{ language?: string }>).detail;
     const newLanguage = detail?.language;
@@ -1934,39 +1938,55 @@ export class LearningMode extends LitElement {
         });
       }
 
+      // Set state to indicate before-sentence audio is playing
+      this.currentPlayingAudio = 'before';
+
       // Play before sentence audio
       const cachedBeforeAudio = this.audioCache.get(beforeSentenceAudioPath);
       if (cachedBeforeAudio) {
         // Use HTML5 Audio API to play from memory
-        const beforeAudioElement = new Audio(cachedBeforeAudio);
-        beforeAudioElement.playbackRate = this.playbackSpeed;
+        this.beforeAudioElement = new Audio(cachedBeforeAudio);
+        this.beforeAudioElement.playbackRate = this.playbackSpeed;
 
         // Wait for before sentence audio to finish
         await new Promise<void>((resolve, reject) => {
-          beforeAudioElement.addEventListener('ended', () => {
+          this.beforeAudioElement!.addEventListener('ended', () => {
+            this.beforeAudioElement = null;
+            this.currentPlayingAudio = null;
             resolve();
           });
-          beforeAudioElement.addEventListener('error', (e) => {
+          this.beforeAudioElement!.addEventListener('error', (e) => {
             console.warn('Error playing before sentence cached audio, falling back to IPC:', e);
+            this.beforeAudioElement = null;
             // Fall back to IPC playback
             window.electronAPI.audio.playAudio(beforeSentenceAudioPath)
-              .then(() => resolve())
+              .then(() => {
+                this.currentPlayingAudio = null;
+                resolve();
+              })
               .catch(reject);
           });
-          beforeAudioElement.play().catch(playError => {
+          this.beforeAudioElement!.play().catch(playError => {
             console.warn('Failed to play before sentence cached audio, falling back to IPC:', playError);
+            this.beforeAudioElement = null;
             // Fall back to IPC playback
             window.electronAPI.audio.playAudio(beforeSentenceAudioPath)
-              .then(() => resolve())
+              .then(() => {
+                this.currentPlayingAudio = null;
+                resolve();
+              })
               .catch(reject);
           });
         });
       } else {
         // Not cached: Use IPC playback
+        // Note: For IPC playback, we can't track exactly when it ends, so we'll assume it's done after a delay
         await window.electronAPI.audio.playAudio(beforeSentenceAudioPath);
+        this.currentPlayingAudio = null;
       }
     } catch (error) {
       console.warn('Failed to play before sentence audio:', error);
+      this.currentPlayingAudio = null;
       // Continue with main sentence audio even if before sentence audio fails
     }
   }
@@ -1994,6 +2014,9 @@ export class LearningMode extends LitElement {
       await this.playBeforeSentenceAudio(currentSentence);
 
       // Now play current sentence audio
+      // Set state to indicate main sentence audio is playing
+      this.currentPlayingAudio = 'main';
+
       const cachedAudio = this.audioCache.get(currentAudioPath);
       if (cachedAudio) {
         // Use HTML5 Audio API to play from memory
@@ -2005,6 +2028,7 @@ export class LearningMode extends LitElement {
         // Handle errors and cleanup
         this.currentAudioElement.addEventListener('ended', () => {
           this.currentAudioElement = null;
+          this.currentPlayingAudio = null;
           // Increment strength when audio finishes playing
           void this.incrementStrengthForWord(currentWord.id);
           // Track sentence play count
@@ -2031,6 +2055,7 @@ export class LearningMode extends LitElement {
           // Fall back to IPC playback
           void window.electronAPI.audio.playAudio(currentAudioPath)
             .then(() => {
+              this.currentPlayingAudio = null;
               void this.incrementStrengthForWord(currentWord.id);
               // Track sentence play count
               if (currentSentence.id) {
@@ -2040,6 +2065,7 @@ export class LearningMode extends LitElement {
               }
             })
             .catch(err => {
+              this.currentPlayingAudio = null;
               console.error('Failed to play audio via IPC:', err);
             });
         });
@@ -2050,14 +2076,17 @@ export class LearningMode extends LitElement {
         } catch (playError) {
           console.warn('Failed to play cached audio:', playError);
           this.currentAudioElement = null;
+          this.currentPlayingAudio = null;
           // Fall through to IPC playback
         }
       }
 
       // Not cached: Start IPC playback immediately (non-blocking, returns quickly)
       // IPC playback starts immediately and plays in background
+      // Note: For IPC playback, we can't track exactly when it ends, so we'll reset state after a delay
       void window.electronAPI.audio.playAudio(currentAudioPath)
         .then(() => {
+          this.currentPlayingAudio = null;
           void this.incrementStrengthForWord(currentWord.id);
           // Track sentence play count
           if (currentSentence.id) {
@@ -2067,6 +2096,7 @@ export class LearningMode extends LitElement {
           }
         })
         .catch(err => {
+          this.currentPlayingAudio = null;
           // Don't log PLAYBACK_STOPPED errors
           if (err?.code !== 'PLAYBACK_STOPPED') {
             console.error('Failed to play audio via IPC:', err);
@@ -2091,11 +2121,21 @@ export class LearningMode extends LitElement {
     // Clear auto-scroll timer when stopping audio
     this.clearAutoScrollTimer();
     
+    if (this.beforeAudioElement) {
+      this.beforeAudioElement.pause();
+      this.beforeAudioElement.currentTime = 0;
+      this.beforeAudioElement = null;
+    }
+    
     if (this.currentAudioElement) {
       this.currentAudioElement.pause();
       this.currentAudioElement.currentTime = 0;
       this.currentAudioElement = null;
     }
+    
+    // Reset audio playing state
+    this.currentPlayingAudio = null;
+    
     // Also stop any IPC audio playback and wait for it to complete
     try {
       await window.electronAPI.audio.stopAudio();
@@ -2476,6 +2516,7 @@ export class LearningMode extends LitElement {
           .isFirstSentence=${this.isFirstSentence()}
           .isLastSentence=${this.isLastSentence()}
           .isProcessing=${this.isProcessing}
+          .currentPlayingAudio=${this.currentPlayingAudio}
           @word-clicked=${this.handleWordClicked}
           @mark-word-known=${this.handleMarkWordKnown}
           @mark-word-ignored=${this.handleMarkWordIgnored}

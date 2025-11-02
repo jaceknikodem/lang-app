@@ -34,8 +34,14 @@ export class SentenceViewer extends LitElement {
   @property({ type: Boolean })
   isProcessing = false;
 
+  @property({ type: String })
+  currentPlayingAudio: 'before' | 'main' | null = null;
+
   @state()
   private isPlayingAudio = false;
+  
+  @state()
+  private localPlayingAudio: 'before' | 'main' | null = null;
 
   @state()
   private isRegeneratingAudio = false;
@@ -212,6 +218,11 @@ export class SentenceViewer extends LitElement {
         background: var(--background-secondary);
         border-radius: var(--border-radius-small);
         border-left: 2px solid var(--primary-color);
+        transition: all 0.3s ease;
+      }
+
+      .context-section.playing {
+        background: #e3f2fd;
       }
 
       .context-label {
@@ -245,6 +256,13 @@ export class SentenceViewer extends LitElement {
         word-wrap: break-word;
         overflow-wrap: break-word;
         hyphens: auto;
+        padding: var(--spacing-sm);
+        border-radius: var(--border-radius-small);
+        transition: all 0.3s ease;
+      }
+
+      .sentence-text.playing {
+        background: #e3f2fd;
       }
 
       .sentence-translation {
@@ -535,6 +553,14 @@ export class SentenceViewer extends LitElement {
   };
 
   updated(changedProperties: Map<string, any>) {
+    // Sync currentPlayingAudio from parent if provided
+    // Use parent state if available, otherwise use local state
+    if (changedProperties.has('currentPlayingAudio')) {
+      // Always sync to parent state when it changes
+      // If parent has a value, use it; if parent clears it, clear local too
+      this.localPlayingAudio = this.currentPlayingAudio;
+    }
+    
     // Only re-parse if sentence actually changed (different ID) or allWords meaningfully changed
     const sentenceChanged = changedProperties.has('sentence');
     const allWordsChanged = changedProperties.has('allWords');
@@ -1580,17 +1606,35 @@ export class SentenceViewer extends LitElement {
         try {
           const beforeSentenceAudioPath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(this.sentence.id);
           if (beforeSentenceAudioPath) {
+            // Set local state to indicate before-sentence audio is playing
+            this.localPlayingAudio = 'before';
+            this.requestUpdate();
+            
             await window.electronAPI.audio.playAudio(beforeSentenceAudioPath);
+            
+            // Reset state after before-sentence audio finishes
+            this.localPlayingAudio = null;
+            this.requestUpdate();
           }
         } catch (error) {
           console.warn('Failed to play before sentence audio:', error);
+          this.localPlayingAudio = null;
+          this.requestUpdate();
           // Continue with main sentence audio even if before sentence audio fails
         }
       }
       
+      // Set local state to indicate main sentence audio is playing
+      this.localPlayingAudio = 'main';
+      this.requestUpdate();
+      
       // Play audio and wait for completion (promise now resolves when audio finishes)
       try {
         await window.electronAPI.audio.playAudio(this.sentence.audioPath);
+        
+        // Reset state after audio finishes
+        this.localPlayingAudio = null;
+        this.requestUpdate();
         
         // Audio finished playing successfully
         this.dispatchEvent(new CustomEvent('sentence-audio-played', {
@@ -1612,6 +1656,10 @@ export class SentenceViewer extends LitElement {
           composed: true
         }));
       } catch (err: any) {
+        // Reset state on error
+        this.localPlayingAudio = null;
+        this.requestUpdate();
+        
         // If error is because audio was stopped, don't log as error
         if (err?.code === 'PLAYBACK_STOPPED') {
           // Audio was intentionally stopped, ignore
@@ -1620,6 +1668,8 @@ export class SentenceViewer extends LitElement {
         console.error('Failed to play audio:', err);
       }
     } catch (error) {
+      this.localPlayingAudio = null;
+      this.requestUpdate();
       console.error('Failed to play audio:', error);
     } finally {
       // Reset after a short delay to prevent rapid clicking
@@ -1854,13 +1904,13 @@ export class SentenceViewer extends LitElement {
 
         <div class="sentence-content">
           ${this.sentence.contextBefore ? html`
-            <div class="context-section">
+            <div class="context-section ${this.localPlayingAudio === 'before' ? 'playing' : ''}">
               <div class="context-text">${this.sentence.contextBefore}</div>
               <div class="context-translation">${this.sentence.contextBeforeTranslation}</div>
             </div>
           ` : ''}
           
-          <div class="sentence-text">
+          <div class="sentence-text ${this.localPlayingAudio === 'main' ? 'playing' : ''}">
             ${this.parsedWords.map(wordInfo => {
               // For whitespace and punctuation, render without word styling
               if (/^\s+$/.test(wordInfo.text) || /^[.,!?;:]+$/.test(wordInfo.text)) {

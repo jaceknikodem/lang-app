@@ -69,7 +69,6 @@ export class AudioService {
 
       const apiKey = await database.getSetting('elevenlabs_api_key');
       if (apiKey && apiKey.trim()) {
-        console.log('ElevenLabs API key found, switching to ElevenLabs TTS');
         const config = {
           elevenLabsApiKey: apiKey,
           elevenLabsModel: model || 'eleven_flash_v2_5'
