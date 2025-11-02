@@ -31,9 +31,7 @@
   },
   "keywords": [
     "language-learning",
-    "electron",
-    "offline",
-    "privacy"
+    "offline"
   ],
   "author": "Local Language Learning",
   "license": "MIT",
@@ -108,14 +106,6 @@
         {
           "target": "dmg",
           "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64",
             "arm64"
           ]
         }
@@ -123,10 +113,7 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
-      "notarize": {
-        "teamId": "${APPLE_TEAM_ID}"
-      }
+      "entitlementsInherit": "build/entitlements.mac.plist"
     },
     "win": {
       "icon": "build/icon.ico",
@@ -181,8 +168,8 @@
       "title": "Local Language Learning ${version}",
       "backgroundColor": "#ffffff",
       "window": {
-        "width": 540,
-        "height": 380
+        "width": 800,
+        "height": 600
       },
       "contents": [
         {

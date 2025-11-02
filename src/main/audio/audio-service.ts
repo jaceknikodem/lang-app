@@ -529,7 +529,10 @@ export class AudioService {
       };
     } catch (error) {
       // If file doesn't exist, readFile throws - catch and return null
-      console.error(`[AudioService] Error loading audio file ${audioPath}:`, error);
+      // Only log non-file-not-found errors to avoid noise from expected missing files
+      if (error instanceof Error && 'code' in error && (error as any).code !== 'ENOENT') {
+        console.error(`[AudioService] Error loading audio file ${audioPath}:`, error);
+      }
       return null;
     }
   }
