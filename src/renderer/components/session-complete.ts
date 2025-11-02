@@ -304,8 +304,8 @@ export class SessionComplete extends LitElement {
     }
   }
 
-  private handleViewProgress() {
-    router.goToProgress();
+  private handleTakeQuiz() {
+    router.goToQuiz(this.sessionSummary.completedWords, 'foreign-to-english');
   }
 
   private handleNewSession() {
@@ -396,9 +396,10 @@ export class SessionComplete extends LitElement {
             ${!isQuiz ? html`
               <button
                 class="action-button"
-                @click=${this.handleViewProgress}
+                @click=${this.handleTakeQuiz}
+                ?disabled=${this.isLoading}
               >
-                View progress
+                Take Quiz
               </button>
             ` : ''}
           </div>

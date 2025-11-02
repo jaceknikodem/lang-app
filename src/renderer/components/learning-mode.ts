@@ -603,6 +603,7 @@ export class LearningMode extends LitElement {
 
       const activeSession = sessionManager.getLearningSession();
       if (activeSession?.wordIds?.length) {
+        console.log(`Found persisted learning session with ${activeSession.wordIds.length} word IDs: ${JSON.stringify(activeSession.wordIds)}`);
         const orderedWordIds = activeSession.wordIds;
         const loadedWords: Word[] = [];
 
@@ -611,12 +612,17 @@ export class LearningMode extends LitElement {
           // Filter by current language to prevent loading words from wrong language
           if (word && (!this.currentLanguage || word.language === this.currentLanguage)) {
             loadedWords.push(word);
+            console.log(`  - Loaded word ${wordId} ("${word.word}") - language: ${word.language}, current: ${this.currentLanguage}`);
+          } else if (word) {
+            console.log(`  - Skipped word ${wordId} ("${word.word}") - language mismatch: ${word.language} vs ${this.currentLanguage}`);
+          } else {
+            console.log(`  - Word ${wordId} not found in database`);
           }
         }
 
         if (loadedWords.length > 0) {
           this.selectedWords = loadedWords;
-          console.log('Loaded words from persisted learning session:', this.selectedWords.length);
+          console.log(`Loaded ${this.selectedWords.length} words from persisted learning session: ${this.selectedWords.map(w => `${w.id}("${w.word}")`).join(', ')}`);
           return;
         }
       }
@@ -624,14 +630,17 @@ export class LearningMode extends LitElement {
       // Fallback: Get words that have sentences available for learning, ordered by strength (weakest first)
       // This handles cases like "Continue Learning" or "Practice Weak Words"
       const wordsOrdered = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(true, false, this.currentLanguage ?? undefined);
+      console.log(`getWordsWithSentencesOrderedByStrength returned ${wordsOrdered.length} words for language: ${this.currentLanguage}`);
       const sessionWordIds: number[] = [];
       const selectableWords: Word[] = [];
 
       for (const word of wordsOrdered) {
         const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
         if (!sentences.length) {
+          console.log(`Word ${word.id} ("${word.word}") has no sentences - skipping`);
           continue;
         }
+        console.log(`Word ${word.id} ("${word.word}") has ${sentences.length} sentences - adding to session`);
 
         selectableWords.push(word);
         sessionWordIds.push(word.id);
@@ -645,7 +654,7 @@ export class LearningMode extends LitElement {
       if (sessionWordIds.length) {
         sessionManager.startNewLearningSession(sessionWordIds, Math.min(20, sessionWordIds.length));
       }
-      console.log('Loaded words with sentences for learning session:', this.selectedWords.length);
+      console.log(`Loaded ${this.selectedWords.length} words with sentences for learning session: ${this.selectedWords.map(w => `${w.id}("${w.word}")`).join(', ')}`);
     } catch (error) {
       console.error('Failed to load words:', error);
       this.error = 'Failed to load words from database.';
@@ -692,6 +701,7 @@ export class LearningMode extends LitElement {
       if (hasCachedIds && activeSession.wordIds.length === this.selectedWords.length && activeSession.sentenceIds && activeSession.audioPaths) {
         // Fast path: Use cached IDs for batch loading
         console.log('Using cached IDs for fast batch loading');
+        console.log(`Session wordIds: ${JSON.stringify(activeSession.wordIds)}, Selected words: ${this.selectedWords.map(w => w.id).join(',')}`);
         
         const wordIds = activeSession.wordIds;
         const sentenceIds = activeSession.sentenceIds;
@@ -718,12 +728,16 @@ export class LearningMode extends LitElement {
 
         // Build wordId -> sentenceId map from loaded sentences
         const sentenceMapByWordId = new Map<number, Sentence[]>();
+        console.log(`Loaded ${loadedSentences.length} sentences from cached session`);
         for (const sentence of loadedSentences) {
           if (!sentenceMapByWordId.has(sentence.wordId)) {
             sentenceMapByWordId.set(sentence.wordId, []);
           }
           sentenceMapByWordId.get(sentence.wordId)!.push(sentence);
         }
+        console.log(`Sentence map by wordId:`, Array.from(sentenceMapByWordId.entries()).map(([wordId, sents]) => 
+          `${wordId}: ${sents.length} sentences`
+        ).join(', '));
 
         // Reconstruct wordsWithSentences array matching wordId -> sentenceIds
         // Filter by current language to prevent loading words from wrong language
@@ -731,6 +745,7 @@ export class LearningMode extends LitElement {
           .filter((word: Word) => !this.currentLanguage || word.language === this.currentLanguage)
           .map((word: Word) => {
             const sentences = sentenceMapByWordId.get(word.id) || [];
+            console.log(`Word ${word.id} ("${word.word}"): ${sentences.length} sentences from cached session`);
             // Apply filtering logic (prepareSentencesForWord)
             const limitedSentences = this.prepareSentencesForWord(word, sentences);
             return {
@@ -738,7 +753,12 @@ export class LearningMode extends LitElement {
               sentences: limitedSentences
             };
           })
-          .filter((w: WordWithSentences) => w.sentences.length > 0);
+          .filter((w: WordWithSentences) => {
+            if (w.sentences.length === 0) {
+              console.warn(`Word ${w.id} ("${w.word}") filtered out: no sentences after prepareSentencesForWord`);
+            }
+            return w.sentences.length > 0;
+          });
 
         // Track audio loading completion (non-blocking)
         void Promise.all(audioLoadPromises).then(() => {
@@ -1520,8 +1540,9 @@ export class LearningMode extends LitElement {
       // Record study session in database
       await window.electronAPI.database.recordStudySession(this.selectedWords.length);
 
-      // Mark the learning session as complete but keep history until a new session starts
-      sessionManager.markLearningSessionComplete();
+      // Clear the learning session so next time it will load fresh words from database
+      sessionManager.clearLearningSession();
+      console.log('Learning session cleared after completion');
 
     } catch (error) {
       console.error('Failed to record learning session:', error);
