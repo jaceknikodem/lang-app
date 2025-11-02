@@ -24,7 +24,7 @@ class MockOllamaClient {
         return words;
     }
 
-    async generateSentences(word: string, language: string, count: number, useContextSentences?: boolean, topic?: string): Promise<any[]> {
+    async generateSentences(word: string, language: string, count: number, topic?: string): Promise<any[]> {
         return [];
     }
 

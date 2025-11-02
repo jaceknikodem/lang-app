@@ -279,10 +279,10 @@ export class OllamaClient implements LLMClient {
     }
   }
 
-  async generateSentences(word: string, language: string, count: number, useContextSentences: boolean = false, topic?: string): Promise<GeneratedSentence[]> {
+  async generateSentences(word: string, language: string, count: number, topic?: string): Promise<GeneratedSentence[]> {
     // Get known words to include in sentences when possible
     const knownWords = await this.getKnownWords(language);
-    const prompt = this.createSentencesPrompt(word, language, count, knownWords, useContextSentences, topic);
+    const prompt = this.createSentencesPrompt(word, language, count, knownWords, topic);
 
     try {
       const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
@@ -462,27 +462,24 @@ export class OllamaClient implements LLMClient {
   }
 
   private createTopicWordsPrompt(topic: string, language: string, count: number, existingWords: string[] = []): string {
-    const examples = Array.from({ length: count }, (_, i) =>
-      `  {"word": "${language.toLowerCase()}_word${i + 1}", "translation": "english_translation${i + 1}"}`
-    ).join(',\n');
-
-    const baseInstructions = `CRITICAL: You must return exactly ${count} words in a JSON array. No more, no less.
-CRITICAL: Return ONLY the JSON array, no explanations or extra text.
-CRITICAL: All words must be in their canonical dictionary form (infinitive for verbs, singular for nouns, base form for adjectives).`;
+    const example = `  {"word": "${language.toLowerCase()}_word1", "translation": "english_translation1"}`;
 
     // Create exclusion list for prompt
     const exclusionText = existingWords.length > 0
       ? `\nIMPORTANT: Do NOT include any of these existing words: ${existingWords.slice(0, 50).join(', ')}${existingWords.length > 50 ? '...' : ''}`
       : '';
 
-    if (topic.trim()) {
-      return `${baseInstructions}
+    // Topic is always specified when this method is called
+    return `CRITICAL: You must return exactly ${count} words in a JSON array. No more, no less.
+CRITICAL: Return ONLY the JSON array, no explanations or extra text.
+CRITICAL: All words must be in their canonical dictionary form (infinitive for verbs, singular for nouns, base form for adjectives).
 
 Task: Generate exactly ${count} different ${language} words related to "${topic}".${exclusionText}
 
 Expected output format (${count} items):
 [
-${examples}
+${example}
+  ...
 ]
 
 Rules:
@@ -494,59 +491,19 @@ Rules:
    - Verbs: infinitive form (e.g., "robić" not "robimy", "do" not "does")
    - Nouns: singular form (e.g., "cat" not "cats", "dom" not "domy")
    - Adjectives: base form (e.g., "good" not "better", "dobry" not "dobrzy")
-7. Do NOT use any words from the exclusion list above
-8. Return ONLY the JSON array, nothing else`;
-    } else {
-      return `${baseInstructions}
-
-Task: Generate exactly ${count} different ${language} words for basic conversation.${exclusionText}
-
-Expected output format (${count} items):
-[
-${examples}
-]
-
-Rules:
-1. Must be exactly ${count} words
-2. Each word must be different and unique
-3. Focus on essential everyday vocabulary
-4. Include nouns, verbs, and adjectives
-5. CRITICAL: Use only canonical dictionary forms:
-   - Verbs: infinitive form (e.g., "robić" not "robimy", "do" not "does")
-   - Nouns: singular form (e.g., "cat" not "cats", "dom" not "domy")
-   - Adjectives: base form (e.g., "good" not "better", "dobry" not "dobrzy")
 6. Do NOT use any words from the exclusion list above
 7. Return ONLY the JSON array, nothing else`;
-    }
   }
 
-  private createSentencesPrompt(word: string, language: string, count: number, knownWords: string[] = [], useContextSentences: boolean = false, topic?: string): string {
-    let examples: string;
-    let contextInstructions = '';
-
-    if (useContextSentences) {
-      examples = Array.from({ length: count }, (_, i) =>
-        `  {
-    "sentence": "${language.toLowerCase()}_sentence${i + 1}_with_${word}",
-    "translation": "english_translation${i + 1}",
-    "contextBefore": "${language.toLowerCase()}_context_before${i + 1}",
-    "contextAfter": "${language.toLowerCase()}_context_after${i + 1}",
-    "contextBeforeTranslation": "english_context_before${i + 1}",
-    "contextAfterTranslation": "english_context_after${i + 1}"
-  }`
-      ).join(',\n');
-
-      contextInstructions = `
-10. Include contextBefore and contextAfter sentences that provide meaningful context
-11. The context sentences should form a natural dialog between two people
-12. Provide English translations for all context sentences
-13. Context sentences should be short (3-10 words each)
-14. The main sentence should make sense when read with its context`;
-    } else {
-      examples = Array.from({ length: count }, (_, i) =>
-        `  {"sentence": "${language.toLowerCase()}_sentence${i + 1}_with_${word}", "translation": "english_translation${i + 1}"}`
-      ).join(',\n');
-    }
+  private createSentencesPrompt(word: string, language: string, count: number, knownWords: string[] = [], topic?: string): string {
+    const example = `  {
+    "sentence": "${language.toLowerCase()}_sentence1_with_${word}",
+    "translation": "english_translation1",
+    "contextBefore": "${language.toLowerCase()}_context_before1",
+    "contextAfter": "${language.toLowerCase()}_context_after1",
+    "contextBeforeTranslation": "english_context_before1",
+    "contextAfterTranslation": "english_context_after1"
+  }`;
 
     // Create known words guidance
     const knownWordsText = knownWords.length > 0
@@ -565,7 +522,8 @@ Task: Generate exactly ${count} natural, conversational sentences in ${language}
 
 Expected output format (${count} items):
 [
-${examples}
+${example}
+  ...
 ]
 
 Rules:
@@ -577,7 +535,12 @@ Rules:
 6. Each sentence must be different
 7. When natural and appropriate, include some known words from the provided list
 8. Don't force known words if they don't fit naturally
-9. Return ONLY the JSON array, nothing else${contextInstructions}`;
+9. Return ONLY the JSON array, nothing else
+10. Include contextBefore and contextAfter sentences that provide meaningful context
+11. The context sentences should form a natural dialog between two people
+12. Provide English translations for all context sentences
+13. Context sentences should be short (3-10 words each)
+14. The main sentence should make sense when read with its context`;
   }
 
   private createContextSentencesPrompt(sentence: string, translation: string, language: string): string {

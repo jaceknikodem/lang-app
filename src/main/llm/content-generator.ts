@@ -378,7 +378,7 @@ export class ContentGenerator {
 
       // Always use context sentences
       const sentences = await this.executeWithRetry(
-        () => this.llmClient.generateSentences(word.trim(), targetLanguage, sentenceCount, true, topic),
+        () => this.llmClient.generateSentences(word.trim(), targetLanguage, sentenceCount, topic),
         `generate sentences for word: ${word}`
       );
 
