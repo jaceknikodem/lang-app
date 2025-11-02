@@ -5,6 +5,7 @@
 import { GeneratedWord, GeneratedSentence } from '../../shared/types/core.js';
 import { LLMClient, LLMConfig, LLMError } from '../../shared/types/llm.js';
 import { LLM_CONFIG } from '../../shared/constants/index.js';
+import { cleanLLMResponse } from './utils.js';
 import { z } from 'zod';
 
 // Zod schemas for response validation (reusing from Ollama client)
@@ -153,7 +154,7 @@ export class GeminiClient implements LLMClient {
       
       const response = await fetch(url, {
         method: 'GET',
-        signal: AbortSignal.timeout(10000) // Increased timeout
+        signal: AbortSignal.timeout(3000)
       });
       
       console.log('Gemini isAvailable: Response status:', response.status);
@@ -176,8 +177,6 @@ export class GeminiClient implements LLMClient {
       'gemini-2.5-pro',
       'gemini-2.5-flash',
       'gemini-2.5-flash-lite',
-      'gemini-2.0-flash',
-      'gemini-2.0-flash-lite'
     ];
   }
 
@@ -255,8 +254,9 @@ export class GeminiClient implements LLMClient {
       console.log(`Generated ${uniqueWords.length} unique words, ${newWords.length} are new (${uniqueWords.length - newWords.length} duplicates filtered)`);
 
       // If we got significantly fewer new words than requested, throw an error to trigger retry
-      if (newWords.length < Math.max(1, Math.floor(count * 0.4))) {
-        throw new Error(`Insufficient new words generated: got ${newWords.length}, expected at least ${Math.floor(count * 0.4)}`);
+      const minWords = Math.max(1, Math.floor(count * LLM_CONFIG.MIN_WORD_COUNT_THRESHOLD));
+      if (newWords.length < minWords) {
+        throw new Error(`Insufficient new words generated: got ${newWords.length}, expected at least ${minWords}`);
       }
 
       return newWords;
@@ -304,8 +304,9 @@ export class GeminiClient implements LLMClient {
       const sentences = parseResult.data;
 
       // If we got significantly fewer sentences than requested, throw an error to trigger retry
-      if (sentences.length < Math.max(1, Math.floor(count * 0.7))) {
-        throw new Error(`Insufficient sentences generated: got ${sentences.length}, expected at least ${Math.floor(count * 0.7)}`);
+      const minSentences = Math.max(1, Math.floor(count * LLM_CONFIG.MIN_SENTENCE_COUNT_THRESHOLD));
+      if (sentences.length < minSentences) {
+        throw new Error(`Insufficient sentences generated: got ${sentences.length}, expected at least ${minSentences}`);
       }
 
       return sentences;
@@ -441,10 +442,7 @@ export class GeminiClient implements LLMClient {
     }
 
     try {
-      const allWords = await this.databaseLayer.getAllWords(true, true);
-      return allWords
-        .filter((word: any) => word.language === language)
-        .map((word: any) => word.word);
+      return await this.databaseLayer.getExistingWordsForDuplicateChecking(language);
     } catch (error) {
       console.error('Failed to get existing words for duplicate checking:', error);
       return [];
@@ -461,18 +459,7 @@ export class GeminiClient implements LLMClient {
     }
 
     try {
-      const allWords = await this.databaseLayer.getAllWords(true, false);
-      const knownWords = allWords
-        .filter((word: any) => word.language === language && word.known === true)
-        .map((word: any) => word.word);
-
-      // Limit to 50 words and randomize selection if more than 50
-      if (knownWords.length > 50) {
-        const shuffled = [...knownWords].sort(() => Math.random() - 0.5);
-        return shuffled.slice(0, 50);
-      }
-
-      return knownWords;
+      return await this.databaseLayer.getKnownWordsForSentenceGeneration(language, 50);
     } catch (error) {
       console.error('Failed to get known words for sentence generation:', error);
       return [];
@@ -637,30 +624,7 @@ Rules:
           throw new Error('Empty response from Gemini');
         }
 
-        let cleanResponse = candidate.content.parts[0].text.trim();
-
-        // Clean the response - remove any markdown formatting or extra text
-        cleanResponse = cleanResponse.replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
-        cleanResponse = cleanResponse.replace(/^```\s*/, '').replace(/\s*```$/i, '');
-
-        // Remove common LLM prefixes
-        cleanResponse = cleanResponse.replace(/^(Here's|Here is|The|Response:|JSON:)\s*/i, '');
-
-        // Remove any text before the first [ or {
-        const jsonStart = cleanResponse.search(/[\[{]/);
-        if (jsonStart > 0) {
-          cleanResponse = cleanResponse.substring(jsonStart);
-        }
-
-        // Remove any text after the last ] or }
-        const jsonEnd = Math.max(
-          cleanResponse.lastIndexOf(']'),
-          cleanResponse.lastIndexOf('}')
-        );
-        if (jsonEnd >= 0 && jsonEnd < cleanResponse.length - 1) {
-          cleanResponse = cleanResponse.substring(0, jsonEnd + 1);
-        }
-
+        const cleanResponse = cleanLLMResponse(candidate.content.parts[0].text);
         console.log('Cleaned response:', cleanResponse);
 
         // Parse JSON

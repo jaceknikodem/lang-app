@@ -5,6 +5,7 @@
 import { GeneratedWord, GeneratedSentence } from '../../shared/types/core.js';
 import { LLMClient, LLMConfig, LLMError } from '../../shared/types/llm.js';
 import { LLM_CONFIG } from '../../shared/constants/index.js';
+import { cleanLLMResponse } from './utils.js';
 import { z } from 'zod';
 
 // Zod schemas for response validation with coercion and fallbacks
@@ -219,35 +220,11 @@ export class OllamaClient implements LLMClient {
     try {
       const response = await this.makeRequest(prompt, this.getWordGenerationModel());
 
-      // Debug: Log the response structure
-      console.log('Response type:', typeof response);
-      console.log('Response is array:', Array.isArray(response));
-      console.log('Response keys:', response && typeof response === 'object' ? Object.keys(response) : 'N/A');
-      console.log('First item (if array):', Array.isArray(response) && response.length > 0 ? response[0] : 'N/A');
-
       // Use Zod to parse and validate the response
       const parseResult = WordGenerationResponseSchema.safeParse(response);
 
       if (!parseResult.success) {
-        console.error('=== VALIDATION FAILED ===');
-        console.error('Raw response:', JSON.stringify(response, null, 2));
-        console.error('Zod errors:', parseResult.error.issues.map(issue => ({
-          path: issue.path.join('.'),
-          message: issue.message,
-          code: issue.code,
-          received: 'received' in issue ? issue.received : 'unknown'
-        })));
-
-        // Try to understand what we got
-        if (Array.isArray(response)) {
-          console.error('Response is array with length:', response.length);
-          if (response.length > 0) {
-            console.error('First item structure:', Object.keys(response[0] || {}));
-          }
-        } else if (response && typeof response === 'object') {
-          console.error('Response is object with keys:', Object.keys(response));
-        }
-
+        console.error('Validation failed:', parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '));
         throw new Error(`Invalid response format: ${parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')}`);
       }
 
@@ -266,8 +243,9 @@ export class OllamaClient implements LLMClient {
       console.log(`Generated ${uniqueWords.length} unique words, ${newWords.length} are new (${uniqueWords.length - newWords.length} duplicates filtered)`);
 
       // If we got significantly fewer new words than requested, throw an error to trigger retry.
-      if (newWords.length < Math.max(1, Math.floor(count * 0.4))) {
-        throw new Error(`Insufficient new words generated: got ${newWords.length}, expected at least ${Math.floor(count * 0.4)}`);
+      const minWords = Math.max(1, Math.floor(count * LLM_CONFIG.MIN_WORD_COUNT_THRESHOLD));
+      if (newWords.length < minWords) {
+        throw new Error(`Insufficient new words generated: got ${newWords.length}, expected at least ${minWords}`);
       }
 
       return newWords;
@@ -287,32 +265,20 @@ export class OllamaClient implements LLMClient {
     try {
       const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
 
-      // Debug: Log the response structure
-      console.log('Sentence response type:', typeof response);
-      console.log('Sentence response is array:', Array.isArray(response));
-      console.log('Sentence response keys:', response && typeof response === 'object' ? Object.keys(response) : 'N/A');
-
       // Use Zod to parse and validate the response
       const parseResult = SentenceGenerationResponseSchema.safeParse(response);
 
       if (!parseResult.success) {
-        console.error('=== SENTENCE VALIDATION FAILED ===');
-        console.error('Raw response:', JSON.stringify(response, null, 2));
-        console.error('Zod errors:', parseResult.error.issues.map(issue => ({
-          path: issue.path.join('.'),
-          message: issue.message,
-          code: issue.code,
-          received: 'received' in issue ? issue.received : 'unknown'
-        })));
-
+        console.error('Sentence validation failed:', parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '));
         throw new Error(`Invalid response format: ${parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')}`);
       }
 
       const sentences = parseResult.data;
 
       // If we got significantly fewer sentences than requested, throw an error to trigger retry
-      if (sentences.length < Math.max(1, Math.floor(count * 0.7))) {
-        throw new Error(`Insufficient sentences generated: got ${sentences.length}, expected at least ${Math.floor(count * 0.7)}`);
+      const minSentences = Math.max(1, Math.floor(count * LLM_CONFIG.MIN_SENTENCE_COUNT_THRESHOLD));
+      if (sentences.length < minSentences) {
+        throw new Error(`Insufficient sentences generated: got ${sentences.length}, expected at least ${minSentences}`);
       }
 
       return sentences;
@@ -334,17 +300,7 @@ export class OllamaClient implements LLMClient {
       const parseResult = ContextSentenceResponseSchema.safeParse(response);
 
       if (!parseResult.success) {
-        console.error('=== CONTEXT SENTENCE VALIDATION FAILED ===');
-        console.error('Raw response:', JSON.stringify(response, null, 2));
-        console.error('Zod errors:', parseResult.error.issues.map(issue => ({
-          path: issue.path.join('.'),
-          message: issue.message,
-          code: issue.code,
-          received: 'received' in issue ? issue.received : 'unknown'
-        })));
-
-        // Return empty context on validation failure instead of throwing
-        console.warn('Context sentence generation validation failed, returning empty context');
+        console.warn('Context sentence validation failed:', parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '));
         return {};
       }
 
@@ -421,11 +377,7 @@ export class OllamaClient implements LLMClient {
     }
 
     try {
-      // Get all words (learning, known, and ignored) for the language
-      const allWords = await this.databaseLayer.getAllWords(true, true);
-      return allWords
-        .filter((word: any) => word.language === language)
-        .map((word: any) => word.word);
+      return await this.databaseLayer.getExistingWordsForDuplicateChecking(language);
     } catch (error) {
       console.error('Failed to get existing words for duplicate checking:', error);
       return [];
@@ -442,19 +394,7 @@ export class OllamaClient implements LLMClient {
     }
 
     try {
-      // Get only known words for the language
-      const allWords = await this.databaseLayer.getAllWords(true, false);
-      const knownWords = allWords
-        .filter((word: any) => word.language === language && word.known === true)
-        .map((word: any) => word.word);
-
-      // Limit to 50 words and randomize selection if more than 50
-      if (knownWords.length > 50) {
-        const shuffled = [...knownWords].sort(() => Math.random() - 0.5);
-        return shuffled.slice(0, 50);
-      }
-
-      return knownWords;
+      return await this.databaseLayer.getKnownWordsForSentenceGeneration(language, 50);
     } catch (error) {
       console.error('Failed to get known words for sentence generation:', error);
       return [];
@@ -607,30 +547,7 @@ Rules:
         }
 
         // Clean the response - remove any markdown formatting or extra text
-        let cleanResponse = data.response.trim();
-
-        // Remove markdown code blocks if present
-        cleanResponse = cleanResponse.replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
-        cleanResponse = cleanResponse.replace(/^```\s*/, '').replace(/\s*```$/i, '');
-
-        // Remove common LLM prefixes
-        cleanResponse = cleanResponse.replace(/^(Here's|Here is|The|Response:|JSON:)\s*/i, '');
-
-        // Remove any text before the first [ or {
-        const jsonStart = cleanResponse.search(/[\[{]/);
-        if (jsonStart > 0) {
-          cleanResponse = cleanResponse.substring(jsonStart);
-        }
-
-        // Remove any text after the last ] or }
-        const jsonEnd = Math.max(
-          cleanResponse.lastIndexOf(']'),
-          cleanResponse.lastIndexOf('}')
-        );
-        if (jsonEnd >= 0 && jsonEnd < cleanResponse.length - 1) {
-          cleanResponse = cleanResponse.substring(0, jsonEnd + 1);
-        }
-
+        const cleanResponse = cleanLLMResponse(data.response);
         console.log('Cleaned response:', cleanResponse);
 
         // Parse JSON

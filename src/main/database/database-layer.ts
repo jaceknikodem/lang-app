@@ -547,6 +547,50 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
+   * Get known words for sentence generation
+   * Returns word strings only, limited and randomized for use in prompts
+   */
+  async getKnownWordsForSentenceGeneration(language: string, limit: number = 50): Promise<string[]> {
+    const db = this.getDb();
+    
+    try {
+      // Get all known words for the language, shuffled
+      const stmt = db.prepare(`
+        SELECT word FROM words 
+        WHERE language = ? AND known = TRUE AND ignored = FALSE
+        ORDER BY RANDOM()
+        LIMIT ?
+      `);
+      
+      const rows = stmt.all(language, limit) as Array<{ word: string }>;
+      return rows.map(row => row.word);
+    } catch (error) {
+      throw new Error(`Failed to get known words for sentence generation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get all existing words for duplicate checking
+   * Returns word strings only (includes learning, known, and ignored words)
+   */
+  async getExistingWordsForDuplicateChecking(language: string): Promise<string[]> {
+    const db = this.getDb();
+    
+    try {
+      // Get all words (learning, known, and ignored) for the language
+      const stmt = db.prepare(`
+        SELECT word FROM words 
+        WHERE language = ?
+      `);
+      
+      const rows = stmt.all(language) as Array<{ word: string }>;
+      return rows.map(row => row.word);
+    } catch (error) {
+      throw new Error(`Failed to get existing words for duplicate checking: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Get multiple words by IDs (batch query)
    */
   async getWordsByIds(wordIds: number[]): Promise<Word[]> {

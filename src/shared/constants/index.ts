@@ -26,7 +26,10 @@ export const LLM_CONFIG = {
   DEFAULT_WORD_GENERATION_MODEL: 'granite4:tiny-h', // Small model for word generation
   DEFAULT_SENTENCE_GENERATION_MODEL: 'granite4:tiny-h', // Big model for sentence generation (can be changed to larger model)
   DEFAULT_TIMEOUT: 80000, // Increased to 80 seconds for better reliability
-  MAX_RETRIES: 2,
+  MAX_RETRIES: 3,
+  // Minimum threshold ratios for retry logic
+  MIN_WORD_COUNT_THRESHOLD: 0.4, // Require at least 40% of requested words to be new (non-duplicate)
+  MIN_SENTENCE_COUNT_THRESHOLD: 0.7, // Require at least 70% of requested sentences to be generated
   // Gemini configuration
   GEMINI_DEFAULT_MODEL: 'gemini-2.5-flash',
   GEMINI_DEFAULT_WORD_MODEL: 'gemini-2.5-flash-lite', // Fastest, most cost-effective for word generation

@@ -42,6 +42,8 @@ export interface DatabaseLayer {
   getWordsWithSentencesOrderedByStrength(includeKnown?: boolean, includeIgnored?: boolean, language?: string): Promise<Word[]>;
   getWordById(wordId: number): Promise<Word | null>;
   getWordsByIds(wordIds: number[]): Promise<Word[]>;
+  getKnownWordsForSentenceGeneration(language: string, limit?: number): Promise<string[]>;
+  getExistingWordsForDuplicateChecking(language: string): Promise<string[]>;
   
   // SRS-specific operations
   updateWordSRS(
