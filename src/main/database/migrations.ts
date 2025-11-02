@@ -5,6 +5,7 @@
 import Database from 'better-sqlite3';
 import { existsSync, mkdirSync, renameSync, readdirSync, statSync } from 'fs';
 import { join, dirname, basename, extname } from 'path';
+import { app } from 'electron';
 
 export interface Migration {
   version: number;
@@ -490,7 +491,7 @@ export class MigrationManager {
   private async migrateAudioPaths(): Promise<void> {
     console.log('Starting audio path restructuring migration...');
     
-    const audioDir = join(process.cwd(), 'audio');
+    const audioDir = join(app.getPath('userData'), 'audio');
     
     if (!existsSync(audioDir)) {
       console.log('No audio directory found, skipping audio migration');
@@ -506,9 +507,12 @@ export class MigrationManager {
     // Migrate word audio files
     for (const word of words) {
       try {
-        const oldPath = join(process.cwd(), word.audio_path);
+        // Try both old location (process.cwd()) and new location (userData)
+        const oldPathCwd = join(process.cwd(), word.audio_path);
+        const oldPath = existsSync(oldPathCwd) ? oldPathCwd : join(app.getPath('userData'), word.audio_path);
         if (existsSync(oldPath)) {
-          const newPath = join(audioDir, word.language, `${this.sanitizeFilename(word.word)}.aiff`);
+          // Use ID-based naming: word_<id>.aiff
+          const newPath = join(audioDir, word.language, `word_${word.id}.aiff`);
           
           // Ensure directory exists
           const newDir = dirname(newPath);
@@ -521,8 +525,8 @@ export class MigrationManager {
             renameSync(oldPath, newPath);
           }
           
-          // Update database with new path
-          const relativePath = join('audio', word.language, `${this.sanitizeFilename(word.word)}.aiff`);
+          // Update database with relative path (without 'audio/' prefix since we resolve from userData/audio)
+          const relativePath = join(word.language, `word_${word.id}.aiff`);
           this.db.prepare('UPDATE words SET audio_path = ? WHERE id = ?').run(relativePath, word.id);
           
           console.log(`Migrated word audio: ${word.word} -> ${relativePath}`);
@@ -539,11 +543,13 @@ export class MigrationManager {
         const word = this.db.prepare('SELECT * FROM words WHERE id = ?').get(sentence.word_id) as any;
         if (!word) continue;
 
-        const oldPath = join(process.cwd(), sentence.audio_path);
+        // Try both old location (process.cwd()) and new location (userData)
+        const oldPathCwd = join(process.cwd(), sentence.audio_path);
+        const oldPath = existsSync(oldPathCwd) ? oldPathCwd : join(app.getPath('userData'), sentence.audio_path);
         if (existsSync(oldPath)) {
-          const wordDir = this.sanitizeFilename(word.word);
-          const sentenceFile = `${this.sanitizeFilename(sentence.sentence)}.aiff`;
-          const newPath = join(audioDir, word.language, wordDir, sentenceFile);
+          // Use ID-based naming: word_<id>/sentence_<id>.aiff
+          const sentenceFile = `sentence_${sentence.id}.aiff`;
+          const newPath = join(audioDir, word.language, `word_${word.id}`, sentenceFile);
           
           // Ensure directory exists
           const newDir = dirname(newPath);
@@ -556,8 +562,8 @@ export class MigrationManager {
             renameSync(oldPath, newPath);
           }
           
-          // Update database with new path
-          const relativePath = join('audio', word.language, wordDir, sentenceFile);
+          // Update database with relative path (without 'audio/' prefix since we resolve from userData/audio)
+          const relativePath = join(word.language, `word_${word.id}`, sentenceFile);
           this.db.prepare('UPDATE sentences SET audio_path = ? WHERE id = ?').run(relativePath, sentence.id);
           
           console.log(`Migrated sentence audio: ${sentence.sentence} -> ${relativePath}`);

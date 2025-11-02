@@ -29,6 +29,9 @@ export class LifecycleManager {
     try {
       console.log('Starting application lifecycle initialization...');
       
+      // Migrate audio files from old location to userData directory
+      await this.migrateAudioFiles();
+      
       // Ensure required directories exist
       await this.ensureDirectories();
       
@@ -95,7 +98,7 @@ export class LifecycleManager {
       }
       
       // Backup audio files
-      const audioDir = path.join(process.cwd(), 'audio');
+      const audioDir = path.join(app.getPath('userData'), 'audio');
       const backupAudioDir = path.join(backupPath, 'audio');
       
       try {
@@ -152,7 +155,7 @@ export class LifecycleManager {
       
       // Restore audio files
       const backupAudioDir = path.join(backupPath, 'audio');
-      const audioDir = path.join(process.cwd(), 'audio');
+      const audioDir = path.join(app.getPath('userData'), 'audio');
       
       try {
         await fs.rm(audioDir, { recursive: true, force: true });
@@ -274,7 +277,7 @@ export class LifecycleManager {
   private async ensureDirectories(): Promise<void> {
     const directories = [
       path.join(this.config.userDataPath, 'backups'),
-      path.join(process.cwd(), 'audio'),
+      path.join(app.getPath('userData'), 'audio'),
       path.join(process.cwd(), 'data')
     ];
     
@@ -322,7 +325,7 @@ export class LifecycleManager {
       }
       
       // Remove all audio files recursively (including subdirectories)
-      const audioDir = path.join(process.cwd(), 'audio');
+      const audioDir = path.join(app.getPath('userData'), 'audio');
       try {
         const entries = await fs.readdir(audioDir, { withFileTypes: true });
         for (const entry of entries) {
@@ -380,6 +383,52 @@ export class LifecycleManager {
     } catch (error) {
       console.error('Failed to open backup directory:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Migrate audio files from old location (process.cwd()/audio) to new location (userData/audio)
+   */
+  private async migrateAudioFiles(): Promise<void> {
+    try {
+      const oldAudioDir = path.join(process.cwd(), 'audio');
+      const newAudioDir = path.join(app.getPath('userData'), 'audio');
+      
+      // Check if old audio directory exists
+      try {
+        await fs.access(oldAudioDir);
+      } catch {
+        // Old directory doesn't exist, nothing to migrate
+        console.log('No audio files to migrate from old location');
+        return;
+      }
+      
+      // Check if new audio directory already has files
+      let newDirExists = false;
+      let newDirHasFiles = false;
+      try {
+        await fs.access(newAudioDir);
+        newDirExists = true;
+        const entries = await fs.readdir(newAudioDir);
+        newDirHasFiles = entries.length > 0;
+      } catch {
+        // New directory doesn't exist yet
+      }
+      
+      if (newDirHasFiles) {
+        console.log('New audio directory already has files, skipping migration');
+        return;
+      }
+      
+      console.log(`Migrating audio files from ${oldAudioDir} to ${newAudioDir}...`);
+      
+      // Copy all files and directories from old location to new location
+      await this.copyDirectory(oldAudioDir, newAudioDir);
+      
+      console.log('Audio files migrated successfully');
+    } catch (error) {
+      // Don't throw - migration failure shouldn't block app startup
+      console.error('Failed to migrate audio files:', error);
     }
   }
 

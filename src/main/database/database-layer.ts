@@ -1244,8 +1244,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           words.push(...wordRows.map(row => this.mapRowToWord(row)));
         }
         
-        // Check for before sentence audio (pattern: audio/<lang>/_before_sentence_<sentence_id>.mp3)
-        const beforeSentenceAudioPath = `audio/${currentLanguage}/_before_sentence_${sentence.id}.mp3`;
+        // Check for before sentence audio (pattern: <lang>/word_<word_id>/before_sentence_<sentence_id>.<ext>)
+        // Use the word's ID to construct the path - we need to get the word first
+        const wordId = sentence.wordId;
+        const beforeSentenceAudioPath = wordId ? `${currentLanguage}/word_${wordId}/before_sentence_${sentence.id}.aiff` : undefined;
         
         // Get dialogue variants and their continuation audio
         const variantsStmt = db.prepare(`

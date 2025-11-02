@@ -2,6 +2,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
+import { app } from 'electron';
 import { AudioGenerator, AudioConfig, AudioError } from '../../shared/types/audio';
 import { DatabaseLayer } from '../../shared/types/database';
 import { sanitizeFilename } from '../../shared/utils/sanitizeFilename';
@@ -20,7 +21,7 @@ export class TTSAudioGenerator implements AudioGenerator {
 
   constructor(config?: Partial<AudioConfig>, database?: DatabaseLayer) {
     this.config = {
-      audioDirectory: join(process.cwd(), 'audio'),
+      audioDirectory: join(app.getPath('userData'), 'audio'),
       ttsCommand: 'say',
       fileExtension: '.aiff',
       rate: 160, // Words per minute

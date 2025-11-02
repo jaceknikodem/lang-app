@@ -1,5 +1,6 @@
 import { promises as fsPromises } from 'fs';
 import { join, parse, extname } from 'path';
+import { app } from 'electron';
 import { TTSAudioGenerator } from './audio-generator';
 import { ElevenLabsAudioGenerator } from './elevenlabs-generator';
 import { AudioGenerator, AudioError } from '../../shared/types/audio';
@@ -160,7 +161,7 @@ export class AudioService {
       // Language is now optional - will be retrieved from database if not provided
       const targetLanguage = language ? language.toLowerCase() : undefined;
 
-      // Generate audio and return path
+      // Generate audio and return relative path
       const audioPath = await this.audioGenerator.generateAudio(text.trim(), targetLanguage, word, wordId, sentenceId, variantId);
 
       // Verify the file was actually created
@@ -168,7 +169,8 @@ export class AudioService {
         throw new Error(`Audio generation succeeded but file not found: ${audioPath}`);
       }
 
-      return audioPath;
+      // Convert absolute path to relative path for storage in database
+      return AudioService.getRelativeAudioPath(audioPath);
     } catch (error) {
       // Re-throw AudioError as-is, wrap other errors
       if (this.isAudioError(error)) {
@@ -191,16 +193,19 @@ export class AudioService {
         throw new Error('Audio path must be specified');
       }
 
+      // Resolve relative path to absolute path
+      const absolutePath = AudioService.resolveAudioPath(audioPath);
+
       // Check if file exists before attempting playback
-      if (!await this.audioExists(audioPath)) {
-        const error = new Error(`Audio file not found: ${audioPath}`) as AudioError;
+      if (!await this.audioExists(absolutePath)) {
+        const error = new Error(`Audio file not found: ${absolutePath}`) as AudioError;
         error.code = 'FILE_NOT_FOUND';
-        error.audioPath = audioPath;
+        error.audioPath = absolutePath;
         throw error;
       }
 
       // Play the audio
-      await this.audioGenerator.playAudio(audioPath);
+      await this.audioGenerator.playAudio(absolutePath);
     } catch (error) {
       // Re-throw AudioError as-is, wrap other errors
       if (this.isAudioError(error)) {
@@ -231,14 +236,17 @@ export class AudioService {
         return null;
       }
 
+      // Resolve relative path to absolute path
+      const absolutePath = AudioService.resolveAudioPath(audioPath);
+
       // Check if file exists
-      if (!await this.audioExists(audioPath)) {
-        console.warn('Audio file not found for normalization:', audioPath);
+      if (!await this.audioExists(absolutePath)) {
+        console.warn('Audio file not found for normalization:', absolutePath);
         return null;
       }
 
       // Create normalized version path
-      const parsedPath = require('path').parse(audioPath);
+      const parsedPath = require('path').parse(absolutePath);
       const normalizedPath = require('path').join(
         parsedPath.dir,
         `${parsedPath.name}_normalized${parsedPath.ext}`
@@ -246,7 +254,7 @@ export class AudioService {
 
       // Check if normalized version already exists
       if (await this.audioExists(normalizedPath)) {
-        return normalizedPath;
+        return AudioService.getRelativeAudioPath(normalizedPath);
       }
 
       // Use ffmpeg to normalize audio volume
@@ -259,7 +267,7 @@ export class AudioService {
 
       try {
         await execFileAsync('ffmpeg', [
-          '-i', audioPath,
+          '-i', absolutePath,
           '-af', `volume=${targetDb}dB`, // Amplify by targetDb (default 0 = normalize to 0dB)
           '-y', // Overwrite output file
           normalizedPath
@@ -270,7 +278,7 @@ export class AudioService {
 
         // Verify normalized file was created
         if (await this.audioExists(normalizedPath)) {
-          return normalizedPath;
+          return AudioService.getRelativeAudioPath(normalizedPath);
         }
       } catch (ffmpegError) {
         console.warn('Failed to normalize audio with ffmpeg, using original:', ffmpegError);
@@ -297,11 +305,12 @@ export class AudioService {
         return null;
       }
 
-      // Filter out paths that don't exist
+      // Filter out paths that don't exist and resolve relative paths
       const existingPaths: string[] = [];
       for (const path of audioPaths) {
-        if (await this.audioExists(path)) {
-          existingPaths.push(path);
+        const absolutePath = AudioService.resolveAudioPath(path);
+        if (await this.audioExists(absolutePath)) {
+          existingPaths.push(absolutePath);
         }
       }
 
@@ -322,7 +331,7 @@ export class AudioService {
       const { join } = require('path');
       const { existsSync, mkdirSync, writeFileSync, unlinkSync } = require('fs');
 
-      const audioDir = join(process.cwd(), 'audio');
+      const audioDir = join(app.getPath('userData'), 'audio');
       const silencePath = join(audioDir, 'silence.wav');
 
       // Create or regenerate silence file (2 seconds, 16kHz, mono, WAV)
@@ -396,10 +405,10 @@ export class AudioService {
           // Ignore cleanup errors
         }
 
-        // Verify output file was created
-        if (await this.audioExists(outputPath)) {
-          return outputPath;
-        }
+      // Verify output file was created and return relative path
+      if (await this.audioExists(outputPath)) {
+        return AudioService.getRelativeAudioPath(outputPath);
+      }
       } catch (error) {
         // Clean up temporary file list on error
         try {
@@ -426,7 +435,9 @@ export class AudioService {
         return false;
       }
 
-      return await this.audioGenerator.audioExists(audioPath);
+      // Resolve relative path to absolute path
+      const absolutePath = AudioService.resolveAudioPath(audioPath);
+      return await this.audioGenerator.audioExists(absolutePath);
     } catch (error) {
       // If there's an error checking existence, assume file doesn't exist
       console.warn(`Error checking audio file existence: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -445,12 +456,15 @@ export class AudioService {
         return null;
       }
 
+      // Resolve relative path to absolute path
+      const absolutePath = AudioService.resolveAudioPath(audioPath);
+
       // Optimized: Read file directly - if it doesn't exist, readFile will throw
       // This eliminates redundant file existence check (one less async I/O)
-      const fileBuffer = await fsPromises.readFile(audioPath);
+      const fileBuffer = await fsPromises.readFile(absolutePath);
       
       // Determine MIME type from file extension
-      const ext = extname(audioPath).toLowerCase();
+      const ext = extname(absolutePath).toLowerCase();
       let mimeType = 'audio/mpeg'; // default
       if (ext === '.wav') {
         mimeType = 'audio/wav';
@@ -494,14 +508,16 @@ export class AudioService {
       await this.checkAndSwitchToAudioBackend(this.database);
     }
 
-    let backupPath: string | null = null;
+      // Resolve existing path to absolute for file operations
+      const absoluteExistingPath = existingPath ? AudioService.resolveAudioPath(existingPath) : null;
+      let backupPath: string | null = null;
     try {
-      if (existingPath && await this.audioExists(existingPath)) {
-        const parsed = parse(existingPath);
+      if (absoluteExistingPath && await this.audioExists(absoluteExistingPath)) {
+        const parsed = parse(absoluteExistingPath);
         backupPath = join(parsed.dir, `${parsed.name}.bak${parsed.ext}`);
         // Remove any stale backup
         await fsPromises.unlink(backupPath).catch(() => {});
-        await fsPromises.rename(existingPath, backupPath);
+        await fsPromises.rename(absoluteExistingPath, backupPath);
       }
 
       const newPath = await this.generateAudio(text, language, word, wordId, sentenceId, variantId);
@@ -510,13 +526,14 @@ export class AudioService {
         await fsPromises.unlink(backupPath).catch(() => {});
       }
 
+      // Return relative path (generateAudio already returns relative path)
       return newPath;
     } catch (error) {
-      if (backupPath && existingPath) {
+      if (backupPath && absoluteExistingPath) {
         try {
-          const newExists = await this.audioExists(existingPath);
+          const newExists = await this.audioExists(absoluteExistingPath);
           if (!newExists) {
-            await fsPromises.rename(backupPath, existingPath);
+            await fsPromises.rename(backupPath, absoluteExistingPath);
           } else {
             await fsPromises.unlink(backupPath).catch(() => {});
           }
@@ -576,7 +593,7 @@ export class AudioService {
     const audioPath = this.buildExternalAudioPath(sentence, targetLanguage, word, extension, wordId, sentenceId);
 
     if (await this.audioExists(audioPath)) {
-      return audioPath;
+      return AudioService.getRelativeAudioPath(audioPath);
     }
 
     const audioDir = parse(audioPath).dir;
@@ -587,7 +604,8 @@ export class AudioService {
       throw new Error(`External audio saved but file not found: ${audioPath}`);
     }
 
-    return audioPath;
+    // Return relative path for storage in database
+    return AudioService.getRelativeAudioPath(audioPath);
   }
 
   /**
@@ -792,8 +810,60 @@ export class AudioService {
     };
   }
 
+  /**
+   * Convert absolute audio path to relative path (relative to userData/audio)
+   * Returns the path relative to the audio directory, e.g., "spanish/word_7/sentence_1.aiff"
+   * Does NOT include "audio/" prefix - paths are stored without it
+   */
+  static getRelativeAudioPath(absolutePath: string): string {
+    if (!absolutePath || typeof absolutePath !== 'string') {
+      return absolutePath;
+    }
+    
+    const audioBaseDir = join(app.getPath('userData'), 'audio');
+    
+    // If path is already relative (doesn't start with audioBaseDir), return as-is
+    // but remove "audio/" prefix if present for consistency
+    if (!absolutePath.startsWith(audioBaseDir)) {
+      // Remove "audio/" prefix if present (legacy compatibility)
+      if (absolutePath.startsWith('audio/') || absolutePath.startsWith('audio\\')) {
+        return absolutePath.substring(6);
+      }
+      return absolutePath;
+    }
+    
+    // Extract relative path
+    const relativePath = absolutePath.substring(audioBaseDir.length + 1); // +1 to skip the path separator
+    return relativePath;
+  }
+
+  /**
+   * Resolve relative audio path to absolute path
+   * Handles both relative paths (e.g., "spanish/word_7/sentence_1.aiff") and absolute paths
+   * Also handles legacy paths that include "audio/" prefix
+   */
+  static resolveAudioPath(path: string): string {
+    if (!path || typeof path !== 'string') {
+      return path;
+    }
+    
+    // If path is already absolute (starts with / or has drive letter on Windows), return as-is
+    if (path.startsWith('/') || /^[A-Za-z]:/.test(path)) {
+      return path;
+    }
+    
+    // Remove "audio/" prefix if present (legacy compatibility)
+    let relativePath = path;
+    if (relativePath.startsWith('audio/') || relativePath.startsWith('audio\\')) {
+      relativePath = relativePath.substring(6); // Remove "audio/" or "audio\"
+    }
+    
+    // Resolve relative path to absolute
+    return join(app.getPath('userData'), 'audio', relativePath);
+  }
+
   private buildExternalAudioPath(sentence: string, language: string, word: string | undefined, extension: string, wordId?: number, sentenceId?: number): string {
-    const baseDirectory = join(process.cwd(), 'audio');
+    const baseDirectory = join(app.getPath('userData'), 'audio');
     const safeLanguage = sanitizeFilename(language || 'unknown');
     const ext = extension.startsWith('.') ? extension : `.${extension}`;
 
@@ -802,10 +872,10 @@ export class AudioService {
     }
 
     if (sentenceId !== undefined) {
-      // Sentence audio: /audio/<lang>/<word_id>/<sentence_id>.<extension>
+      // Sentence audio: /audio/<lang>/word_<word_id>/sentence_<sentence_id>.<extension>
       return join(baseDirectory, safeLanguage, `word_${wordId}`, `sentence_${sentenceId}${ext}`);
     } else {
-      // Word audio: /audio/<lang>/<word_id>.<extension>
+      // Word audio: /audio/<lang>/word_<word_id>.<extension>
       return join(baseDirectory, safeLanguage, `word_${wordId}${ext}`);
     }
   }

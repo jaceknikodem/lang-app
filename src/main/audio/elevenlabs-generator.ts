@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
+import { app } from 'electron';
 import { AudioGenerator, AudioConfig, AudioError } from '../../shared/types/audio';
 import { DatabaseLayer } from '../../shared/types/database';
 import { sanitizeFilename } from '../../shared/utils/sanitizeFilename';
@@ -20,7 +21,7 @@ export class ElevenLabsAudioGenerator implements AudioGenerator {
 
   constructor(config?: Partial<AudioConfig>, database?: DatabaseLayer) {
     this.config = {
-      audioDirectory: join(process.cwd(), 'audio'),
+      audioDirectory: join(app.getPath('userData'), 'audio'),
       ttsCommand: 'say',
       fileExtension: '.mp3', // ElevenLabs returns MP3
       rate: 160,
