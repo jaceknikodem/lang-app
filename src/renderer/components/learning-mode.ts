@@ -291,19 +291,54 @@ export class LearningMode extends LitElement {
 
       .error-message {
         color: var(--error-color);
+        background: var(--error-light);
+        padding: var(--spacing-md);
+        border-radius: var(--border-radius);
+        border: 1px solid var(--error-color);
+        text-align: center;
+      }
+
+      .error-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: var(--spacing-md);
+        padding: var(--spacing-xl);
+        text-align: center;
+      }
+
+      .action-button {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border: 2px solid var(--primary-color);
+        background: var(--background-primary);
+        color: var(--primary-color);
+        border-radius: var(--border-radius);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .action-button:hover {
+        background: var(--primary-color);
+        color: white;
+      }
+
+      .action-button.primary {
+        background: var(--primary-color);
+        color: white;
+      }
+
+      .action-button.primary:hover {
+        background: var(--primary-dark);
+        color: white;
       }
 
       .keyboard-hint {
         font-size: 0.8em;
         opacity: 0.7;
         font-weight: normal;
-      }
-        background: #ffebee;
-        padding: var(--spacing-md);
-        border-radius: var(--border-radius);
-        border: 1px solid #ffcdd2;
-        text-align: center;
-        font-size: 14px;
       }
 
       .loading-container {
@@ -316,8 +351,13 @@ export class LearningMode extends LitElement {
       }
 
       .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: var(--spacing-md);
+        padding: var(--spacing-xl);
         text-align: center;
-        padding: var(--spacing-lg);
         color: var(--text-secondary);
       }
 
@@ -2181,6 +2221,10 @@ export class LearningMode extends LitElement {
     this.showInfo(`"${word}" is already in your vocabulary.`, 'info', 3000);
   }
 
+  private goToTopicSelection() {
+    router.goToTopicSelection();
+  }
+
   private async incrementStrengthForWord(wordId: number): Promise<void> {
     // Only increment strength once per session per word
     // This prevents double incrementing when:
@@ -2298,8 +2342,11 @@ export class LearningMode extends LitElement {
     if (this.error) {
       return html`
         <div class="learning-container">
-          <div class="error-message">
-            ${this.error}
+          <div class="error-container">
+            <div class="error-message">${this.error}</div>
+            <button class="action-button primary" @click=${this.goToTopicSelection}>
+              Select Words
+            </button>
           </div>
         </div>
       `;
@@ -2311,6 +2358,9 @@ export class LearningMode extends LitElement {
           <div class="empty-state">
             <h3>No Learning Content Available</h3>
             <p>No sentences were found for the selected words.</p>
+            <button class="action-button primary" @click=${this.goToTopicSelection}>
+              Select Words
+            </button>
           </div>
         </div>
       `;

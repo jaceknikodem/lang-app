@@ -8,6 +8,7 @@ import { Sentence, DialogueVariant } from '../../shared/types/core.js';
 import { sharedStyles } from '../styles/shared.js';
 import { useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 import { sessionManager } from '../utils/session-manager.js';
+import { router } from '../utils/router.js';
 import type { RecordingOptions, RecordingSession } from '../../shared/types/audio.js';
 
 // DialogueVariant is now imported from shared/types/core.js
@@ -1018,6 +1019,10 @@ export class DialogMode extends LitElement {
     return 'poor';
   }
 
+  private goToTopicSelection() {
+    router.goToTopicSelection();
+  }
+
   private renderRecordingSection() {
     if (!this.responseOptions.length) return '';
 
@@ -1538,6 +1543,51 @@ export class DialogMode extends LitElement {
         font-weight: 500;
       }
 
+      .error-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: var(--spacing-md);
+        padding: var(--spacing-xl);
+        text-align: center;
+      }
+
+      .error-message {
+        color: var(--error-color);
+        background: var(--error-light);
+        padding: var(--spacing-md);
+        border-radius: var(--border-radius);
+        border: 1px solid var(--error-color);
+        text-align: center;
+      }
+
+      .action-button {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border: 2px solid var(--primary-color);
+        background: var(--background-primary);
+        color: var(--primary-color);
+        border-radius: var(--border-radius);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .action-button:hover {
+        background: var(--primary-color);
+        color: white;
+      }
+
+      .action-button.primary {
+        background: var(--primary-color);
+        color: white;
+      }
+
+      .action-button.primary:hover {
+        background: var(--primary-dark);
+        color: white;
+      }
 
       .loading {
         text-align: center;
@@ -1550,8 +1600,11 @@ export class DialogMode extends LitElement {
     if (this.error) {
       return html`
         <div class="dialog-container">
-          <div class="error-message">
-            <p>${this.error}</p>
+          <div class="error-container">
+            <div class="error-message">${this.error}</div>
+            <button class="action-button primary" @click=${this.goToTopicSelection}>
+              Select Words
+            </button>
           </div>
         </div>
       `;

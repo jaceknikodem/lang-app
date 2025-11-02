@@ -1153,6 +1153,25 @@ export class QuizMode extends LitElement {
         font-weight: normal;
       }
 
+      .error-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: var(--spacing-md);
+        padding: var(--spacing-xl);
+        text-align: center;
+      }
+
+      .error-message {
+        color: var(--error-color);
+        background: var(--error-light);
+        padding: var(--spacing-md);
+        border-radius: var(--border-radius);
+        border: 1px solid var(--error-color);
+        text-align: center;
+      }
+
       @media (max-width: 768px) {
         .quiz-container {
           padding: var(--spacing-md);
