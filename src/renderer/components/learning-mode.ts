@@ -1711,18 +1711,6 @@ export class LearningMode extends LitElement {
         description: 'Mark current word as ignored'
       },
       {
-        ...GlobalShortcuts.REMOVE_SENTENCE,
-        action: () => this.handleRemoveCurrentSentence(),
-        context: 'learning',
-        description: 'Remove current sentence'
-      },
-      {
-        ...GlobalShortcuts.REMOVE_SENTENCE_BACKSPACE,
-        action: () => this.handleRemoveCurrentSentence(),
-        context: 'learning',
-        description: 'Remove current sentence'
-      },
-      {
         key: 'o',
         action: () => this.handleShowOtherSentence(),
         context: 'learning',
@@ -1740,6 +1728,12 @@ export class LearningMode extends LitElement {
         action: () => this.handlePlayCurrentAudio(),
         context: 'learning',
         description: 'Replay sentence audio'
+      },
+      {
+        ...GlobalShortcuts.TOGGLE_AUDIO_ONLY,
+        action: () => this.toggleAudioOnlyMode(),
+        context: 'learning',
+        description: 'Toggle show/hide English'
       },
     ];
 

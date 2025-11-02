@@ -267,10 +267,12 @@ export class SentenceViewer extends LitElement {
         overflow-wrap: break-word;
         hyphens: auto;
         padding: var(--spacing-md);
+        padding-right: var(--spacing-md);
         background: var(--background-secondary);
         border-radius: var(--border-radius-small);
         border-left: 2px solid var(--primary-color);
         transition: all 0.3s ease;
+        box-sizing: border-box;
       }
 
       .sentence-text.playing {

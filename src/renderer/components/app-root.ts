@@ -1160,27 +1160,6 @@ export class AppRoot extends LitElement {
 
   private setupKeyboardBindings() {
     const bindings = [
-      // Global navigation shortcuts
-      {
-        ...GlobalShortcuts.LEARN,
-        action: () => this.handleNavigation('topic-selection'),
-        context: 'global'
-      },
-      {
-        ...GlobalShortcuts.REVIEW,
-        action: () => this.handleNavigation('learning'),
-        context: 'global'
-      },
-      {
-        ...GlobalShortcuts.QUIZ,
-        action: () => this.handleNavigation('quiz'),
-        context: 'global'
-      },
-      {
-        ...GlobalShortcuts.SETTINGS,
-        action: () => this.handleNavigation('settings'),
-        context: 'global'
-      },
       // Flow pause shortcut (space bar)
       {
         key: ' ',

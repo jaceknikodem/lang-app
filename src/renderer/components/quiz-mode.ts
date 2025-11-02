@@ -2015,7 +2015,7 @@ export class QuizMode extends LitElement {
         ...GlobalShortcuts.TOGGLE_AUDIO_ONLY,
         action: () => this.toggleAudioOnlyMode(),
         context: 'quiz',
-        description: 'Toggle audio-only mode'
+        description: 'Toggle show/hide English'
       },
       // Audio controls
       {
@@ -2023,12 +2023,6 @@ export class QuizMode extends LitElement {
         action: () => this.playAudio(),
         context: 'quiz',
         description: 'Play sentence audio'
-      },
-      {
-        ...GlobalShortcuts.REPLAY_AUDIO,
-        action: () => this.playAudio(),
-        context: 'quiz',
-        description: 'Replay sentence audio'
       },
       // SRS difficulty ratings (when answer is revealed)
       {

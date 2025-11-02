@@ -160,13 +160,6 @@ export const CommonKeys = {
  * Predefined keyboard shortcuts for common actions
  */
 export const GlobalShortcuts = {
-  // Navigation
-  LEARN: { key: '1', ctrlKey: true, description: 'Go to Learn mode' },
-  REVIEW: { key: '2', ctrlKey: true, description: 'Go to Review mode' },
-  QUIZ: { key: '3', ctrlKey: true, description: 'Go to Quiz mode' },
-  PROGRESS: { key: '4', ctrlKey: true, description: 'Go to Progress' },
-  SETTINGS: { key: '5', ctrlKey: true, description: 'Go to Settings' },
-  
   // Audio
   PLAY_AUDIO: { key: CommonKeys.SPACE, description: 'Play/Stop audio' },
   REPLAY_AUDIO: { key: 'r', description: 'Replay audio' },
@@ -176,15 +169,8 @@ export const GlobalShortcuts = {
   PREVIOUS: { key: CommonKeys.ARROW_LEFT, description: 'Previous item' },
   MARK_KNOWN: { key: 'k', description: 'Mark word as known' },
   MARK_IGNORED: { key: 'i', description: 'Mark word as ignored' },
-  REMOVE_SENTENCE: { key: CommonKeys.DELETE, description: 'Remove current sentence' },
-  REMOVE_SENTENCE_BACKSPACE: { key: CommonKeys.BACKSPACE, description: 'Remove current sentence' },
+
   REVEAL_ANSWER: { key: CommonKeys.ENTER, description: 'Reveal answer/Continue' },
-  
-  // Quiz actions
-  ANSWER_1: { key: '1', description: 'Select first answer' },
-  ANSWER_2: { key: '2', description: 'Select second answer' },
-  ANSWER_3: { key: '3', description: 'Select third answer' },
-  ANSWER_4: { key: '4', description: 'Select fourth answer' },
   
   // SRS difficulty ratings
   SRS_FAIL: { key: '1', description: 'Rate as Failed' },
@@ -194,6 +180,6 @@ export const GlobalShortcuts = {
   
   // General
   ESCAPE: { key: CommonKeys.ESCAPE, description: 'Cancel/Go back' },
-  TOGGLE_AUDIO_ONLY: { key: 'a', description: 'Toggle audio-only mode' },
+  TOGGLE_AUDIO_ONLY: { key: 'e', description: 'Toggle audio-only mode' },
   RECORD_PRONUNCIATION: { key: 'm', description: 'Record pronunciation' }
 } as const;
