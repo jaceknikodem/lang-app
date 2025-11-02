@@ -494,7 +494,6 @@ export class AudioService {
 
       // Resolve relative path to absolute path
       const absolutePath = AudioService.resolveAudioPath(audioPath);
-      console.log(`[AudioService] Loading audio: ${audioPath} -> ${absolutePath}`);
 
       // Optimized: Read file directly - if it doesn't exist, readFile will throw
       // This eliminates redundant file existence check (one less async I/O)

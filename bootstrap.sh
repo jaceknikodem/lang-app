@@ -30,18 +30,40 @@ fi
 
 # 2. Check if models exist
 echo -e "\n${YELLOW}Checking for Whisper models...${NC}"
-MODELS_DIR="models"
-MODEL_FILE="${MODELS_DIR}/ggml-small.bin"
+# Models are stored in Electron userData directory
+# Determine platform-specific userData path
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS
+    MODELS_DIR="${HOME}/Library/Application Support/KotobaAI/models"
+elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    # Linux
+    MODELS_DIR="${HOME}/.config/KotobaAI/models"
+elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+    # Windows
+    MODELS_DIR="${APPDATA}/KotobaAI/models"
+else
+    # Fallback to macOS path
+    MODELS_DIR="${HOME}/Library/Application Support/KotobaAI/models"
+fi
 
 if [ ! -d "$MODELS_DIR" ]; then
-    echo -e "${YELLOW}Creating models directory...${NC}"
+    echo -e "${YELLOW}Creating models directory: ${MODELS_DIR}${NC}"
     mkdir -p "$MODELS_DIR"
 fi
 
-if [ -f "$MODEL_FILE" ]; then
-    echo -e "${GREEN}✓ Whisper model (ggml-small.bin) already exists${NC}"
+# Check if any Whisper model exists (any ggml-*.bin file)
+EXISTING_MODEL=$(find "$MODELS_DIR" -maxdepth 1 -name "ggml-*.bin" -type f | head -n 1)
+
+if [ -n "$EXISTING_MODEL" ]; then
+    MODEL_NAME=$(basename "$EXISTING_MODEL")
+    echo -e "${GREEN}✓ Whisper model found: ${MODEL_NAME}${NC}"
 else
-    echo -e "${YELLOW}Downloading Whisper model from Hugging Face...${NC}"
+    # No model found, download a default one (small model for quick setup)
+    echo -e "${YELLOW}No Whisper model found. Downloading default model (ggml-small.bin)...${NC}"
+    echo -e "${YELLOW}  Note: You can download larger models later for better accuracy${NC}"
+    echo -e "${YELLOW}  Destination: ${MODELS_DIR}/ggml-small.bin${NC}"
+    
+    MODEL_FILE="${MODELS_DIR}/ggml-small.bin"
     MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin"
     
     if command_exists curl; then

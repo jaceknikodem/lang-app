@@ -41,21 +41,69 @@ export class ServiceManager {
     if (config.whisperModelPath) {
       this.whisperModelPath = config.whisperModelPath;
     } else {
-      // Try relative to app path (production)
-      const appPath = app.getAppPath();
-      // In development, appPath might be the source directory
-      // In production, it's the app.asar or app directory
-      this.whisperModelPath = path.resolve(appPath, 'models', 'ggml-small.bin');
+      // Use userData directory (consistent with other app data)
+      // This works in both development and production
+      const modelsDir = path.join(app.getPath('userData'), 'models');
       
-      // Fallback to relative to __dirname if not found
-      if (!fs.existsSync(this.whisperModelPath)) {
-        this.whisperModelPath = path.resolve(__dirname, '../../../models/ggml-small.bin');
+      // Ensure models directory exists
+      if (!fs.existsSync(modelsDir)) {
+        fs.mkdirSync(modelsDir, { recursive: true });
       }
+      
+      // Auto-detect available Whisper model with preference for larger/better models
+      this.whisperModelPath = this.findWhisperModel(modelsDir);
     }
     
     this.whisperPort = config.whisperPort || 8080;
     this.lemmatizationPort = config.lemmatizationPort || 8888;
     this.maxRestarts = config.maxRestarts || 10;
+  }
+
+  /**
+   * Find the best available Whisper model in the models directory
+   * Prioritizes larger/better models, falls back to any .bin file
+   */
+  private findWhisperModel(modelsDir: string): string {
+    // Preference order: larger/better models first, then fallback to any .bin file
+    const preferredModels = [
+      'ggml-large-v3-turbo-q8_0.bin',
+      'ggml-large-v3-turbo.bin',
+      'ggml-large-v3.bin',
+      'ggml-large-v2.bin',
+      'ggml-large.bin',
+      'ggml-medium.bin',
+      'ggml-base.bin',
+      'ggml-small.bin',
+      'ggml-tiny.bin'
+    ];
+
+    // First, try preferred models in order
+    for (const modelName of preferredModels) {
+      const modelPath = path.join(modelsDir, modelName);
+      if (fs.existsSync(modelPath)) {
+        console.log(`[ServiceManager] Found Whisper model: ${modelName}`);
+        return modelPath;
+      }
+    }
+
+    // If no preferred model found, look for any .bin file in the directory
+    try {
+      const files = fs.readdirSync(modelsDir);
+      for (const file of files) {
+        if (file.endsWith('.bin') && file.startsWith('ggml')) {
+          const modelPath = path.join(modelsDir, file);
+          console.log(`[ServiceManager] Found Whisper model: ${file}`);
+          return modelPath;
+        }
+      }
+    } catch (error) {
+      // Directory read failed, will fall through to default
+    }
+
+    // Fallback to default if nothing found
+    const defaultModel = path.join(modelsDir, 'ggml-small.bin');
+    console.log(`[ServiceManager] No Whisper model found, will use default path: ${defaultModel}`);
+    return defaultModel;
   }
 
   /**
@@ -136,9 +184,14 @@ export class ServiceManager {
       // Check if model file exists
       const modelPath = this.whisperModelPath;
       if (!fs.existsSync(modelPath)) {
-        console.warn(`[ServiceManager] Whisper model not found at ${modelPath}, skipping Whisper server start`);
+        console.warn(`[ServiceManager] Whisper model not found at ${modelPath}`);
+        console.warn(`[ServiceManager] Please download a Whisper model to: ${path.dirname(modelPath)}`);
+        console.warn(`[ServiceManager] Supported models: ggml-*.bin files (e.g., ggml-small.bin, ggml-large-v3-turbo-q8_0.bin)`);
+        console.warn(`[ServiceManager] Skipping Whisper server start`);
         return;
       }
+      
+      console.log(`[ServiceManager] Using Whisper model: ${path.basename(modelPath)}`);
 
       // Spawn whisper-server
       console.log(`[ServiceManager] Starting whisper-server on port ${actualPort}...`);

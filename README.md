@@ -66,11 +66,35 @@ ollama pull llama3.2:3b
 ```
 
 **Whisper Model** (for speech recognition):
+Models are stored in the Electron userData directory:
+- **macOS**: `~/Library/Application Support/KotobaAI/models/`
+- **Linux**: `~/.config/KotobaAI/models/`
+- **Windows**: `%APPDATA%/KotobaAI/models/`
+
+The app automatically detects and uses any available Whisper model (any `ggml-*.bin` file) in the models directory. It prioritizes larger/better models if multiple are available:
+1. `ggml-large-v3-turbo-q8_0.bin` (best quality, recommended)
+2. `ggml-large-v3-turbo.bin`
+3. `ggml-large-v3.bin`
+4. `ggml-large-v2.bin`
+5. `ggml-large.bin`
+6. `ggml-medium.bin`
+7. `ggml-base.bin`
+8. `ggml-small.bin` (default, smallest/fastest)
+
 ```bash
-mkdir -p models
-cd models
+# Download a model to the userData directory
+# On macOS:
+mkdir -p ~/Library/Application\ Support/KotobaAI/models
+cd ~/Library/Application\ Support/KotobaAI/models
+
+# Example: Download small model (fastest, smallest)
 curl -L -o ggml-small.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
+
+# Example: Download large turbo model (best quality)
+curl -L -o ggml-large-v3-turbo-q8_0.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q8_0.bin
 ```
+
+Or run `./bootstrap.sh` to automatically download the default model (ggml-small.bin). You can download additional models later for better accuracy.
 
 **Stanza Models** (loaded automatically when needed):
 - Spanish, Italian, Portuguese, Polish, Indonesian
@@ -85,7 +109,10 @@ ollama serve
 
 **Whisper Server** (speech practice/recognition):
 ```bash
-whisper-server --model models/ggml-small.bin --threads 8 --port 8080
+# Note: The model path will be automatically detected when using managed services
+# If running manually, use the full path to any Whisper model in the userData directory:
+# On macOS (replace with your actual model filename):
+whisper-server --model ~/Library/Application\ Support/KotobaAI/models/ggml-large-v3-turbo-q8_0.bin --threads 8 --port 8080
 ```
 
 **Stanza Service** (lemmatization):
