@@ -649,49 +649,53 @@ export class QuizMode extends LitElement {
       }
 
       .recording-status-container {
-        padding: var(--spacing-md);
-        background: var(--background-primary);
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: #fff5f5;
         border-radius: var(--border-radius);
-        border: 2px solid var(--error-color);
-        margin-bottom: var(--spacing-md);
+        border-top: 2px solid rgba(255, 59, 48, 0.2);
+        margin-bottom: var(--spacing-sm);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--spacing-md);
       }
 
       .recording-status {
         display: flex;
-        flex-direction: column;
         align-items: center;
         gap: var(--spacing-sm);
+        flex: 1;
       }
 
       .recording-indicator {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-xs);
-        font-size: 14px;
-        color: var(--error-color);
-        font-weight: 500;
+        font-size: 13px;
+        color: var(--text-secondary);
+        font-weight: 400;
       }
 
       .recording-dot {
-        width: 10px;
-        height: 10px;
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
-        background: var(--error-color);
-        animation: pulse 1.5s ease-in-out infinite;
+        background: #ff3b30;
+        animation: recording-pulse 1.2s ease-in-out infinite;
+        flex-shrink: 0;
       }
 
-      @keyframes pulse {
+      @keyframes recording-pulse {
         0%, 100% {
           opacity: 1;
+          transform: scale(1);
         }
         50% {
-          opacity: 0.5;
+          opacity: 0.6;
+          transform: scale(1.1);
         }
       }
 
       .recording-time {
-        font-size: 18px;
-        font-weight: 600;
+        font-size: 14px;
+        font-weight: 500;
         color: var(--text-primary);
         font-variant-numeric: tabular-nums;
       }
@@ -699,19 +703,19 @@ export class QuizMode extends LitElement {
       .cancel-recording-button {
         padding: var(--spacing-xs) var(--spacing-sm);
         border: 1px solid var(--border-color);
-        background: var(--background-secondary);
-        color: var(--text-primary);
-        border-radius: var(--border-radius);
+        background: var(--background-primary);
+        color: var(--text-secondary);
+        border-radius: var(--border-radius-small);
         font-size: 12px;
         cursor: pointer;
         transition: all 0.2s ease;
-        margin-top: var(--spacing-xs);
+        flex-shrink: 0;
       }
 
       .cancel-recording-button:hover {
-        background: var(--error-light);
-        border-color: var(--error-color);
-        color: var(--error-color);
+        background: var(--background-secondary);
+        border-color: var(--text-tertiary);
+        color: var(--text-primary);
       }
 
       .recording-header {
@@ -2117,6 +2121,9 @@ export class QuizMode extends LitElement {
   private async startRecording() {
     if (this.isRecording || !this.speechRecognitionReady || !this.currentQuestion) return;
 
+    // Stop any currently playing audio when starting recording
+    this.stopCachedAudio();
+
     try {
       // Get the expected sentence (foreign language)
       const expectedSentence = this.currentQuestion.sentence.sentence;
@@ -2753,19 +2760,17 @@ export class QuizMode extends LitElement {
     return html`
       <div class="recording-status-container">
         <div class="recording-status">
-          <div class="recording-indicator">
-            <div class="recording-dot"></div>
-            Recording... (auto-stop enabled)
-          </div>
-          <div class="recording-time">${formattedTime}</div>
-          <button 
-            class="cancel-recording-button"
-            @click=${this.cancelRecording}
-            title="Cancel recording"
-          >
-            ✕ Cancel
-          </button>
+          <div class="recording-dot"></div>
+          <span class="recording-time">${formattedTime}</span>
+          <span class="recording-indicator">Recording…</span>
         </div>
+        <button 
+          class="cancel-recording-button"
+          @click=${this.cancelRecording}
+          title="Cancel recording"
+        >
+          ✕ Cancel
+        </button>
       </div>
     `;
   }
@@ -2806,34 +2811,21 @@ export class QuizMode extends LitElement {
     const similarity = result.similarity;
     const similarityPercentage = Math.round(similarity * 100);
 
-    // Determine similarity level and feedback
+    // Determine similarity level
     let similarityClass = 'poor';
-    let feedbackClass = 'poor';
-    let feedbackMessage = '';
 
     if (similarity >= 0.95) {
       similarityClass = 'excellent';
-      feedbackClass = 'excellent';
-      feedbackMessage = 'Excellent pronunciation! 🎉';
     } else if (similarity >= 0.85) {
       similarityClass = 'good';
-      feedbackClass = 'good';
-      feedbackMessage = 'Good pronunciation! Keep it up! 👍';
     } else if (similarity >= 0.75) {
       similarityClass = 'fair';
-      feedbackClass = 'fair';
-      feedbackMessage = 'Not bad! Try to match the original more closely. 🤔';
     } else {
       similarityClass = 'poor';
-      feedbackClass = 'poor';
-      feedbackMessage = 'Keep practicing! Listen to the audio again and try to match it. 💪';
     }
 
     return html`
       <div class="transcription-results">
-        <div class="transcription-header">
-          🎤 Speech Recognition Results
-        </div>
 
         <div class="transcription-text">
           <div class="label">Expected:</div>
@@ -2864,10 +2856,6 @@ export class QuizMode extends LitElement {
             <div class="similarity-fill ${similarityClass}" style="width: ${similarityPercentage}%"></div>
           </div>
           <span class="similarity-percentage">${similarityPercentage}%</span>
-        </div>
-
-        <div class="pronunciation-feedback ${feedbackClass}">
-          ${feedbackMessage}
         </div>
       </div>
     `;
