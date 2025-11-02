@@ -16,6 +16,7 @@ import { IPC_CHANNELS } from '../shared/types/ipc.js';
 import { LemmatizationService } from './lemmatization/index.js';
 import { ScoringService } from './scoring/index.js';
 import { setupScoringHandlers } from './ipc/ipc-handlers.js';
+import { ServiceManager } from './services/index.js';
 
 let mainWindow: BrowserWindow;
 let databaseLayer: SQLiteDatabaseLayer | undefined;
@@ -28,6 +29,7 @@ let updateManager: UpdateManager | undefined;
 let wordGenerationRunner: WordGenerationRunner | undefined;
 let lemmatizationService: LemmatizationService | undefined;
 let scoringService: ScoringService | undefined;
+let serviceManager: ServiceManager | undefined;
 
 const forceLocalServices = process.env.E2E_FORCE_LOCAL_SERVICES === '1';
 
@@ -290,6 +292,13 @@ app.whenReady().then(async () => {
     // Set up security policies
     await setupSecurity();
 
+    // Start managed services (whisper-server and stanza-service) if enabled
+    // This is controlled by MANAGE_SERVICES=1 environment variable
+    serviceManager = new ServiceManager({
+      enabled: process.env.MANAGE_SERVICES === '1'
+    });
+    await serviceManager.start();
+
     // Create the main window early - show UI while services initialize
     // This provides better perceived performance
     createWindow();
@@ -369,6 +378,11 @@ app.on('before-quit', async (event) => {
         } catch (error) {
           console.warn('Error stopping recording during before-quit:', error);
         }
+      }
+
+      // Stop managed services
+      if (serviceManager) {
+        await serviceManager.stop();
       }
 
       // Clean up update manager

@@ -95,6 +95,18 @@ uv run python stanza-service.py
 # Runs on http://127.0.0.1:8888
 ```
 
+**Optional: Managed Services** (automatic service management):
+The app can automatically start and manage whisper-server and stanza-service as child processes. Enable this with:
+```bash
+MANAGE_SERVICES=1 npm run dev
+```
+
+When enabled:
+- Services are spawned on random ports if default ports (8080, 8888) are taken
+- Services are monitored and automatically restarted if they crash
+- Port conflicts are automatically detected and resolved
+- Services are cleaned up when the app exits
+
 ## Setup
 
 1. Install Node.js 18+
