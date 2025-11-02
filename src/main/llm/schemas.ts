@@ -110,3 +110,59 @@ export const ContextSentenceResponseSchema = z.union([
   }))
 ]);
 
+// Dialogue variant schema for conversation practice
+const DialogueVariantItemSchema = z.object({
+  sentence: z.string().min(1),
+  translation: z.string().min(1)
+});
+
+export const DialogueVariantResponseSchema = z.union([
+  z.object({
+    variants: z.array(DialogueVariantItemSchema)
+  }).transform(obj => obj.variants),
+  z.array(DialogueVariantItemSchema),
+  DialogueVariantItemSchema.transform(v => [v]),
+  z.record(z.any()).transform(obj => {
+    // Try to extract variants from various formats
+    if (obj.variants && Array.isArray(obj.variants)) {
+      return obj.variants.filter((item: any) => item.sentence && item.translation).map((item: any) => ({
+        sentence: String(item.sentence).trim(),
+        translation: String(item.translation).trim()
+      }));
+    }
+    if (Array.isArray(obj)) {
+      return obj.filter((item: any) => item.sentence && item.translation).map((item: any) => ({
+        sentence: String(item.sentence).trim(),
+        translation: String(item.translation).trim()
+      }));
+    }
+    return [];
+  })
+]);
+
+// Follow-up continuation schema for dialog practice
+export const FollowUpResponseSchema = z.union([
+  z.string().transform(text => ({ text, translation: '' })),
+  z.object({
+    text: z.string(),
+    translation: z.string().optional()
+  }),
+  z.object({
+    continuation: z.string(),
+    translation: z.string().optional()
+  }),
+  z.object({
+    text: z.string(),
+    english: z.string().optional()
+  }),
+  z.record(z.any()).transform(obj => {
+    if (typeof obj === 'string') return { text: obj, translation: '' };
+    if (obj.text || obj.continuation) {
+      const text = String(obj.text || obj.continuation);
+      const translation = String(obj.translation || obj.english || '');
+      return { text, translation };
+    }
+    return { text: '', translation: '' };
+  })
+]);
+

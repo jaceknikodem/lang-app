@@ -8,7 +8,9 @@ import { LLM_CONFIG } from '../../shared/constants/index.js';
 import {
   WordGenerationResponseSchema,
   SentenceGenerationResponseSchema,
-  ContextSentenceResponseSchema
+  ContextSentenceResponseSchema,
+  DialogueVariantResponseSchema,
+  FollowUpResponseSchema
 } from './schemas.js';
 import { z } from 'zod';
 
@@ -339,6 +341,188 @@ Rules:
 5. Provide English translations for both context sentences
 6. The sentences should make sense when read together: [contextBefore] [given sentence] [contextAfter]
 7. Return ONLY the JSON object, nothing else`;
+  }
+
+  /**
+   * Generate dialogue variants - shared implementation
+   */
+  async generateDialogueVariants(
+    triggerSentence: string,
+    triggerTranslation: string,
+    language: string,
+    knownWords: string[],
+    count: number
+  ): Promise<Array<{ sentence: string; translation: string }>> {
+    const prompt = this.createDialogueVariantPrompt(
+      triggerSentence,
+      triggerTranslation,
+      language,
+      knownWords,
+      count
+    );
+
+    try {
+      const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
+
+      // Use Zod to parse and validate the response
+      const parseResult = DialogueVariantResponseSchema.safeParse(response);
+
+      if (!parseResult.success) {
+        console.error('Dialogue variant validation failed:', parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '));
+        throw new Error(`Invalid response format: ${parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')}`);
+      }
+
+      const variants = parseResult.data;
+
+      // Ensure we have an array of variants
+      const variantArray = Array.isArray(variants) ? variants : [];
+
+      // If we got significantly fewer variants than requested, throw an error to trigger retry
+      const minVariants = Math.max(1, Math.floor(count * LLM_CONFIG.MIN_SENTENCE_COUNT_THRESHOLD));
+      if (variantArray.length < minVariants) {
+        throw new Error(`Insufficient variants generated: got ${variantArray.length}, expected at least ${minVariants}`);
+      }
+
+      return variantArray;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw this.createLLMError(error, 'Response validation failed', 'INVALID_RESPONSE', false);
+      }
+      throw this.createLLMError(error instanceof Error ? error : new Error(String(error)), 'Failed to generate dialogue variants');
+    }
+  }
+
+  /**
+   * Create prompt for dialogue variant generation
+   */
+  protected createDialogueVariantPrompt(
+    triggerSentence: string,
+    triggerTranslation: string,
+    language: string,
+    knownWords: string[],
+    count: number
+  ): string {
+    const languageName = language.charAt(0).toUpperCase() + language.slice(1);
+    const examples = Array.from({ length: count }, (_, i) =>
+      `  {
+    "sentence": "${languageName.toLowerCase()}_response_${i + 1}",
+    "translation": "english_translation_${i + 1}"
+  }`
+    ).join(',\n');
+    
+    const knownWordsText = knownWords.length > 0
+      ? `\nIMPORTANT: Use words from this list when possible: ${knownWords.slice(0, 20).join(', ')}`
+      : '';
+    
+    return `CRITICAL: You must return exactly ${count} ${languageName} response sentence(s) in a JSON array. No more, no less.
+CRITICAL: Return ONLY the JSON array, no explanations or extra text.
+
+Task: Generate exactly ${count} diverse ${languageName} response sentence(s) that could naturally follow this trigger sentence.${knownWordsText}
+
+Trigger sentence: "${triggerSentence}"
+Trigger translation: "${triggerTranslation}"
+
+Expected output format (${count} items):
+[
+${examples}
+]
+
+Requirements:
+1. Must be exactly ${count} responses
+2. Each response should be DIFFERENT from the others - provide diverse options
+3. Responses should naturally follow the trigger sentence conversationally
+4. Make them natural and idiomatic
+5. Each response must have both the ${languageName} sentence and English translation
+6. Responses should vary in wording, structure, or approach when possible
+${knownWords.length > 0 ? '7. Prefer using words from the provided list when possible' : ''}
+8. Return ONLY the JSON array, nothing else`;
+  }
+
+  /**
+   * Generate follow-up continuation - shared implementation
+   */
+  async generateFollowUp(sentence: string, translation: string, language: string): Promise<{ text: string; translation: string }> {
+    const prompt = this.createFollowUpPrompt(sentence, translation, language);
+
+    try {
+      const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
+
+      // Use Zod to parse and validate the response
+      const parseResult = FollowUpResponseSchema.safeParse(response);
+
+      if (!parseResult.success) {
+        console.warn('Follow-up validation failed:', parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '));
+        // Return empty object on validation failure instead of throwing
+        return { text: '', translation: '' };
+      }
+
+      const parsedData = parseResult.data;
+
+      // Extract text and translation
+      let text = '';
+      let translation = '';
+
+      if ('text' in parsedData) {
+        text = String(parsedData.text || '');
+        // Check if text contains translation separated by blank line
+        const parts = text.split('\n\n');
+        if (parts.length >= 2) {
+          text = parts[0].trim();
+          translation = parts.slice(1).join('\n').trim();
+        }
+      } else if ('continuation' in parsedData) {
+        text = String(parsedData.continuation || '');
+      }
+
+      // If we don't have translation from text parsing, check object properties
+      if (!translation) {
+        if ('translation' in parsedData && parsedData.translation) {
+          translation = String(parsedData.translation);
+        } else if ('english' in parsedData && parsedData.english) {
+          translation = String(parsedData.english);
+        }
+      }
+
+      return {
+        text: text.trim(),
+        translation: translation.trim()
+      };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        console.warn('Follow-up generation validation failed, returning empty result:', error);
+        return { text: '', translation: '' };
+      }
+      // On any error, return empty result instead of throwing
+      console.warn('Follow-up generation failed, returning empty result:', error);
+      return { text: '', translation: '' };
+    }
+  }
+
+  /**
+   * Create prompt for follow-up continuation generation
+   */
+  protected createFollowUpPrompt(sentence: string, translation: string, language: string): string {
+    const languageName = language.charAt(0).toUpperCase() + language.slice(1);
+    
+    return `Given this ${languageName} sentence and its English translation:
+
+"${sentence}"
+"${translation}"
+
+Generate a natural continuation of about 3 sentences in ${languageName}. This should:
+1. NOT be a question
+2. Continue the thought or provide related context
+3. Be suitable for reading/listening practice
+4. Be natural and coherent
+
+IMPORTANT: You must return BOTH the ${languageName} text AND its English translation.
+
+Preferred JSON format:
+{
+  "text": "${languageName} continuation text here",
+  "translation": "English translation here"
+}
+`;
   }
 
   /**

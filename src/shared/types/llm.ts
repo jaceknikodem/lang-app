@@ -8,6 +8,8 @@ export interface LLMClient {
   generateTopicWords(topic: string, language: string, count: number): Promise<GeneratedWord[]>;
   generateSentences(word: string, language: string, count: number, topic?: string): Promise<GeneratedSentence[]>;
   generateContextSentences(sentence: string, translation: string, language: string): Promise<{ contextBefore?: string; contextAfter?: string; contextBeforeTranslation?: string; contextAfterTranslation?: string }>;
+  generateDialogueVariants(triggerSentence: string, triggerTranslation: string, language: string, knownWords: string[], count: number): Promise<Array<{ sentence: string; translation: string }>>;
+  generateFollowUp(sentence: string, translation: string, language: string): Promise<{ text: string; translation: string }>;
   generateResponse(prompt: string, model?: string): Promise<string>;
   isAvailable(): Promise<boolean>;
   getAvailableModels(): Promise<string[]>;

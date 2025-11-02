@@ -5,60 +5,7 @@
 
 import { DatabaseLayer } from '../../shared/types/database.js';
 import { LLMClient } from '../../shared/types/llm.js';
-import { Sentence, DialogueVariant } from '../../shared/types/core.js';
-import { z } from 'zod';
-
-const DialogueVariantResponseSchema = z.union([
-  z.object({
-    variants: z.array(z.object({
-      sentence: z.string(),
-      translation: z.string()
-    }))
-  }),
-  z.array(z.object({
-    sentence: z.string(),
-    translation: z.string()
-  })),
-  z.object({
-    sentence: z.string(),
-    translation: z.string()
-  }).transform(v => [{ sentence: v.sentence, translation: v.translation }]),
-  z.record(z.any()).transform(obj => {
-    // Try to extract variants from various formats
-    if (obj.variants && Array.isArray(obj.variants)) {
-      return obj.variants;
-    }
-    if (Array.isArray(obj)) {
-      return obj;
-    }
-    return [];
-  })
-]);
-
-const FollowUpResponseSchema = z.union([
-  z.string().transform(text => ({ text, translation: '' })),
-  z.object({
-    text: z.string(),
-    translation: z.string().optional()
-  }),
-  z.object({
-    continuation: z.string(),
-    translation: z.string().optional()
-  }),
-  z.object({
-    text: z.string(),
-    english: z.string().optional()
-  }),
-  z.record(z.any()).transform(obj => {
-    if (typeof obj === 'string') return { text: obj, translation: '' };
-    if (obj.text || obj.continuation) {
-      const text = String(obj.text || obj.continuation);
-      const translation = String(obj.translation || obj.english || '');
-      return { text, translation };
-    }
-    return { text: '', translation: '' };
-  })
-]);
+import { Sentence, DialogueVariant, DialogSession } from '../../shared/types/core.js';
 
 export interface DialogServiceConfig {
   minWordStrength?: number;
@@ -88,33 +35,18 @@ export class DialogService {
   async selectSentence(language?: string): Promise<Sentence | null> {
     try {
       const currentLanguage = language || await this.database.getCurrentLanguage();
-      
-      // Single database query handles all filtering and random selection:
-      // - Filters by language, strength >= minWordStrength, ignored = FALSE
-      // - Filters by contextBefore exists and is not empty
-      // - Randomly selects one result
+
       const sentence = await this.database.getRandomDialogSentence(
         this.config.minWordStrength!,
         currentLanguage
       );
       
       if (!sentence) {
-        console.log('[DialogService] No suitable sentences found for dialog', {
-          language: currentLanguage,
-          minStrength: this.config.minWordStrength
-        });
         return null;
       }
       
-      console.log('[DialogService] Selected sentence for dialog', {
-        sentenceId: sentence.id,
-        wordId: sentence.wordId,
-        language: currentLanguage
-      });
-      
       return sentence;
     } catch (error) {
-      console.error('[DialogService] Failed to select sentence for dialog:', error);
       return null;
     }
   }
@@ -150,21 +82,8 @@ export class DialogService {
       const currentCount = existingVariants.length;
       const maxToGenerate = Math.max(0, this.config.maxVariantsPerSentence! - currentCount);
       
-      console.log('[DialogService] generateDialogueVariants - cache check', {
-        sentenceId: sentence.id,
-        existingVariantsCount: currentCount,
-        neededCount,
-        maxToGenerate,
-        cachedVariantIds: existingVariants.map(v => v.id)
-      });
-      
       if (neededCount === 0) {
         // We have enough variants cached in DB (2+), use them - avoid expensive LLM generation
-        console.log('[DialogService] Using cached variants from DB', {
-          sentenceId: sentence.id,
-          cachedVariantsCount: existingVariants.length,
-          returningCount: 2
-        });
         const shuffled = [...existingVariants].sort(() => Math.random() - 0.5);
         return shuffled.slice(0, 2); // Return full DialogueVariant objects
       }
@@ -174,78 +93,18 @@ export class DialogService {
       // Generate as many as needed at a time for efficiency.
       const generateCount = Math.max(neededCount, Math.min(this.config.maxVariantsPerSentence!, maxToGenerate));
       
-      console.log('[DialogService] Generating new variants (not cached)', {
-        sentenceId: sentence.id,
-        generateCount,
-        reason: currentCount < 2 ? 'insufficient cached variants' : 'filling cache to max'
-      });
-      
       // Use contextBefore (trigger sentence) instead of the sentence itself
       const triggerSentence = sentence.contextBefore || sentence.sentence;
       const triggerTranslation = sentence.contextBeforeTranslation || sentence.translation;
       
-      const prompt = this.createVariantPrompt(
+      // Use LLM client method which handles prompt creation, JSON parsing, and validation
+      const variantArray = await this.llmClient.generateDialogueVariants(
         triggerSentence,
         triggerTranslation,
         language,
         wordsToUse,
         generateCount
       );
-
-      // Use makeRequest if available (for Gemini client), otherwise use generateResponse
-      let parsedResponse: any;
-      
-      // Check if the LLM client has a makeRequest method (Gemini client)
-      const geminiClient = this.llmClient as any;
-      if (typeof geminiClient.makeRequest === 'function') {
-        // Use makeRequest which handles JSON parsing and cleaning
-        parsedResponse = await geminiClient.makeRequest(prompt, geminiClient.getSentenceGenerationModel?.());
-      } else {
-        // For Ollama or other clients, use generateResponse and parse manually
-        const response = await this.llmClient.generateResponse(prompt);
-        
-        // Clean the response (remove markdown code blocks, leading text, etc.)
-        let cleanResponse = typeof response === 'string' ? response : String(response);
-        
-        // Remove markdown code blocks
-        cleanResponse = cleanResponse.replace(/```json\s*/gi, '').replace(/```\s*/gi, '');
-        
-        // Remove leading text before JSON
-        cleanResponse = cleanResponse.replace(/^(Here's|Here is|The|Response:|JSON:)\s*/i, '');
-        
-        // Extract JSON array or object
-        const jsonMatch = cleanResponse.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
-        if (jsonMatch) {
-          cleanResponse = jsonMatch[0];
-        }
-        
-        try {
-          parsedResponse = JSON.parse(cleanResponse.trim());
-        } catch (parseError) {
-          console.error('[DialogService] JSON parsing failed:', parseError);
-          console.error('[DialogService] Clean response:', cleanResponse);
-          throw new Error('Could not parse LLM response as JSON');
-        }
-      }
-
-      // Validate with Zod
-      const parseResult = DialogueVariantResponseSchema.safeParse(parsedResponse);
-      
-      if (!parseResult.success) {
-        console.error('[DialogService] Zod validation failed for dialogue variants');
-        console.error('[DialogService] Parsed response:', JSON.stringify(parsedResponse, null, 2));
-        console.error('[DialogService] Zod errors:', parseResult.error.issues.map(issue => ({
-          path: issue.path.join('.'),
-          message: issue.message,
-          code: issue.code
-        })));
-        throw new Error(`Invalid response format: ${parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')}`);
-      }
-
-      const variants = parseResult.data;
-      
-      // Ensure we have an array of variants
-      const variantArray = Array.isArray(variants) ? variants : variants.variants || [];
       
       // Check how many we can actually store (respect max limit)
       const canStore = Math.min(variantArray.length, maxToGenerate);
@@ -264,7 +123,6 @@ export class DialogService {
         // Check for duplicates before storing
         const normalized = `${variant.sentence.toLowerCase().trim()}|${variant.translation.toLowerCase().trim()}`;
         if (normalizedExisting.has(normalized)) {
-          console.log('[DialogService] Skipping duplicate variant:', variant.sentence);
           continue;
         }
         
@@ -286,14 +144,7 @@ export class DialogService {
           
           // Add to existing set to avoid duplicates
           normalizedExisting.add(normalized);
-          
-          console.log('[DialogService] Stored dialogue variant', {
-            sentenceId: sentence.id,
-            variantId,
-            variantSentence: variant.sentence.slice(0, 50)
-          });
         } catch (error) {
-          console.warn('[DialogService] Failed to store dialogue variant:', error);
           // Continue storing other variants even if one fails
         }
       }
@@ -308,17 +159,9 @@ export class DialogService {
       const allVariants = allStoredVariants.length > 0 ? allStoredVariants : [...existingVariants, ...storedVariants];
       const shuffled = [...allVariants].sort(() => Math.random() - 0.5);
       
-      console.log('[DialogService] Variants generated and cached', {
-        sentenceId: sentence.id,
-        totalCachedVariants: allVariants.length,
-        newlyStoredCount: storedVariants.length,
-        returningVariantIds: shuffled.slice(0, 2).map(v => v.id)
-      });
-      
       // Return full DialogueVariant objects with IDs
       return shuffled.slice(0, 2);
     } catch (error) {
-      console.error('Failed to generate dialogue variants:', error);
       // Return empty array on error
       return [];
     }
@@ -338,7 +181,6 @@ export class DialogService {
         const sentenceId = Math.abs(variantId);
         const sentence = await this.database.getSentenceById(sentenceId);
         if (!sentence) {
-          console.error('[DialogService] Sentence not found for variant:', variantId);
           return { text: '', translation: '' };
         }
         
@@ -359,7 +201,6 @@ export class DialogService {
           );
           variant = await this.database.getDialogueVariantById(variantIdFromDb);
           if (!variant) {
-            console.error('[DialogService] Failed to create variant for original sentence');
             return { text: '', translation: '' };
           }
         }
@@ -367,142 +208,27 @@ export class DialogService {
         // Regular variant - get from database
         variant = await this.database.getDialogueVariantById(variantId);
         if (!variant) {
-          console.error('[DialogService] Variant not found:', variantId);
           return { text: '', translation: '' };
         }
       }
 
       // Return cached continuation if available
       if (variant.continuationText && variant.continuationTranslation) {
-        console.log('[DialogService] Using cached continuation from DB', {
-          variantId: variant.id,
-          sentenceId: variant.sentenceId,
-          hasContinuationText: !!variant.continuationText,
-          hasContinuationTranslation: !!variant.continuationTranslation
-        });
         return {
           text: variant.continuationText,
           translation: variant.continuationTranslation
         };
       }
-      
-      console.log('[DialogService] Generating new continuation (not cached)', {
-        variantId: variant.id,
-        sentenceId: variant.sentenceId,
-        isOriginalSentence
-      });
 
       const currentLanguage = language || await this.database.getCurrentLanguage();
       
+      // Use LLM client method which handles prompt creation, JSON parsing, and validation
       // Use the variant sentence as context (what the user said), not the original sentence
-      const prompt = this.createFollowUpPrompt(
+      const result = await this.llmClient.generateFollowUp(
         variant.variantSentence,
         variant.variantTranslation,
         currentLanguage
       );
-
-      // Use makeRequest if available (for Gemini client), otherwise use generateResponse
-      let parsedResponse: any;
-      
-      // Check if the LLM client has a makeRequest method (Gemini client)
-      const geminiClient = this.llmClient as any;
-      if (typeof geminiClient.makeRequest === 'function') {
-        // Use makeRequest which handles JSON parsing and cleaning
-        try {
-          parsedResponse = await geminiClient.makeRequest(prompt, geminiClient.getSentenceGenerationModel?.());
-        } catch (error) {
-          // If makeRequest fails, fall back to generateResponse
-          const rawResponse = await this.llmClient.generateResponse(prompt);
-          parsedResponse = rawResponse;
-        }
-      } else {
-        // For Ollama or other clients, use generateResponse
-        const rawResponse = await this.llmClient.generateResponse(prompt);
-        parsedResponse = rawResponse;
-      }
-      
-      // If response is a string that might be JSON, try to parse it
-      if (typeof parsedResponse === 'string') {
-        // Clean the response (remove markdown code blocks, leading text, etc.)
-        let cleanResponse = parsedResponse.trim();
-        
-        // Remove markdown code blocks
-        cleanResponse = cleanResponse.replace(/```json\s*/gi, '').replace(/```\s*/gi, '');
-        
-        // Remove leading text before JSON
-        cleanResponse = cleanResponse.replace(/^(Here's|Here is|The|Response:|JSON:)\s*/i, '');
-        
-        // Try to extract JSON object
-        const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          try {
-            parsedResponse = JSON.parse(jsonMatch[0]);
-          } catch (parseError) {
-            // If JSON parsing fails, treat as plain text
-            console.log('[DialogService] JSON parsing failed, treating as plain text');
-          }
-        } else {
-          // No JSON found, check if it's plain text with translation separated by blank line
-          const parts = cleanResponse.split('\n\n');
-          if (parts.length >= 2) {
-            parsedResponse = {
-              text: parts[0].trim(),
-              translation: parts.slice(1).join('\n').trim()
-            };
-          } else {
-            // Plain text only
-            parsedResponse = { text: cleanResponse, translation: '' };
-          }
-        }
-      }
-      
-      // Parse response - follow-up can be plain text or JSON with text and translation
-      const parseResult = FollowUpResponseSchema.safeParse(parsedResponse);
-      
-      if (!parseResult.success) {
-        console.error('[DialogService] Failed to parse follow-up:', parseResult.error);
-        console.error('[DialogService] Parsed response:', parsedResponse);
-        // Return empty object on parse failure instead of crashing
-        return { text: '', translation: '' };
-      }
-
-      const parsedData = parseResult.data;
-      
-      // Extract text and translation - parsedData can be various formats, but schema ensures it has text and translation
-      let text = '';
-      let translation = '';
-      
-      if ('text' in parsedData) {
-        text = String(parsedData.text);
-        // Check if text contains translation separated by blank line
-        const parts = text.split('\n\n');
-        if (parts.length >= 2) {
-          text = parts[0].trim();
-          translation = parts.slice(1).join('\n').trim();
-        }
-      } else if ('continuation' in parsedData) {
-        text = String(parsedData.continuation);
-      }
-      
-      // If we don't have translation from text parsing, check object properties
-      if (!translation) {
-        if ('translation' in parsedData && parsedData.translation) {
-          translation = String(parsedData.translation);
-        } else if ('english' in parsedData && parsedData.english) {
-          translation = String(parsedData.english);
-        }
-      }
-
-      // If no translation was provided, try to generate it separately
-      if (!translation && text) {
-        console.log('[DialogService] No translation in response, generating separately...');
-        // Could add translation logic here if needed
-      }
-
-      const result = { 
-        text: text.trim(), 
-        translation: translation.trim() 
-      };
 
       // Cache the continuation for this variant (use actual variant ID, not the pseudo ID)
       if (result.text && result.translation) {
@@ -512,95 +238,15 @@ export class DialogService {
             result.text,
             result.translation
           );
-          console.log('[DialogService] Cached continuation for variant:', variant.id);
         } catch (cacheError) {
-          console.error('[DialogService] Failed to cache continuation:', cacheError);
           // Continue even if caching fails
         }
       }
 
       return result;
     } catch (error) {
-      console.error('Failed to generate follow-up:', error);
       return { text: '', translation: '' };
     }
-  }
-
-  /**
-   * Create prompt for generating dialogue variants
-   */
-  private createVariantPrompt(
-    triggerSentence: string,
-    triggerTranslation: string,
-    language: string,
-    knownWords: string[],
-    count: number
-  ): string {
-    const languageName = language.charAt(0).toUpperCase() + language.slice(1);
-    const examples = Array.from({ length: count }, (_, i) =>
-      `  {
-    "sentence": "${languageName.toLowerCase()}_response_${i + 1}",
-    "translation": "english_translation_${i + 1}"
-  }`
-    ).join(',\n');
-    
-    const knownWordsText = knownWords.length > 0
-      ? `\nIMPORTANT: Use words from this list when possible: ${knownWords.slice(0, 20).join(', ')}`
-      : '';
-    
-    return `CRITICAL: You must return exactly ${count} ${languageName} response sentence(s) in a JSON array. No more, no less.
-CRITICAL: Return ONLY the JSON array, no explanations or extra text.
-
-Task: Generate exactly ${count} diverse ${languageName} response sentence(s) that could naturally follow this trigger sentence.${knownWordsText}
-
-Trigger sentence: "${triggerSentence}"
-Trigger translation: "${triggerTranslation}"
-
-Expected output format (${count} items):
-[
-${examples}
-]
-
-Requirements:
-1. Must be exactly ${count} responses
-2. Each response should be DIFFERENT from the others - provide diverse options
-3. Responses should naturally follow the trigger sentence conversationally
-4. Make them natural and idiomatic
-5. Each response must have both the ${languageName} sentence and English translation
-6. Responses should vary in wording, structure, or approach when possible
-${knownWords.length > 0 ? '7. Prefer using words from the provided list when possible' : ''}
-8. Return ONLY the JSON array, nothing else`;
-  }
-
-  /**
-   * Create prompt for generating follow-up continuation
-   */
-  private createFollowUpPrompt(
-    sentence: string,
-    translation: string,
-    language: string
-  ): string {
-    const languageName = language.charAt(0).toUpperCase() + language.slice(1);
-    
-    return `Given this ${languageName} sentence and its English translation:
-
-"${sentence}"
-"${translation}"
-
-Generate a natural continuation of about 3 sentences in ${languageName}. This should:
-1. NOT be a question
-2. Continue the thought or provide related context
-3. Be suitable for reading/listening practice
-4. Be natural and coherent
-
-IMPORTANT: You must return BOTH the ${languageName} text AND its English translation.
-
-Preferred JSON format:
-{
-  "text": "${languageName} continuation text here",
-  "translation": "English translation here"
-}
-`;
   }
 
   /**
@@ -608,32 +254,13 @@ Preferred JSON format:
    * Batches database queries for efficiency but processes LLM-dependent operations sequentially
    * to avoid flooding the LLM service
    */
-  async pregenerateSessions(count: number, language?: string): Promise<Array<{
-    sentenceId: number;
-    sentence: string;
-    translation: string;
-    contextBefore?: string;
-    contextBeforeTranslation?: string;
-    beforeSentenceAudio?: string;
-    responseOptions: Array<{
-      id: number;
-      sentenceId: number;
-      variantSentence: string;
-      variantTranslation: string;
-      createdAt: Date;
-    }>;
-  }>> {
+  async pregenerateSessions(count: number, language?: string): Promise<DialogSession[]> {
     if (count <= 0) {
       return [];
     }
 
     try {
       const currentLanguage = language || await this.database.getCurrentLanguage();
-      
-      console.log('[DialogService] pregenerateSessions - starting batch generation', {
-        requestedCount: count,
-        language: currentLanguage
-      });
       
       // Step 1: Batch query - get all sentences at once from database
       const sentences = await this.database.getRandomDialogSentences(
@@ -643,19 +270,8 @@ Preferred JSON format:
       );
 
       if (sentences.length === 0) {
-        console.log('[DialogService] No suitable sentences found for batch generation', {
-          language: currentLanguage,
-          minStrength: this.config.minWordStrength,
-          requestedCount: count
-        });
         return [];
       }
-      
-      console.log('[DialogService] pregenerateSessions - selected sentences', {
-        sentenceIds: sentences.map(s => s.id),
-        selectedCount: sentences.length,
-        requestedCount: count
-      });
 
       // Step 2: Extract known words once (used for all variant generations)
       const allWords = await this.database.getAllWords(true, false, currentLanguage);
@@ -673,14 +289,6 @@ Preferred JSON format:
         const variants = await this.database.getDialogueVariantsBySentenceId(sentenceId);
         allExistingVariantsMap.set(sentenceId, variants);
       }));
-      
-      console.log('[DialogService] pregenerateSessions - checked cache for existing variants', {
-        sentenceIds: Array.from(allExistingVariantsMap.keys()),
-        cachedVariantCounts: Array.from(allExistingVariantsMap.entries()).map(([id, variants]) => ({
-          sentenceId: id,
-          cachedVariantsCount: variants.length
-        }))
-      });
 
       // Step 4: Process each sentence sequentially for LLM-dependent operations
       // This avoids flooding the LLM service with concurrent requests
@@ -702,11 +310,6 @@ Preferred JSON format:
 
       for (const sentence of sentences) {
         try {
-          console.log('[DialogService] pregenerateSessions - processing sentence', {
-            sentenceId: sentence.id,
-            wordId: sentence.wordId
-          });
-          
           // Generate variants sequentially (LLM call)
           const existingVariants = allExistingVariantsMap.get(sentence.id) || [];
           const variants = await this.generateDialogueVariants(sentence, existingVariants, knownWords);
@@ -741,25 +344,13 @@ Preferred JSON format:
               createdAt: v.createdAt
             }))
           });
-          
-          console.log('[DialogService] pregenerateSessions - session generated', {
-            sentenceId: sentence.id,
-            responseOptionsCount: responseOptions.length
-          });
         } catch (error) {
-          console.error(`[DialogService] Failed to generate variants for sentence ${sentence.id}:`, error);
           // Continue with other sentences even if one fails
         }
       }
 
-      console.log('[DialogService] pregenerateSessions - batch generation complete', {
-        generatedCount: sessions.length,
-        requestedCount: count,
-        sentenceIds: sessions.map(s => s.sentenceId)
-      });
       return sessions;
     } catch (error) {
-      console.error('[DialogService] Failed to pre-generate dialog sessions:', error);
       return [];
     }
   }

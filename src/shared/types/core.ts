@@ -138,6 +138,24 @@ export interface DialogueVariant {
   continuationAudio?: string;
 }
 
+export interface DialogResponseOption {
+  id: number;
+  sentenceId: number;
+  variantSentence: string;
+  variantTranslation: string;
+  createdAt: Date;
+}
+
+export interface DialogSession {
+  sentenceId: number;
+  sentence: string;
+  translation: string;
+  contextBefore?: string;
+  contextBeforeTranslation?: string;
+  beforeSentenceAudio?: string;
+  responseOptions: DialogResponseOption[];
+}
+
 export interface ModeScores {
   addWords: number;
   review: number;

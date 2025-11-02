@@ -2,7 +2,7 @@
  * IPC bridge interfaces for secure communication between main and renderer processes
  */
 
-import { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest, DictionaryEntry, DialogueVariant, ModeScores } from './core.js';
+import { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest, DictionaryEntry, DialogueVariant, ModeScores, DialogSession } from './core.js';
 import { JobWordInfo, WordProcessingStatus } from './database.js';
 import { RecordingOptions, RecordingSession, TranscriptionOptions, TranscriptionResult, TranscriptionComparison } from './audio.js';
 
@@ -202,36 +202,8 @@ export interface IPCBridge {
     generateVariants: (sentenceId: number) => Promise<DialogueVariant[]>;
     generateFollowUp: (variantId: number) => Promise<{ text: string; translation: string; audio?: string }>;
     ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
-    pregenerateSession: () => Promise<{
-      sentenceId: number;
-      sentence: string;
-      translation: string;
-      contextBefore?: string;
-      contextBeforeTranslation?: string;
-      beforeSentenceAudio?: string;
-      responseOptions: Array<{
-        id: number;
-        sentenceId: number;
-        variantSentence: string;
-        variantTranslation: string;
-        createdAt: Date;
-      }>;
-    } | null>;
-    pregenerateSessions: (count: number) => Promise<Array<{
-      sentenceId: number;
-      sentence: string;
-      translation: string;
-      contextBefore?: string;
-      contextBeforeTranslation?: string;
-      beforeSentenceAudio?: string;
-      responseOptions: Array<{
-        id: number;
-        sentenceId: number;
-        variantSentence: string;
-        variantTranslation: string;
-        createdAt: Date;
-      }>;
-    }>>;
+    pregenerateSession: () => Promise<DialogSession | null>;
+    pregenerateSessions: (count: number) => Promise<DialogSession[]>;
   };
 
   // Flow operations
