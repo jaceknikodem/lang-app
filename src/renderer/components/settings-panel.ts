@@ -115,6 +115,7 @@ export class SettingsPanel extends LitElement {
       .warning-section {
         border-color: #ffc107;
         background: #fff3cd;
+        padding: var(--spacing-md);
       }
 
       .warning-section h3 {
@@ -257,6 +258,68 @@ export class SettingsPanel extends LitElement {
         letter-spacing: 0.1em;
       }
 
+      .advanced-toggle {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        margin-bottom: var(--spacing-md);
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--background-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-small);
+        cursor: pointer;
+        font-size: 12px;
+        color: var(--text-secondary);
+        transition: all 0.2s ease;
+      }
+
+      .advanced-toggle:hover {
+        background: var(--background-tertiary);
+        color: var(--text-primary);
+      }
+
+      .advanced-toggle-icon {
+        transition: transform 0.2s ease;
+      }
+
+      .advanced-toggle-icon.expanded {
+        transform: rotate(90deg);
+      }
+
+      .advanced-settings {
+        margin-top: var(--spacing-md);
+        padding-top: var(--spacing-md);
+        border-top: 1px solid var(--border-color);
+      }
+
+      .backup-actions {
+        display: flex;
+        gap: var(--spacing-md);
+        margin-bottom: var(--spacing-md);
+      }
+
+      .backup-action {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+      }
+
+      .backup-action .settings-description {
+        margin-right: 0;
+        margin-bottom: 0;
+      }
+
+      .error-message {
+        margin-top: var(--spacing-sm);
+        padding: var(--spacing-sm);
+        border-radius: var(--border-radius-small);
+        font-size: 12px;
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+
     `
   ];
 
@@ -321,6 +384,9 @@ export class SettingsPanel extends LitElement {
 
   @state()
   private elevenLabsModel = 'eleven_flash_v2_5';
+
+  @state()
+  private llmError = '';
 
 
 
@@ -724,6 +790,9 @@ export class SettingsPanel extends LitElement {
 
     if (!selectedProvider) return;
 
+    // Clear any previous error
+    this.llmError = '';
+
     try {
       // Update the UI immediately to show the new provider's models
       this.currentLLMProvider = selectedProvider;
@@ -738,12 +807,16 @@ export class SettingsPanel extends LitElement {
       // Reload all settings to get the current model selections
       await this.loadLLMSettings();
 
+      // Clear any previous errors on success
+      this.llmError = '';
+
       console.log('LLM provider changed to:', this.currentLLMProvider);
     } catch (error) {
       console.error('Failed to change LLM provider:', error);
       // Revert the selection
       select.value = this.currentLLMProvider;
-      alert(`Failed to switch to ${selectedProvider}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Show inline error instead of alert
+      this.llmError = `Failed to switch to ${selectedProvider}: ${error instanceof Error ? error.message : 'Unknown error'}`;
     } finally {
       this.isLoadingLLMModels = false;
     }
@@ -873,6 +946,12 @@ export class SettingsPanel extends LitElement {
                 `)}
               </select>
             </div>
+
+            ${this.llmError ? html`
+              <div class="error-message">
+                ${this.llmError}
+              </div>
+            ` : ''}
 
             <div class="settings-row">
               <div class="settings-description">
@@ -1016,36 +1095,37 @@ export class SettingsPanel extends LitElement {
 
         <div class="settings-section">
           <h3>Data Management</h3>
-          <div class="settings-row">
-            <div class="settings-description">
-              <strong>Create Backup</strong>
-              <p>Create a backup of your learning data and audio files</p>
+          <div class="backup-actions">
+            <div class="backup-action">
+              <div class="settings-description">
+                <strong>Create Backup</strong>
+                <p>Create a backup of your learning data and audio files</p>
+              </div>
+              <button 
+                class="action-button" 
+                @click=${this.createBackup}
+                ?disabled=${this.isCreatingBackup}
+              >
+                ${this.isCreatingBackup ? 'Creating...' : 'Create Backup'}
+              </button>
+              ${this.backupStatus && !this.backupStatus.includes('Restore') ? html`
+                <div class="status-message ${this.backupStatus.includes('Failed') ? 'status-error' : 'status-success'}">
+                  ${this.backupStatus}
+                </div>
+              ` : ''}
             </div>
-            <button 
-              class="action-button" 
-              @click=${this.createBackup}
-              ?disabled=${this.isCreatingBackup}
-            >
-              ${this.isCreatingBackup ? 'Creating...' : 'Create Backup'}
-            </button>
-          </div>
-          ${this.backupStatus ? html`
-            <div class="status-message ${this.backupStatus.includes('Failed') ? 'status-error' : 'status-success'}">
-              ${this.backupStatus}
+            <div class="backup-action">
+              <div class="settings-description">
+                <strong>Restore Backup</strong>
+                <p>Open the backup directory to browse and restore from your backups</p>
+              </div>
+              <button 
+                class="action-button" 
+                @click=${this.openBackupDirectory}
+              >
+                Restore Backup
+              </button>
             </div>
-          ` : ''}
-          
-          <div class="settings-row">
-            <div class="settings-description">
-              <strong>Restore Backup</strong>
-              <p>Open the backup directory to browse and restore from your backups</p>
-            </div>
-            <button 
-              class="action-button" 
-              @click=${this.openBackupDirectory}
-            >
-              Restore Backup
-            </button>
           </div>
         </div>
 
