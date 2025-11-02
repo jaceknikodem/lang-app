@@ -1046,19 +1046,17 @@ export class DialogMode extends LitElement {
     return html`
       <div class="recording-status-container">
         <div class="recording-status">
-          <div class="recording-indicator">
-            <div class="recording-dot"></div>
-            Recording... (auto-stop enabled)
-          </div>
-          <div class="recording-time">${formattedTime}</div>
-          <button 
-            class="cancel-recording-button"
-            @click=${this.cancelRecording}
-            title="Cancel recording"
-          >
-            ✕ Cancel
-          </button>
+          <div class="recording-dot"></div>
+          <span class="recording-time">${formattedTime}</span>
+          <span class="recording-indicator">Recording…</span>
         </div>
+        <button 
+          class="cancel-recording-button"
+          @click=${this.cancelRecording}
+          title="Cancel recording"
+        >
+          ✕ Cancel
+        </button>
       </div>
     `;
   }
@@ -1235,6 +1233,45 @@ export class DialogMode extends LitElement {
         color: rgba(255, 255, 255, 0.9);
       }
 
+      .typing-indicator {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-height: 24px;
+      }
+
+      .typing-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--text-secondary);
+        opacity: 0.7;
+        animation: typing-bounce 1.4s ease-in-out infinite;
+      }
+
+      .typing-dot:nth-child(1) {
+        animation-delay: 0s;
+      }
+
+      .typing-dot:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+
+      .typing-dot:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+
+      @keyframes typing-bounce {
+        0%, 60%, 100% {
+          transform: translateY(0);
+          opacity: 0.7;
+        }
+        30% {
+          transform: translateY(-8px);
+          opacity: 1;
+        }
+      }
+
       .response-options {
         display: flex;
         flex-direction: column;
@@ -1270,49 +1307,53 @@ export class DialogMode extends LitElement {
       }
 
       .recording-status-container {
-        padding: var(--spacing-md);
-        background: var(--background-primary);
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: #fff5f5;
         border-radius: var(--border-radius);
-        border: 2px solid var(--error-color);
-        margin-bottom: var(--spacing-md);
+        border-top: 2px solid rgba(255, 59, 48, 0.2);
+        margin-bottom: var(--spacing-sm);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--spacing-md);
       }
 
       .recording-status {
         display: flex;
-        flex-direction: column;
         align-items: center;
         gap: var(--spacing-sm);
+        flex: 1;
       }
 
       .recording-indicator {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-xs);
-        font-size: 14px;
-        color: var(--error-color);
-        font-weight: 500;
+        font-size: 13px;
+        color: var(--text-secondary);
+        font-weight: 400;
       }
 
       .recording-dot {
-        width: 10px;
-        height: 10px;
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
-        background: var(--error-color);
-        animation: pulse 1.5s ease-in-out infinite;
+        background: #ff3b30;
+        animation: recording-pulse 1.2s ease-in-out infinite;
+        flex-shrink: 0;
       }
 
-      @keyframes pulse {
+      @keyframes recording-pulse {
         0%, 100% {
           opacity: 1;
+          transform: scale(1);
         }
         50% {
-          opacity: 0.5;
+          opacity: 0.6;
+          transform: scale(1.1);
         }
       }
 
       .recording-time {
-        font-size: 18px;
-        font-weight: 600;
+        font-size: 14px;
+        font-weight: 500;
         color: var(--text-primary);
         font-variant-numeric: tabular-nums;
       }
@@ -1320,19 +1361,19 @@ export class DialogMode extends LitElement {
       .cancel-recording-button {
         padding: var(--spacing-xs) var(--spacing-sm);
         border: 1px solid var(--border-color);
-        background: var(--background-secondary);
-        color: var(--text-primary);
-        border-radius: var(--border-radius);
+        background: var(--background-primary);
+        color: var(--text-secondary);
+        border-radius: var(--border-radius-small);
         font-size: 12px;
         cursor: pointer;
         transition: all 0.2s ease;
-        margin-top: var(--spacing-xs);
+        flex-shrink: 0;
       }
 
       .cancel-recording-button:hover {
-        background: var(--error-light);
-        border-color: var(--error-color);
-        color: var(--error-color);
+        background: var(--background-secondary);
+        border-color: var(--text-tertiary);
+        color: var(--text-primary);
       }
 
       .transcribing-indicator {
@@ -1516,31 +1557,49 @@ export class DialogMode extends LitElement {
         cursor: not-allowed;
       }
 
-      .toggle-button {
-        background: var(--background-secondary);
-        border: 1px solid var(--border-color);
-        border-radius: var(--border-radius-small);
-        padding: var(--spacing-xs) var(--spacing-sm);
-        font-size: 12px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        color: var(--text-primary);
-        display: inline-flex;
+      .translations-toggle {
+        display: flex;
         align-items: center;
-        justify-content: center;
-        gap: var(--spacing-xs);
+        gap: var(--spacing-sm);
+        font-size: 14px;
+        color: var(--text-secondary);
         margin-left: auto;
       }
 
-      .toggle-button:hover {
-        border-color: var(--primary-color);
-        color: var(--primary-color);
-        background: var(--primary-light);
+      .translations-switch {
+        position: relative;
+        width: 40px;
+        height: 20px;
+        background: var(--border-color);
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
       }
 
-      .toggle-label {
-        font-size: 11px;
+      .translations-switch.active {
+        background: var(--primary-color);
+      }
+
+      .translations-slider {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
+
+      .translations-switch.active .translations-slider {
+        transform: translateX(20px);
+      }
+
+      .translations-label {
         font-weight: 500;
+        user-select: none;
+        font-size: 12px;
       }
 
       .error-container {
@@ -1657,15 +1716,17 @@ export class DialogMode extends LitElement {
               </button>
             `}
           ` : nothing}
-          <button 
-            class="toggle-button"
-            @click=${() => { this.showTranslations = !this.showTranslations; }}
-            title=${this.showTranslations ? 'Hide translations' : 'Show translations'}
-            aria-label=${this.showTranslations ? 'Hide translations' : 'Show translations'}
-          >
-            <span aria-hidden="true">${this.showTranslations ? '👁' : '👁‍🗨'}</span>
-            <span class="toggle-label">${this.showTranslations ? 'Hide EN' : 'Show EN'}</span>
-          </button>
+          <div class="translations-toggle">
+            <span class="translations-label">Show EN</span>
+            <div 
+              class="translations-switch ${this.showTranslations ? 'active' : ''}"
+              @click=${() => { this.showTranslations = !this.showTranslations; }}
+              title=${this.showTranslations ? 'Hide translations' : 'Show translations'}
+              aria-label=${this.showTranslations ? 'Hide translations' : 'Show translations'}
+            >
+              <div class="translations-slider"></div>
+            </div>
+          </div>
         </div>
 
         <div class="dialog-bubbles">
@@ -1718,6 +1779,18 @@ export class DialogMode extends LitElement {
           </div>
         ` : nothing}
 
+          ${this.isGeneratingFollowUp && !this.isTranscribing ? html`
+            <div class="dialog-bubble bubble-left">
+              <div class="bubble-content">
+                <p class="bubble-text typing-indicator">
+                  <span class="typing-dot"></span>
+                  <span class="typing-dot"></span>
+                  <span class="typing-dot"></span>
+                </p>
+              </div>
+            </div>
+          ` : nothing}
+
           ${this.showFollowUp && this.followUpText ? html`
             <div class="dialog-bubble bubble-left">
               <div class="bubble-content">
@@ -1731,16 +1804,9 @@ export class DialogMode extends LitElement {
         </div>
 
         ${this.renderRecordingSection()}
-
-        ${this.isGeneratingFollowUp && !this.isTranscribing ? html`
-          <div class="loading">
-            <div class="spinner"></div>
-            <p>Generating follow-up...</p>
-          </div>
-        ` : nothing}
         ${!this.isGeneratingFollowUp ? html`
           <button 
-            class="btn btn-primary"
+            class="btn ${this.showFollowUp && this.followUpText ? 'btn-primary' : 'btn-secondary'}"
             @click=${this.nextDialog}
             ?disabled=${this.isRecording || this.isTranscribing}
             style="margin-top: var(--spacing-md);"
