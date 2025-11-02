@@ -42,6 +42,7 @@ export class WordSelector extends LitElement {
   private wordsProcessed = false; // Track if words have been processed
 
   private keyboardUnsubscribe?: () => void;
+  private autoNavigateTimeout?: number;
 
   static styles = [
     sharedStyles,
@@ -339,6 +340,9 @@ export class WordSelector extends LitElement {
     if (this.keyboardUnsubscribe) {
       this.keyboardUnsubscribe();
     }
+    if (this.autoNavigateTimeout !== undefined) {
+      clearTimeout(this.autoNavigateTimeout);
+    }
   }
 
   private initializeWords() {
@@ -370,19 +374,24 @@ export class WordSelector extends LitElement {
     }
   }
 
-  private selectAll() {
-    this.selectableWords.forEach(word => {
-      if (!word.markedAsKnown) {
-        word.selected = true;
-      }
-    });
-    this.requestUpdate();
-  }
+  private toggleSelectAllNone() {
+    const selectedCount = this.selectableWords.filter(w => w.selected && !w.markedAsKnown).length;
+    const availableCount = this.selectableWords.filter(w => !w.markedAsKnown).length;
+    const allSelected = availableCount > 0 && selectedCount === availableCount;
 
-  private selectNone() {
-    this.selectableWords.forEach(word => {
-      word.selected = false;
-    });
+    if (allSelected) {
+      // Deselect all
+      this.selectableWords.forEach(word => {
+        word.selected = false;
+      });
+    } else {
+      // Select all
+      this.selectableWords.forEach(word => {
+        if (!word.markedAsKnown) {
+          word.selected = true;
+        }
+      });
+    }
     this.requestUpdate();
   }
 
@@ -428,6 +437,11 @@ export class WordSelector extends LitElement {
   }
 
   private handleGoToReview() {
+    // Clear auto-navigate timeout if it exists
+    if (this.autoNavigateTimeout !== undefined) {
+      clearTimeout(this.autoNavigateTimeout);
+      this.autoNavigateTimeout = undefined;
+    }
     // Clear the cached learning session to ensure fresh data is loaded
     sessionManager.clearLearningSession();
     router.goToLearning();
@@ -546,6 +560,13 @@ export class WordSelector extends LitElement {
       if (queuedCount > 0 || processedKnown > 0) {
         this.wordsProcessed = true;
         window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
+        
+        // Auto-navigate to Review after 3 seconds if words were queued
+        if (queuedCount > 0) {
+          this.autoNavigateTimeout = window.setTimeout(() => {
+            this.handleGoToReview();
+          }, 3000);
+        }
       }
 
       if (queuedCount === 0 && processedKnown > 0) {
@@ -618,11 +639,15 @@ export class WordSelector extends LitElement {
                 >
                   ${learnButtonLabel}
                 </button>
-                <button class="btn btn-small btn-secondary" @click=${this.selectAll}>
-                  Select All
-                </button>
-                <button class="btn btn-small btn-secondary" @click=${this.selectNone}>
-                  Select None
+                <button 
+                  class="btn btn-small btn-secondary" 
+                  @click=${this.toggleSelectAllNone}
+                >
+                  ${(() => {
+                    const availableCount = this.selectableWords.filter(w => !w.markedAsKnown).length;
+                    const allSelected = availableCount > 0 && selectedCount === availableCount;
+                    return allSelected ? 'Select None' : 'Select All';
+                  })()}
                 </button>
               </div>
             `}

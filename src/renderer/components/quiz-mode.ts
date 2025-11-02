@@ -309,6 +309,8 @@ export class QuizMode extends LitElement {
         gap: var(--spacing-sm);
         justify-content: center;
         flex-wrap: wrap;
+        margin-top: var(--spacing-md);
+        margin-bottom: var(--spacing-md);
       }
 
       .answer-button {
@@ -2656,9 +2658,6 @@ export class QuizMode extends LitElement {
     // Always show the difficulty prompt and buttons
     const difficultyButtons = html`
       <div class="answer-buttons">
-        <div class="difficulty-prompt">
-          <p>How well did you know this?</p>
-        </div>
         <div class="difficulty-buttons">
           <button 
             class="answer-button difficulty-fail"

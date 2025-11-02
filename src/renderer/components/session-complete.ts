@@ -244,12 +244,11 @@ export class SessionComplete extends LitElement {
       {
         key: CommonKeys.ENTER,
         action: () => {
-          // Only trigger if not in quiz mode (i.e., "Start another session" button is visible)
-          if (!this.isLoading && this.sessionSummary.type !== 'quiz') {
-            this.handleNewSession();
+          if (!this.isLoading) {
+            this.handleRecommendedAction();
           }
         },
-        description: 'Start another session'
+        description: 'Keep going'
       }
     ];
 
@@ -324,19 +323,8 @@ export class SessionComplete extends LitElement {
 
   render() {
     const isQuiz = this.sessionSummary.type === 'quiz';
-    const completionIcon = isQuiz ? '🎯' : '📚';
-    const completionTitle = isQuiz ? 'Quiz Complete!' : 'Learning Session Complete!';
-
     return html`
       <div class="completion-container">
-        <div class="completion-header">
-          <div class="completion-icon">${completionIcon}</div>
-          <h2 class="completion-title">${completionTitle}</h2>
-          <p class="completion-subtitle">
-            Great work! You've made progress in your language learning journey.
-          </p>
-        </div>
-
         ${isQuiz && this.sessionSummary.quizScore !== undefined && this.sessionSummary.quizTotal !== undefined ? html`
           <div class="quiz-score">
             <div class="score-percentage">
@@ -384,32 +372,13 @@ export class SessionComplete extends LitElement {
         ` : ''}
 
         <div class="recommendation">
-          <h3 class="recommendation-title">${isQuiz ? 'Next Steps' : 'Ready for more?'}</h3>
-          <p class="recommendation-text">
-            ${isQuiz
-              ? this.getRecommendationText()
-              : `Congrats!`}
-          </p>
-          <div class="action-buttons">
-            ${!isQuiz ? html`
-              <button
-                class="action-button primary"
-                @click=${this.handleNewSession}
-                ?disabled=${this.isLoading}
-              >
-                Start another session
-              </button>
-            ` : ''}
-            ${!isQuiz ? html`
-              <button
-                class="action-button"
-                @click=${this.handleTakeQuiz}
-                ?disabled=${this.isLoading}
-              >
-                Take Quiz
-              </button>
-            ` : ''}
-          </div>
+          <button
+            class="action-button primary"
+            @click=${this.handleRecommendedAction}
+            ?disabled=${this.isLoading}
+          >
+            Keep going!
+          </button>
         </div>
       </div>
     `;

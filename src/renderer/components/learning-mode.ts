@@ -2390,7 +2390,6 @@ export class LearningMode extends LitElement {
       return html`
         <div class="learning-container">
           <div class="completion-state">
-            <h3>🎉 Learning Session Complete!</h3>
             <p>You've reviewed all sentences for the selected words.</p>
             <div class="completion-actions">
               <button class="btn btn-primary btn-large" @click=${this.handleFinishLearning}>
@@ -2420,7 +2419,6 @@ export class LearningMode extends LitElement {
             </div>
             <div style="display: flex; align-items: center; gap: var(--spacing-sm);">
               <div class="playback-speed-control">
-                <span class="playback-speed-label">Speed</span>
                 <div class="playback-speed-buttons">
                   <button
                     class="playback-speed-button ${this.playbackSpeed === 0.8 ? 'active' : ''}"
