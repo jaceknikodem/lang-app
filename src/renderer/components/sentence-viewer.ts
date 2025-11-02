@@ -37,6 +37,9 @@ export class SentenceViewer extends LitElement {
   @property({ type: String })
   currentPlayingAudio: 'before' | 'main' | null = null;
 
+  @property({ type: Boolean })
+  audioOnlyMode = false;
+
   @state()
   private isPlayingAudio = false;
   
@@ -247,6 +250,13 @@ export class SentenceViewer extends LitElement {
         font-style: italic;
       }
 
+      .context-translation.hidden {
+        opacity: 0.1;
+        filter: blur(8px);
+        pointer-events: none;
+        user-select: none;
+      }
+
       .sentence-text {
         font-size: 18px;
         line-height: 1.5;
@@ -273,6 +283,13 @@ export class SentenceViewer extends LitElement {
         font-style: italic;
         line-height: 1.4;
         margin-top: var(--spacing-xs);
+      }
+
+      .sentence-translation.hidden {
+        opacity: 0.1;
+        filter: blur(8px);
+        pointer-events: none;
+        user-select: none;
       }
 
       .word-in-sentence {
@@ -1909,7 +1926,7 @@ export class SentenceViewer extends LitElement {
           ${this.sentence.contextBefore ? html`
             <div class="context-section ${this.localPlayingAudio === 'before' ? 'playing' : ''}">
               <div class="context-text">${this.sentence.contextBefore}</div>
-              <div class="context-translation">${this.sentence.contextBeforeTranslation}</div>
+              <div class="context-translation ${this.audioOnlyMode ? 'hidden' : ''}">${this.sentence.contextBeforeTranslation}</div>
             </div>
           ` : ''}
           
@@ -2006,7 +2023,7 @@ export class SentenceViewer extends LitElement {
               </div>
             ` : nothing}
             
-            <div class="sentence-translation">
+            <div class="sentence-translation ${this.audioOnlyMode ? 'hidden' : ''}">
               ${this.sentence.translation}
             </div>
           </div>
@@ -2014,7 +2031,7 @@ export class SentenceViewer extends LitElement {
           ${this.sentence.contextAfter ? html`
             <div class="context-section">
               <div class="context-text">${this.sentence.contextAfter}</div>
-              <div class="context-translation">${this.sentence.contextAfterTranslation}</div>
+              <div class="context-translation ${this.audioOnlyMode ? 'hidden' : ''}">${this.sentence.contextAfterTranslation}</div>
             </div>
           ` : ''}
         </div>

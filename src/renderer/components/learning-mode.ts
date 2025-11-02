@@ -81,6 +81,9 @@ export class LearningMode extends LitElement {
   @state()
   private currentPlayingAudio: 'before' | 'main' | null = null;
 
+  @state()
+  private audioOnlyMode = false;
+
   private sessionStartTime = Date.now();
   private keyboardUnsubscribe?: () => void;
   private lastRecordedSentenceId: number | null = null;
@@ -479,6 +482,49 @@ export class LearningMode extends LitElement {
       .playback-speed-button.active {
         background: var(--primary-color);
         color: white;
+      }
+
+      .audio-only-toggle {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+
+      .audio-only-switch {
+        position: relative;
+        width: 40px;
+        height: 20px;
+        background: var(--border-color);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+
+      .audio-only-switch.active {
+        background: var(--primary-color);
+      }
+
+      .audio-only-slider {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
+
+      .audio-only-switch.active .audio-only-slider {
+        transform: translateX(20px);
+      }
+
+      .audio-only-label {
+        font-weight: 500;
+        user-select: none;
       }
 
       @media (max-width: 768px) {
@@ -1109,6 +1155,10 @@ export class LearningMode extends LitElement {
     if (!this.autoScrollEnabled) {
       this.clearAutoScrollTimer();
     }
+  }
+
+  private toggleAudioOnlyMode(): void {
+    this.audioOnlyMode = !this.audioOnlyMode;
   }
 
   private setPlaybackSpeed(speed: number): void {
@@ -2501,6 +2551,17 @@ export class LearningMode extends LitElement {
                   <div class="auto-scroll-slider" style="width: 16px; height: 16px; top: 2px; left: 2px;"></div>
                 </div>
               </div>
+              <div class="audio-only-toggle" style="margin-bottom: 0;">
+                <span class="audio-only-label" style="font-size: 12px;">Hide English</span>
+                <div 
+                  class="audio-only-switch ${this.audioOnlyMode ? 'active' : ''}"
+                  @click=${this.toggleAudioOnlyMode}
+                  title="Hide English translations"
+                  style="width: 40px; height: 20px; cursor: pointer;"
+                >
+                  <div class="audio-only-slider" style="width: 16px; height: 16px; top: 2px; left: 2px;"></div>
+                </div>
+              </div>
             </div>
           </div>
           <div class="progress-bar">
@@ -2517,6 +2578,7 @@ export class LearningMode extends LitElement {
           .isLastSentence=${this.isLastSentence()}
           .isProcessing=${this.isProcessing}
           .currentPlayingAudio=${this.currentPlayingAudio}
+          .audioOnlyMode=${this.audioOnlyMode}
           @word-clicked=${this.handleWordClicked}
           @mark-word-known=${this.handleMarkWordKnown}
           @mark-word-ignored=${this.handleMarkWordIgnored}
