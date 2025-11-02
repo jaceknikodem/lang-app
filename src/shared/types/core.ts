@@ -74,7 +74,6 @@ export interface PrecomputedToken {
 export interface QuizQuestion {
   word: Word;
   sentence: Sentence;
-  direction: 'foreign-to-english' | 'english-to-foreign';
 }
 
 export interface StudyStats {
@@ -111,13 +110,11 @@ export interface CreateWordRequest {
 export interface AppState {
   currentMode: 'learning' | 'quiz';
   selectedTopic?: string;
-  quizDirection: 'foreign-to-english' | 'english-to-foreign';
 }
 
 export interface QuizSession {
   questions: QuizQuestion[];
   currentQuestionIndex: number;
-  direction: 'foreign-to-english' | 'english-to-foreign';
   score: number;
   totalQuestions: number;
   isComplete: boolean;

@@ -17,8 +17,6 @@ import type { RecordingOptions, RecordingSession } from '../../shared/types/audi
 @customElement('quiz-mode')
 export class QuizMode extends LitElement {
 
-  @property({ type: String })
-  direction: 'foreign-to-english' | 'english-to-foreign' = 'foreign-to-english';
 
   @state()
   private quizSession: QuizSession | null = null;
@@ -304,13 +302,6 @@ export class QuizMode extends LitElement {
         font-style: italic;
       }
 
-      .direction-indicator {
-        font-size: 12px;
-        color: var(--text-secondary);
-        margin-bottom: var(--spacing-xs);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
 
       .answer-buttons {
         display: flex;
@@ -1344,8 +1335,7 @@ export class QuizMode extends LitElement {
         return;
       }
 
-      // Restore direction and audio-only mode
-      this.direction = savedSession.direction;
+      // Restore audio-only mode
       this.audioOnlyMode = savedSession.audioOnlyMode ?? false;
 
       // Generate quiz questions from words in the saved order
@@ -1361,8 +1351,7 @@ export class QuizMode extends LitElement {
         if (sentence) {
           questions.push({
             word,
-            sentence,
-            direction: savedSession.direction
+            sentence
           });
         }
       }
@@ -1377,7 +1366,6 @@ export class QuizMode extends LitElement {
       this.quizSession = {
         questions,
         currentQuestionIndex: savedSession.currentQuestionIndex,
-        direction: savedSession.direction,
         score: savedSession.score,
         totalQuestions: savedSession.totalQuestions,
         isComplete: savedSession.isComplete
@@ -1449,8 +1437,7 @@ export class QuizMode extends LitElement {
         if (sentence) {
           questions.push({
             word,
-            sentence,
-            direction: this.direction
+            sentence
           });
         }
       }
@@ -1467,7 +1454,6 @@ export class QuizMode extends LitElement {
       this.quizSession = {
         questions: shuffledQuestions,
         currentQuestionIndex: 0,
-        direction: this.direction,
         score: 0,
         totalQuestions: shuffledQuestions.length,
         isComplete: false
@@ -1476,7 +1462,7 @@ export class QuizMode extends LitElement {
       this.currentQuestion = shuffledQuestions[0];
       
       // Save quiz session to session manager (creates new session)
-      sessionManager.startNewQuizSession(wordIds, this.direction, this.audioOnlyMode);
+      sessionManager.startNewQuizSession(wordIds, this.audioOnlyMode);
       
       // Prioritize: Load current question's audio first, then autoplay
       // This ensures audio is ready before playback starts
@@ -1533,7 +1519,6 @@ export class QuizMode extends LitElement {
         score: this.quizSession.score,
         totalQuestions: this.quizSession.totalQuestions,
         isComplete: this.quizSession.isComplete,
-        direction: this.quizSession.direction,
         audioOnlyMode: this.audioOnlyMode
       });
     }
@@ -2130,10 +2115,8 @@ export class QuizMode extends LitElement {
     if (this.isRecording || !this.speechRecognitionReady || !this.currentQuestion) return;
 
     try {
-      // Get the expected sentence for the initial prompt (if supported)
-      const expectedSentence = this.direction === 'foreign-to-english'
-        ? this.currentQuestion.sentence.sentence
-        : this.currentQuestion.sentence.translation;
+      // Get the expected sentence (foreign language)
+      const expectedSentence = this.currentQuestion.sentence.sentence;
 
       const recordingOptions: RecordingOptions = {
         sampleRate: 16000,
@@ -2297,10 +2280,8 @@ export class QuizMode extends LitElement {
     this.transcriptionResult = null;
 
     try {
-      // Get the expected sentence based on quiz direction
-      const expectedSentence = this.direction === 'foreign-to-english'
-        ? this.currentQuestion.sentence.sentence
-        : this.currentQuestion.sentence.translation;
+      // Get the expected sentence (foreign language)
+      const expectedSentence = this.currentQuestion.sentence.sentence;
 
       // Compare typed text with expected sentence (same logic as transcription comparison)
       const comparison = await window.electronAPI.audio.compareTranscription(
@@ -2397,18 +2378,14 @@ export class QuizMode extends LitElement {
     this.streamingTranscriptionText = null;
 
     try {
-      // Get the expected sentence based on quiz direction
-      const expectedSentence = this.direction === 'foreign-to-english'
-        ? this.currentQuestion.sentence.sentence
-        : this.currentQuestion.sentence.translation;
+      // Get the expected sentence (foreign language)
+      const expectedSentence = this.currentQuestion.sentence.sentence;
 
       // Get the current language for transcription
       const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
 
-      // Determine transcription language based on quiz direction
-      const transcriptionLanguage = this.direction === 'foreign-to-english'
-        ? currentLanguage
-        : 'en'; // English for english-to-foreign direction
+      // Transcription language is always the foreign language
+      const transcriptionLanguage = currentLanguage;
 
       console.log('Transcribing audio:', {
         filePath: this.currentRecording.filePath,
@@ -2556,15 +2533,11 @@ export class QuizMode extends LitElement {
     const progress = ((this.quizSession.currentQuestionIndex + 1) / this.quizSession.totalQuestions) * 100;
     const question = this.currentQuestion;
 
-    // Determine what to show based on quiz direction
-    const displayText = this.direction === 'foreign-to-english'
-      ? question.sentence.sentence
-      : question.sentence.translation;
+    // Always show foreign language sentence
+    const displayText = question.sentence.sentence;
 
-    // The word we're asking about (not the answer!)
-    const questionWord = this.direction === 'foreign-to-english'
-      ? `"${question.word.word}"`
-      : `"${question.word.translation}"`;
+    // The word we're asking about
+    const questionWord = `"${question.word.word}"`;
 
     return html`
       <div class="quiz-container">
@@ -2738,10 +2711,8 @@ export class QuizMode extends LitElement {
     const word = this.currentQuestion.word;
     const sentence = this.currentQuestion.sentence;
     
-    // Show the correct answer based on quiz direction
-    const correctAnswer = this.direction === 'foreign-to-english'
-      ? word.translation
-      : word.word;
+    // Show the correct answer (English translation)
+    const correctAnswer = word.translation;
 
     return html`
       <div class="revealed-answer">

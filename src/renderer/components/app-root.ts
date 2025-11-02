@@ -25,8 +25,7 @@ export class AppRoot extends LitElement {
 
   @state()
   private appState: AppState = {
-    currentMode: 'learning',
-    quizDirection: 'foreign-to-english'
+    currentMode: 'learning'
   };
 
   @state()
@@ -708,8 +707,7 @@ export class AppRoot extends LitElement {
     this.appState = {
       ...this.appState,
       currentMode: this.currentRoute.mode === 'quiz' ? 'quiz' : 'learning',
-      selectedTopic: routeData?.topic,
-      quizDirection: routeData?.direction || this.appState.quizDirection
+      selectedTopic: routeData?.topic
     };
   }
 
@@ -724,10 +722,6 @@ export class AppRoot extends LitElement {
 
     if (routeData?.topic) {
       sessionManager.updateSelectedTopic(routeData.topic);
-    }
-
-    if (routeData?.direction) {
-      sessionManager.updateQuizDirection(routeData.direction);
     }
   }
 
@@ -752,8 +746,7 @@ export class AppRoot extends LitElement {
         break;
       case 'quiz':
         // Always navigate to quiz - the quiz component will handle empty state
-        const direction = this.sessionState?.quizDirection || this.appState.quizDirection;
-        router.goToQuiz(undefined, direction);
+        router.goToQuiz();
         break;
       case 'dialog':
         router.goToDialog();
@@ -1250,9 +1243,7 @@ export class AppRoot extends LitElement {
 
       case 'quiz':
         return html`
-          <quiz-mode
-            .direction=${routeData?.direction || 'foreign-to-english'}
-          ></quiz-mode>
+          <quiz-mode></quiz-mode>
         `;
 
       case 'dialog':

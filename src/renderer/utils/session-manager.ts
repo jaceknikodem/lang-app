@@ -17,7 +17,6 @@ export interface QuizSessionState {
   id: string;
   wordIds: number[]; // Word IDs in the order they appear in the quiz (preserves shuffle)
   currentQuestionIndex: number;
-  direction: 'foreign-to-english' | 'english-to-foreign';
   score: number;
   totalQuestions: number;
   isComplete: boolean;
@@ -46,7 +45,6 @@ export interface DialogSessionState {
 export interface SessionState {
   currentMode: 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'dialog' | 'progress' | 'settings';
   selectedTopic?: string;
-  quizDirection: 'foreign-to-english' | 'english-to-foreign';
   playbackSpeed?: number;
   learningProgress?: {
     currentWordIndex: number;
@@ -379,13 +377,6 @@ export class SessionManager {
   }
 
   /**
-   * Update quiz direction
-   */
-  updateQuizDirection(direction: 'foreign-to-english' | 'english-to-foreign'): void {
-    this.saveSession({ quizDirection: direction });
-  }
-
-  /**
    * Get the current quiz session state if available
    */
   getQuizSession(): QuizSessionState | undefined {
@@ -397,14 +388,12 @@ export class SessionManager {
    */
   startNewQuizSession(
     wordIds: number[],
-    direction: 'foreign-to-english' | 'english-to-foreign',
     audioOnlyMode: boolean = false
   ): void {
     const newSession: QuizSessionState = {
       id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
       wordIds,
       currentQuestionIndex: 0,
-      direction,
       score: 0,
       totalQuestions: wordIds.length,
       isComplete: false,
@@ -414,7 +403,6 @@ export class SessionManager {
 
     this.saveSession({
       quizSession: newSession,
-      quizDirection: direction,
       quizProgress: {
         currentQuestionIndex: 0,
         score: 0,
@@ -735,7 +723,6 @@ export class SessionManager {
   private createDefaultSession(): SessionState {
     return {
       currentMode: 'topic-selection',
-      quizDirection: 'foreign-to-english',
       lastActivity: new Date()
     };
   }
@@ -821,7 +808,6 @@ export class SessionManager {
     
     return {
       currentMode: sessionData.currentMode ?? 'topic-selection',
-      quizDirection: sessionData.quizDirection ?? 'foreign-to-english',
       selectedTopic: sessionData.selectedTopic,
       playbackSpeed: sessionData.playbackSpeed,
       learningProgress: sessionData.learningProgress,

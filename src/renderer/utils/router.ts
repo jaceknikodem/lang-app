@@ -55,8 +55,8 @@ export class Router {
     this.navigateTo('learning', specificWords ? { specificWords } : undefined);
   }
 
-  goToQuiz(specificWords?: any[], direction: 'foreign-to-english' | 'english-to-foreign' = 'foreign-to-english'): void {
-    const data: any = { direction };
+  goToQuiz(specificWords?: any[]): void {
+    const data: any = {};
     if (specificWords) {
       data.specificWords = specificWords;
     }

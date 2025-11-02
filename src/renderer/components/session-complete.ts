@@ -285,7 +285,7 @@ export class SessionComplete extends LitElement {
     try {
       switch (this.sessionSummary.nextRecommendation) {
         case 'take-quiz':
-          router.goToQuiz(this.sessionSummary.completedWords, 'foreign-to-english');
+          router.goToQuiz(this.sessionSummary.completedWords);
           break;
         case 'continue-learning':
           router.goToLearning(this.sessionSummary.completedWords);
@@ -312,7 +312,7 @@ export class SessionComplete extends LitElement {
   }
 
   private handleTakeQuiz() {
-    router.goToQuiz(this.sessionSummary.completedWords, 'foreign-to-english');
+    router.goToQuiz(this.sessionSummary.completedWords);
   }
 
   private handleNewSession() {

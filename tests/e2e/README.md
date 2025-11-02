@@ -10,7 +10,6 @@ Tests the complete user journey from topic selection to quiz completion:
 - **Audio Playback Integration**: Tests TTS audio generation and playback during learning
 - **Navigation Between Modes**: Verifies smooth transitions between all app modes
 - **Empty Topic Handling**: Tests graceful handling when no topic is provided
-- **Quiz Direction Selection**: Tests bidirectional quiz functionality (foreign↔English)
 
 ### 2. `data-persistence.spec.ts`
 Verifies data persistence across application restarts:

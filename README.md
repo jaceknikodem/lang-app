@@ -13,7 +13,6 @@ A privacy-first desktop language learning application that operates entirely off
 - **Lemmatization**: Automatic word form recognition via Stanza service
 - **Privacy-First**: Complete offline operation, no accounts, no data collection
 - **Adaptive Intelligence**: Automatically focuses on your weakest vocabulary
-- **Bidirectional Quizzing**: Test both directions (foreign→English and English→foreign)
 
 ## Tech Stack
 

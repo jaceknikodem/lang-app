@@ -44,7 +44,6 @@ describe('Core Types', () => {
     const appState: AppState = {
       currentMode: 'learning',
       selectedTopic: 'food',
-      quizDirection: 'foreign-to-english',
     };
 
     expect(appState.currentMode).toBe('learning');
@@ -55,7 +54,6 @@ describe('Core Types', () => {
     const quizSession: QuizSession = {
       questions: [],
       currentQuestionIndex: 0,
-      direction: 'foreign-to-english',
       score: 0,
       totalQuestions: 10,
       isComplete: false,
