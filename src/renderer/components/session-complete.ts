@@ -38,7 +38,7 @@ export class SessionComplete extends LitElement {
     css`
       :host {
         display: block;
-        max-width: 600px;
+        max-width: 900px;
         margin: 0 auto;
       }
 

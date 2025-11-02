@@ -149,7 +149,7 @@ export class QuizMode extends LitElement {
         display: flex;
         flex-direction: column;
         height: 100%;
-        max-width: 800px;
+        max-width: 1000px;
         margin: 0 auto;
         padding: var(--spacing-sm);
       }
