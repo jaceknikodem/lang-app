@@ -569,6 +569,25 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
+  async getKnownWords(language: string, minWordStrength: number, maxWords: number): Promise<string[]> {
+    const db = this.getDb();
+    
+    try {
+      // Get words that are either known OR have strength >= minWordStrength
+      const stmt = db.prepare(`
+        SELECT word FROM words 
+        WHERE language = ? AND ignored = FALSE AND (known = TRUE OR strength >= ?)
+        ORDER BY RANDOM()
+        LIMIT ?
+      `);
+      
+      const rows = stmt.all(language, minWordStrength, maxWords) as Array<{ word: string }>;
+      return rows.map(row => row.word);
+    } catch (error) {
+      throw new Error(`Failed to get known words: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   /**
    * Get all existing words for duplicate checking
    * Returns word strings only (includes learning, known, and ignored words)

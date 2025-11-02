@@ -1407,7 +1407,8 @@ function setupDialogHandlers(
 
   ipcMain.handle(IPC_CHANNELS.DIALOG.SELECT_SENTENCE, async (event) => {
     try {
-      return await dialogService.selectSentence();
+      const language = await databaseLayer.getCurrentLanguage();
+      return await dialogService.selectSentence(language);
     } catch (error) {
       console.error('Error selecting sentence for dialog:', error);
       throw new Error(`Failed to select sentence: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -1427,8 +1428,19 @@ function setupDialogHandlers(
       // Get existing variants
       const existingVariants = await databaseLayer.getDialogueVariantsBySentenceId(validatedSentenceId);
       
+      // Get known words for variant generation
+      const language = await databaseLayer.getCurrentLanguage();
+      const allWords = await databaseLayer.getAllWords(true, false, language);
+      const dialogServiceConfig = dialogService as any; // Access private config
+      const minWordStrength = dialogServiceConfig.config?.minWordStrength ?? 40;
+      const maxKnownWords = dialogServiceConfig.config?.maxKnownWordsForVariants ?? 50;
+      const knownWords = allWords
+        .filter(w => w.known || (w.strength ?? 0) >= minWordStrength)
+        .slice(0, maxKnownWords)
+        .map(w => w.word);
+      
       // Generate variants
-      return await dialogService.generateDialogueVariants(sentence, existingVariants);
+      return await dialogService.generateDialogueVariants(sentence, existingVariants, knownWords, language);
     } catch (error) {
       console.error('Error generating dialogue variants:', error);
       throw new Error(`Failed to generate variants: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -1438,9 +1450,10 @@ function setupDialogHandlers(
   ipcMain.handle(IPC_CHANNELS.DIALOG.GENERATE_FOLLOW_UP, async (event, variantId) => {
     try {
       const validatedVariantId = VariantIdSchema.parse(variantId); // Use VariantIdSchema to allow negative IDs
+      const language = await databaseLayer.getCurrentLanguage();
       
       // Generate follow-up (will check cache and generate if needed)
-      const followUp = await dialogService.generateFollowUp(validatedVariantId);
+      const followUp = await dialogService.generateFollowUp(validatedVariantId, language);
       
       // Generate audio on-demand if continuation text exists and no audio is cached yet
       // Only cache audio for actual variants (positive IDs), not pseudo-variants (negative IDs)
@@ -1520,7 +1533,8 @@ function setupDialogHandlers(
   ipcMain.handle(IPC_CHANNELS.DIALOG.PREGENERATE_SESSION, async (event) => {
     try {
       // Pre-generate a single dialog session using batch method
-      const sessions = await dialogService.pregenerateSessions(1);
+      const language = await databaseLayer.getCurrentLanguage();
+      const sessions = await dialogService.pregenerateSessions(1, language);
       if (sessions.length === 0) {
         return null;
       }
@@ -1572,12 +1586,11 @@ function setupDialogHandlers(
   ipcMain.handle(IPC_CHANNELS.DIALOG.PREGENERATE_SESSIONS, async (event, count: number) => {
     try {
       // Pre-generate multiple dialog sessions (non-blocking - can fail silently)
-      const sessions = await dialogService.pregenerateSessions(count);
+      const language = await databaseLayer.getCurrentLanguage();
+      const sessions = await dialogService.pregenerateSessions(count, language);
       if (sessions.length === 0) {
         return [];
       }
-
-      const currentLanguage = await databaseLayer.getCurrentLanguage();
       const sessionsWithAudio = await Promise.all(sessions.map(async (session) => {
         // Generate audio if needed (non-blocking - don't fail if audio generation fails)
         let beforeSentenceAudio: string | undefined;
@@ -1590,7 +1603,7 @@ function setupDialogHandlers(
             }
             const audioPath = await audioService.generateAudio(
               session.contextBefore,
-              currentLanguage,
+              language,
               '_before_sentence',
               sentence.wordId,
               session.sentenceId
