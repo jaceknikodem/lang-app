@@ -8,6 +8,7 @@ import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { Word, StudyStats } from '../../shared/types/core.js';
 import { useKeyboardBindings, CommonKeys } from '../utils/keyboard-manager.js';
+import { sessionManager } from '../utils/session-manager.js';
 
 export interface SessionSummary {
   type: 'learning' | 'quiz';
@@ -221,6 +222,12 @@ export class SessionComplete extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    
+    // Clear quiz session when quiz is finished to prevent reloading
+    if (this.sessionSummary?.type === 'quiz') {
+      sessionManager.clearQuizSession();
+    }
+    
     this.loadUpdatedStats();
     this.setupKeyboardBindings();
   }

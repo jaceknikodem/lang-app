@@ -1121,19 +1121,27 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       }
       
       // Get additional weak words if needed (only words with sentences)
+      // Exclude words that were recently reviewed/studied to prevent immediate re-quizzing
       const remainingLimit = limit - dueWords.length;
-      const now = new Date().toISOString();
+      const now = new Date();
+      const nowIso = now.toISOString();
+      // Exclude words reviewed/studied within the last 24 hours
+      const minHoursSinceReview = 24;
+      const cutoffTime = new Date(now.getTime() - minHoursSinceReview * 60 * 60 * 1000);
+      const cutoffTimeIso = cutoffTime.toISOString();
       
       const stmt = db.prepare(`
         SELECT DISTINCT w.* FROM words w
         INNER JOIN sentence_words sw ON w.id = sw.word_id
         WHERE w.known = FALSE AND w.ignored = FALSE AND w.language = ?
         AND w.next_due > ?
+        AND (w.last_review IS NULL OR w.last_review < ?)
+        AND (w.last_studied IS NULL OR w.last_studied < ?)
         ORDER BY w.strength ASC, RANDOM()
         LIMIT ?
       `);
       
-      const rows = stmt.all(currentLanguage, now, remainingLimit) as any[];
+      const rows = stmt.all(currentLanguage, nowIso, cutoffTimeIso, cutoffTimeIso, remainingLimit) as any[];
       const additionalWords = rows.map(this.mapRowToWord);
       
       return [...dueWords, ...additionalWords];
