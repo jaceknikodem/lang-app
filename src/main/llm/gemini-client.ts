@@ -6,82 +6,9 @@ import { GeneratedWord, GeneratedSentence } from '../../shared/types/core.js';
 import { LLMClient, LLMConfig, LLMError } from '../../shared/types/llm.js';
 import { LLM_CONFIG } from '../../shared/constants/index.js';
 import { cleanLLMResponse } from './utils.js';
+import { BaseLLMClient } from './base-llm-client.js';
 import { z } from 'zod';
 
-// Zod schemas for response validation (reusing from Ollama client)
-const GeneratedWordSchema = z.object({
-  word: z.string().min(1, "Word cannot be empty").trim(),
-  translation: z.string().min(1, "Translation cannot be empty").trim()
-});
-
-const GeneratedSentenceSchema = z.object({
-  sentence: z.string().min(1, "Sentence cannot be empty").trim(),
-  translation: z.string().min(1, "Translation cannot be empty").trim(),
-  contextBefore: z.string().optional(),
-  contextAfter: z.string().optional(),
-  contextBeforeTranslation: z.string().optional(),
-  contextAfterTranslation: z.string().optional()
-});
-
-// Flexible schemas for various response formats
-const WordGenerationResponseSchema = z.union([
-  z.array(GeneratedWordSchema),
-  GeneratedWordSchema.transform(word => [word]),
-  z.object({
-    words: z.array(GeneratedWordSchema)
-  }).transform(obj => obj.words),
-  z.object({
-    response: z.array(GeneratedWordSchema)
-  }).transform(obj => obj.response),
-  z.array(z.record(z.any())).transform(arr =>
-    arr.filter(item => item.word && item.translation).map(item => ({
-      word: String(item.word).trim(),
-      translation: String(item.translation).trim()
-    }))
-  )
-]);
-
-const SentenceGenerationResponseSchema = z.union([
-  z.array(GeneratedSentenceSchema),
-  GeneratedSentenceSchema.transform(sentence => [sentence]),
-  z.object({
-    sentences: z.array(GeneratedSentenceSchema)
-  }).transform(obj => obj.sentences),
-  z.object({
-    response: z.array(GeneratedSentenceSchema)
-  }).transform(obj => obj.response),
-  z.array(z.record(z.any())).transform(arr =>
-    arr.filter(item => item.sentence && item.translation).map(item => ({
-      sentence: String(item.sentence).trim(),
-      translation: String(item.translation).trim()
-    }))
-  )
-]);
-
-const ContextSentenceSchema = z.object({
-  contextBefore: z.string().optional(),
-  contextAfter: z.string().optional(),
-  contextBeforeTranslation: z.string().optional(),
-  contextAfterTranslation: z.string().optional()
-});
-
-const ContextSentenceResponseSchema = z.union([
-  ContextSentenceSchema,
-  z.object({
-    response: ContextSentenceSchema
-  }).transform(obj => obj.response),
-  z.record(z.any()).transform(obj => ({
-    contextBefore: obj.contextBefore ? String(obj.contextBefore).trim() : undefined,
-    contextAfter: obj.contextAfter ? String(obj.contextAfter).trim() : undefined,
-    contextBeforeTranslation: obj.contextBeforeTranslation ? String(obj.contextBeforeTranslation).trim() : undefined,
-    contextAfterTranslation: obj.contextAfterTranslation ? String(obj.contextAfterTranslation).trim() : undefined
-  }))
-]);
-
-interface GeminiConfig extends LLMConfig {
-  apiKey: string;
-  model: string;
-}
 
 interface GeminiRequest {
   contents: Array<{
@@ -108,48 +35,41 @@ interface GeminiResponse {
   }>;
 }
 
-export class GeminiClient implements LLMClient {
-  private config: GeminiConfig;
-  private databaseLayer?: any;
+export class GeminiClient extends BaseLLMClient implements LLMClient {
+  private apiKey: string;
   private baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
 
   constructor(apiKey: string, config: Partial<LLMConfig> = {}) {
-    this.config = {
-      apiKey: apiKey || '',
-      baseUrl: config.baseUrl || this.baseUrl,
+    const defaultBaseUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
+    super({
+      baseUrl: config.baseUrl || defaultBaseUrl,
       model: config.model || LLM_CONFIG.GEMINI_DEFAULT_MODEL,
       wordGenerationModel: config.wordGenerationModel || LLM_CONFIG.GEMINI_DEFAULT_WORD_MODEL,
       sentenceGenerationModel: config.sentenceGenerationModel || LLM_CONFIG.GEMINI_DEFAULT_SENTENCE_MODEL,
       timeout: config.timeout || LLM_CONFIG.GEMINI_DEFAULT_TIMEOUT,
       maxRetries: config.maxRetries || LLM_CONFIG.MAX_RETRIES
-    };
-  }
-
-  /**
-   * Set database layer for duplicate checking
-   */
-  setDatabaseLayer(databaseLayer: any): void {
-    this.databaseLayer = databaseLayer;
+    });
+    this.apiKey = apiKey || '';
   }
 
   /**
    * Update the API key after construction
    */
   setApiKey(apiKey: string): void {
-    this.config.apiKey = apiKey || '';
+    this.apiKey = apiKey || '';
   }
 
   async isAvailable(): Promise<boolean> {
-    console.log('Gemini isAvailable check - API key length:', this.config.apiKey?.length || 0);
+    console.log('Gemini isAvailable check - API key length:', this.apiKey?.length || 0);
     
-    if (!this.config.apiKey || this.config.apiKey.trim() === '') {
+    if (!this.apiKey || this.apiKey.trim() === '') {
       console.log('Gemini isAvailable: No API key configured');
       return false;
     }
     
     try {
       // Use a simpler endpoint to test API availability
-      const url = `${this.baseUrl}?key=${this.config.apiKey}`;
+      const url = `${this.baseUrl}?key=${this.apiKey}`;
       console.log('Gemini isAvailable: Testing models list endpoint');
       
       const response = await fetch(url, {
@@ -180,202 +100,75 @@ export class GeminiClient implements LLMClient {
     ];
   }
 
-  setModel(model: string): void {
-    this.config.model = model;
+  /**
+   * Helper method to log validation errors with a specific prefix
+   */
+  private logValidationError(error: unknown, prefix: string): void {
+    if (error instanceof Error && error.message.includes('Invalid response format')) {
+      console.error(`=== ${prefix} ===`);
+      console.error('Error:', error.message);
+    }
   }
 
-  getCurrentModel(): string {
-    return this.config.model;
-  }
-
-  setWordGenerationModel(model: string): void {
-    this.config.wordGenerationModel = model;
-  }
-
-  setSentenceGenerationModel(model: string): void {
-    this.config.sentenceGenerationModel = model;
-  }
-
-  getWordGenerationModel(): string {
-    return this.config.wordGenerationModel ?? this.config.model;
-  }
-
-  getSentenceGenerationModel(): string {
-    return this.config.sentenceGenerationModel ?? this.config.model;
-  }
-
-  async generateTopicWords(topic: string, language: string, count: number): Promise<GeneratedWord[]> {
-    if (!this.config.apiKey || this.config.apiKey.trim() === '') {
-      throw this.createLLMError(
+  /**
+   * Helper method to check if API key is configured
+   */
+  private ensureApiKey(): void {
+    if (!this.apiKey || this.apiKey.trim() === '') {
+      throw super.createLLMError(
         new Error('Gemini API key is required'), 
         'Gemini API key not configured', 
         'MODEL_ERROR', 
         false
       );
     }
+  }
 
-    // Get existing words to check for duplicates
-    const existingWords = await this.getExistingWords(language);
-    const existingWordsSet = new Set(existingWords.map(w => w.toLowerCase()));
+  async generateTopicWords(topic: string, language: string, count: number): Promise<GeneratedWord[]> {
+    this.ensureApiKey();
 
-    const prompt = this.createTopicWordsPrompt(topic, language, count, existingWords);
-
+    // Call base class implementation, but add validation logging
     try {
-      const response = await this.makeRequest(prompt, this.getWordGenerationModel());
-
-      // Use Zod to parse and validate the response
-      const parseResult = WordGenerationResponseSchema.safeParse(response);
-
-      if (!parseResult.success) {
-        console.error('=== GEMINI VALIDATION FAILED ===');
-        console.error('Raw response:', JSON.stringify(response, null, 2));
-        console.error('Zod errors:', parseResult.error.issues.map(issue => ({
-          path: issue.path.join('.'),
-          message: issue.message,
-          code: issue.code,
-          received: 'received' in issue ? issue.received : 'unknown'
-        })));
-
-        throw new Error(`Invalid response format: ${parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')}`);
-      }
-
-      const words = parseResult.data;
-
-      // Remove duplicates within generated words (case-insensitive)
-      const uniqueWords = words.filter((word, index, arr) =>
-        arr.findIndex(w => w.word.toLowerCase() === word.word.toLowerCase()) === index
-      );
-
-      // Filter out words that already exist in database
-      const newWords = uniqueWords.filter(word =>
-        !existingWordsSet.has(word.word.toLowerCase())
-      );
-
-      console.log(`Generated ${uniqueWords.length} unique words, ${newWords.length} are new (${uniqueWords.length - newWords.length} duplicates filtered)`);
-
-      // If we got significantly fewer new words than requested, throw an error to trigger retry
-      const minWords = Math.max(1, Math.floor(count * LLM_CONFIG.MIN_WORD_COUNT_THRESHOLD));
-      if (newWords.length < minWords) {
-        throw new Error(`Insufficient new words generated: got ${newWords.length}, expected at least ${minWords}`);
-      }
-
-      return newWords;
+      const words = await super.generateTopicWords(topic, language, count);
+      return words;
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw this.createLLMError(error, 'Response validation failed', 'INVALID_RESPONSE', false);
-      }
-      throw this.createLLMError(error instanceof Error ? error : new Error(String(error)), 'Failed to generate words');
+      this.logValidationError(error, 'GEMINI VALIDATION FAILED');
+      throw error;
     }
   }
 
   async generateSentences(word: string, language: string, count: number, topic?: string): Promise<GeneratedSentence[]> {
-    if (!this.config.apiKey || this.config.apiKey.trim() === '') {
-      throw this.createLLMError(
-        new Error('Gemini API key is required'), 
-        'Gemini API key not configured', 
-        'MODEL_ERROR', 
-        false
-      );
-    }
+    this.ensureApiKey();
 
-    // Get known words to include in sentences when possible
-    const knownWords = await this.getKnownWords(language);
-    const prompt = this.createSentencesPrompt(word, language, count, knownWords, topic);
-
+    // Call base class implementation, but add validation logging
     try {
-      const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
-
-      // Use Zod to parse and validate the response
-      const parseResult = SentenceGenerationResponseSchema.safeParse(response);
-
-      if (!parseResult.success) {
-        console.error('=== GEMINI SENTENCE VALIDATION FAILED ===');
-        console.error('Raw response:', JSON.stringify(response, null, 2));
-        console.error('Zod errors:', parseResult.error.issues.map(issue => ({
-          path: issue.path.join('.'),
-          message: issue.message,
-          code: issue.code,
-          received: 'received' in issue ? issue.received : 'unknown'
-        })));
-
-        throw new Error(`Invalid response format: ${parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')}`);
-      }
-
-      const sentences = parseResult.data;
-
-      // If we got significantly fewer sentences than requested, throw an error to trigger retry
-      const minSentences = Math.max(1, Math.floor(count * LLM_CONFIG.MIN_SENTENCE_COUNT_THRESHOLD));
-      if (sentences.length < minSentences) {
-        throw new Error(`Insufficient sentences generated: got ${sentences.length}, expected at least ${minSentences}`);
-      }
-
+      const sentences = await super.generateSentences(word, language, count, topic);
       return sentences;
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw this.createLLMError(error, 'Response validation failed', 'INVALID_RESPONSE', false);
-      }
-      throw this.createLLMError(error instanceof Error ? error : new Error(String(error)), 'Failed to generate sentences');
+      this.logValidationError(error, 'GEMINI SENTENCE VALIDATION FAILED');
+      throw error;
     }
   }
 
   async generateContextSentences(sentence: string, translation: string, language: string): Promise<{ contextBefore?: string; contextAfter?: string; contextBeforeTranslation?: string; contextAfterTranslation?: string }> {
-    if (!this.config.apiKey || this.config.apiKey.trim() === '') {
+    if (!this.apiKey || this.apiKey.trim() === '') {
       // Return empty context instead of throwing if API key not configured
       return {};
     }
 
-    const prompt = this.createContextSentencesPrompt(sentence, translation, language);
-
+    // Call base class implementation, but add validation logging
     try {
-      const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
-
-      // Use Zod to parse and validate the response
-      const parseResult = ContextSentenceResponseSchema.safeParse(response);
-
-      if (!parseResult.success) {
-        console.error('=== GEMINI CONTEXT SENTENCE VALIDATION FAILED ===');
-        console.error('Raw response:', JSON.stringify(response, null, 2));
-        console.error('Zod errors:', parseResult.error.issues.map(issue => ({
-          path: issue.path.join('.'),
-          message: issue.message,
-          code: issue.code,
-          received: 'received' in issue ? issue.received : 'unknown'
-        })));
-
-        // Return empty context on validation failure instead of throwing
-        console.warn('Context sentence generation validation failed, returning empty context');
-        return {};
-      }
-
-      const context = parseResult.data;
-
-      // Filter out empty strings
-      return {
-        contextBefore: context.contextBefore && context.contextBefore.trim() ? context.contextBefore.trim() : undefined,
-        contextAfter: context.contextAfter && context.contextAfter.trim() ? context.contextAfter.trim() : undefined,
-        contextBeforeTranslation: context.contextBeforeTranslation && context.contextBeforeTranslation.trim() ? context.contextBeforeTranslation.trim() : undefined,
-        contextAfterTranslation: context.contextAfterTranslation && context.contextAfterTranslation.trim() ? context.contextAfterTranslation.trim() : undefined
-      };
+      const context = await super.generateContextSentences(sentence, translation, language);
+      return context;
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        console.warn('Context sentence generation validation failed, returning empty context:', error);
-        return {};
-      }
-      // On any error, return empty context instead of throwing
-      console.warn('Context sentence generation failed, returning empty context:', error);
+      this.logValidationError(error, 'GEMINI CONTEXT SENTENCE VALIDATION FAILED');
+      // Base class already returns empty context on error, but we'll return it anyway
       return {};
     }
   }
 
   async generateResponse(prompt: string, model?: string): Promise<string> {
-    if (!this.config.apiKey || this.config.apiKey.trim() === '') {
-      throw this.createLLMError(
-        new Error('Gemini API key is required'), 
-        'Gemini API key not configured', 
-        'MODEL_ERROR', 
-        false
-      );
-    }
+    this.ensureApiKey();
 
     try {
       const selectedModel = model || this.config.model;
@@ -396,7 +189,7 @@ export class GeminiClient implements LLMClient {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
 
-      const response = await fetch(`${this.baseUrl}/${selectedModel}:generateContent?key=${this.config.apiKey}`, {
+      const response = await fetch(`${this.baseUrl}/${selectedModel}:generateContent?key=${this.apiKey}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -426,155 +219,13 @@ export class GeminiClient implements LLMClient {
       return candidate.content.parts[0].text.trim();
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        throw this.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
+        throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
       }
-      throw this.createLLMError(error instanceof Error ? error : new Error(String(error)), 'Failed to generate response');
+      throw super.createLLMError(error instanceof Error ? error : new Error(String(error)), 'Failed to generate response');
     }
   }
 
-  /**
-   * Get existing words from database to avoid duplicates
-   */
-  private async getExistingWords(language: string): Promise<string[]> {
-    if (!this.databaseLayer) {
-      console.warn('Database layer not set, cannot check for duplicates');
-      return [];
-    }
-
-    try {
-      return await this.databaseLayer.getExistingWordsForDuplicateChecking(language);
-    } catch (error) {
-      console.error('Failed to get existing words for duplicate checking:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Get known words from database to include in sentence generation
-   */
-  private async getKnownWords(language: string): Promise<string[]> {
-    if (!this.databaseLayer) {
-      console.warn('Database layer not set, cannot get known words');
-      return [];
-    }
-
-    try {
-      return await this.databaseLayer.getKnownWordsForSentenceGeneration(language, 50);
-    } catch (error) {
-      console.error('Failed to get known words for sentence generation:', error);
-      return [];
-    }
-  }
-
-  private createTopicWordsPrompt(topic: string, language: string, count: number, existingWords: string[] = []): string {
-    const example = `  {"word": "${language.toLowerCase()}_word1", "translation": "english_translation1"}`;
-
-    // Create exclusion list for prompt
-    const exclusionText = existingWords.length > 0
-      ? `\nIMPORTANT: Do NOT include any of these existing words: ${existingWords.slice(0, 50).join(', ')}${existingWords.length > 50 ? '...' : ''}`
-      : '';
-
-    // Topic is always specified when this method is called
-    return `CRITICAL: You must return exactly ${count} words in a JSON array. No more, no less.
-CRITICAL: Return ONLY the JSON array, no explanations or extra text.
-CRITICAL: All words must be in their canonical dictionary form (infinitive for verbs, singular for nouns, base form for adjectives).
-
-Task: Generate exactly ${count} different ${language} words related to "${topic}".${exclusionText}
-
-Expected output format (${count} items):
-[
-${example}
-  ...
-]
-
-Rules:
-1. Must be exactly ${count} words
-2. Each word must be different and unique
-3. All words should relate to "${topic}"
-4. Include nouns, verbs, and adjectives
-5. CRITICAL: Use only canonical dictionary forms:
-   - Verbs: infinitive form (e.g., "robić" not "robimy", "do" not "does")
-   - Nouns: singular form (e.g., "cat" not "cats", "dom" not "domy")
-   - Adjectives: base form (e.g., "good" not "better", "dobry" not "dobrzy")
-6. Do NOT use any words from the exclusion list above
-7. Return ONLY the JSON array, nothing else`;
-  }
-
-  private createSentencesPrompt(word: string, language: string, count: number, knownWords: string[] = [], topic?: string): string {
-    const example = `  {
-    "sentence": "${language.toLowerCase()}_sentence1_with_${word}",
-    "translation": "english_translation1",
-    "contextBefore": "${language.toLowerCase()}_context_before1",
-    "contextAfter": "${language.toLowerCase()}_context_after1",
-    "contextBeforeTranslation": "english_context_before1",
-    "contextAfterTranslation": "english_context_after1"
-  }`;
-
-    // Create known words guidance
-    const knownWordsText = knownWords.length > 0
-      ? `\nWhen possible, try to include some of these known words in your sentences (when it makes sense naturally): ${knownWords.join(', ')}`
-      : '';
-
-    // Create topic guidance
-    const topicText = topic && topic.trim()
-      ? `\nIMPORTANT: All sentences should relate to or be contextually relevant to the topic: "${topic.trim()}"`
-      : '';
-
-    return `CRITICAL: You must return exactly ${count} sentences in a JSON array. No more, no less.
-CRITICAL: Return ONLY the JSON array, no explanations or extra text.
-
-Task: Generate exactly ${count} natural, conversational sentences in ${language} using the word '${word}' (note: this word is in its canonical dictionary form).${knownWordsText}${topicText}
-
-Expected output format (${count} items):
-[
-${example}
-  ...
-]
-
-Rules:
-1. Must be exactly ${count} sentences
-2. Each sentence must contain the word '${word}' or its appropriate conjugated/inflected form
-3. The word '${word}' is provided in its canonical dictionary form - use the appropriate conjugated/inflected form that fits naturally in each sentence
-4. Keep sentences short (5-15 words)
-5. Make them conversational and natural
-6. Each sentence must be different
-7. When natural and appropriate, include some known words from the provided list
-8. Don't force known words if they don't fit naturally
-9. Return ONLY the JSON array, nothing else
-10. Include contextBefore and contextAfter sentences that provide meaningful context
-11. The context sentences should form a natural conversation or narrative flow
-12. Provide English translations for all context sentences
-13. Context sentences should be short (3-10 words each)
-14. The main sentence should make sense when read with its context`;
-  }
-
-  private createContextSentencesPrompt(sentence: string, translation: string, language: string): string {
-    return `CRITICAL: Return ONLY a JSON object, no explanations or extra text.
-
-Task: Given this sentence in ${language} and its English translation, suggest what sentence would make sense BEFORE and AFTER it to provide context for language learning.
-
-Sentence in ${language}: "${sentence}"
-English translation: "${translation}"
-
-Expected output format:
-{
-  "contextBefore": "sentence_before_in_${language.toLowerCase()}",
-  "contextAfter": "sentence_after_in_${language.toLowerCase()}",
-  "contextBeforeTranslation": "english_translation_of_before",
-  "contextAfterTranslation": "english_translation_of_after"
-}
-
-Rules:
-1. Context sentences should be short (3-10 words each)
-2. They should form a natural conversation or narrative flow with the given sentence
-3. The contextBefore should logically precede the given sentence, like it's a dialog between two people.
-4. The contextAfter should logically follow the given sentence
-5. Provide English translations for both context sentences
-6. The sentences should make sense when read together: [contextBefore] [given sentence] [contextAfter]
-7. Return ONLY the JSON object, nothing else`;
-  }
-
-  private async makeRequest(prompt: string, model?: string): Promise<any> {
+  protected async makeRequest(prompt: string, model?: string): Promise<any> {
     const selectedModel = model || this.config.model;
     const requestBody: GeminiRequest = {
       contents: [{
@@ -597,7 +248,7 @@ Rules:
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
 
-        const response = await fetch(`${this.baseUrl}/${selectedModel}:generateContent?key=${this.config.apiKey}`, {
+        const response = await fetch(`${this.baseUrl}/${selectedModel}:generateContent?key=${this.apiKey}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -644,32 +295,21 @@ Rules:
         // Don't retry on certain errors
         if (error instanceof Error) {
           if (error.name === 'AbortError') {
-            throw this.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
+            throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
           }
           if (error.message.includes('JSON') && !error.message.includes('Insufficient')) {
-            throw this.createLLMError(error, 'Invalid response format', 'INVALID_RESPONSE', false);
+            throw super.createLLMError(error, 'Invalid response format', 'INVALID_RESPONSE', false);
           }
         }
 
         // Wait before retry (exponential backoff)
         if (attempt < this.config.maxRetries!) {
           console.log(`Attempt ${attempt} failed, retrying in ${Math.pow(2, attempt - 1)}s...`);
-          await this.delay(Math.pow(2, attempt - 1) * 1000);
+          await super.delay(Math.pow(2, attempt - 1) * 1000);
         }
       }
     }
 
-    throw this.createLLMError(lastError!, 'Max retries exceeded', 'CONNECTION_ERROR', false);
-  }
-
-  private createLLMError(originalError: Error, message: string, code: LLMError['code'] = 'MODEL_ERROR', retryable: boolean = true): LLMError {
-    const error = new Error(`${message}: ${originalError.message}`) as LLMError;
-    error.code = code;
-    error.retryable = retryable;
-    return error;
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    throw super.createLLMError(lastError!, 'Max retries exceeded', 'CONNECTION_ERROR', false);
   }
 }
