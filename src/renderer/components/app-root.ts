@@ -50,6 +50,9 @@ export class AppRoot extends LitElement {
   @state()
   private autopilotEnabled = false;
 
+  @state()
+  private hasFlowSentences = false;
+
   private routerUnsubscribe?: () => void;
   private keyboardUnsubscribe?: () => void;
   private flowAudioElement: HTMLAudioElement | null = null;
@@ -451,27 +454,28 @@ export class AppRoot extends LitElement {
 
       // Check for existing words in database (non-blocking - deferred)
       // This optimization speeds up initial render by deferring the check
-      setImmediate(async () => {
+      setTimeout(async () => {
         try {
           await this.checkExistingWords();
+          await this.checkFlowSentences();
         } catch (error) {
           console.error('Failed to check existing words:', error);
         }
-      });
+      }, 0);
 
       console.log('Ensuring learning session...');
       await this.ensureLearningSession();
       console.log('Learning session ready');
 
       // Pre-generate dialog session asynchronously (non-blocking)
-      setImmediate(async () => {
+      setTimeout(async () => {
         try {
           await this.pregenerateDialogSession();
         } catch (error) {
           console.error('Failed to pre-generate dialog session:', error);
           // Non-critical - continue without cached dialog session
         }
-      });
+      }, 0);
 
       console.log('App initialization complete');
       this.isLoading = false;
@@ -505,6 +509,32 @@ export class AppRoot extends LitElement {
     } catch (error) {
       console.error('Failed to check existing words:', error);
       this.hasExistingWords = false;
+    }
+  }
+
+  private async checkFlowSentences() {
+    try {
+      console.log('Checking if flow sentences are available...');
+      const flowSentences = await window.electronAPI.flow.getFlowSentences();
+      
+      // Collect all audio paths using the same logic as handleFlowPlay()
+      const audioPaths: string[] = [];
+      for (const item of flowSentences) {
+        if (item.beforeSentenceAudio) {
+          audioPaths.push(item.beforeSentenceAudio);
+        }
+        if (item.sentence.audioPath) {
+          audioPaths.push(item.sentence.audioPath);
+        }
+        audioPaths.push(...item.continuationAudios);
+      }
+      
+      // Only enable Flow button if we have at least one audio file
+      this.hasFlowSentences = audioPaths.length > 0;
+      console.log('Flow sentences check complete, found:', flowSentences.length, 'sentences with', audioPaths.length, 'audio files');
+    } catch (error) {
+      console.error('Failed to check flow sentences:', error);
+      this.hasFlowSentences = false;
     }
   }
 
@@ -564,6 +594,7 @@ export class AppRoot extends LitElement {
     await this.loadCurrentLanguage();
     this.sessionState = sessionManager.getCurrentSession();
     await this.checkExistingWords();
+    await this.checkFlowSentences();
     await this.ensureLearningSession();
     this.requestUpdate();
   }
@@ -616,6 +647,7 @@ export class AppRoot extends LitElement {
       void this.loadLemmatizationModel(selectedLanguage);
       
       await this.checkExistingWords();
+      await this.checkFlowSentences();
       await this.ensureLearningSession();
       this.requestUpdate();
 
@@ -764,6 +796,11 @@ export class AppRoot extends LitElement {
   private async handleFlowPlay() {
     if (this.isFlowPlaying) {
       this.handleFlowPause();
+      return;
+    }
+
+    // Prevent playing if there are no flow sentences available
+    if (!this.hasFlowSentences) {
       return;
     }
 
@@ -1087,8 +1124,8 @@ export class AppRoot extends LitElement {
                 <button 
                   class="nav-button flow-button"
                   @click=${() => this.handleFlowPlay()}
-                  ?disabled=${this.isFlowPlaying}
-                  title="Get into the Flow"
+                  ?disabled=${this.isFlowPlaying || !this.hasFlowSentences}
+                  title=${this.hasFlowSentences ? 'Get into the Flow' : 'Not enough sentences with audio available'}
                 >
                   ▶
                 </button>
