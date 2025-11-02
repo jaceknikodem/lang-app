@@ -1712,6 +1712,36 @@ export class SentenceViewer extends LitElement {
         bubbles: true,
         composed: true
       }));
+
+      // Play the newly generated audio
+      // Use a small delay to ensure the file is ready and to allow the UI to update
+      setTimeout(async () => {
+        try {
+          // Stop any currently playing audio to ensure we play only the new one
+          await window.electronAPI.audio.stopAudio();
+          this.isPlayingAudio = false;
+          
+          // Wait a bit more to ensure stop has completed
+          await new Promise(resolve => setTimeout(resolve, 50));
+          
+          // Play only the newly generated audio (not before sentence audio)
+          if (regeneratedPath) {
+            this.isPlayingAudio = true;
+            try {
+              await window.electronAPI.audio.playAudio(regeneratedPath);
+            } finally {
+              // Reset after a short delay to prevent rapid clicking
+              setTimeout(() => {
+                this.isPlayingAudio = false;
+              }, 100);
+            }
+          }
+        } catch (playError) {
+          console.warn('Failed to play newly regenerated audio:', playError);
+          // Don't show error to user as regeneration succeeded
+          this.isPlayingAudio = false;
+        }
+      }, 100);
     } catch (error) {
       console.error('Failed to regenerate audio:', error);
       const message = error instanceof Error ? error.message : String(error);
