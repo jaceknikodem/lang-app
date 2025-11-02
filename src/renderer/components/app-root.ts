@@ -102,7 +102,6 @@ export class AppRoot extends LitElement {
 
       .language-dropdown {
         position: relative;
-        margin-left: var(--spacing-sm);
       }
 
       .language-select {
@@ -211,7 +210,6 @@ export class AppRoot extends LitElement {
         font-weight: 300;
         line-height: 1;
         transition: all 0.2s ease;
-        margin-left: auto;
         opacity: 0.5;
       }
 
@@ -221,11 +219,23 @@ export class AppRoot extends LitElement {
         background: var(--background-secondary);
       }
 
-      .autopilot-toggle-container {
+      .nav-left-group {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+      }
+
+      .nav-right-group {
         display: flex;
         align-items: center;
         gap: var(--spacing-xs);
         margin-left: auto;
+      }
+
+      .autopilot-toggle-container {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
         margin-right: var(--spacing-xs);
       }
 
@@ -884,8 +894,8 @@ export class AppRoot extends LitElement {
     // Stop existing intervals if any
     this.stopAutopilot();
     
-    // Check scores immediately
-    this.checkScoresAndNavigate();
+    // Check scores immediately - take over control on first run
+    this.checkScoresAndNavigate(true);
     
     // Set up event listeners for specific actions
     window.addEventListener('autopilot-check-trigger', this.handleAutopilotCheckTrigger);
@@ -914,9 +924,12 @@ export class AppRoot extends LitElement {
     }
   }
 
-  private async checkScoresAndNavigate() {
+  private async checkScoresAndNavigate(initialTakeover = false) {
     try {
       const scores = await window.electronAPI.scoring.getScores(this.currentLanguage);
+      
+      // Log scores in one line
+      console.log(`Autopilot scores: topic-selection=${scores.addWords}, learning=${scores.review}, quiz=${scores.quiz}, dialog=${scores.dialog}, flow=${scores.flow}`);
       
       // Find mode with highest score
       const modeScores = [
@@ -932,9 +945,12 @@ export class AppRoot extends LitElement {
       const currentModeScore = modeScores.find(m => m.mode === currentMode)?.score ?? 0;
       
       // Filter out current mode and previous autopilot mode to prevent bouncing
-      const availableModes = modeScores.filter(m => 
-        m.mode !== currentMode && m.mode !== this.previousAutopilotMode
-      );
+      // On initial takeover, allow navigating even if it's the current mode (if there's a better one)
+      const availableModes = initialTakeover 
+        ? modeScores.filter(m => m.mode !== this.previousAutopilotMode)
+        : modeScores.filter(m => 
+            m.mode !== currentMode && m.mode !== this.previousAutopilotMode
+          );
       
       if (availableModes.length === 0) {
         // No valid modes to navigate to (all excluded)
@@ -945,11 +961,14 @@ export class AppRoot extends LitElement {
       availableModes.sort((a, b) => b.score - a.score);
       const highestMode = availableModes[0];
       
-      // Only navigate if:
-      // 1. Highest mode score is > 0
-      // 2. Highest mode score is at least 1 point higher than current mode score
+      // On initial takeover, navigate if there's any mode with score > 0, regardless of current mode
+      // Otherwise, only navigate if highest mode score is at least 1 point higher than current mode score
       const scoreDifference = highestMode.score - currentModeScore;
-      if (highestMode.score > 0 && scoreDifference >= 1) {
+      const shouldNavigate = initialTakeover
+        ? (highestMode.score > 0 && highestMode.mode !== currentMode)
+        : (highestMode.score > 0 && scoreDifference >= 1);
+      
+      if (shouldNavigate) {
         // Update previous autopilot mode before navigating
         this.previousAutopilotMode = currentMode;
         
@@ -1063,94 +1082,98 @@ export class AppRoot extends LitElement {
       <div class="app-container">
         <header class="app-header">
           <nav class="navigation">
-            ${!this.autopilotEnabled ? html`
-              <button 
-                class="nav-button flow-button"
-                @click=${() => this.handleFlowPlay()}
-                ?disabled=${this.isFlowPlaying}
-                title="Get into the Flow"
-              >
-                ▶
-              </button>
-              <button 
-                class="nav-button ${router.isCurrentMode('topic-selection') || router.isCurrentMode('word-selection') ? 'active' : ''}"
-                @click=${() => this.handleNavigation('topic-selection')}
-                title="Learn new words (Ctrl+1)"
-              >
-                Add new
-              </button>
-              <button 
-                class="nav-button ${router.isCurrentMode('learning') ? 'active' : ''}"
-                @click=${() => this.handleNavigation('learning')}
-                ?disabled=${this.hasExistingWords === false}
-                title="Review existing words (Ctrl+2)"
-              >
-                Review
-              </button>
-              <button 
-                class="nav-button ${router.isCurrentMode('quiz') ? 'active' : ''}"
-                @click=${() => this.handleNavigation('quiz')}
-                title="Take a quiz (Ctrl+3)"
-              >
-                Quiz
-              </button>
-              <button 
-                class="nav-button ${router.isCurrentMode('dialog') ? 'active' : ''}"
-                @click=${() => this.handleNavigation('dialog')}
-                title="Practice speaking (Ctrl+4)"
-              >
-                Dialog
-              </button>
-              <button 
-                class="nav-button ${router.isCurrentMode('progress') ? 'active' : ''}"
-                @click=${() => this.handleNavigation('progress')}
-                title="View progress (Ctrl+5)"
-              >
-                Progress
-              </button>
-              <button 
-                class="nav-button ${router.isCurrentMode('settings') ? 'active' : ''}"
-                @click=${() => this.handleNavigation('settings')}
-                title="Settings (Ctrl+6)"
-              >
-                Settings
-              </button>
-            ` : ''}
-            ${this.currentLanguage ? html`
-              <div class="language-dropdown">
-                <select 
-                  class="language-select"
-                  .value=${this.currentLanguage}
-                  @change=${this.handleLanguageDropdownChange}
-                  title="Select Language"
+            <div class="nav-left-group">
+              ${!this.autopilotEnabled ? html`
+                <button 
+                  class="nav-button flow-button"
+                  @click=${() => this.handleFlowPlay()}
+                  ?disabled=${this.isFlowPlaying}
+                  title="Get into the Flow"
                 >
-                  ${this.getSupportedLanguages().map(language => html`
-                    <option value=${language} ?selected=${language === this.currentLanguage}>
-                      ${this.getLanguageFlag(language)} ${this.capitalizeLanguage(language)}
-                    </option>
-                  `)}
-                </select>
-              </div>
-            ` : ''}
-            <div class="autopilot-toggle-container">
-              <span class="autopilot-label">Autopilot</span>
-              <label class="autopilot-switch">
-                <input 
-                  type="checkbox"
-                  .checked=${this.autopilotEnabled}
-                  @change=${this.handleAutopilotToggle}
-                  title="Autopilot: Automatically navigate to highest-scoring mode"
-                />
-                <span class="autopilot-slider"></span>
-              </label>
+                  ▶
+                </button>
+                <button 
+                  class="nav-button ${router.isCurrentMode('topic-selection') || router.isCurrentMode('word-selection') ? 'active' : ''}"
+                  @click=${() => this.handleNavigation('topic-selection')}
+                  title="Learn new words (Ctrl+1)"
+                >
+                  Add new
+                </button>
+                <button 
+                  class="nav-button ${router.isCurrentMode('learning') ? 'active' : ''}"
+                  @click=${() => this.handleNavigation('learning')}
+                  ?disabled=${this.hasExistingWords === false}
+                  title="Review existing words (Ctrl+2)"
+                >
+                  Review
+                </button>
+                <button 
+                  class="nav-button ${router.isCurrentMode('quiz') ? 'active' : ''}"
+                  @click=${() => this.handleNavigation('quiz')}
+                  title="Take a quiz (Ctrl+3)"
+                >
+                  Quiz
+                </button>
+                <button 
+                  class="nav-button ${router.isCurrentMode('dialog') ? 'active' : ''}"
+                  @click=${() => this.handleNavigation('dialog')}
+                  title="Practice speaking (Ctrl+4)"
+                >
+                  Dialog
+                </button>
+                <button 
+                  class="nav-button ${router.isCurrentMode('progress') ? 'active' : ''}"
+                  @click=${() => this.handleNavigation('progress')}
+                  title="View progress (Ctrl+5)"
+                >
+                  Progress
+                </button>
+                <button 
+                  class="nav-button ${router.isCurrentMode('settings') ? 'active' : ''}"
+                  @click=${() => this.handleNavigation('settings')}
+                  title="Settings (Ctrl+6)"
+                >
+                  Settings
+                </button>
+              ` : ''}
+              ${this.currentLanguage ? html`
+                <div class="language-dropdown">
+                  <select 
+                    class="language-select"
+                    .value=${this.currentLanguage}
+                    @change=${this.handleLanguageDropdownChange}
+                    title="Select Language"
+                  >
+                    ${this.getSupportedLanguages().map(language => html`
+                      <option value=${language} ?selected=${language === this.currentLanguage}>
+                        ${this.getLanguageFlag(language)} ${this.capitalizeLanguage(language)}
+                      </option>
+                    `)}
+                  </select>
+                </div>
+              ` : ''}
             </div>
-            <button 
-              class="close-button"
-              @click=${this.handleCloseApp}
-              title="Close Application"
-            >
-              ×
-            </button>
+            <div class="nav-right-group">
+              <div class="autopilot-toggle-container">
+                <span class="autopilot-label">Autopilot</span>
+                <label class="autopilot-switch">
+                  <input 
+                    type="checkbox"
+                    .checked=${this.autopilotEnabled}
+                    @change=${this.handleAutopilotToggle}
+                    title="Autopilot: Automatically navigate to highest-scoring mode"
+                  />
+                  <span class="autopilot-slider"></span>
+                </label>
+              </div>
+              <button 
+                class="close-button"
+                @click=${this.handleCloseApp}
+                title="Close Application"
+              >
+                ×
+              </button>
+            </div>
           </nav>
         </header>
 
