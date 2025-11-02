@@ -256,8 +256,10 @@ export class SentenceViewer extends LitElement {
         word-wrap: break-word;
         overflow-wrap: break-word;
         hyphens: auto;
-        padding: var(--spacing-sm);
+        padding: var(--spacing-md);
+        background: var(--background-secondary);
         border-radius: var(--border-radius-small);
+        border-left: 2px solid var(--primary-color);
         transition: all 0.3s ease;
       }
 
@@ -270,6 +272,7 @@ export class SentenceViewer extends LitElement {
         color: var(--text-secondary);
         font-style: italic;
         line-height: 1.4;
+        margin-top: var(--spacing-xs);
       }
 
       .word-in-sentence {
@@ -1933,79 +1936,79 @@ export class SentenceViewer extends LitElement {
                 </span>
               `;
             })}
-          </div>
-          
-          ${this.wordPopup ? html`
-            <div
-              class="word-popup"
-              style="${this.getPopupStyle()}"
-              @click=${(e: Event) => e.stopPropagation()}
-            >
-              ${(() => {
-                const wordInfo = this.wordPopup!.wordInfo;
-                const word = wordInfo.isTargetWord ? this.targetWord : wordInfo.wordData;
-                const isKnown = word?.known ?? false;
-                const isIgnored = word?.ignored ?? false;
-                const existsInLearning = !!word || wordInfo.isTargetWord;
-                const needsAddToLearningSet = !existsInLearning;
-                
-                const buttons: any[] = [];
-                
-                if (!isKnown) {
-                  buttons.push(html`
-                    <button
-                      class="word-popup-button known"
-                      @click=${this.handleMarkWordKnown}
-                      ?disabled=${this.isProcessing}
-                    >
-                      Mark as known
-                    </button>
-                  `);
-                }
-                
-                if (!isIgnored) {
-                  buttons.push(html`
-                    <button
-                      class="word-popup-button ignore"
-                      @click=${this.handleIgnoreWord}
-                      ?disabled=${this.isProcessing}
-                    >
-                      Ignore
-                    </button>
-                  `);
-                }
-                
-                if (needsAddToLearningSet) {
-                  if (buttons.length > 0) {
-                    buttons.push(html`<div class="word-popup-divider"></div>`);
+            
+            ${this.wordPopup ? html`
+              <div
+                class="word-popup"
+                style="${this.getPopupStyle()}"
+                @click=${(e: Event) => e.stopPropagation()}
+              >
+                ${(() => {
+                  const wordInfo = this.wordPopup!.wordInfo;
+                  const word = wordInfo.isTargetWord ? this.targetWord : wordInfo.wordData;
+                  const isKnown = word?.known ?? false;
+                  const isIgnored = word?.ignored ?? false;
+                  const existsInLearning = !!word || wordInfo.isTargetWord;
+                  const needsAddToLearningSet = !existsInLearning;
+                  
+                  const buttons: any[] = [];
+                  
+                  if (!isKnown) {
+                    buttons.push(html`
+                      <button
+                        class="word-popup-button known"
+                        @click=${this.handleMarkWordKnown}
+                        ?disabled=${this.isProcessing}
+                      >
+                        Mark as known
+                      </button>
+                    `);
                   }
-                  buttons.push(html`
-                    <button
-                      class="word-popup-button add"
-                      @click=${this.handleAddToLearningSet}
-                      ?disabled=${this.isProcessing}
-                    >
-                      Add to learning set
-                    </button>
-                  `);
-                }
-                
-                // If no buttons to show (word is already known/ignored and in learning set)
-                if (buttons.length === 0) {
-                  buttons.push(html`
-                    <div class="word-popup-button" style="opacity: 0.6; cursor: default; padding: var(--spacing-sm);">
-                      ${wordInfo.isTargetWord ? 'Target word' : isKnown ? 'Already known' : 'Already ignored'}
-                    </div>
-                  `);
-                }
-                
-                return buttons;
-              })()}
+                  
+                  if (!isIgnored) {
+                    buttons.push(html`
+                      <button
+                        class="word-popup-button ignore"
+                        @click=${this.handleIgnoreWord}
+                        ?disabled=${this.isProcessing}
+                      >
+                        Ignore
+                      </button>
+                    `);
+                  }
+                  
+                  if (needsAddToLearningSet) {
+                    if (buttons.length > 0) {
+                      buttons.push(html`<div class="word-popup-divider"></div>`);
+                    }
+                    buttons.push(html`
+                      <button
+                        class="word-popup-button add"
+                        @click=${this.handleAddToLearningSet}
+                        ?disabled=${this.isProcessing}
+                      >
+                        Add to learning set
+                      </button>
+                    `);
+                  }
+                  
+                  // If no buttons to show (word is already known/ignored and in learning set)
+                  if (buttons.length === 0) {
+                    buttons.push(html`
+                      <div class="word-popup-button" style="opacity: 0.6; cursor: default; padding: var(--spacing-sm);">
+                        ${wordInfo.isTargetWord ? 'Target word' : isKnown ? 'Already known' : 'Already ignored'}
+                      </div>
+                    `);
+                  }
+                  
+                  return buttons;
+                })()}
+              </div>
+            ` : nothing}
+            
+            <div class="sentence-translation">
+              ${this.sentence.translation}
             </div>
-          ` : nothing}
-          
-          <div class="sentence-translation">
-            ${this.sentence.translation}
           </div>
           
           ${this.sentence.contextAfter ? html`
