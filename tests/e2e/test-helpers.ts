@@ -288,20 +288,3 @@ export const mockLLMResponses = {
     { sentence: 'Adiós, hasta luego.', translation: 'Goodbye, see you later.' }
   ]
 };
-
-/**
- * Verify progress data structure
- */
-export async function verifyProgressData(page: Page): Promise<boolean> {
-  await page.locator('nav button:has-text("Progress")').click();
-  await page.waitForSelector('progress-summary', { timeout: 10000 });
-  
-  const progressContent = await page.locator('progress-summary').textContent();
-  
-  // Check for expected progress indicators
-  const hasWordsStudied = /words?\s+studied/i.test(progressContent || '');
-  const hasSessionData = /session/i.test(progressContent || '');
-  const hasStats = /\d+/.test(progressContent || ''); // Should contain numbers
-  
-  return hasWordsStudied || hasSessionData || hasStats;
-}
