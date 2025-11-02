@@ -457,6 +457,7 @@ export class LearningMode extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
     document.addEventListener('language-changed', this.handleExternalLanguageChange);
+    window.addEventListener('stop-auto-scroll', this.handleStopAutoScroll);
     
     // Reset session tracking for fresh session
     this.wordsIncrementedThisSession.clear();
@@ -511,6 +512,7 @@ export class LearningMode extends LitElement {
     this.clearInfoTimeout();
     this.clearAutoScrollTimer();
     document.removeEventListener('language-changed', this.handleExternalLanguageChange);
+    window.removeEventListener('stop-auto-scroll', this.handleStopAutoScroll);
   }
 
   private async loadCurrentLanguage(): Promise<void> {
@@ -1050,6 +1052,11 @@ export class LearningMode extends LitElement {
       this.autoScrollTimer = null;
     }
   }
+
+  private handleStopAutoScroll = (): void => {
+    this.clearAutoScrollTimer();
+    this.autoScrollEnabled = false;
+  };
 
   private toggleAutoScroll(): void {
     this.autoScrollEnabled = !this.autoScrollEnabled;

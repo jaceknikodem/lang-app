@@ -717,6 +717,21 @@ export class AppRoot extends LitElement {
         router.goToDialog();
         break;
       case 'flow':
+        // Stop previously played audio
+        try {
+          await window.electronAPI.audio.stopAudio();
+        } catch (err) {
+          // Ignore errors when stopping (might not be playing)
+        }
+
+        // If we were in review mode (learning mode), stop auto-scroll
+        if (this.currentRoute.mode === 'learning') {
+          window.dispatchEvent(new CustomEvent('stop-auto-scroll', {
+            bubbles: true,
+            composed: true
+          }));
+        }
+
         router.goToFlow();
         break;
       case 'progress':
@@ -740,6 +755,21 @@ export class AppRoot extends LitElement {
     if (this.isFlowPlaying) {
       this.handleFlowPause();
       return;
+    }
+
+    // Stop previously played audio
+    try {
+      await window.electronAPI.audio.stopAudio();
+    } catch (err) {
+      // Ignore errors when stopping (might not be playing)
+    }
+
+    // If we were in review mode (learning mode), stop auto-scroll
+    if (this.currentRoute.mode === 'learning') {
+      window.dispatchEvent(new CustomEvent('stop-auto-scroll', {
+        bubbles: true,
+        composed: true
+      }));
     }
 
     try {
