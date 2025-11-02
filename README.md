@@ -4,15 +4,15 @@ A privacy-first desktop language learning application that operates entirely off
 
 ## Features
 
-- **Contextual Learning**: Every word presented in natural sentences with audio
-- **Spaced Repetition**: FSRS and Classic algorithms for adaptive learning
-- **Speech Practice**: Practice pronunciation with Whisper models for speech recognition
-- **Micro Dialogues**: Interactive conversational practice with variant generation and follow-ups
-- **Multiple LLM Providers**: Local Ollama or Google Gemini API
-- **TTS Options**: System TTS, ElevenLabs, or custom audio
-- **Lemmatization**: Automatic word form recognition via Stanza service
-- **Privacy-First**: Complete offline operation, no accounts, no data collection
-- **Adaptive Intelligence**: Automatically focuses on your weakest vocabulary
+- **Immersive Context**: Every word appears in natural sentences with audio
+- **Smarter Spacing**: SRS-powered review adapts precisely to memory strength, keeping recall sharp with less grind
+- **Pronunciation Feedback**: Instant, character-level feedback shows exactly where you're off (all privately on your device)
+- **Micro-Dialogues**: Choose your reply, speak it aloud, and hear the natural response — real conversation built from what you already know
+- **Flow Mode**: Hands-free listening sessions (10–60 min) that train your ear and rhythm without screens or clicks
+- **Autopilot Learning**: The app glides between modes — review, quiz, dialogue, flow — so you can just focus on language
+- **Multiple LLM Providers**: Use Gemini or local LLMs — your choice of engine and privacy
+- **Privacy-First Design**: No accounts. No tracking. Your data never leaves your device
+- **Adaptive Intelligence**: The system quietly tracks what you struggle with and targets it — no manual tweaking needed
 
 ## Tech Stack
 
