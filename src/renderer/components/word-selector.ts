@@ -342,10 +342,10 @@ export class WordSelector extends LitElement {
   }
 
   private initializeWords() {
-    // Convert generated words to selectable format and auto-select all words
+    // Convert generated words to selectable format
     this.selectableWords = this.generatedWords.map(word => ({
       ...word,
-      selected: true,  // Auto-select all generated words by default
+      selected: false,  // Deselect all words by default
       markedAsKnown: false
     }));
   }
