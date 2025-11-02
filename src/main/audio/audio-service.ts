@@ -499,7 +499,6 @@ export class AudioService {
       // Optimized: Read file directly - if it doesn't exist, readFile will throw
       // This eliminates redundant file existence check (one less async I/O)
       const fileBuffer = await fsPromises.readFile(absolutePath);
-      console.log(`[AudioService] Audio file loaded: ${fileBuffer.length} bytes from ${absolutePath}`);
       
       // Determine MIME type from file extension
       const ext = extname(absolutePath).toLowerCase();

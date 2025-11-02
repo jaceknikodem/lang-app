@@ -6,13 +6,12 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
-import { Word, StudyStats } from '../../shared/types/core.js';
-import { sessionManager } from '../utils/session-manager.js';
+import { Word } from '../../shared/types/core.js';
 
 interface WordCategoryStats {
   known: number;           // strength > STRONG_THRESHOLD
-  learningStrong: number;  // strength WEAK_THRESHOLD to STRONG_THRESHOLD
-  learningWeak: number;    // strength < WEAK_THRESHOLD
+  strong: number;           // strength WEAK_THRESHOLD to STRONG_THRESHOLD
+  weak: number;            // strength < WEAK_THRESHOLD (and has been studied)
   new: number;             // never studied (lastStudied is null)
 }
 
@@ -24,13 +23,7 @@ export class ProgressSummary extends LitElement {
   private static readonly STRONG_THRESHOLD = 80;
 
   @state()
-  private studyStats: StudyStats | null = null;
-
-  @state()
   private wordCategoryStats: WordCategoryStats | null = null;
-
-  @state()
-  private recentSessions: Array<{ id: number, wordsStudied: number, whenStudied: Date }> = [];
 
   @state()
   private isLoading = true;
@@ -41,197 +34,115 @@ export class ProgressSummary extends LitElement {
   @state()
   private currentLanguage = '';
 
-  @state()
-  private languageStats: Array<{language: string, totalWords: number, studiedWords: number}> = [];
-
   static styles = [
     sharedStyles,
     css`
       :host {
         display: block;
-        max-width: 1000px;
+        max-width: 800px;
         margin: 0 auto;
-      }
-
-      .progress-container {
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-lg);
-      }
-
-      .progress-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: var(--spacing-lg);
-        margin-top: var(--spacing-lg);
-      }
-
-      .progress-section {
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-md);
-      }
-
-      .progress-header {
-        text-align: center;
-      }
-
-      .progress-title {
-        font-size: 20px;
-        font-weight: 600;
-        color: var(--text-primary);
-        margin: 0 0 var(--spacing-sm) 0;
-      }
-
-      .progress-subtitle {
-        font-size: 14px;
-        color: var(--text-secondary);
-        margin: 0;
-      }
-
-      .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: var(--spacing-md);
-      }
-
-      .stat-card {
-        background: var(--background-secondary);
-        border: 1px solid var(--border-color);
-        border-radius: var(--border-radius);
-        padding: var(--spacing-lg);
-        text-align: center;
-        position: relative;
-        overflow: hidden;
-      }
-
-      .stat-card.known {
-        border-color: var(--success-color);
-      }
-
-      .stat-card.known .stat-value {
-        color: var(--success-color);
-      }
-
-      .stat-card.learning-strong {
-        border-color: var(--primary-color);
-      }
-
-      .stat-card.learning-strong .stat-value {
-        color: var(--primary-color);
-      }
-
-      .stat-card.learning-weak {
-        border-color: var(--warning-color);
-      }
-
-      .stat-card.learning-weak .stat-value {
-        color: var(--warning-color);
-      }
-
-      .stat-card.new {
-        border-color: var(--text-tertiary);
-      }
-
-      .stat-card.new .stat-value {
-        color: var(--text-secondary);
-      }
-
-      .stat-value {
-        font-size: 36px;
-        font-weight: 700;
-        color: var(--primary-color);
-        margin: 0 0 var(--spacing-xs) 0;
-      }
-
-      .stat-label {
-        font-size: 14px;
-        color: var(--text-secondary);
-        margin: 0;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-
-      .stat-description {
-        font-size: 12px;
-        color: var(--text-tertiary);
-        margin: var(--spacing-xs) 0 0 0;
-      }
-
-      .section-title {
-        font-size: 20px;
-        font-weight: 600;
-        color: var(--text-primary);
-        margin: 0 0 var(--spacing-md) 0;
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-sm);
-      }
-
-      .section-icon {
-        font-size: 24px;
-      }
-
-      .sessions-list {
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-sm);
-        max-height: 400px;
-        overflow-y: auto;
-      }
-
-      .session-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: var(--spacing-md);
-        background: var(--background-secondary);
-        border: 1px solid var(--border-color);
-        border-radius: var(--border-radius);
-      }
-
-      .session-info {
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-xs);
-      }
-
-      .session-words {
-        font-size: 16px;
-        font-weight: 500;
-        color: var(--text-primary);
-      }
-
-      .session-date {
-        font-size: 14px;
-        color: var(--text-secondary);
-      }
-
-      .session-badge {
-        background: var(--primary-color);
-        color: white;
-        padding: var(--spacing-xs) var(--spacing-sm);
-        border-radius: 12px;
-        font-size: 12px;
-        font-weight: 500;
-      }
-
-      .empty-state {
-        text-align: center;
         padding: var(--spacing-xl);
-        color: var(--text-secondary);
       }
 
-      .empty-state h3 {
-        color: var(--text-primary);
-        margin-bottom: var(--spacing-md);
-      }
-
-      .action-buttons {
+      .stats-container {
         display: flex;
         flex-direction: column;
+        align-items: center;
+        gap: var(--spacing-lg);
+      }
+
+      .stats-row {
+        display: flex;
         gap: var(--spacing-md);
-        align-items: stretch;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .stat-box {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        padding: var(--spacing-sm) var(--spacing-md);
+        border-radius: var(--border-radius);
+        cursor: help;
+      }
+
+      .stat-box .stat-emoji {
+        font-size: 24px;
+        line-height: 1;
+      }
+
+      .stat-box .stat-value {
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .stat-box.known {
+        background: rgba(76, 175, 80, 0.1);
+      }
+
+      .stat-box.known .stat-value {
+        color: #4caf50;
+      }
+
+      .stat-box.strong {
+        background: rgba(33, 150, 243, 0.1);
+      }
+
+      .stat-box.strong .stat-value {
+        color: #2196f3;
+      }
+
+      .stat-box.weak {
+        background: rgba(255, 152, 0, 0.1);
+      }
+
+      .stat-box.weak .stat-value {
+        color: #ff9800;
+      }
+
+      .stat-box.new {
+        background: rgba(158, 158, 158, 0.1);
+      }
+
+      .stat-box.new .stat-value {
+        color: #9e9e9e;
+      }
+
+      .tooltip {
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-bottom: var(--spacing-xs);
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--background-primary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-small);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        white-space: nowrap;
+        font-size: 12px;
+        color: var(--text-primary);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+        z-index: 1000;
+      }
+
+      .stat-box:hover .tooltip {
+        opacity: 1;
+      }
+
+      .loading-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-xl);
+        gap: var(--spacing-md);
       }
 
       .error-message {
@@ -243,92 +154,10 @@ export class ProgressSummary extends LitElement {
         text-align: center;
       }
 
-      .language-selector {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-md);
-        margin-bottom: var(--spacing-lg);
-        padding: var(--spacing-md);
-        background: var(--background-secondary);
-        border: 1px solid var(--border-color);
-        border-radius: var(--border-radius);
-      }
-
-      .language-selector label {
-        font-weight: 500;
-        color: var(--text-primary);
-        white-space: nowrap;
-      }
-
-      .language-select {
-        padding: var(--spacing-xs) var(--spacing-sm);
-        border: 1px solid var(--border-color);
-        border-radius: var(--border-radius-small);
-        background: var(--background-primary);
-        color: var(--text-primary);
-        font-size: 14px;
-        cursor: pointer;
-        min-width: 150px;
-      }
-
-      .language-select:focus {
-        outline: none;
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
-      }
-
-      .language-stats {
-        flex: 1;
-        display: flex;
-        gap: var(--spacing-lg);
-        font-size: 14px;
+      .empty-state {
+        text-align: center;
+        padding: var(--spacing-xl);
         color: var(--text-secondary);
-      }
-
-      .language-stat {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: var(--spacing-xs);
-      }
-
-      .language-stat-value {
-        font-weight: 600;
-        color: var(--primary-color);
-      }
-
-      .language-stat-label {
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-
-      @media (max-width: 1024px) {
-        .progress-grid {
-          grid-template-columns: 1fr;
-          grid-template-rows: auto;
-        }
-
-        .stats-grid {
-          grid-template-columns: repeat(2, 1fr);
-        }
-
-        .sessions-list {
-          max-height: none;
-          overflow-y: visible;
-        }
-      }
-
-      @media (max-width: 768px) {
-        .stats-grid {
-          grid-template-columns: 1fr;
-        }
-
-        .session-item {
-          flex-direction: column;
-          align-items: stretch;
-          gap: var(--spacing-sm);
-        }
       }
     `
   ];
@@ -365,17 +194,10 @@ export class ProgressSummary extends LitElement {
     try {
       // Load language information
       this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
-      this.languageStats = await window.electronAPI.database.getLanguageStats();
-
-      // Load study statistics for current language
-      this.studyStats = await window.electronAPI.database.getStudyStats(this.currentLanguage);
 
       // Load all words for current language to calculate category statistics
       const allWords = await window.electronAPI.database.getAllWords(true, false, this.currentLanguage);
       this.wordCategoryStats = this.calculateWordCategoryStats(allWords);
-
-      // Load recent study sessions
-      this.recentSessions = await window.electronAPI.database.getRecentStudySessions(5);
 
     } catch (error) {
       console.error('Failed to load progress data:', error);
@@ -388,118 +210,39 @@ export class ProgressSummary extends LitElement {
   private calculateWordCategoryStats(words: Word[]): WordCategoryStats {
     const stats: WordCategoryStats = {
       known: 0,
-      learningStrong: 0,
-      learningWeak: 0,
+      strong: 0,
+      weak: 0,
       new: 0
     };
 
     words.forEach(word => {
       if (!word.lastStudied) {
+        // Not yet reviewed
         stats.new++;
-      } else if (word.known) {
+      } else if (word.strength > ProgressSummary.STRONG_THRESHOLD) {
+        // Confidently remembered (strength > 80)
         stats.known++;
       } else if (word.strength >= ProgressSummary.WEAK_THRESHOLD) {
-        stats.learningStrong++;
+        // Mostly remembered (30-80)
+        stats.strong++;
       } else {
-        stats.learningWeak++;
+        // Shaky or forgotten (<30)
+        stats.weak++;
       }
     });
 
     return stats;
   }
 
-  private formatDate(date: Date): string {
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) {
-      return 'Today';
-    } else if (diffDays === 1) {
-      return 'Yesterday';
-    } else if (diffDays < 7) {
-      return `${diffDays} days ago`;
-    } else {
-      return date.toLocaleDateString();
-    }
-  }
-
-  private handleStartLearning() {
-    router.goToTopicSelection();
-  }
-
-  private async handleLanguageChange(event: Event) {
-    const select = event.target as HTMLSelectElement;
-    const selectedLanguage = select.value;
-    
-    if (!selectedLanguage || selectedLanguage === this.currentLanguage) return;
-    
-    try {
-      await window.electronAPI.database.setCurrentLanguage(selectedLanguage);
-      this.currentLanguage = selectedLanguage;
-      sessionManager.setActiveLanguage(selectedLanguage);
-      
-      // Load lemmatization model for the new language (async, non-blocking)
-      void this.loadLemmatizationModel(selectedLanguage);
-      
-      this.dispatchEvent(new CustomEvent('language-changed', {
-        detail: { language: selectedLanguage },
-        bubbles: true,
-        composed: true
-      }));
-      
-      // Reload progress data for the new language
-      await this.loadProgressData();
-    } catch (error) {
-      console.error('Failed to change language:', error);
-      // Revert the selection
-      select.value = this.currentLanguage;
-    }
-  }
-
-  private capitalizeLanguage(language: string): string {
-    return language.charAt(0).toUpperCase() + language.slice(1);
-  }
-
-  /**
-   * Load lemmatization model asynchronously (non-blocking)
-   */
-  private async loadLemmatizationModel(language: string): Promise<void> {
-    try {
-      console.log(`[Lemmatization] Loading model for language: ${language}`);
-      await window.electronAPI.lemmatization.loadModel(language);
-      console.log(`[Lemmatization] Model loaded successfully for ${language}`);
-    } catch (error) {
-      console.warn(`[Lemmatization] Failed to load model for ${language} (non-critical):`, error);
-    }
-  }
-
-  private getSupportedLanguages(): string[] {
-    return ['italian', 'spanish', 'portuguese', 'polish', 'indonesian'];
-  }
-
-  private async handleContinueWeakWords() {
-    try {
-      const weakWords = await window.electronAPI.quiz.getWeakestWords(10);
-      if (weakWords.length > 0) {
-        router.goToLearning();
-      } else {
-        this.error = 'No words need practice right now. Start a new learning session!';
-      }
-    } catch (error) {
-      console.error('Failed to get weak words:', error);
-      this.error = 'Failed to load weak words. Please try again.';
-    }
-  }
 
   render() {
     if (this.isLoading) {
       return html`
-        <div class="progress-container">
+        <div class="stats-container">
           <div class="loading-container">
             <div class="loading">
               <div class="spinner"></div>
-              Loading progress data...
+              Loading stats...
             </div>
           </div>
         </div>
@@ -508,88 +251,52 @@ export class ProgressSummary extends LitElement {
 
     if (this.error) {
       return html`
-        <div class="progress-container">
+        <div class="stats-container">
           <div class="error-message">
             ${this.error}
-          </div>
-          <div class="action-buttons">
-            <button class="btn btn-primary" @click=${this.handleStartLearning}>
-              Start Learning
-            </button>
           </div>
         </div>
       `;
     }
 
     if (!this.wordCategoryStats ||
-      (this.wordCategoryStats.known + this.wordCategoryStats.learningStrong +
-        this.wordCategoryStats.learningWeak + this.wordCategoryStats.new) === 0) {
+      (this.wordCategoryStats.known + this.wordCategoryStats.strong +
+        this.wordCategoryStats.weak + this.wordCategoryStats.new) === 0) {
       return html`
-        <div class="progress-container">
+        <div class="stats-container">
           <div class="empty-state">
-            <h3>No Learning Progress Yet</h3>
-            <p>Start your first learning session to see your progress here.</p>
-            <div class="action-buttons">
-              <button class="btn btn-primary btn-large" @click=${this.handleStartLearning}>
-                Start Learning
-              </button>
-            </div>
+            <p>No learning progress yet. Start your first learning session!</p>
           </div>
         </div>
       `;
     }
 
     return html`
-      <div class="progress-container">
-        <div class="language-stats-display">
-          <div class="language-stats">
-            ${this.getSupportedLanguages().map(language => {
-              const stat = this.languageStats.find(s => s.language === language);
-              const studiedWords = stat ? stat.studiedWords : 0;
-              const totalWords = stat ? stat.totalWords : 0;
-              return html`
-                <div class="language-stat ${language === this.currentLanguage ? 'current' : ''}">
-                  <div class="language-stat-value">${studiedWords}/${totalWords}</div>
-                  <div class="language-stat-label">${this.capitalizeLanguage(language)}</div>
-                </div>
-              `;
-            })}
+      <div class="stats-container">
+        <div class="stats-row">
+          <div class="stat-box known">
+            <span class="stat-emoji">🟩</span>
+            <span class="stat-value">${this.wordCategoryStats?.known || 0}</span>
+            <div class="tooltip">Known: confidently remembered (strength > 80)</div>
           </div>
-        </div>
-        <div class="progress-grid">
-          <!-- Top Left: Word Categories -->
-          <div class="progress-section">
-            <h3 class="section-title">
-              <span class="section-icon">📊</span>
-              Study Statistics - ${this.capitalizeLanguage(this.currentLanguage)}
-            </h3>
-            <div class="stats-grid">
-              <div class="stat-card known">
-                <div class="stat-value">${this.wordCategoryStats?.known || 0}</div>
-                <div class="stat-label">Known</div>
-                <div class="stat-description">Strength > ${ProgressSummary.STRONG_THRESHOLD}</div>
-              </div>
-
-              <div class="stat-card learning-strong">
-                <div class="stat-value">${this.wordCategoryStats?.learningStrong || 0}</div>
-                <div class="stat-label">Learning - Strong</div>
-                <div class="stat-description">Strength ${ProgressSummary.WEAK_THRESHOLD}-${ProgressSummary.STRONG_THRESHOLD}</div>
-              </div>
-
-              <div class="stat-card learning-weak">
-                <div class="stat-value">${this.wordCategoryStats?.learningWeak || 0}</div>
-                <div class="stat-label">Learning - Weak</div>
-                <div class="stat-description">Strength < ${ProgressSummary.WEAK_THRESHOLD}</div>
-              </div>
-
-              <div class="stat-card new">
-                <div class="stat-value">${this.wordCategoryStats?.new || 0}</div>
-                <div class="stat-label">New</div>
-                <div class="stat-description">Never quizzed</div>
-              </div>
-            </div>
+          
+          <div class="stat-box strong">
+            <span class="stat-emoji">🟦</span>
+            <span class="stat-value">${this.wordCategoryStats?.strong || 0}</span>
+            <div class="tooltip">Strong: mostly remembered (30–80)</div>
           </div>
-
+          
+          <div class="stat-box weak">
+            <span class="stat-emoji">🟧</span>
+            <span class="stat-value">${this.wordCategoryStats?.weak || 0}</span>
+            <div class="tooltip">Weak: shaky or forgotten (&lt;30)</div>
+          </div>
+          
+          <div class="stat-box new">
+            <span class="stat-emoji">⚪</span>
+            <span class="stat-value">${this.wordCategoryStats?.new || 0}</span>
+            <div class="tooltip">New: not yet reviewed</div>
+          </div>
         </div>
       </div>
     `;

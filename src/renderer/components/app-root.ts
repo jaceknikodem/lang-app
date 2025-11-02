@@ -15,13 +15,12 @@ import './learning-mode.js';
 import './quiz-mode.js';
 import './dialog-mode.js';
 import './flow-mode.js';
-import './progress-summary.js';
 import './settings-panel.js';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
   @state()
-  private currentRoute: RouteState = { mode: 'progress' };
+  private currentRoute: RouteState = { mode: 'learning' };
 
   @state()
   private appState: AppState = {
@@ -51,6 +50,12 @@ export class AppRoot extends LitElement {
 
   @state()
   private hasFlowSentences = false;
+
+  @state()
+  private wordCategoryStats: { known: number; strong: number; weak: number; new: number } | null = null;
+
+  private static readonly WEAK_THRESHOLD = 30;
+  private static readonly STRONG_THRESHOLD = 80;
 
   private routerUnsubscribe?: () => void;
   private keyboardUnsubscribe?: () => void;
@@ -104,6 +109,9 @@ export class AppRoot extends LitElement {
 
       .language-dropdown {
         position: relative;
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
       }
 
       .language-select {
@@ -122,6 +130,84 @@ export class AppRoot extends LitElement {
         appearance: none;
         -webkit-appearance: none;
         -moz-appearance: none;
+      }
+
+      .stats-display {
+        display: flex;
+        gap: var(--spacing-xs);
+        align-items: center;
+      }
+
+      .stat-box {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        padding: var(--spacing-xs) var(--spacing-sm);
+        border-radius: var(--border-radius-small);
+        cursor: help;
+        font-size: 12px;
+      }
+
+      .stat-box .stat-value {
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      .stat-box.known {
+        background: rgba(76, 175, 80, 0.05);
+      }
+
+      .stat-box.known .stat-value {
+        color: rgba(76, 175, 80, 0.7);
+      }
+
+      .stat-box.strong {
+        background: rgba(33, 150, 243, 0.05);
+      }
+
+      .stat-box.strong .stat-value {
+        color: rgba(33, 150, 243, 0.7);
+      }
+
+      .stat-box.weak {
+        background: rgba(255, 152, 0, 0.05);
+      }
+
+      .stat-box.weak .stat-value {
+        color: rgba(255, 152, 0, 0.7);
+      }
+
+      .stat-box.new {
+        background: rgba(158, 158, 158, 0.05);
+      }
+
+      .stat-box.new .stat-value {
+        color: rgba(158, 158, 158, 0.7);
+      }
+
+      .tooltip {
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-bottom: var(--spacing-xs);
+        padding: var(--spacing-xs) var(--spacing-sm);
+        background: var(--background-primary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-small);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        white-space: nowrap;
+        font-size: 11px;
+        color: var(--text-primary);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+        z-index: 1000;
+      }
+
+      .stat-box:hover .tooltip {
+        opacity: 1;
       }
 
       .language-select:hover {
@@ -446,6 +532,9 @@ export class AppRoot extends LitElement {
       await this.loadCurrentLanguage();
       console.log('Current language loaded');
 
+      // Load stats for current language
+      await this.loadWordStats();
+
       // Load saved session
       console.log('Loading session...');
       await this.loadSession();
@@ -610,9 +699,11 @@ export class AppRoot extends LitElement {
       return;
     }
 
-    console.log('Language changed event received:', customEvent.detail);
-    await this.refreshCurrentLanguage();
-  };
+      console.log('Language changed event received:', customEvent.detail);
+      await this.refreshCurrentLanguage();
+      // Reload stats for new language
+      await this.loadWordStats();
+    };
 
   /**
    * Pre-generate dialog session after language changes
@@ -648,6 +739,10 @@ export class AppRoot extends LitElement {
       await this.checkExistingWords();
       await this.checkFlowSentences();
       await this.ensureLearningSession();
+      
+      // Reload stats for new language
+      await this.loadWordStats();
+      
       this.requestUpdate();
 
       // Dispatch event to notify other components (like settings panel)
@@ -700,6 +795,47 @@ export class AppRoot extends LitElement {
     return ['italian', 'spanish', 'portuguese', 'polish', 'indonesian'];
   }
 
+  private async loadWordStats() {
+    try {
+      if (!this.currentLanguage) {
+        return;
+      }
+
+      const allWords = await window.electronAPI.database.getAllWords(true, false, this.currentLanguage);
+      this.wordCategoryStats = this.calculateWordCategoryStats(allWords);
+    } catch (error) {
+      console.error('Failed to load word stats:', error);
+      this.wordCategoryStats = null;
+    }
+  }
+
+  private calculateWordCategoryStats(words: any[]): { known: number; strong: number; weak: number; new: number } {
+    const stats = {
+      known: 0,
+      strong: 0,
+      weak: 0,
+      new: 0
+    };
+
+    words.forEach(word => {
+      if (!word.lastStudied) {
+        // Not yet reviewed
+        stats.new++;
+      } else if (word.strength > AppRoot.STRONG_THRESHOLD) {
+        // Confidently remembered (strength > 80)
+        stats.known++;
+      } else if (word.strength >= AppRoot.WEAK_THRESHOLD) {
+        // Mostly remembered (30-80)
+        stats.strong++;
+      } else {
+        // Shaky or forgotten (<30)
+        stats.weak++;
+      }
+    });
+
+    return stats;
+  }
+
   private updateAppState() {
     // Update legacy app state based on current route
     const routeData = router.getRouteData();
@@ -715,10 +851,10 @@ export class AppRoot extends LitElement {
     // Update session manager with current route state
     const routeData = router.getRouteData();
 
-    // Only update mode if it's not 'flow' (flow doesn't have a session state)
-    if (this.currentRoute.mode !== 'flow') {
-      sessionManager.updateCurrentMode(this.currentRoute.mode as 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'dialog' | 'progress' | 'settings');
-    }
+      // Only update mode if it's not 'flow' (flow doesn't have a session state)
+      if (this.currentRoute.mode !== 'flow') {
+        sessionManager.updateCurrentMode(this.currentRoute.mode as 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'dialog' | 'settings');
+      }
 
     if (routeData?.topic) {
       sessionManager.updateSelectedTopic(routeData.topic);
@@ -768,9 +904,6 @@ export class AppRoot extends LitElement {
         }
 
         router.goToFlow();
-        break;
-      case 'progress':
-        router.goToProgress();
         break;
       case 'settings':
         router.goToSettings();
@@ -961,6 +1094,52 @@ export class AppRoot extends LitElement {
     }
   }
 
+  /**
+   * Navigate to the highest-scoring mode based on scoring mechanism (without enabling autopilot)
+   */
+  private async navigateToHighestScoringMode() {
+    try {
+      const scores = await window.electronAPI.scoring.getScores(this.currentLanguage);
+      
+      // Log scores in one line
+      console.log(`Mode scores: topic-selection=${scores.addWords}, learning=${scores.review}, quiz=${scores.quiz}, dialog=${scores.dialog}, flow=${scores.flow}`);
+      
+      // Find mode with highest score
+      const modeScores = [
+        { mode: 'topic-selection' as AppMode, score: scores.addWords },
+        { mode: 'learning' as AppMode, score: scores.review },
+        { mode: 'quiz' as AppMode, score: scores.quiz },
+        { mode: 'dialog' as AppMode, score: scores.dialog },
+        { mode: 'flow' as AppMode, score: scores.flow }
+      ];
+      
+      // Sort by score descending and get the highest mode
+      modeScores.sort((a, b) => b.score - a.score);
+      const highestMode = modeScores[0];
+      
+      // Navigate to the highest-scoring mode if it has a score > 0
+      if (highestMode.score > 0) {
+        console.log(`Navigating to highest-scoring mode: ${highestMode.mode} (score: ${highestMode.score})`);
+        await this.handleNavigation(highestMode.mode);
+        
+        // If it's flow mode, also start playing
+        if (highestMode.mode === 'flow') {
+          setTimeout(async () => {
+            await this.handleFlowPlay();
+          }, 100);
+        }
+      } else {
+        // If all scores are 0, navigate to topic-selection
+        console.log('All mode scores are 0, navigating to topic-selection');
+        await this.handleNavigation('topic-selection');
+      }
+    } catch (error) {
+      console.error('Error determining highest-scoring mode:', error);
+      // On error, navigate to topic-selection
+      await this.handleNavigation('topic-selection');
+    }
+  }
+
   private async checkScoresAndNavigate(initialTakeover = false) {
     try {
       const scores = await window.electronAPI.scoring.getScores(this.currentLanguage);
@@ -1069,11 +1248,6 @@ export class AppRoot extends LitElement {
         context: 'global'
       },
       {
-        ...GlobalShortcuts.PROGRESS,
-        action: () => this.handleNavigation('progress'),
-        context: 'global'
-      },
-      {
         ...GlobalShortcuts.SETTINGS,
         action: () => this.handleNavigation('settings'),
         context: 'global'
@@ -1159,13 +1333,6 @@ export class AppRoot extends LitElement {
                   Dialog
                 </button>
                 <button 
-                  class="nav-button ${router.isCurrentMode('progress') ? 'active' : ''}"
-                  @click=${() => this.handleNavigation('progress')}
-                  title="View progress (Ctrl+5)"
-                >
-                  Progress
-                </button>
-                <button 
                   class="nav-button ${router.isCurrentMode('settings') ? 'active' : ''}"
                   @click=${() => this.handleNavigation('settings')}
                   title="Settings (Ctrl+6)"
@@ -1187,6 +1354,26 @@ export class AppRoot extends LitElement {
                       </option>
                     `)}
                   </select>
+                  ${this.wordCategoryStats ? html`
+                    <div class="stats-display">
+                      <div class="stat-box known">
+                        <span class="stat-value">${this.wordCategoryStats.known}</span>
+                        <div class="tooltip">Known: confidently remembered (strength > 80)</div>
+                      </div>
+                      <div class="stat-box strong">
+                        <span class="stat-value">${this.wordCategoryStats.strong}</span>
+                        <div class="tooltip">Strong: mostly remembered (30–80)</div>
+                      </div>
+                      <div class="stat-box weak">
+                        <span class="stat-value">${this.wordCategoryStats.weak}</span>
+                        <div class="tooltip">Weak: shaky or forgotten (&lt;30)</div>
+                      </div>
+                      <div class="stat-box new">
+                        <span class="stat-value">${this.wordCategoryStats.new}</span>
+                        <div class="tooltip">New: not yet reviewed</div>
+                      </div>
+                    </div>
+                  ` : ''}
                 </div>
               ` : ''}
             </div>
@@ -1258,9 +1445,6 @@ export class AppRoot extends LitElement {
 
       case 'flow':
         return html`<flow-mode></flow-mode>`;
-
-      case 'progress':
-        return html`<progress-summary></progress-summary>`;
 
       case 'settings':
         return html`<settings-panel></settings-panel>`;
