@@ -83,6 +83,7 @@ export interface DatabaseLayer {
     sentenceGenerationModel?: string,
     audioGenerationService?: string,
     audioGenerationModel?: string,
+    audioGenerationVoiceId?: string,
     tokenizedTokens?: any[]
   ): Promise<number>;
   getSentencesByWord(wordId: number): Promise<Sentence[]>;
@@ -90,7 +91,7 @@ export interface DatabaseLayer {
   getSentenceById(sentenceId: number): Promise<Sentence | null>;
   deleteSentence(sentenceId: number): Promise<void>;
   updateSentenceLastShown(sentenceId: number): Promise<void>;
-  updateSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void>;
+  updateSentenceAudioPath(sentenceId: number, audioPath: string, audioGenerationVoiceId?: string): Promise<void>;
   updateSentenceTokens(sentenceId: number, tokens: any[]): Promise<void>;
   incrementSentencePlayCount(sentenceId: number): Promise<void>;
   recordPronunciationAttempt(sentenceId: number, similarityScore: number, expectedText: string, transcribedText: string): Promise<void>;

@@ -18,6 +18,7 @@ export class ElevenLabsAudioGenerator implements AudioGenerator {
   private database?: DatabaseLayer;
   private currentAudioProcess?: any; // Track current audio process
   private currentPlayPromise?: { resolve: () => void; reject: (error: any) => void }; // Store promise callbacks for playback completion
+  private lastUsedVoiceId?: string; // Track the last voiceID used for generation
 
   constructor(config?: Partial<AudioConfig>, database?: DatabaseLayer) {
     this.config = {
@@ -76,6 +77,9 @@ export class ElevenLabsAudioGenerator implements AudioGenerator {
 
       // Get voice ID for the language
       const voiceId = this.getVoiceForLanguage(targetLanguage);
+      
+      // Store the voiceID that was used for this generation
+      this.lastUsedVoiceId = voiceId;
 
       // Make API request to ElevenLabs
       const audioBuffer = await this.callElevenLabsAPI(text, voiceId);
@@ -306,6 +310,13 @@ export class ElevenLabsAudioGenerator implements AudioGenerator {
     }
     
     return ElevenLabsAudioGenerator.DEFAULT_VOICE;
+  }
+
+  /**
+   * Get the last voiceID that was used for audio generation
+   */
+  getLastUsedVoiceId(): string | undefined {
+    return this.lastUsedVoiceId;
   }
 
   /**

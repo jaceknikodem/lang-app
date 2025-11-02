@@ -33,13 +33,14 @@ declare global {
           sentenceParts?: string[],
           sentenceGenerationModel?: string,
           audioGenerationService?: string,
-          audioGenerationModel?: string
+          audioGenerationModel?: string,
+          audioGenerationVoiceId?: string
         ) => Promise<number>;
         getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
         getSentencesByIds: (sentenceIds: number[]) => Promise<Sentence[]>;
         deleteSentence: (sentenceId: number) => Promise<void>;
         updateSentenceLastShown: (sentenceId: number) => Promise<void>;
-        updateSentenceAudioPath: (sentenceId: number, audioPath: string) => Promise<void>;
+        updateSentenceAudioPath: (sentenceId: number, audioPath: string, audioGenerationVoiceId?: string) => Promise<void>;
         incrementSentencePlayCount: (sentenceId: number) => Promise<void>;
         updateLastStudied: (wordId: number) => Promise<void>;
         getStudyStats: () => Promise<StudyStats>;

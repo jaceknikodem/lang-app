@@ -830,15 +830,17 @@ export class AudioService {
   /**
    * Get current audio generation service and model information
    */
-  getAudioGenerationInfo(): { service: string; model?: string } {
+  getAudioGenerationInfo(): { service: string; model?: string; voiceId?: string } {
     const generatorName = this.audioGenerator.constructor.name;
     
     // Check if it's ElevenLabs generator
     if (generatorName === 'ElevenLabsAudioGenerator') {
       const config = (this.audioGenerator as any).config;
+      const voiceId = (this.audioGenerator as any).getLastUsedVoiceId?.();
       return {
         service: 'elevenlabs',
-        model: config?.elevenLabsModel || 'eleven_flash_v2_5'
+        model: config?.elevenLabsModel || 'eleven_flash_v2_5',
+        voiceId: voiceId
       };
     }
     

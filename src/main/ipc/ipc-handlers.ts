@@ -63,7 +63,7 @@ export function setupIPCHandlers(
   setupLLMHandlers(llmClient, contentGenerator, databaseLayer);
 
   // Audio handlers
-  setupAudioHandlers(audioService);
+  setupAudioHandlers(audioService, databaseLayer);
 
   // Quiz handlers
   setupQuizHandlers(databaseLayer);
@@ -173,7 +173,7 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.INSERT_SENTENCE, async (event, wordId, sentence, translation, audioPath, contextBefore, contextAfter, contextBeforeTranslation, contextAfterTranslation, sentenceParts, sentenceGenerationModel, audioGenerationService, audioGenerationModel) => {
+  ipcMain.handle(IPC_CHANNELS.DATABASE.INSERT_SENTENCE, async (event, wordId, sentence, translation, audioPath, contextBefore, contextAfter, contextBeforeTranslation, contextAfterTranslation, sentenceParts, sentenceGenerationModel, audioGenerationService, audioGenerationModel, audioGenerationVoiceId) => {
     try {
       const validatedWordId = WordIdSchema.parse(wordId);
       const validatedSentence = TextSchema.parse(sentence);
@@ -187,6 +187,7 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       const validatedSentenceGenerationModel = sentenceGenerationModel ? z.string().parse(sentenceGenerationModel) : undefined;
       const validatedAudioGenerationService = audioGenerationService ? z.string().parse(audioGenerationService) : undefined;
       const validatedAudioGenerationModel = audioGenerationModel ? z.string().parse(audioGenerationModel) : undefined;
+      const validatedAudioGenerationVoiceId = audioGenerationVoiceId ? z.string().parse(audioGenerationVoiceId) : undefined;
 
       return await databaseLayer.insertSentence(
         validatedWordId,
@@ -197,7 +198,11 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
         validatedContextAfter,
         validatedContextBeforeTranslation,
         validatedContextAfterTranslation,
-        validatedSentenceParts
+        validatedSentenceParts,
+        validatedSentenceGenerationModel,
+        validatedAudioGenerationService,
+        validatedAudioGenerationModel,
+        validatedAudioGenerationVoiceId
       );
     } catch (error) {
       console.error('Error inserting sentence:', error);
@@ -285,11 +290,12 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_AUDIO_PATH, async (event, sentenceId, audioPath) => {
+  ipcMain.handle(IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_AUDIO_PATH, async (event, sentenceId, audioPath, audioGenerationVoiceId) => {
     try {
       const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
       const validatedAudioPath = AudioPathSchema.parse(audioPath);
-      return await databaseLayer.updateSentenceAudioPath(validatedSentenceId, validatedAudioPath);
+      const validatedAudioGenerationVoiceId = audioGenerationVoiceId ? z.string().parse(audioGenerationVoiceId) : undefined;
+      return await databaseLayer.updateSentenceAudioPath(validatedSentenceId, validatedAudioPath, validatedAudioGenerationVoiceId);
     } catch (error) {
       console.error('Error updating sentence audio path:', error);
       throw new Error(`Failed to update sentence audio path: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -680,7 +686,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
 /**
  * Set up audio-related IPC handlers
  */
-function setupAudioHandlers(audioService: AudioService): void {
+function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDatabaseLayer): void {
   ipcMain.handle(IPC_CHANNELS.AUDIO.GENERATE_AUDIO, async (event, text, language, word, wordId, sentenceId, variantId) => {
     try {
       const validatedText = TextSchema.parse(text);
@@ -795,6 +801,20 @@ function setupAudioHandlers(audioService: AudioService): void {
         validatedPayload.variantId,
         validatedPayload.existingPath
       );
+
+      // Capture voiceID after generation and update database if sentenceId is provided
+      let voiceId: string | undefined;
+      if (validatedPayload.sentenceId && databaseLayer) {
+        try {
+          const audioInfo = audioService.getAudioGenerationInfo();
+          voiceId = audioInfo.voiceId;
+          if (voiceId) {
+            await databaseLayer.updateSentenceAudioPath(validatedPayload.sentenceId, audioPath, voiceId);
+          }
+        } catch (error) {
+          console.warn('Failed to update voiceID after regeneration:', error);
+        }
+      }
 
       return { audioPath };
     } catch (error) {

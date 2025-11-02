@@ -168,6 +168,7 @@ export class WordGenerationRunner {
           let sentenceModel: string | undefined;
           let audioService: string | undefined;
           let audioModel: string | undefined;
+          let audioVoiceId: string | undefined;
           
           const sentenceParts = splitSentenceIntoParts(sentence.sentence);
           const sentenceId = await this.database.insertSentence(
@@ -242,6 +243,7 @@ export class WordGenerationRunner {
               const audioInfo = this.audioService.getAudioGenerationInfo();
               audioService = audioInfo.service;
               audioModel = audioInfo.model;
+              audioVoiceId = audioInfo.voiceId;
             } catch (error) {
               console.warn('[WordGenerationRunner] Failed to generate audio:', error);
               audioPath = '';
@@ -249,12 +251,13 @@ export class WordGenerationRunner {
               const audioInfo = this.audioService.getAudioGenerationInfo();
               audioService = audioInfo.service;
               audioModel = audioInfo.model;
+              audioVoiceId = audioInfo.voiceId;
             }
           }
 
           // Update sentence with audio path and metadata
           if (audioPath) {
-            await this.database.updateSentenceAudioPath(sentenceId, audioPath);
+            await this.database.updateSentenceAudioPath(sentenceId, audioPath, audioVoiceId);
           }
           // Update sentence metadata (model info) if available
           if (sentenceModel !== undefined || audioService !== undefined || audioModel !== undefined) {
@@ -264,13 +267,15 @@ export class WordGenerationRunner {
                 UPDATE sentences 
                 SET sentence_generation_model = COALESCE(?, sentence_generation_model),
                     audio_generation_service = COALESCE(?, audio_generation_service),
-                    audio_generation_model = COALESCE(?, audio_generation_model)
+                    audio_generation_model = COALESCE(?, audio_generation_model),
+                    audio_generation_voice_id = COALESCE(?, audio_generation_voice_id)
                 WHERE id = ?
               `);
               updateStmt.run(
                 sentenceModel || null,
                 audioService || null,
                 audioModel || null,
+                audioVoiceId || null,
                 sentenceId
               );
             }

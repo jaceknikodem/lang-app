@@ -45,7 +45,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       sentenceParts?: string[],
       sentenceGenerationModel?: string,
       audioGenerationService?: string,
-      audioGenerationModel?: string
+      audioGenerationModel?: string,
+      audioGenerationVoiceId?: string
     ) => 
       ipcRenderer.invoke(
         IPC_CHANNELS.DATABASE.INSERT_SENTENCE,
@@ -60,7 +61,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         sentenceParts,
         sentenceGenerationModel,
         audioGenerationService,
-        audioGenerationModel
+        audioGenerationModel,
+        audioGenerationVoiceId
       ),
     getSentencesByWord: (wordId: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_SENTENCES_BY_WORD, wordId),
@@ -70,8 +72,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.DELETE_SENTENCE, sentenceId),
     updateSentenceLastShown: (sentenceId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_LAST_SHOWN, sentenceId),
-    updateSentenceAudioPath: (sentenceId: number, audioPath: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_AUDIO_PATH, sentenceId, audioPath),
+    updateSentenceAudioPath: (sentenceId: number, audioPath: string, audioGenerationVoiceId?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_AUDIO_PATH, sentenceId, audioPath, audioGenerationVoiceId),
     incrementSentencePlayCount: (sentenceId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.INCREMENT_SENTENCE_PLAY_COUNT, sentenceId),
     recordPronunciationAttempt: (sentenceId: number, similarityScore: number, expectedText: string, transcribedText: string) =>

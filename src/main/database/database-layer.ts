@@ -123,12 +123,21 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         sentence_generation_model TEXT,
         audio_generation_service TEXT,
         audio_generation_model TEXT,
+        audio_generation_voice_id TEXT,
         sentence_tokens TEXT,
         similarity_score REAL,
         play_count INTEGER DEFAULT 0,
         pronunciation_count INTEGER DEFAULT 0
       )
     `);
+
+    // Migration: Add audio_generation_voice_id column if it doesn't exist
+    try {
+      db.exec(`ALTER TABLE sentences ADD COLUMN audio_generation_voice_id TEXT`);
+    } catch (error) {
+      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
+      // Ignore error - this is expected for existing databases with the column
+    }
 
     // Progress table
     db.exec(`
@@ -641,6 +650,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     sentenceGenerationModel?: string,
     audioGenerationService?: string,
     audioGenerationModel?: string,
+    audioGenerationVoiceId?: string,
     tokenizedTokens?: any[]
   ): Promise<number> {
     const db = this.getDb();
@@ -656,9 +666,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           word_id, sentence, translation, audio_path,
           context_before, context_after, context_before_translation, context_after_translation,
           sentence_parts, sentence_generation_model, audio_generation_service, audio_generation_model,
-          sentence_tokens
+          audio_generation_voice_id, sentence_tokens
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       const result = stmt.run(
@@ -674,6 +684,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         sentenceGenerationModel || null,
         audioGenerationService || null,
         audioGenerationModel || null,
+        audioGenerationVoiceId || null,
         serializedTokens
       );
 
@@ -812,17 +823,31 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Update sentence audio path after successful regeneration
    */
-  async updateSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void> {
+  async updateSentenceAudioPath(sentenceId: number, audioPath: string, audioGenerationVoiceId?: string): Promise<void> {
     const db = this.getDb();
     try {
-      const stmt = db.prepare(`
-        UPDATE sentences
-        SET audio_path = ?
-        WHERE id = ?
-      `);
-      const result = stmt.run(audioPath, sentenceId);
-      if (result.changes === 0) {
-        throw new Error(`Sentence with ID ${sentenceId} not found`);
+      if (audioGenerationVoiceId !== undefined) {
+        // Update both audio path and voice ID
+        const stmt = db.prepare(`
+          UPDATE sentences
+          SET audio_path = ?, audio_generation_voice_id = ?
+          WHERE id = ?
+        `);
+        const result = stmt.run(audioPath, audioGenerationVoiceId || null, sentenceId);
+        if (result.changes === 0) {
+          throw new Error(`Sentence with ID ${sentenceId} not found`);
+        }
+      } else {
+        // Update only audio path
+        const stmt = db.prepare(`
+          UPDATE sentences
+          SET audio_path = ?
+          WHERE id = ?
+        `);
+        const result = stmt.run(audioPath, sentenceId);
+        if (result.changes === 0) {
+          throw new Error(`Sentence with ID ${sentenceId} not found`);
+        }
       }
     } catch (error) {
       throw new Error(`Failed to update sentence audio path: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -2407,7 +2432,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       contextAfterTranslation: row.context_after_translation || undefined,
       sentenceGenerationModel: row.sentence_generation_model || undefined,
       audioGenerationService: row.audio_generation_service || undefined,
-      audioGenerationModel: row.audio_generation_model || undefined
+      audioGenerationModel: row.audio_generation_model || undefined,
+      audioGenerationVoiceId: row.audio_generation_voice_id || undefined
     };
   }
 

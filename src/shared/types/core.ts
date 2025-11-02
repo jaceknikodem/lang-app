@@ -52,6 +52,7 @@ export interface Sentence {
   sentenceGenerationModel?: string;
   audioGenerationService?: string;
   audioGenerationModel?: string;
+  audioGenerationVoiceId?: string;
   tokenizedTokens?: PrecomputedToken[];
 }
 
