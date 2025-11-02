@@ -3,7 +3,6 @@
  */
 
 export { DatabaseConnection } from './connection.js';
-export { MigrationManager, type Migration } from './migrations.js';
 export { SQLiteDatabaseLayer } from './database-layer.js';
 export { createDatabase, createTestDatabase } from './factory.js';
 

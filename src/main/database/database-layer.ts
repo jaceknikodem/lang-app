@@ -8,28 +8,25 @@ import { promises as fsPromises } from 'fs';
 import { DatabaseLayer, DatabaseConfig, JobWordInfo, WordGenerationJob, WordGenerationJobStatus, WordProcessingStatus } from '../../shared/types/database.js';
 import { Word, Sentence, StudyStats, CreateWordRequest, DictionaryEntry, DialogueVariant } from '../../shared/types/core.js';
 import { DatabaseConnection } from './connection.js';
-import { MigrationManager } from './migrations.js';
 import { splitSentenceIntoParts, serializeSentenceParts, parseSentenceParts, serializeTokenizedTokens, parseTokenizedTokens } from '../../shared/utils/sentence.js';
 import { backfillSentenceTokens } from './backfill-sentence-tokens.js';
 
 export class SQLiteDatabaseLayer implements DatabaseLayer {
   private connection: DatabaseConnection;
-  private migrationManager: MigrationManager | null = null;
 
   constructor(config: DatabaseConfig) {
     this.connection = new DatabaseConnection(config);
   }
 
   /**
-   * Initialize database connection and run migrations
+   * Initialize database connection and schema
    */
   async initialize(): Promise<void> {
     try {
       const db = await this.connection.connect();
       
-      // Initialize and run migrations
-      this.migrationManager = new MigrationManager(db);
-      await this.migrationManager.migrate();
+      // Initialize schema
+      this.initializeSchema(db);
 
       // Defer expensive operations to background - don't block startup
       // Backfill sentence parts in background (non-blocking)
@@ -75,6 +72,162 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   private getDb(): Database.Database {
     return this.connection.getDatabase();
+  }
+
+  /**
+   * Initialize database schema - creates all tables and indexes
+   */
+  private initializeSchema(db: Database.Database): void {
+    // Words table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS words (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        word TEXT NOT NULL,
+        language TEXT NOT NULL DEFAULT 'spanish',
+        translation TEXT NOT NULL,
+        audio_path TEXT,
+        strength INTEGER DEFAULT 0,
+        known BOOLEAN DEFAULT FALSE,
+        ignored BOOLEAN DEFAULT FALSE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_studied DATETIME,
+        interval_days INTEGER DEFAULT 1,
+        ease_factor REAL DEFAULT 2.5,
+        last_review DATETIME,
+        next_due DATETIME,
+        fsrs_difficulty REAL DEFAULT 5.0,
+        fsrs_stability REAL DEFAULT 1.0,
+        fsrs_lapses INTEGER DEFAULT 0,
+        fsrs_last_rating INTEGER,
+        fsrs_version TEXT DEFAULT 'fsrs-baseline',
+        processing_status TEXT DEFAULT 'ready',
+        sentence_count INTEGER DEFAULT 0
+      )
+    `);
+
+    // Sentences table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS sentences (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        word_id INTEGER NOT NULL REFERENCES words(id) ON DELETE CASCADE,
+        sentence TEXT NOT NULL,
+        translation TEXT NOT NULL,
+        audio_path TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_shown DATETIME,
+        context_before TEXT,
+        context_after TEXT,
+        context_before_translation TEXT,
+        context_after_translation TEXT,
+        sentence_parts TEXT,
+        sentence_generation_model TEXT,
+        audio_generation_service TEXT,
+        audio_generation_model TEXT,
+        sentence_tokens TEXT,
+        similarity_score REAL,
+        play_count INTEGER DEFAULT 0,
+        pronunciation_count INTEGER DEFAULT 0
+      )
+    `);
+
+    // Progress table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS progress (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        words_studied INTEGER DEFAULT 0,
+        when_studied DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Settings table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    db.exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('current_language', 'spanish')`);
+
+    // Dictionary table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS dict (
+        word TEXT,
+        pos TEXT,
+        glosses TEXT,
+        lang TEXT
+      )
+    `);
+
+    // Word generation queue table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS word_generation_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        word_id INTEGER NOT NULL UNIQUE REFERENCES words(id) ON DELETE CASCADE,
+        language TEXT NOT NULL,
+        topic TEXT,
+        desired_sentence_count INTEGER NOT NULL DEFAULT 3,
+        status TEXT NOT NULL DEFAULT 'queued',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        started_at DATETIME
+      )
+    `);
+
+    // Sentence words junction table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS sentence_words (
+        sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
+        word_id INTEGER NOT NULL REFERENCES words(id) ON DELETE CASCADE,
+        PRIMARY KEY (sentence_id, word_id)
+      )
+    `);
+
+    // Dialogue variants table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS dialogue_variants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
+        variant_sentence TEXT NOT NULL,
+        variant_translation TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        continuation_text TEXT,
+        continuation_translation TEXT,
+        continuation_audio TEXT
+      )
+    `);
+
+    // Pronunciation attempts table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS pronunciation_attempts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
+        similarity_score REAL NOT NULL,
+        expected_text TEXT NOT NULL,
+        transcribed_text TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create indexes for better query performance
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_words_strength ON words(strength)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_words_last_studied ON words(last_studied)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_words_known_ignored ON words(known, ignored)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_words_next_due ON words(next_due)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_words_srs_review ON words(next_due, strength)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_words_fsrs_state ON words(fsrs_stability, fsrs_difficulty)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_sentences_word_id ON sentences(word_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_progress_when_studied ON progress(when_studied)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_word_lang ON dict(word, lang)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_word_generation_queue_status ON word_generation_queue(status, updated_at)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_sentence_words_sentence_id ON sentence_words(sentence_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_sentence_words_word_id ON sentence_words(word_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_dialogue_variants_sentence_id ON dialogue_variants(sentence_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_dialogue_variants_created_at ON dialogue_variants(created_at)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_pronunciation_attempts_sentence_id ON pronunciation_attempts(sentence_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_pronunciation_attempts_created_at ON pronunciation_attempts(created_at)`);
   }
 
   // Word management operations
