@@ -617,7 +617,7 @@ Expected output format:
 Rules:
 1. Context sentences should be short (3-10 words each)
 2. They should form a natural conversation or narrative flow with the given sentence
-3. The contextBefore should logically precede the given sentence
+3. The contextBefore should logically precede the given sentence, like it's a dialog between two people.
 4. The contextAfter should logically follow the given sentence
 5. Provide English translations for both context sentences
 6. The sentences should make sense when read together: [contextBefore] [given sentence] [contextAfter]

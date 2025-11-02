@@ -538,7 +538,7 @@ Rules:
 
       contextInstructions = `
 10. Include contextBefore and contextAfter sentences that provide meaningful context
-11. The context sentences should form a natural conversation or narrative flow
+11. The context sentences should form a natural dialog between two people
 12. Provide English translations for all context sentences
 13. Context sentences should be short (3-10 words each)
 14. The main sentence should make sense when read with its context`;
@@ -599,7 +599,7 @@ Expected output format:
 Rules:
 1. Context sentences should be short (3-10 words each)
 2. They should form a natural conversation or narrative flow with the given sentence
-3. The contextBefore should logically precede the given sentence
+3. The contextBefore should logically precede the given sentence, like it's a dialog between two people.
 4. The contextAfter should logically follow the given sentence
 5. Provide English translations for both context sentences
 6. The sentences should make sense when read together: [contextBefore] [given sentence] [contextAfter]
