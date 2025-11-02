@@ -1533,6 +1533,9 @@ export class LearningMode extends LitElement {
     this.showSessionCompletion();
 
     console.log('showCompletion set to:', this.showCompletion);
+    
+    // Dispatch event for autopilot to check scores after review is done
+    window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
   }
 
   private async recordLearningSession() {
@@ -1653,9 +1656,6 @@ export class LearningMode extends LitElement {
       this.handleFinishLearning();
     } else {
       await this.goToNextSentence();
-      
-      // Dispatch event for autopilot to check scores
-      window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
     }
   }
 

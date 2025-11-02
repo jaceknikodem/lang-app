@@ -1619,9 +1619,6 @@ export class QuizMode extends LitElement {
     };
     
     console.log(`[Quiz] ========== REVIEW COMPLETE ==========\n`);
-
-    // Dispatch event for autopilot to check scores
-    window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
     
     // Automatically move to next question after a short delay
     setTimeout(() => {
@@ -1681,10 +1678,15 @@ export class QuizMode extends LitElement {
       // Show completion screen
       this.showQuizCompletion();
 
+      // Dispatch event for autopilot to check scores after quiz is done
+      window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
+
     } catch (error) {
       console.error('Error recording quiz session:', error);
       // Don't block the UI for this error
       this.showQuizCompletion();
+      // Still trigger autopilot check even on error
+      window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
     }
   }
 

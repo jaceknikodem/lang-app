@@ -40,6 +40,10 @@ export class FlowMode extends LitElement {
 
   private keyboardUnsubscribe?: () => void;
   private audioElement: HTMLAudioElement | null = null;
+  private playbackTimer: number | null = null;
+  private playbackStartTime: number | 0 = 0;
+  private totalPlaybackTime: number = 0; // Cumulative playback time in seconds
+  private lastPauseTime: number | null = null;
 
   connectedCallback() {
     super.connectedCallback();
@@ -159,10 +163,32 @@ export class FlowMode extends LitElement {
         this.error = 'Failed to play audio';
       });
 
+      // Set up timeupdate handler to track playback duration
+      this.audioElement.addEventListener('timeupdate', () => {
+        if (this.audioElement && this.isPlaying) {
+          // Calculate current playback time: accumulated time + current segment time
+          const currentPlaybackTime = this.totalPlaybackTime + this.audioElement.currentTime;
+          
+          // Check if 2 minutes (120 seconds) have elapsed
+          if (currentPlaybackTime >= 120 && this.playbackTimer === null) {
+            // Dispatch event for autopilot to check scores after 2 minutes of Flow playback
+            window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
+            // Mark timer as triggered so we don't trigger multiple times
+            this.playbackTimer = 1;
+          }
+        }
+      });
+
       // Play audio
       await this.audioElement.play();
       this.isPlaying = true;
       this.showOverlay = true;
+      
+      // When starting/resuming playback, the audio element will continue from its current position
+      // We track totalPlaybackTime separately to handle pauses correctly
+      this.lastPauseTime = null;
+      this.playbackStartTime = Date.now();
+      this.playbackTimer = null; // Reset timer trigger flag
     } catch (err) {
       console.error('Error playing audio:', err);
       this.error = `Failed to play audio: ${err instanceof Error ? err.message : 'Unknown error'}`;
@@ -171,10 +197,20 @@ export class FlowMode extends LitElement {
   }
 
   private pauseAudio() {
-    if (this.audioElement) {
+    if (this.audioElement && this.isPlaying) {
+      // Accumulate the time played in this playback segment
+      if (this.audioElement.currentTime > 0) {
+        this.totalPlaybackTime += this.audioElement.currentTime;
+      }
+      
       this.audioElement.pause();
       this.isPlaying = false;
       this.showOverlay = false;
+      
+      // Reset currentTime to 0 so next resume starts from beginning of audio
+      // This allows us to track cumulative playback time correctly
+      this.audioElement.currentTime = 0;
+      this.lastPauseTime = Date.now();
     }
   }
 
@@ -193,6 +229,10 @@ export class FlowMode extends LitElement {
     }
     this.isPlaying = false;
     this.showOverlay = false;
+    this.playbackStartTime = 0;
+    this.playbackTimer = null;
+    this.totalPlaybackTime = 0;
+    this.lastPauseTime = null;
   }
 
   private handleSpaceKey() {

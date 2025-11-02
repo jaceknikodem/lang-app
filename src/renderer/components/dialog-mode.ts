@@ -93,6 +93,7 @@ export class DialogMode extends LitElement {
   private transcriptionProgressUnsubscribe: (() => void) | null = null;
   private keyboardUnsubscribe?: () => void;
   private currentLanguage = '';
+  private dialogCount = 0; // Track number of dialogs completed in this session
 
   private handleExternalLanguageChange = async (event: Event) => {
     const detail = (event as CustomEvent<{ language?: string }>).detail;
@@ -123,6 +124,7 @@ export class DialogMode extends LitElement {
     this.isTranscribing = false;
     this.streamingTranscriptionText = null;
     this.recordedAudioPath = null;
+    this.dialogCount = 0; // Reset dialog count on language change
     
     // Reload dialog session for the new language
     await this.loadDialogSession();
@@ -130,6 +132,9 @@ export class DialogMode extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    
+    // Reset dialog count when component is connected
+    this.dialogCount = 0;
     
     // Listen for language changes
     document.addEventListener('language-changed', this.handleExternalLanguageChange);
@@ -919,6 +924,17 @@ export class DialogMode extends LitElement {
     }
     sessionManager.consumeCurrentDialogSession();
     
+    // Increment dialog count
+    this.dialogCount++;
+    
+    // Check if we've completed 5 dialogs
+    if (this.dialogCount >= 5) {
+      // Dispatch event for autopilot to check scores after 5 dialogs are done
+      window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
+      // Reset counter for next batch
+      this.dialogCount = 0;
+    }
+    
     // Load the next session from the queue
     await this.loadDialogSession();
     
@@ -929,9 +945,6 @@ export class DialogMode extends LitElement {
         // Non-critical error - continue without new session
       });
     });
-    
-    // Dispatch event for autopilot to check scores
-    window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
   }
 
   /**

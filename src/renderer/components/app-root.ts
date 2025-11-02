@@ -55,6 +55,7 @@ export class AppRoot extends LitElement {
   private flowAudioElement: HTMLAudioElement | null = null;
   private flowAudioPath: string | null = null;
   private autopilotIntervalId: number | null = null;
+  private previousAutopilotMode: AppMode | null = null; // Track previous mode navigated to via autopilot
 
   static styles = [
     sharedStyles,
@@ -896,13 +897,32 @@ export class AppRoot extends LitElement {
         { mode: 'flow' as AppMode, score: scores.flow }
       ];
       
-      // Sort by score descending and get the highest
-      modeScores.sort((a, b) => b.score - a.score);
-      const highestMode = modeScores[0];
-      
-      // Only navigate if we're not already in that mode and score is > 0
+      // Get current mode and its score
       const currentMode = router.getCurrentRoute().mode;
-      if (currentMode !== highestMode.mode && highestMode.score > 0) {
+      const currentModeScore = modeScores.find(m => m.mode === currentMode)?.score ?? 0;
+      
+      // Filter out current mode and previous autopilot mode to prevent bouncing
+      const availableModes = modeScores.filter(m => 
+        m.mode !== currentMode && m.mode !== this.previousAutopilotMode
+      );
+      
+      if (availableModes.length === 0) {
+        // No valid modes to navigate to (all excluded)
+        return;
+      }
+      
+      // Sort by score descending and get the highest available mode
+      availableModes.sort((a, b) => b.score - a.score);
+      const highestMode = availableModes[0];
+      
+      // Only navigate if:
+      // 1. Highest mode score is > 0
+      // 2. Highest mode score is at least 1 point higher than current mode score
+      const scoreDifference = highestMode.score - currentModeScore;
+      if (highestMode.score > 0 && scoreDifference >= 1) {
+        // Update previous autopilot mode before navigating
+        this.previousAutopilotMode = currentMode;
+        
         await this.handleNavigation(highestMode.mode);
         
         // If it's flow mode, also start playing

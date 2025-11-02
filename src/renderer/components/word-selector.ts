@@ -38,6 +38,9 @@ export class WordSelector extends LitElement {
   @state()
   private statusMessage = '';
 
+  @state()
+  private wordsProcessed = false; // Track if words have been processed
+
   private keyboardUnsubscribe?: () => void;
 
   static styles = [
@@ -130,6 +133,17 @@ export class WordSelector extends LitElement {
       .word-item:hover {
         border-color: var(--primary-color);
         box-shadow: var(--shadow-light);
+      }
+
+      .word-item.disabled {
+        cursor: default;
+        pointer-events: none;
+        opacity: 0.8;
+      }
+
+      .word-item.disabled:hover {
+        border-color: var(--border-color);
+        box-shadow: none;
       }
 
       .word-item.selected {
@@ -381,6 +395,11 @@ export class WordSelector extends LitElement {
             return;
           }
 
+          // If words are already processed, go to review
+          if (this.wordsProcessed) {
+            return this.handleGoToReview();
+          }
+
           const hasSelection = this.getSelectedWords().length > 0 || this.getKnownWords().length > 0;
           if (!hasSelection) {
             return;
@@ -389,7 +408,7 @@ export class WordSelector extends LitElement {
           return this.handleStartLearning();
         },
         context: 'word-selection',
-        description: 'Start learning with selected words'
+        description: 'Start learning with selected words / Go to review'
       }
     ];
 
@@ -406,6 +425,13 @@ export class WordSelector extends LitElement {
     return this.selectableWords
       .filter(word => word.markedAsKnown)
       .map(({ selected, markedAsKnown, ...word }) => word);
+  }
+
+  private handleGoToReview() {
+    // Clear the cached learning session to ensure fresh data is loaded
+    sessionManager.clearLearningSession();
+    router.goToLearning();
+    window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
   }
 
   private async handleStartLearning() {
@@ -516,16 +542,17 @@ export class WordSelector extends LitElement {
         this.error = `Unable to process: ${failedWords.join(', ')}`;
       }
 
-      if (queuedCount > 0) {
-        // Small delay to ensure database operations are fully committed
-        await new Promise(resolve => setTimeout(resolve, 100));
-        router.goToLearning();
-        
-        // Dispatch event for autopilot to check scores
+      // Mark words as processed and show success state
+      if (queuedCount > 0 || processedKnown > 0) {
+        this.wordsProcessed = true;
         window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
-      } else {
+      }
+
+      if (queuedCount === 0 && processedKnown > 0) {
+        // Only known words, no words queued - go back to topic selection
         router.goToTopicSelection();
       }
+      // If words are queued, don't auto-navigate - user will click button
     } catch (error) {
       console.error('Failed to process selected words:', error);
       this.error = error instanceof Error ? error.message : 'Failed to process selected words. Please try again.';
@@ -556,78 +583,81 @@ export class WordSelector extends LitElement {
 
     return html`
       <div class="word-selector-container">
-        <div class="header-section">
-          <p class="header-subtitle">
-            Choose the vocabulary words you want to focus on in this session.
-          </p>
-        </div>
+        ${!this.wordsProcessed ? html`
+          <div class="header-section">
+            <p class="header-subtitle">
+              Choose the vocabulary words you want to focus on in this session.
+            </p>
+          </div>
 
-        ${this.topic ? html`
-          <div class="topic-info">
-            <p class="topic-label">Topic</p>
-            <p class="topic-name">${this.topic}</p>
+          ${this.topic ? html`
+            <div class="topic-info">
+              <p class="topic-label">Topic</p>
+              <p class="topic-name">${this.topic}</p>
+            </div>
+          ` : ''}
+
+          <div class="selection-controls">
+            <div class="selection-info">
+              ${selectedCount} selected • ${knownCount} marked as known • ${this.selectableWords.length - selectedCount - knownCount} unselected
+            </div>
+          </div>
+
+          <div class="action-section">
+            ${this.isProcessing ? html`
+              <div class="loading">
+                <div class="spinner"></div>
+                Processing selected words...
+              </div>
+            ` : html`
+              <div class="primary-actions">
+                <button
+                  class="btn btn-primary start-btn"
+                  @click=${this.handleStartLearning}
+                  ?disabled=${selectedCount === 0 && knownCount === 0}
+                >
+                  ${learnButtonLabel}
+                </button>
+                <button class="btn btn-small btn-secondary" @click=${this.selectAll}>
+                  Select All
+                </button>
+                <button class="btn btn-small btn-secondary" @click=${this.selectNone}>
+                  Select None
+                </button>
+              </div>
+            `}
           </div>
         ` : ''}
-
-        <div class="selection-controls">
-          <div class="selection-info">
-            ${selectedCount} selected • ${knownCount} marked as known • ${this.selectableWords.length - selectedCount - knownCount} unselected
-          </div>
-        </div>
-
-        <div class="action-section">
-          ${this.isProcessing ? html`
-            <div class="loading">
-              <div class="spinner"></div>
-              Processing selected words...
-            </div>
-          ` : html`
-            <div class="primary-actions">
-              <button
-                class="btn btn-primary start-btn"
-                @click=${this.handleStartLearning}
-                ?disabled=${selectedCount === 0 && knownCount === 0}
-              >
-                ${learnButtonLabel}
-              </button>
-              <button class="btn btn-small btn-secondary" @click=${this.selectAll}>
-                Select All
-              </button>
-              <button class="btn btn-small btn-secondary" @click=${this.selectNone}>
-                Select None
-              </button>
-            </div>
-          `}
-        </div>
 
         <div class="word-list">
           ${this.selectableWords.map((word, index) => html`
             <div 
-              class="word-item ${word.selected ? 'selected' : ''} ${word.markedAsKnown ? 'known' : ''}"
-              @click=${() => this.toggleWordSelection(index)}
+              class="word-item ${word.selected ? 'selected' : ''} ${word.markedAsKnown ? 'known' : ''} ${this.wordsProcessed ? 'disabled' : ''}"
+              @click=${() => !this.wordsProcessed && this.toggleWordSelection(index)}
             >
               <div class="word-actions">
                 ${word.frequencyTier ? html`
                   <span class="frequency-tier">${word.frequencyTier}</span>
                 ` : ''}
-                ${word.markedAsKnown ? html`
-                  <button
-                    class="undo-btn"
-                    @click=${(e: Event) => this.markWordAsKnown(index, e)}
-                    title="Undo mark as known"
-                  >
-                    Undo
-                  </button>
-                ` : html`
-
-                  <button
-                    class="known-btn"
-                    @click=${(e: Event) => this.markWordAsKnown(index, e)}
-                    title="Mark as known"
-                  >
-                    Mark as known
-                  </button>
-                `}
+                ${!this.wordsProcessed ? html`
+                  ${word.markedAsKnown ? html`
+                    <button
+                      class="undo-btn"
+                      @click=${(e: Event) => this.markWordAsKnown(index, e)}
+                      title="Undo mark as known"
+                    >
+                      Undo
+                    </button>
+                  ` : html`
+                    <button
+                      class="known-btn"
+                      @click=${(e: Event) => this.markWordAsKnown(index, e)}
+                      title="Mark as known"
+                    >
+                      Mark as known
+                    </button>
+                  `}
+                ` : ''}
               </div>
               <div class="word-content">
                 <h4 class="word-foreign">${word.word}</h4>
@@ -647,6 +677,17 @@ export class WordSelector extends LitElement {
         ${this.statusMessage ? html`
           <div class="success-message">
             ${this.statusMessage}
+            ${this.wordsProcessed && this.statusMessage.includes('queued for review') ? html`
+              <div style="margin-top: var(--spacing-md);">
+                <button
+                  class="btn btn-primary"
+                  @click=${this.handleGoToReview}
+                  style="min-width: 200px;"
+                >
+                  Go to Review
+                </button>
+              </div>
+            ` : ''}
           </div>
         ` : ''}
       </div>
