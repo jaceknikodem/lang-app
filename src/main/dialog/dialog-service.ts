@@ -108,7 +108,8 @@ export class DialogService {
       
       console.log('[DialogService] Selected sentence for dialog', {
         sentenceId: sentence.id,
-        wordId: sentence.wordId
+        wordId: sentence.wordId,
+        language: currentLanguage
       });
       
       return sentence;
@@ -149,8 +150,21 @@ export class DialogService {
       const currentCount = existingVariants.length;
       const maxToGenerate = Math.max(0, this.config.maxVariantsPerSentence! - currentCount);
       
-      if (neededCount === 0 && maxToGenerate <= 0) {
-        // We have enough variants cached (at max limit), just return 2 random ones
+      console.log('[DialogService] generateDialogueVariants - cache check', {
+        sentenceId: sentence.id,
+        existingVariantsCount: currentCount,
+        neededCount,
+        maxToGenerate,
+        cachedVariantIds: existingVariants.map(v => v.id)
+      });
+      
+      if (neededCount === 0) {
+        // We have enough variants cached in DB (2+), use them - avoid expensive LLM generation
+        console.log('[DialogService] Using cached variants from DB', {
+          sentenceId: sentence.id,
+          cachedVariantsCount: existingVariants.length,
+          returningCount: 2
+        });
         const shuffled = [...existingVariants].sort(() => Math.random() - 0.5);
         return shuffled.slice(0, 2); // Return full DialogueVariant objects
       }
@@ -158,7 +172,13 @@ export class DialogService {
       // Generate new variants - generate up to maxVariantsPerSentence to cache for future use
       // But at minimum, generate enough to have 2 options
       // Generate as many as needed at a time for efficiency.
-      const generateCount = Math.max(neededCount, Math.min(this.config.maxVariantsPerSentence! + 1, maxToGenerate));
+      const generateCount = Math.max(neededCount, Math.min(this.config.maxVariantsPerSentence!, maxToGenerate));
+      
+      console.log('[DialogService] Generating new variants (not cached)', {
+        sentenceId: sentence.id,
+        generateCount,
+        reason: currentCount < 2 ? 'insufficient cached variants' : 'filling cache to max'
+      });
       
       // Use contextBefore (trigger sentence) instead of the sentence itself
       const triggerSentence = sentence.contextBefore || sentence.sentence;
@@ -288,6 +308,13 @@ export class DialogService {
       const allVariants = allStoredVariants.length > 0 ? allStoredVariants : [...existingVariants, ...storedVariants];
       const shuffled = [...allVariants].sort(() => Math.random() - 0.5);
       
+      console.log('[DialogService] Variants generated and cached', {
+        sentenceId: sentence.id,
+        totalCachedVariants: allVariants.length,
+        newlyStoredCount: storedVariants.length,
+        returningVariantIds: shuffled.slice(0, 2).map(v => v.id)
+      });
+      
       // Return full DialogueVariant objects with IDs
       return shuffled.slice(0, 2);
     } catch (error) {
@@ -347,12 +374,23 @@ export class DialogService {
 
       // Return cached continuation if available
       if (variant.continuationText && variant.continuationTranslation) {
-        console.log('[DialogService] Using cached continuation for variant:', variant.id);
+        console.log('[DialogService] Using cached continuation from DB', {
+          variantId: variant.id,
+          sentenceId: variant.sentenceId,
+          hasContinuationText: !!variant.continuationText,
+          hasContinuationTranslation: !!variant.continuationTranslation
+        });
         return {
           text: variant.continuationText,
           translation: variant.continuationTranslation
         };
       }
+      
+      console.log('[DialogService] Generating new continuation (not cached)', {
+        variantId: variant.id,
+        sentenceId: variant.sentenceId,
+        isOriginalSentence
+      });
 
       const currentLanguage = language || await this.database.getCurrentLanguage();
       
@@ -592,6 +630,11 @@ Preferred JSON format:
     try {
       const currentLanguage = language || await this.database.getCurrentLanguage();
       
+      console.log('[DialogService] pregenerateSessions - starting batch generation', {
+        requestedCount: count,
+        language: currentLanguage
+      });
+      
       // Step 1: Batch query - get all sentences at once from database
       const sentences = await this.database.getRandomDialogSentences(
         count,
@@ -607,6 +650,12 @@ Preferred JSON format:
         });
         return [];
       }
+      
+      console.log('[DialogService] pregenerateSessions - selected sentences', {
+        sentenceIds: sentences.map(s => s.id),
+        selectedCount: sentences.length,
+        requestedCount: count
+      });
 
       // Step 2: Extract known words once (used for all variant generations)
       const allWords = await this.database.getAllWords(true, false, currentLanguage);
@@ -624,6 +673,14 @@ Preferred JSON format:
         const variants = await this.database.getDialogueVariantsBySentenceId(sentenceId);
         allExistingVariantsMap.set(sentenceId, variants);
       }));
+      
+      console.log('[DialogService] pregenerateSessions - checked cache for existing variants', {
+        sentenceIds: Array.from(allExistingVariantsMap.keys()),
+        cachedVariantCounts: Array.from(allExistingVariantsMap.entries()).map(([id, variants]) => ({
+          sentenceId: id,
+          cachedVariantsCount: variants.length
+        }))
+      });
 
       // Step 4: Process each sentence sequentially for LLM-dependent operations
       // This avoids flooding the LLM service with concurrent requests
@@ -645,6 +702,11 @@ Preferred JSON format:
 
       for (const sentence of sentences) {
         try {
+          console.log('[DialogService] pregenerateSessions - processing sentence', {
+            sentenceId: sentence.id,
+            wordId: sentence.wordId
+          });
+          
           // Generate variants sequentially (LLM call)
           const existingVariants = allExistingVariantsMap.get(sentence.id) || [];
           const variants = await this.generateDialogueVariants(sentence, existingVariants, knownWords);
@@ -679,13 +741,22 @@ Preferred JSON format:
               createdAt: v.createdAt
             }))
           });
+          
+          console.log('[DialogService] pregenerateSessions - session generated', {
+            sentenceId: sentence.id,
+            responseOptionsCount: responseOptions.length
+          });
         } catch (error) {
           console.error(`[DialogService] Failed to generate variants for sentence ${sentence.id}:`, error);
           // Continue with other sentences even if one fails
         }
       }
 
-      console.log(`[DialogService] Successfully pre-generated ${sessions.length} of ${count} requested dialog sessions`);
+      console.log('[DialogService] pregenerateSessions - batch generation complete', {
+        generatedCount: sessions.length,
+        requestedCount: count,
+        sentenceIds: sessions.map(s => s.sentenceId)
+      });
       return sessions;
     } catch (error) {
       console.error('[DialogService] Failed to pre-generate dialog sessions:', error);

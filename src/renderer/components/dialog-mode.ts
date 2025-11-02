@@ -224,62 +224,101 @@ export class DialogMode extends LitElement {
       // Check for cached dialog session first
       const cachedSession = sessionManager.getCurrentDialogSession();
       if (cachedSession) {
-        console.log('Using cached dialog session:', cachedSession.id);
+        console.log('[DialogMode] loadDialogSession - using cached session from session manager', {
+          sessionId: cachedSession.id,
+          sentenceId: cachedSession.sentenceId,
+          responseOptionsCount: cachedSession.responseOptions.length
+        });
         
         // Get current language to verify cached session is for the correct language
         const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
         
         // Load from cache
-        const sentences = await window.electronAPI.database.getSentencesByIds([cachedSession.sentenceId]);
-        const sentence = sentences && sentences.length > 0 ? sentences[0] : null;
-        if (sentence) {
-          // Verify the sentence's language matches the current language
-          const word = await window.electronAPI.database.getWordById(sentence.wordId);
-          if (word && word.language === currentLanguage) {
-            this.currentSentence = sentence;
-            this.beforeSentenceAudio = cachedSession.beforeSentenceAudio || null;
-            
-            // Convert cached response options back to DialogueVariant format
-            this.responseOptions = cachedSession.responseOptions.map(v => ({
-              id: v.id,
-              sentenceId: v.sentenceId,
-              variantSentence: v.variantSentence,
-              variantTranslation: v.variantTranslation,
-              createdAt: new Date(v.createdAt)
-            }));
-            
-            // Don't consume yet - will be consumed when user completes the dialog (in nextDialog)
-            // This allows the session to persist if the user navigates away and comes back
-            
-            this.isLoading = false;
-            
-            // Auto-play trigger audio if available
-            if (this.beforeSentenceAudio) {
-              requestAnimationFrame(() => {
-                setTimeout(() => {
-                  this.playBeforeSentence();
-                }, 300);
-              });
-            }
-            return;
-          } else {
-            // Language mismatch - discard cached session
-            console.log('Cached dialog session language mismatch. Discarding and generating new session.');
+        try {
+          const sentences = await window.electronAPI.database.getSentencesByIds([cachedSession.sentenceId]);
+          const sentence = sentences && sentences.length > 0 ? sentences[0] : null;
+          
+          if (!sentence) {
+            console.log('[DialogMode] loadDialogSession - cached session sentence not found in DB, discarding session', {
+              sessionId: cachedSession.id,
+              cachedSentenceId: cachedSession.sentenceId
+            });
             sessionManager.consumeCurrentDialogSession();
+          } else if (sentence) {
+            // Verify the sentence's language matches the current language
+            const word = await window.electronAPI.database.getWordById(sentence.wordId);
+            
+            if (word && word.language === currentLanguage) {
+              console.log('[DialogMode] loadDialogSession - cached session validated and loaded', {
+                sessionId: cachedSession.id,
+                sentenceId: sentence.id,
+                wordId: sentence.wordId,
+                language: currentLanguage,
+                responseOptionsCount: cachedSession.responseOptions.length
+              });
+              this.currentSentence = sentence;
+              this.beforeSentenceAudio = cachedSession.beforeSentenceAudio || null;
+              
+              // Convert cached response options back to DialogueVariant format
+              this.responseOptions = cachedSession.responseOptions.map(v => ({
+                id: v.id,
+                sentenceId: v.sentenceId,
+                variantSentence: v.variantSentence,
+                variantTranslation: v.variantTranslation,
+                createdAt: new Date(v.createdAt)
+              }));
+              
+              // Don't consume yet - will be consumed when user completes the dialog (in nextDialog)
+              // This allows the session to persist if the user navigates away and comes back
+              
+              this.isLoading = false;
+              
+              // Auto-play trigger audio if available
+              if (this.beforeSentenceAudio) {
+                requestAnimationFrame(() => {
+                  setTimeout(() => {
+                    this.playBeforeSentence();
+                  }, 300);
+                });
+              }
+              return;
+            } else {
+              // Language mismatch - discard cached session
+              console.log('[DialogMode] loadDialogSession - language mismatch, discarding cached session', {
+                sessionId: cachedSession.id,
+                sentenceId: sentence.id,
+                wordLanguage: word?.language || 'NOT_FOUND',
+                currentLanguage: currentLanguage
+              });
+              sessionManager.consumeCurrentDialogSession();
+            }
           }
+        } catch (error) {
+          console.error('[DialogMode] loadDialogSession - error during validation', {
+            sessionId: cachedSession.id,
+            cachedSentenceId: cachedSession.sentenceId,
+            error
+          });
+          sessionManager.consumeCurrentDialogSession();
         }
       }
 
       // No cached session - generate new one
+      console.log('[DialogMode] loadDialogSession - no cached session, generating new');
       // Step 1: Select a sentence with high word strengths
       const sentence = await window.electronAPI.dialog.selectSentence();
       
       if (!sentence) {
+        console.log('[DialogMode] loadDialogSession - no sentence available');
         this.error = 'No sentences available for dialog practice. Please learn more words first.';
         this.isLoading = false;
         return;
       }
 
+      console.log('[DialogMode] loadDialogSession - selected new sentence', {
+        sentenceId: sentence.id,
+        wordId: sentence.wordId
+      });
       this.currentSentence = sentence;
 
       // Step 2: Prepare trigger (beforeSentence audio)
@@ -295,7 +334,16 @@ export class DialogMode extends LitElement {
 
       // Step 3: Generate response options (target + 2 variants)
       try {
+        console.log('[DialogMode] loadDialogSession - generating variants', {
+          sentenceId: sentence.id
+        });
         const variants = await window.electronAPI.dialog.generateVariants(sentence.id);
+        
+        console.log('[DialogMode] loadDialogSession - variants generated', {
+          sentenceId: sentence.id,
+          variantsCount: variants.length,
+          variantIds: variants.map(v => v.id)
+        });
         
         // Create a pseudo-variant for the original sentence (using negative ID to indicate it's the original)
         const originalVariant: DialogueVariant = {
@@ -327,6 +375,35 @@ export class DialogMode extends LitElement {
       }
 
       this.isLoading = false;
+      
+      // Save the generated session to cache so it persists across navigation
+      // Only save if we have response options
+      if (this.responseOptions && this.responseOptions.length > 0) {
+        try {
+          const dialogSession: import('../utils/session-manager.js').DialogSessionState = {
+            id: `dialog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            sentenceId: sentence.id,
+            sentence: sentence.sentence,
+            translation: sentence.translation,
+            contextBefore: sentence.contextBefore,
+            contextBeforeTranslation: sentence.contextBeforeTranslation,
+            beforeSentenceAudio: this.beforeSentenceAudio || undefined,
+            responseOptions: this.responseOptions.map(v => ({
+              id: v.id,
+              sentenceId: v.sentenceId,
+              variantSentence: v.variantSentence,
+              variantTranslation: v.variantTranslation,
+              createdAt: v.createdAt.toISOString()
+            })),
+            createdAt: new Date().toISOString()
+          };
+          
+          // Add to cache (will set currentDialogIndex if it's the first session)
+          sessionManager.addDialogSession(dialogSession);
+        } catch (error) {
+          console.error('[DialogMode] loadDialogSession - failed to save session to cache', error);
+        }
+      }
       
       // Auto-play trigger audio if available (after component updates)
       if (this.beforeSentenceAudio) {
@@ -831,7 +908,15 @@ export class DialogMode extends LitElement {
   }
 
   private async nextDialog() {
+    console.log('[DialogMode] nextDialog - user clicked next, consuming current session');
     // Consume the current dialog session (mark it as used and advance to next)
+    const currentSession = sessionManager.getCurrentDialogSession();
+    if (currentSession) {
+      console.log('[DialogMode] nextDialog - consuming session', {
+        sessionId: currentSession.id,
+        sentenceId: currentSession.sentenceId
+      });
+    }
     sessionManager.consumeCurrentDialogSession();
     
     // Load the next session from the queue

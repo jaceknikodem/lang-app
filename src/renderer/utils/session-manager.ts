@@ -514,13 +514,39 @@ export class SessionManager {
   getCurrentDialogSession(): DialogSessionState | undefined {
     const session = this.getCurrentSession();
     if (!session.dialogSessions || session.dialogSessions.length === 0) {
+      console.log('[SessionManager] getCurrentDialogSession - no sessions in cache');
       return undefined;
     }
-    const currentIndex = session.currentDialogIndex ?? 0;
+    
+    // Ensure currentDialogIndex is always set if sessions exist (for persistence across restarts)
+    let currentIndex = session.currentDialogIndex;
+    if (currentIndex === undefined) {
+      console.log('[SessionManager] getCurrentDialogSession - initializing undefined index to 0', {
+        totalSessions: session.dialogSessions.length
+      });
+      currentIndex = 0;
+      // Persist the initialized index so it's preserved across restarts
+      this.saveSession({ currentDialogIndex: 0 });
+    }
+    
     if (currentIndex >= session.dialogSessions.length) {
+      console.log('[SessionManager] getCurrentDialogSession - index out of bounds', {
+        currentIndex,
+        totalSessions: session.dialogSessions.length
+      });
       return undefined;
     }
-    return session.dialogSessions[currentIndex];
+    
+    const dialogSession = session.dialogSessions[currentIndex];
+    console.log('[SessionManager] getCurrentDialogSession - returning cached session', {
+      sessionId: dialogSession.id,
+      sentenceId: dialogSession.sentenceId,
+      currentIndex,
+      totalSessions: session.dialogSessions.length,
+      queueIndices: session.dialogSessions.map((s, i) => ({ index: i, sentenceId: s.sentenceId }))
+    });
+    
+    return dialogSession;
   }
 
   /**
@@ -534,6 +560,13 @@ export class SessionManager {
     const existingSessions = session.dialogSessions || [];
     let updatedSessions: DialogSessionState[];
     let updatedCurrentIndex: number | undefined;
+    
+    console.log('[SessionManager] addDialogSession - adding to cache', {
+      newSessionId: newSession.id,
+      newSentenceId: newSession.sentenceId,
+      existingSessionsCount: existingSessions.length,
+      currentIndex: session.currentDialogIndex
+    });
 
     if (existingSessions.length >= 5) {
       // FIFO: Remove the oldest session (first in queue) and add new one at the end
@@ -550,12 +583,27 @@ export class SessionManager {
         updatedCurrentIndex = 0;
       }
       
-      console.log(`Dialog session queue is full. Removed oldest session (${removedSession?.id}) and added new one.`);
+      console.log('[SessionManager] addDialogSession - queue full, FIFO removal', {
+        removedSessionId: removedSession?.id,
+        removedSentenceId: removedSession?.sentenceId,
+        addedSessionId: newSession.id,
+        addedSentenceId: newSession.sentenceId,
+        oldIndex: currentIndex,
+        newIndex: updatedCurrentIndex
+      });
     } else {
       // Queue has space, just add to the end
       updatedSessions = [...existingSessions, newSession];
-      // If this is the first session, set currentDialogIndex to 0
-      updatedCurrentIndex = session.currentDialogIndex ?? (updatedSessions.length === 1 ? 0 : undefined);
+      // Ensure currentDialogIndex is set if sessions exist
+      // If this is the first session, set to 0, otherwise preserve existing index
+      updatedCurrentIndex = session.currentDialogIndex ?? (updatedSessions.length === 1 ? 0 : 0);
+      
+      console.log('[SessionManager] addDialogSession - added to queue', {
+        addedSessionId: newSession.id,
+        addedSentenceId: newSession.sentenceId,
+        totalSessions: updatedSessions.length,
+        currentIndex: updatedCurrentIndex
+      });
     }
 
     const updatedSession: SessionState = {
@@ -581,11 +629,21 @@ export class SessionManager {
   consumeCurrentDialogSession(): void {
     const session = this.getCurrentSession();
     if (!session.dialogSessions || session.dialogSessions.length === 0) {
+      console.log('[SessionManager] consumeCurrentDialogSession - no sessions to consume');
       return;
     }
 
     const currentIndex = session.currentDialogIndex ?? 0;
     const nextIndex = currentIndex + 1;
+    const consumedSession = session.dialogSessions[currentIndex];
+
+    console.log('[SessionManager] consumeCurrentDialogSession - advancing index', {
+      consumedSessionId: consumedSession?.id,
+      consumedSentenceId: consumedSession?.sentenceId,
+      oldIndex: currentIndex,
+      newIndex: nextIndex < session.dialogSessions.length ? nextIndex : undefined,
+      totalSessions: session.dialogSessions.length
+    });
 
     const languageKey = this.getActiveLanguageKey();
     const updatedSession: SessionState = {

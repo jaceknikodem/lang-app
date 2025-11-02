@@ -179,6 +179,12 @@ async function setupSecurity(): Promise<void> {
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
     const url = new URL(details.url);
 
+    // Allow devtools:// protocol in development (needed for DevTools)
+    if (url.protocol === 'devtools:' || url.hostname === 'devtools') {
+      callback({ cancel: false });
+      return;
+    }
+
     // Allow localhost requests (for Ollama)
     if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
       callback({ cancel: false });
