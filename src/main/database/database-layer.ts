@@ -111,6 +111,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       CREATE TABLE IF NOT EXISTS sentences (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         word_id INTEGER NOT NULL REFERENCES words(id) ON DELETE CASCADE,
+        language TEXT NOT NULL,
         sentence TEXT NOT NULL,
         translation TEXT NOT NULL,
         audio_path TEXT,
@@ -143,6 +144,24 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     // Migration: Add topic column to words table if it doesn't exist
     try {
       db.exec(`ALTER TABLE words ADD COLUMN topic TEXT`);
+    } catch (error) {
+      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
+      // Ignore error - this is expected for existing databases with the column
+    }
+
+    // Migration: Add language column to sentences table if it doesn't exist
+    try {
+      db.exec(`ALTER TABLE sentences ADD COLUMN language TEXT`);
+      // Backfill existing sentences with language from their associated words
+      db.exec(`
+        UPDATE sentences
+        SET language = (
+          SELECT w.language
+          FROM words w
+          WHERE w.id = sentences.word_id
+        )
+        WHERE language IS NULL
+      `);
     } catch (error) {
       // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
       // Ignore error - this is expected for existing databases with the column
@@ -756,19 +775,26 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const serializedParts = serializeSentenceParts(parts);
       const serializedTokens = serializeTokenizedTokens(tokenizedTokens);
 
-      // Insert sentence with primary wordId
+      // Get the word to determine language before inserting
+      const word = await this.getWordById(wordId);
+      if (!word) {
+        throw new Error(`Word with ID ${wordId} not found`);
+      }
+
+      // Insert sentence with primary wordId and language
       const stmt = db.prepare(`
         INSERT INTO sentences (
-          word_id, sentence, translation, audio_path,
+          word_id, language, sentence, translation, audio_path,
           context_before, context_after, context_before_translation, context_after_translation,
           sentence_parts, sentence_generation_model, audio_generation_service, audio_generation_model,
           audio_generation_voice_id, sentence_tokens
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       const result = stmt.run(
-        wordId, 
+        wordId,
+        word.language,
         sentence, 
         translation, 
         audioPath,
@@ -785,12 +811,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       );
 
       const sentenceId = result.lastInsertRowid as number;
-
-      // Get the word to determine language
-      const word = await this.getWordById(wordId);
-      if (!word) {
-        throw new Error(`Word with ID ${wordId} not found`);
-      }
 
       // Find all learning words that appear in the sentence
       const matchingWords = this.findMatchingLearningWords(sentence, word.language);
@@ -1474,15 +1494,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const currentLanguage = language || await this.getCurrentLanguage();
       
       // Get all sentences for the language that have audio
-      // Use sentences.word_id directly instead of requiring sentence_words entries
       const stmt = db.prepare(`
-        SELECT s.* 
-        FROM sentences s
-        INNER JOIN words w ON s.word_id = w.id
-        WHERE w.language = ?
-          AND s.audio_path IS NOT NULL
-          AND TRIM(s.audio_path) != ''
-        ORDER BY s.id ASC
+        SELECT * 
+        FROM sentences
+        WHERE language = ?
+          AND audio_path IS NOT NULL
+          AND TRIM(audio_path) != ''
+        ORDER BY id ASC
       `);
       
       const sentenceRows = stmt.all(currentLanguage) as any[];
@@ -1576,7 +1594,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         SELECT DISTINCT s.* 
         FROM sentences s
         INNER JOIN words w ON s.word_id = w.id
-        WHERE w.language = ?
+        WHERE s.language = ?
           AND w.ignored = FALSE
           AND s.context_before IS NOT NULL
           AND TRIM(s.context_before) != ''
@@ -1611,14 +1629,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       const currentLanguage = language || await this.getCurrentLanguage();
       
-      // Batch query: join sentences to their primary word
-      // Filter by: language, ignored = FALSE, contextBefore exists and is not empty
+      // Batch query: filter by language, ignored = FALSE, contextBefore exists and is not empty
       // Randomly select multiple results
       const stmt = db.prepare(`
         SELECT DISTINCT s.* 
         FROM sentences s
         INNER JOIN words w ON s.word_id = w.id
-        WHERE w.language = ?
+        WHERE s.language = ?
           AND w.ignored = FALSE
           AND s.context_before IS NOT NULL
           AND TRIM(s.context_before) != ''
@@ -2508,6 +2525,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     return {
       id: row.id,
       wordId: row.word_id,
+      language: row.language,
       sentence: row.sentence,
       sentenceParts: parseSentenceParts(row.sentence_parts),
       tokenizedTokens: parseTokenizedTokens(row.sentence_tokens),
@@ -2632,7 +2650,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         FROM words w
         INNER JOIN sentence_words sw ON w.id = sw.word_id
         INNER JOIN sentences s ON sw.sentence_id = s.id
-        WHERE w.language = ?
+        WHERE s.language = ?
         AND w.ignored = FALSE
         AND s.context_before IS NOT NULL
         AND TRIM(s.context_before) != ''
@@ -2651,7 +2669,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         FROM words w
         INNER JOIN sentence_words sw ON w.id = sw.word_id
         INNER JOIN sentences s ON sw.sentence_id = s.id
-        WHERE w.language = ?
+        WHERE s.language = ?
         AND w.ignored = FALSE
         AND s.context_before IS NOT NULL
         AND TRIM(s.context_before) != ''
@@ -2678,14 +2696,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const currentLanguage = language || await this.getCurrentLanguage();
       
       // Get average similarity score from pronunciation_attempts
-      // Join with sentences and words to filter by language
+      // Join with sentences to filter by language
       const stmt = db.prepare(`
         SELECT AVG(pa.similarity_score) as avg_score
         FROM pronunciation_attempts pa
         INNER JOIN sentences s ON pa.sentence_id = s.id
-        INNER JOIN sentence_words sw ON s.id = sw.sentence_id
-        INNER JOIN words w ON sw.word_id = w.id
-        WHERE w.language = ?
+        WHERE s.language = ?
       `);
       
       const result = stmt.get(currentLanguage) as { avg_score: number | null };
@@ -2710,15 +2726,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     try {
       const currentLanguage = language || await this.getCurrentLanguage();
       
-      // Count distinct sentences with audio for the language
+      // Count sentences with audio for the language
       const stmt = db.prepare(`
-        SELECT COUNT(DISTINCT s.id) as count
-        FROM sentences s
-        INNER JOIN sentence_words sw ON s.id = sw.sentence_id
-        INNER JOIN words w ON sw.word_id = w.id
-        WHERE w.language = ?
-        AND s.audio_path IS NOT NULL
-        AND TRIM(s.audio_path) != ''
+        SELECT COUNT(*) as count
+        FROM sentences
+        WHERE language = ?
+        AND audio_path IS NOT NULL
+        AND TRIM(audio_path) != ''
       `);
       
       const result = stmt.get(currentLanguage) as { count: number };

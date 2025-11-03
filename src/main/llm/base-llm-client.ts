@@ -227,6 +227,42 @@ export abstract class BaseLLMClient {
   }
 
   /**
+   * Create proficiency level guidance text
+   */
+  private createProficiencyGuidance(proficiencyLevel: string | undefined, guidanceType: 'vocabulary' | 'sentence'): string {
+    if (!proficiencyLevel) {
+      return '';
+    }
+
+    let levelGuidance = '';
+    switch (proficiencyLevel) {
+      case 'newbie':
+        levelGuidance = guidanceType === 'vocabulary'
+          ? 'Use very simple, basic words that beginners can understand'
+          : 'Use very simple sentence structures, basic grammar, and common words';
+        break;
+      case 'a1':
+        levelGuidance = guidanceType === 'vocabulary'
+          ? 'Use simple, everyday words appropriate for A1 beginners'
+          : 'Use simple sentence structures appropriate for A1 beginners';
+        break;
+      case 'a2':
+        levelGuidance = guidanceType === 'vocabulary'
+          ? 'Use common words appropriate for A2 elementary learners'
+          : 'Use common sentence structures appropriate for A2 elementary learners';
+        break;
+      case 'b1':
+        levelGuidance = guidanceType === 'vocabulary'
+          ? 'Use intermediate vocabulary appropriate for B1 learners'
+          : 'Use intermediate sentence structures appropriate for B1 learners';
+        break;
+    }
+
+    const adjustmentType = guidanceType === 'vocabulary' ? 'vocabulary complexity' : 'sentence complexity';
+    return `\nIMPORTANT: The user's proficiency level is ${proficiencyLevel.toUpperCase()}. Adjust ${adjustmentType} accordingly: ${levelGuidance}`;
+  }
+
+  /**
    * Create prompt for topic word generation
    */
   protected createTopicWordsPrompt(topic: string, language: string, count: number, existingWords: string[] = [], proficiencyLevel?: string): string {
@@ -242,25 +278,7 @@ export abstract class BaseLLMClient {
       : '';
 
     // Create proficiency level guidance
-    let proficiencyText = '';
-    if (proficiencyLevel) {
-      let levelGuidance = '';
-      switch (proficiencyLevel) {
-        case 'newbie':
-          levelGuidance = 'Use very simple, basic words that beginners can understand';
-          break;
-        case 'a1':
-          levelGuidance = 'Use simple, everyday words appropriate for A1 beginners';
-          break;
-        case 'a2':
-          levelGuidance = 'Use common words appropriate for A2 elementary learners';
-          break;
-        case 'b1':
-          levelGuidance = 'Use intermediate vocabulary appropriate for B1 learners';
-          break;
-      }
-      proficiencyText = `\nIMPORTANT: The user's proficiency level is ${proficiencyLevel.toUpperCase()}. Adjust vocabulary complexity accordingly: ${levelGuidance}`;
-    }
+    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'vocabulary');
 
     // Topic is always specified when this method is called
     return `CRITICAL: You must return exactly ${count} words in a JSON array. No more, no less.
@@ -312,25 +330,7 @@ Rules:
       : '';
 
     // Create proficiency level guidance
-    let proficiencyText = '';
-    if (proficiencyLevel) {
-      let levelGuidance = '';
-      switch (proficiencyLevel) {
-        case 'newbie':
-          levelGuidance = 'Use very simple sentence structures, basic grammar, and common words';
-          break;
-        case 'a1':
-          levelGuidance = 'Use simple sentence structures appropriate for A1 beginners';
-          break;
-        case 'a2':
-          levelGuidance = 'Use common sentence structures appropriate for A2 elementary learners';
-          break;
-        case 'b1':
-          levelGuidance = 'Use intermediate sentence structures appropriate for B1 learners';
-          break;
-      }
-      proficiencyText = `\nIMPORTANT: The user's proficiency level is ${proficiencyLevel.toUpperCase()}. Adjust sentence complexity accordingly: ${levelGuidance}`;
-    }
+    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence');
 
     return `CRITICAL: You must return exactly ${count} sentences in a JSON array. No more, no less.
 CRITICAL: Return ONLY the JSON array, no explanations or extra text.

@@ -30,6 +30,7 @@ describe('Core Types', () => {
     const sentence: Sentence = {
       id: 1,
       wordId: 1,
+      language: 'spanish',
       sentence: 'Hola, ¿cómo estás?',
       translation: 'Hello, how are you?',
       audioPath: 'audio/sentence_1.aiff',
@@ -39,6 +40,7 @@ describe('Core Types', () => {
 
     expect(sentence.wordId).toBe(1);
     expect(sentence.sentence).toBe('Hola, ¿cómo estás?');
+    expect(sentence.language).toBe('spanish');
   });
 
   test('AppState interface should have required properties', () => {

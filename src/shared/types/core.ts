@@ -39,6 +39,7 @@ export interface DictionaryEntry {
 export interface Sentence {
   id: number;
   wordId: number;
+  language: string;
   sentence: string;
   sentenceParts?: string[];
   translation: string;
