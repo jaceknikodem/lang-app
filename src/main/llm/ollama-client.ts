@@ -148,7 +148,6 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
 
         // Clean the response - remove any markdown formatting or extra text
         const cleanResponse = cleanLLMResponse(data.response);
-        console.log('Cleaned response:', cleanResponse);
 
         // Parse JSON
         let parsed: any;

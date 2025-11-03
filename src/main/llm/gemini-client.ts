@@ -70,14 +70,12 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
     try {
       // Use a simpler endpoint to test API availability
       const url = `${this.baseUrl}?key=${this.apiKey}`;
-      console.log('Gemini isAvailable: Testing models list endpoint');
       
       const response = await fetch(url, {
         method: 'GET',
         signal: AbortSignal.timeout(3000)
       });
       
-      console.log('Gemini isAvailable: Response status:', response.status);
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -124,6 +122,49 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         false
       );
     }
+  }
+
+  /**
+   * Extract retry delay from Gemini API error response
+   * @param errorText The error response text from the API
+   * @returns Retry delay in milliseconds, or null if not found or >= 2 minutes
+   */
+  private extractRetryDelay(errorText: string): number | null {
+    try {
+      const errorJson = JSON.parse(errorText);
+      
+      // Check if error.details exists and is an array
+      if (errorJson.error?.details && Array.isArray(errorJson.error.details)) {
+        // Find the RetryInfo entry
+        const retryInfo = errorJson.error.details.find(
+          (detail: any) => detail['@type'] === 'type.googleapis.com/google.rpc.RetryInfo'
+        );
+        
+        if (retryInfo?.retryDelay) {
+          // Parse delay string like "23s" or "23.41586998s"
+          const delayStr = retryInfo.retryDelay;
+          // Remove 's' suffix and parse as float
+          const seconds = parseFloat(delayStr.replace(/s$/, ''));
+          
+          if (!isNaN(seconds)) {
+            const milliseconds = seconds * 1000;
+            const twoMinutes = 2 * 60 * 1000; // 120,000ms
+            
+            // If delay is >= 2 minutes, return null to give up
+            if (milliseconds >= twoMinutes) {
+              return null;
+            }
+            
+            return Math.ceil(milliseconds); // Round up to ensure we wait long enough
+          }
+        }
+      }
+    } catch (parseError) {
+      // If parsing fails, return null to fall back to exponential backoff
+      return null;
+    }
+    
+    return null;
   }
 
   async generateTopicWords(topic: string, language: string, count: number, proficiencyLevel?: string): Promise<GeneratedWord[]> {
@@ -263,7 +304,11 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
 
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+          const error = new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+          // Attach response status and errorText to error for retry logic
+          (error as any).status = response.status;
+          (error as any).errorText = errorText;
+          throw error;
         }
 
         const data: GeminiResponse = await response.json();
@@ -278,7 +323,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         }
 
         const cleanResponse = cleanLLMResponse(candidate.content.parts[0].text);
-        console.log('Cleaned response:', cleanResponse);
+
 
         // Parse JSON
         let parsed: any;
@@ -304,10 +349,30 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
           }
         }
 
-        // Wait before retry (exponential backoff)
+        // Check if this is a 429 error and extract retry delay
+        let retryDelayMs: number | null = null;
+        if (error instanceof Error && (error as any).status === 429 && (error as any).errorText) {
+          retryDelayMs = this.extractRetryDelay((error as any).errorText);
+          
+          // If retryDelay is null (>= 2 minutes), give up immediately
+          if (retryDelayMs === null) {
+            throw super.createLLMError(error, 'Rate limit exceeded - retry delay too long', 'CONNECTION_ERROR', false);
+          }
+        }
+
+        // Wait before retry
         if (attempt < this.config.maxRetries!) {
-          console.log(`Attempt ${attempt} failed, retrying in ${Math.pow(2, attempt - 1)}s...`);
-          await super.delay(Math.pow(2, attempt - 1) * 1000);
+          if (retryDelayMs !== null) {
+            // Use the extracted retry delay from the API
+            const seconds = Math.ceil(retryDelayMs / 1000);
+            console.log(`Attempt ${attempt} failed with HTTP 429, retrying in ${seconds}s (as specified by API)...`);
+            await super.delay(retryDelayMs);
+          } else {
+            // Use exponential backoff for other errors
+            const backoffSeconds = Math.pow(2, attempt - 1);
+            console.log(`Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`);
+            await super.delay(backoffSeconds * 1000);
+          }
         }
       }
     }
