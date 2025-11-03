@@ -8,6 +8,7 @@ import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
 import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
+import { loadCurrentLanguage, loadLemmatizationModel } from '../utils/language-manager.js';
 import { ALL_TOPIC_SUGGESTIONS } from '../../shared/constants/topics.js';
 
 @customElement('topic-selector')
@@ -255,16 +256,7 @@ export class TopicSelector extends LitElement {
   }
 
   private async loadCurrentLanguage() {
-    try {
-      this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
-    } catch (error) {
-      console.error('Failed to load current language:', error);
-      this.currentLanguage = 'spanish'; // Default fallback
-    }
-  }
-
-  private capitalizeLanguage(language: string): string {
-    return language.charAt(0).toUpperCase() + language.slice(1);
+    this.currentLanguage = await loadCurrentLanguage('spanish');
   }
 
   private selectRandomSuggestions() {

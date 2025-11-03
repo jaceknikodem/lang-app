@@ -10,6 +10,7 @@ import { sessionManager } from '../utils/session-manager.js';
 import { Word, Sentence } from '../../shared/types/core.js';
 import { STRENGTH_BOOST_CONFIG } from '../../shared/constants/index.js';
 import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
+import { loadCurrentLanguage, loadLemmatizationModel } from '../utils/language-manager.js';
 import './sentence-viewer.js';
 import './session-complete.js';
 import type { SessionSummary } from './session-complete.js';
@@ -126,7 +127,7 @@ export class LearningMode extends LitElement {
     // Reload all data for the new language
     try {
       // Load lemmatization model for the new language (async, non-blocking)
-      void this.loadLemmatizationModel(newLanguage);
+      void loadLemmatizationModel(newLanguage);
       
       // Load all words for highlighting purposes
       await this.loadAllWords();
@@ -610,32 +611,11 @@ export class LearningMode extends LitElement {
   }
 
   private async loadCurrentLanguage(): Promise<void> {
-    try {
-      this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
-    } catch (error) {
-      console.error('Failed to load current language for learning mode:', error);
-      if (!this.currentLanguage) {
-        this.currentLanguage = 'spanish';
-      }
-    }
-    
+    this.currentLanguage = await loadCurrentLanguage('spanish');
     const languageToUse = this.currentLanguage || 'spanish';
     
     // Load lemmatization model for the current language (async, non-blocking)
-    void this.loadLemmatizationModel(languageToUse);
-  }
-
-  /**
-   * Load lemmatization model asynchronously (non-blocking)
-   */
-  private async loadLemmatizationModel(language: string): Promise<void> {
-    try {
-      console.log(`[Lemmatization] Loading model for language: ${language}`);
-      await window.electronAPI.lemmatization.loadModel(language);
-      console.log(`[Lemmatization] Model loaded successfully for ${language}`);
-    } catch (error) {
-      console.warn(`[Lemmatization] Failed to load model for ${language} (non-critical):`, error);
-    }
+    void loadLemmatizationModel(languageToUse);
   }
 
   private async loadAllWords() {

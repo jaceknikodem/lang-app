@@ -10,7 +10,14 @@ import { sessionManager, SessionState } from '../utils/session-manager.js';
 import { sharedStyles } from '../styles/shared.js';
 import { keyboardManager } from '../utils/keyboard-manager.js';
 import { autoAddNewWords } from '../utils/auto-add-words.js';
+import { loadCurrentLanguageWithSession, changeLanguage, loadLemmatizationModel, capitalizeLanguage, getLanguageFlag, getSupportedLanguages } from '../utils/language-manager.js';
+import { calculateWordCategoryStats } from '../utils/word-stats.js';
+import { checkElectronAPI, checkLLMAvailability, loadAutoplayAudioSetting, checkExistingWords, checkFlowSentences, checkProficiencyLevel, scheduleDeferred } from '../utils/app-initializer.js';
+import { transformDialogSessionData, queueDialogSessions } from '../utils/dialog-session-helpers.js';
 import type { ProficiencyLevel } from './language-proficiency-selector.js';
+import type { LanguageState, SessionDataState, UIState } from './app-root-state.js';
+import { createInitialLanguageState, createInitialSessionDataState, createInitialUIState } from './app-root-state.js';
+import { AutopilotManager } from '../utils/autopilot-manager.js';
 import './topic-selector.js';
 import './word-selector.js';
 import './learning-mode.js';
@@ -19,6 +26,7 @@ import './dialog-mode.js';
 import './flow-mode.js';
 import './settings-panel.js';
 import './language-proficiency-selector.js';
+import './toggle-switch.js';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -31,44 +39,21 @@ export class AppRoot extends LitElement {
   };
 
   @state()
-  private isLoading = true;
+  private uiState: UIState = createInitialUIState();
 
   @state()
   private sessionState: SessionState | null = null;
 
   @state()
-  private hasExistingWords: boolean | null = null;
+  private languageState: LanguageState = createInitialLanguageState();
 
   @state()
-  private currentLanguage = '';
+  private sessionDataState: SessionDataState = createInitialSessionDataState();
 
-  @state()
-  private autopilotEnabled = false;
-
-  @state()
-  private autoplayAudioEnabled = false;
-
-  @state()
-  private hasFlowSentences = false;
-
-  @state()
-  private wordCategoryStats: { known: number; strong: number; weak: number; new: number } | null = null;
-
-  @state()
-  private showProficiencySelector = false;
-
-  @state()
-  private currentProficiencyLevel: ProficiencyLevel | null = null;
-
-  @state()
-  private transitionMessage: string | null = null;
-
-  private static readonly WEAK_THRESHOLD = 30;
-  private static readonly STRONG_THRESHOLD = 70;
 
   private routerUnsubscribe?: () => void;
   private keyboardUnsubscribe?: () => void;
-  private autopilotIntervalId: number | null = null;
+  private autopilotManager?: AutopilotManager;
   private transitionMessageTimeout: number | null = null;
 
   static styles = [
@@ -374,105 +359,6 @@ export class AppRoot extends LitElement {
         margin-left: auto;
       }
 
-      .autopilot-toggle-container {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-xs);
-        margin-right: var(--spacing-xs);
-        font-size: 14px;
-        color: var(--text-secondary);
-      }
-
-      .autopilot-label {
-        font-size: 12px;
-        color: var(--text-secondary);
-        font-weight: 500;
-        user-select: none;
-      }
-
-      .autopilot-switch {
-        position: relative;
-        width: 40px;
-        height: 20px;
-        background: var(--border-color);
-        border-radius: 10px;
-        cursor: pointer;
-        transition: background-color 0.3s ease;
-      }
-
-      .autopilot-switch.active {
-        background: var(--primary-color);
-      }
-
-      .autopilot-slider {
-        position: absolute;
-        top: 2px;
-        left: 2px;
-        width: 16px;
-        height: 16px;
-        background: white;
-        border-radius: 50%;
-        transition: transform 0.3s ease;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-      }
-
-      .autopilot-switch.active .autopilot-slider {
-        transform: translateX(20px);
-      }
-
-      .autopilot-switch:hover {
-        border-color: var(--primary-color);
-      }
-
-      .autoplay-toggle-container {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-xs);
-        margin-right: var(--spacing-xs);
-        font-size: 14px;
-        color: var(--text-secondary);
-      }
-
-      .autoplay-label {
-        font-size: 12px;
-        color: var(--text-secondary);
-        font-weight: 500;
-        user-select: none;
-      }
-
-      .autoplay-switch {
-        position: relative;
-        width: 40px;
-        height: 20px;
-        background: var(--border-color);
-        border-radius: 10px;
-        cursor: pointer;
-        transition: background-color 0.3s ease;
-      }
-
-      .autoplay-switch.active {
-        background: var(--primary-color);
-      }
-
-      .autoplay-slider {
-        position: absolute;
-        top: 2px;
-        left: 2px;
-        width: 16px;
-        height: 16px;
-        background: white;
-        border-radius: 50%;
-        transition: transform 0.3s ease;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-      }
-
-      .autoplay-switch.active .autoplay-slider {
-        transform: translateX(20px);
-      }
-
-      .autoplay-switch:hover {
-        border-color: var(--primary-color);
-      }
 
       .content-area {
         flex: 1;
@@ -559,6 +445,11 @@ export class AppRoot extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
 
+    // Initialize autopilot manager
+    this.autopilotManager = new AutopilotManager({
+      onCheck: (initialTakeover) => this.checkScoresAndNavigate(initialTakeover)
+    });
+
     // Subscribe to router changes
     this.routerUnsubscribe = router.subscribe((route) => {
       this.currentRoute = route;
@@ -584,7 +475,9 @@ export class AppRoot extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    this.stopAutopilot();
+    if (this.autopilotManager) {
+      this.autopilotManager.stop();
+    }
     if (this.routerUnsubscribe) {
       this.routerUnsubscribe();
     }
@@ -602,18 +495,13 @@ export class AppRoot extends LitElement {
   private async initializeApp() {
     try {
       // Check if electronAPI is available
-      if (!window.electronAPI) {
-        console.error('electronAPI not available - preload script may have failed');
-        this.isLoading = false;
+      if (!checkElectronAPI()) {
+        this.uiState = { ...this.uiState, isLoading: false };
         return;
       }
 
       // Check if LLM is available (non-blocking)
-      try {
-        await window.electronAPI.llm.isAvailable();
-      } catch (error) {
-        console.warn('LLM check failed (this is OK):', error);
-      }
+      await checkLLMAvailability();
 
       // Load current language
       await this.loadCurrentLanguage();
@@ -629,31 +517,22 @@ export class AppRoot extends LitElement {
 
       // Check for existing words in database (non-blocking - deferred)
       // This optimization speeds up initial render by deferring the check
-      setTimeout(async () => {
-        try {
-          await this.checkExistingWords();
-          await this.checkFlowSentences();
-        } catch (error) {
-          console.error('Failed to check existing words:', error);
-        }
-      }, 0);
+      scheduleDeferred(async () => {
+        await this.checkExistingWords();
+        await this.checkFlowSentences();
+      });
 
       await this.ensureLearningSession();
 
       // Pre-generate dialog session asynchronously (non-blocking)
-      setTimeout(async () => {
-        try {
-          await this.pregenerateDialogSession();
-        } catch (error) {
-          console.error('Failed to pre-generate dialog session:', error);
-          // Non-critical - continue without cached dialog session
-        }
-      }, 0);
+      scheduleDeferred(async () => {
+        await this.pregenerateDialogSession();
+      });
 
-      this.isLoading = false;
+      this.uiState = { ...this.uiState, isLoading: false };
     } catch (error) {
       console.error('Failed to initialize app:', error);
-      this.isLoading = false;
+      this.uiState = { ...this.uiState, isLoading: false };
     }
   }
 
@@ -668,82 +547,44 @@ export class AppRoot extends LitElement {
   }
 
   private async checkExistingWords() {
-    try {
-      // Use getStudyStats which is much faster than loading all words
-      // It only returns a count, not the full word data
-      const stats = await window.electronAPI.database.getStudyStats(this.currentLanguage || undefined);
-      this.hasExistingWords = stats.totalWords > 0;
-      
-      // Check proficiency level (will show selector if no words and no proficiency set)
-      if (this.currentLanguage) {
-        await this.checkProficiencyLevel();
-      }
-      
-      if (this.hasExistingWords === false && router.isCurrentMode('learning')) {
-        router.goToTopicSelection();
-      }
-    } catch (error) {
-      console.error('Failed to check existing words:', error);
-      this.hasExistingWords = false;
+    this.sessionDataState = { 
+      ...this.sessionDataState, 
+      hasExistingWords: await checkExistingWords(this.languageState.currentLanguage || undefined)
+    };
+    
+    // Check proficiency level (will show selector if no words and no proficiency set)
+    if (this.languageState.currentLanguage) {
+      await this.checkProficiencyLevelInternal();
+    }
+    
+    if (this.sessionDataState.hasExistingWords === false && router.isCurrentMode('learning')) {
+      router.goToTopicSelection();
     }
   }
 
-  private async checkProficiencyLevel() {
-    if (!this.currentLanguage) {
+  private async checkProficiencyLevelInternal() {
+    if (!this.languageState.currentLanguage) {
       return;
     }
 
-    try {
-      const proficiencyKey = `language_proficiency_${this.currentLanguage}`;
-      const proficiency = await window.electronAPI.database.getSetting(proficiencyKey);
-      this.currentProficiencyLevel = proficiency as ProficiencyLevel | null;
-      
-      // Show proficiency selector if NO words exist and proficiency is not set
-      if (!this.hasExistingWords && !proficiency) {
-        this.showProficiencySelector = true;
-      }
-    } catch (error) {
-      console.error('Failed to check proficiency level:', error);
-    }
+    const proficiency = await checkProficiencyLevel(this.languageState.currentLanguage);
+    this.languageState = {
+      ...this.languageState,
+      currentProficiencyLevel: proficiency as ProficiencyLevel | null,
+      showProficiencySelector: !this.sessionDataState.hasExistingWords && !proficiency
+    };
   }
 
   private async checkFlowSentences() {
-    try {
-      const flowSentences = await window.electronAPI.flow.getFlowSentences();
-      
-      // Collect all audio paths using the same logic as handleFlowPlay()
-      const audioPaths: string[] = [];
-      for (const item of flowSentences) {
-        if (item.beforeSentenceAudio) {
-          audioPaths.push(item.beforeSentenceAudio);
-        }
-        if (item.sentence.audioPath) {
-          audioPaths.push(item.sentence.audioPath);
-        }
-        audioPaths.push(...item.continuationAudios);
-      }
-      
-      // Only enable Flow button if we have at least one audio file
-      this.hasFlowSentences = audioPaths.length > 0;
-    } catch (error) {
-      console.error('Failed to check flow sentences:', error);
-      this.hasFlowSentences = false;
-    }
+    this.sessionDataState = { 
+      ...this.sessionDataState, 
+      hasFlowSentences: await checkFlowSentences() 
+    };
   }
 
   private async loadCurrentLanguage() {
-    try {
-      this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
-    } catch (error) {
-      console.error('Failed to load current language:', error);
-      this.currentLanguage = 'spanish'; // Default fallback
-    }
-
-    const languageToUse = this.currentLanguage || 'spanish';
-    sessionManager.setActiveLanguage(languageToUse);
-    
-    // Load lemmatization model for the current language (async, non-blocking)
-    void this.loadLemmatizationModel(languageToUse);
+    const language = await loadCurrentLanguageWithSession('spanish', true);
+    this.languageState = { ...this.languageState, currentLanguage: language };
   }
 
   private async ensureLearningSession() {
@@ -753,11 +594,11 @@ export class AppRoot extends LitElement {
         return;
       }
 
-      if (this.hasExistingWords === false) {
+      if (this.sessionDataState.hasExistingWords === false) {
         return;
       }
 
-      const language = this.currentLanguage || (await window.electronAPI.database.getCurrentLanguage());
+      const language = this.languageState.currentLanguage || (await window.electronAPI.database.getCurrentLanguage());
       const candidates = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(true, false, language);
 
       const sessionWordIds: number[] = [];
@@ -799,7 +640,7 @@ export class AppRoot extends LitElement {
     const customEvent = event as CustomEvent<{ language?: string }>;
     const newLanguage = customEvent.detail?.language;
 
-    if (newLanguage && newLanguage === this.currentLanguage) {
+    if (newLanguage && newLanguage === this.languageState.currentLanguage) {
       return;
     }
 
@@ -833,55 +674,54 @@ export class AppRoot extends LitElement {
     const select = event.target as HTMLSelectElement;
     const selectedLanguage = select.value;
 
-    if (!selectedLanguage || selectedLanguage === this.currentLanguage) return;
+    if (!selectedLanguage || selectedLanguage === this.languageState.currentLanguage) return;
 
     try {
-      await window.electronAPI.database.setCurrentLanguage(selectedLanguage);
-      this.currentLanguage = selectedLanguage;
+      await changeLanguage(selectedLanguage, async (newLanguage) => {
+        this.languageState = { ...this.languageState, currentLanguage: newLanguage };
+        this.sessionState = sessionManager.getCurrentSession();
+        
+        await this.checkExistingWords();
+        await this.checkFlowSentences();
+        await this.ensureLearningSession();
+        
+        // Reload stats for new language
+        await this.loadWordStats();
+        
+        this.requestUpdate();
 
-      sessionManager.setActiveLanguage(selectedLanguage);
-      this.sessionState = sessionManager.getCurrentSession();
-      
-      // Load lemmatization model for the new language (async, non-blocking)
-      void this.loadLemmatizationModel(selectedLanguage);
-      
-      await this.checkExistingWords();
-      await this.checkFlowSentences();
-      await this.ensureLearningSession();
-      
-      // Reload stats for new language
-      await this.loadWordStats();
-      
-      this.requestUpdate();
+        // Dispatch event to notify other components (like settings panel)
+        this.dispatchEvent(new CustomEvent('language-changed', {
+          detail: { language: newLanguage },
+          bubbles: true,
+          composed: true
+        }));
 
-      // Dispatch event to notify other components (like settings panel)
-      this.dispatchEvent(new CustomEvent('language-changed', {
-        detail: { language: selectedLanguage },
-        bubbles: true,
-        composed: true
-      }));
-
-      // Pre-generate dialog session for the new language
-      this.pregenerateDialogSessionAfterLanguageChange();
+        // Pre-generate dialog session for the new language
+        this.pregenerateDialogSessionAfterLanguageChange();
+      });
     } catch (error) {
       console.error('Failed to change language:', error);
       // Revert the selection
-      select.value = this.currentLanguage;
+      select.value = this.languageState.currentLanguage;
     }
   }
 
   private async handleProficiencySelected(event: CustomEvent<{ level: ProficiencyLevel }>) {
     const { level } = event.detail;
     
-    if (!this.currentLanguage) {
+    if (!this.languageState.currentLanguage) {
       return;
     }
 
     try {
-      const proficiencyKey = `language_proficiency_${this.currentLanguage}`;
+      const proficiencyKey = `language_proficiency_${this.languageState.currentLanguage}`;
       await window.electronAPI.database.setSetting(proficiencyKey, level);
-      this.currentProficiencyLevel = level;
-      this.showProficiencySelector = false;
+      this.languageState = {
+        ...this.languageState,
+        currentProficiencyLevel: level,
+        showProficiencySelector: false
+      };
     } catch (error) {
       console.error('Failed to save proficiency level:', error);
     }
@@ -890,79 +730,27 @@ export class AppRoot extends LitElement {
   private handleProficiencyCancelled() {
     // User cancelled, but we still don't want to show it again until next session
     // or they can dismiss it manually - for now, just hide it
-    this.showProficiencySelector = false;
+    this.languageState = { ...this.languageState, showProficiencySelector: false };
   }
 
-  private capitalizeLanguage(language: string): string {
-    return language.charAt(0).toUpperCase() + language.slice(1);
-  }
-
-  /**
-   * Load lemmatization model asynchronously (non-blocking)
-   */
-  private async loadLemmatizationModel(language: string): Promise<void> {
-    try {
-      await window.electronAPI.lemmatization.loadModel(language);
-    } catch (error) {
-      console.warn(`[Lemmatization] Failed to load model for ${language} (non-critical):`, error);
-    }
-  }
-
-  private getLanguageFlag(language: string): string {
-    const flags: Record<string, string> = {
-      'italian': '🇮🇹',
-      'spanish': '🇪🇸',
-      'portuguese': '🇵🇹',
-      'polish': '🇵🇱',
-      'indonesian': '🇮🇩'
-    };
-    return flags[language] || '🌐';
-  }
-
-  private getSupportedLanguages(): string[] {
-    return ['italian', 'spanish', 'portuguese', 'polish', 'indonesian'];
-  }
 
   private async loadWordStats() {
     try {
-      if (!this.currentLanguage) {
+      if (!this.languageState.currentLanguage) {
         return;
       }
 
-      const allWords = await window.electronAPI.database.getAllWords(true, false, this.currentLanguage);
-      this.wordCategoryStats = this.calculateWordCategoryStats(allWords);
+      const allWords = await window.electronAPI.database.getAllWords(true, false, this.languageState.currentLanguage);
+      this.sessionDataState = {
+        ...this.sessionDataState,
+        wordCategoryStats: calculateWordCategoryStats(allWords)
+      };
     } catch (error) {
       console.error('Failed to load word stats:', error);
-      this.wordCategoryStats = null;
+      this.sessionDataState = { ...this.sessionDataState, wordCategoryStats: null };
     }
   }
 
-  private calculateWordCategoryStats(words: any[]): { known: number; strong: number; weak: number; new: number } {
-    const stats = {
-      known: 0,
-      strong: 0,
-      weak: 0,
-      new: 0
-    };
-
-    words.forEach(word => {
-      if (!word.lastStudied) {
-        // Not yet reviewed
-        stats.new++;
-      } else if (word.strength > AppRoot.STRONG_THRESHOLD) {
-        // Confidently remembered (strength > 80)
-        stats.known++;
-      } else if (word.strength >= AppRoot.WEAK_THRESHOLD) {
-        // Mostly remembered (30-80)
-        stats.strong++;
-      } else {
-        // Shaky or forgotten (<30)
-        stats.weak++;
-      }
-    });
-
-    return stats;
-  }
 
   private updateAppState() {
     // Update legacy app state based on current route
@@ -995,7 +783,7 @@ export class AppRoot extends LitElement {
       case 'learning':
         // Check if there are words with sentences available for review in the current language
         try {
-          const wordsWithSentences = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(true, false, this.currentLanguage || undefined);
+          const wordsWithSentences = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(true, false, this.languageState.currentLanguage || undefined);
           if (wordsWithSentences.length > 0) {
             router.goToLearning();
           } else {
@@ -1034,7 +822,7 @@ export class AppRoot extends LitElement {
 
   async handleFlowPlay() {
     // Prevent playing if there are no flow sentences available
-    if (!this.hasFlowSentences) {
+    if (!this.sessionDataState.hasFlowSentences) {
       return;
     }
 
@@ -1064,89 +852,38 @@ export class AppRoot extends LitElement {
   }
 
   private handleAutopilotToggle(event: Event) {
-    event.preventDefault();
-    this.autopilotEnabled = !this.autopilotEnabled;
+    this.handleToggleAutopilot(event);
+  }
+
+  private handleToggleAutopilot(event: Event) {
+    const customEvent = event as CustomEvent<{ checked: boolean }>;
+    this.uiState = { ...this.uiState, autopilotEnabled: customEvent.detail.checked };
     
-    if (this.autopilotEnabled) {
-      this.startAutopilot();
-    } else {
-      this.stopAutopilot();
+    if (this.uiState.autopilotEnabled && this.autopilotManager) {
+      this.autopilotManager.start(true);
+    } else if (this.autopilotManager) {
+      this.autopilotManager.stop();
     }
+  }
+
+  private handleToggleAutoplayAudio(event: Event) {
+    const customEvent = event as CustomEvent<{ checked: boolean }>;
+    const previousValue = this.uiState.autoplayAudioEnabled;
+    this.uiState = { ...this.uiState, autoplayAudioEnabled: customEvent.detail.checked };
+
+    window.electronAPI.database.setSetting('autoplay_audio', this.uiState.autoplayAudioEnabled ? 'true' : 'false')
+      .catch((error: Error) => {
+        console.error('Failed to save autoplay audio setting:', error);
+        // Revert the state if saving failed
+        this.uiState = { ...this.uiState, autoplayAudioEnabled: previousValue };
+      });
   }
 
   private async loadAutoplayAudioSetting() {
-    try {
-      const autoplaySetting = await window.electronAPI.database.getSetting('autoplay_audio');
-      this.autoplayAudioEnabled = autoplaySetting === 'true';
-    } catch (error) {
-      console.error('Failed to load autoplay audio setting:', error);
-      this.autoplayAudioEnabled = false;
-    }
+    this.uiState = { ...this.uiState, autoplayAudioEnabled: await loadAutoplayAudioSetting() };
   }
 
-  private async toggleAutoplayAudio(event: Event) {
-    event.preventDefault();
-    const previousValue = this.autoplayAudioEnabled;
-    this.autoplayAudioEnabled = !this.autoplayAudioEnabled;
 
-    try {
-      await window.electronAPI.database.setSetting('autoplay_audio', this.autoplayAudioEnabled ? 'true' : 'false');
-    } catch (error) {
-      console.error('Failed to save autoplay audio setting:', error);
-      // Revert the state if saving failed
-      this.autoplayAudioEnabled = previousValue;
-    }
-  }
-
-  private startAutopilot() {
-    // Stop existing intervals if any
-    this.stopAutopilot();
-    
-    // Check scores immediately - take over control on first run
-    this.checkScoresAndNavigate(true);
-    
-    // Set up event listeners for specific actions
-    window.addEventListener('autopilot-check-trigger', this.handleAutopilotCheckTrigger);
-    
-    // Set up 30-second interval for checking scores periodically
-    this.autopilotIntervalId = window.setInterval(() => {
-      this.checkScoresAndNavigate();
-    }, 30000);
-  }
-
-  private stopAutopilot() {
-    if (this.autopilotIntervalId) {
-      clearInterval(this.autopilotIntervalId);
-      this.autopilotIntervalId = null;
-    }
-    
-    // Remove event listener
-    window.removeEventListener('autopilot-check-trigger', this.handleAutopilotCheckTrigger);
-  }
-
-  private handleAutopilotCheckTrigger = () => {
-    if (this.autopilotEnabled) {
-      this.checkScoresAndNavigate();
-    }
-  }
-
-  /**
-   * Get transition message text for a mode
-   */
-  private getTransitionMessage(mode: 'learning' | 'quiz' | 'dialog' | 'flow'): string {
-    switch (mode) {
-      case 'learning':
-        return "Let's review some words";
-      case 'quiz':
-        return "Let's quiz some words";
-      case 'dialog':
-        return "Let's practice speaking";
-      case 'flow':
-        return "Let's get into the flow";
-      default:
-        return '';
-    }
-  }
 
   /**
    * Show transition message and clear it after a delay
@@ -1159,11 +896,11 @@ export class AppRoot extends LitElement {
     }
 
     // Set the message
-    this.transitionMessage = message;
+    this.uiState = { ...this.uiState, transitionMessage: message };
 
     // Clear after 3 seconds
     this.transitionMessageTimeout = window.setTimeout(() => {
-      this.transitionMessage = null;
+      this.uiState = { ...this.uiState, transitionMessage: null };
       this.transitionMessageTimeout = null;
     }, 3000);
   }
@@ -1183,7 +920,7 @@ export class AppRoot extends LitElement {
       // Get next mode and ranked modes from scoring service
       const result = await window.electronAPI.scoring.getNextMode({
         currentMode: currentScoringMode ?? null,
-        language: this.currentLanguage || null,
+        language: this.languageState.currentLanguage || null,
         initialTakeover: initialTakeover ?? false
       });
       
@@ -1202,7 +939,7 @@ export class AppRoot extends LitElement {
       }
       
       // Show transition message
-      const message = this.getTransitionMessage(result.nextMode);
+      const message = AutopilotManager.getTransitionMessage(result.nextMode);
       this.showTransitionMessage(message);
       
       // Navigate to the recommended mode
@@ -1225,7 +962,7 @@ export class AppRoot extends LitElement {
    */
   private async handleAutoAddNew(): Promise<void> {
     try {
-      const result = await autoAddNewWords(this.currentLanguage);
+      const result = await autoAddNewWords(this.languageState.currentLanguage);
       
       if (result.success) {
         // Reload stats and check existing words after adding
@@ -1254,7 +991,7 @@ export class AppRoot extends LitElement {
 
 
   render() {
-    if (this.isLoading) {
+    if (this.uiState.isLoading) {
       return html`
         <div class="app-container">
           <div class="loading-container">
@@ -1272,12 +1009,12 @@ export class AppRoot extends LitElement {
         <header class="app-header">
           <nav class="navigation">
             <div class="nav-left-group">
-              ${!this.autopilotEnabled ? html`
+              ${!this.uiState.autopilotEnabled ? html`
                 <button 
                   class="nav-button flow-button"
                   @click=${() => this.handleFlowPlay()}
-                  ?disabled=${!this.hasFlowSentences}
-                  title=${this.hasFlowSentences ? 'Get into the Flow' : 'Not enough sentences with audio available'}
+                  ?disabled=${!this.sessionDataState.hasFlowSentences}
+                  title=${this.sessionDataState.hasFlowSentences ? 'Get into the Flow' : 'Not enough sentences with audio available'}
                 >
                   ▶
                 </button>
@@ -1310,36 +1047,36 @@ export class AppRoot extends LitElement {
                   Dialog
                 </button>
               ` : ''}
-              ${this.currentLanguage ? html`
+              ${this.languageState.currentLanguage ? html`
                 <div class="language-dropdown">
                   <select 
                     class="language-select"
-                    .value=${this.currentLanguage}
+                    .value=${this.languageState.currentLanguage}
                     @change=${this.handleLanguageDropdownChange}
                     title="Select Language"
                   >
-                    ${this.getSupportedLanguages().map(language => html`
-                      <option value=${language} ?selected=${language === this.currentLanguage}>
-                        ${this.getLanguageFlag(language)} ${this.capitalizeLanguage(language)}
+                    ${getSupportedLanguages().map(language => html`
+                      <option value=${language} ?selected=${language === this.languageState.currentLanguage}>
+                        ${getLanguageFlag(language)} ${capitalizeLanguage(language)}
                       </option>
                     `)}
                   </select>
-                  ${this.wordCategoryStats ? html`
+                  ${this.sessionDataState.wordCategoryStats ? html`
                     <div class="stats-display">
                       <div class="stat-box known">
-                        <span class="stat-value">${this.wordCategoryStats.known}</span>
+                        <span class="stat-value">${this.sessionDataState.wordCategoryStats.known}</span>
                         <div class="tooltip">Known: confidently remembered (strength > 80)</div>
                       </div>
                       <div class="stat-box strong">
-                        <span class="stat-value">${this.wordCategoryStats.strong}</span>
+                        <span class="stat-value">${this.sessionDataState.wordCategoryStats.strong}</span>
                         <div class="tooltip">Strong: mostly remembered (30–80)</div>
                       </div>
                       <div class="stat-box weak">
-                        <span class="stat-value">${this.wordCategoryStats.weak}</span>
+                        <span class="stat-value">${this.sessionDataState.wordCategoryStats.weak}</span>
                         <div class="tooltip">Weak: shaky or forgotten (&lt;30)</div>
                       </div>
                       <div class="stat-box new">
-                        <span class="stat-value">${this.wordCategoryStats.new}</span>
+                        <span class="stat-value">${this.sessionDataState.wordCategoryStats.new}</span>
                         <div class="tooltip">New: not yet reviewed</div>
                       </div>
                     </div>
@@ -1348,30 +1085,18 @@ export class AppRoot extends LitElement {
               ` : ''}
             </div>
             <div class="nav-right-group">
-              <div class="autoplay-toggle-container">
-                <span class="autoplay-label">Auto-play</span>
-                <div 
-                  class="autoplay-switch ${this.autoplayAudioEnabled ? 'active' : ''}"
-                  @click=${this.toggleAutoplayAudio}
-                  title="Auto-play: Automatically play sentence audio when reviewing"
-                  role="switch"
-                  aria-checked=${this.autoplayAudioEnabled}
-                >
-                  <div class="autoplay-slider"></div>
-                </div>
-              </div>
-              <div class="autopilot-toggle-container">
-                <span class="autopilot-label">Autopilot</span>
-                <div 
-                  class="autopilot-switch ${this.autopilotEnabled ? 'active' : ''}"
-                  @click=${this.handleAutopilotToggle}
-                  title="Autopilot: Automatically navigate to highest-scoring mode"
-                  role="switch"
-                  aria-checked=${this.autopilotEnabled}
-                >
-                  <div class="autopilot-slider"></div>
-                </div>
-              </div>
+              <toggle-switch
+                label="Auto-play"
+                ?checked=${this.uiState.autoplayAudioEnabled}
+                title="Auto-play: Automatically play sentence audio when reviewing"
+                @toggle-changed=${this.handleToggleAutoplayAudio}
+              ></toggle-switch>
+              <toggle-switch
+                label="Autopilot"
+                ?checked=${this.uiState.autopilotEnabled}
+                title="Autopilot: Automatically navigate to highest-scoring mode"
+                @toggle-changed=${this.handleToggleAutopilot}
+              ></toggle-switch>
               <button 
                 class="settings-button ${router.isCurrentMode('settings') ? 'active' : ''}"
                 @click=${() => this.handleNavigation('settings')}
@@ -1397,19 +1122,19 @@ export class AppRoot extends LitElement {
         </main>
       </div>
 
-      ${this.transitionMessage ? html`
+      ${this.uiState.transitionMessage ? html`
         <div class="transition-indicator visible">
-          ${this.transitionMessage}
+          ${this.uiState.transitionMessage}
         </div>
       ` : ''}
 
       <!-- Flow mode overlay - always rendered, appears on top when active -->
       <flow-mode></flow-mode>
 
-      ${this.showProficiencySelector ? html`
+      ${this.languageState.showProficiencySelector ? html`
         <language-proficiency-selector
-          .language=${this.currentLanguage}
-          .currentLevel=${this.currentProficiencyLevel}
+          .language=${this.languageState.currentLanguage}
+          .currentLevel=${this.languageState.currentProficiencyLevel}
           @proficiency-selected=${this.handleProficiencySelected}
           @proficiency-cancelled=${this.handleProficiencyCancelled}
         ></language-proficiency-selector>
@@ -1463,7 +1188,8 @@ export class AppRoot extends LitElement {
   private async pregenerateDialogSession(): Promise<void> {
     try {
       // Check if we already have 5 sessions cached
-      const existingSessions = sessionManager.getCurrentSession().dialogSessions || [];
+      const currentSession = sessionManager.getCurrentSession();
+      const existingSessions = currentSession.dialogSessions || [];
       if (existingSessions.length >= 5) {
         return;
       }
@@ -1473,67 +1199,17 @@ export class AppRoot extends LitElement {
       // Generate all sessions in one batch (batches DB queries, processes LLM calls sequentially)
       const sessionsData = await window.electronAPI.dialog.pregenerateSessions(sessionsToGenerate);
       
-      // Convert response options dates from ISO strings back to Date objects
-      const generatedSessions: import('../utils/session-manager.js').DialogSessionState[] = sessionsData.map((sessionData, index) => {
-        const responseOptions = sessionData.responseOptions.map((v: {
-          id: number;
-          sentenceId: number;
-          variantSentence: string;
-          variantTranslation: string;
-          createdAt: string;
-        }) => ({
-          id: v.id,
-          sentenceId: v.sentenceId,
-          variantSentence: v.variantSentence,
-          variantTranslation: v.variantTranslation,
-          createdAt: new Date(v.createdAt)
-        }));
+      // Transform API response to DialogSessionState
+      const generatedSessions = transformDialogSessionData(sessionsData, existingSessions.length);
 
-        // Create dialog session state
-        const dialogSession: import('../utils/session-manager.js').DialogSessionState = {
-          id: `dialog-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
-          sentenceId: sessionData.sentenceId,
-          sentence: sessionData.sentence,
-          translation: sessionData.translation,
-          contextBefore: sessionData.contextBefore,
-          contextBeforeTranslation: sessionData.contextBeforeTranslation,
-          beforeSentenceAudio: sessionData.beforeSentenceAudio,
-          responseOptions: responseOptions.map((v: {
-            id: number;
-            sentenceId: number;
-            variantSentence: string;
-            variantTranslation: string;
-            createdAt: Date;
-          }) => ({
-            id: v.id,
-            sentenceId: v.sentenceId,
-            variantSentence: v.variantSentence,
-            variantTranslation: v.variantTranslation,
-            createdAt: v.createdAt.toISOString()
-          })),
-          createdAt: new Date().toISOString()
-        };
-
-        return dialogSession;
-      });
-
-      // Add all generated sessions to the queue
-      if (generatedSessions.length > 0) {
-        // If we have existing sessions, add them one by one
-        // Otherwise, set them all at once with startIndex based on existing currentDialogIndex
-        const currentSession = sessionManager.getCurrentSession();
-        const startIndex = currentSession.currentDialogIndex ?? 0;
-        
-        if (existingSessions.length === 0) {
-          // No existing sessions, set all at once
-          sessionManager.setDialogSessions(generatedSessions, startIndex);
-        } else {
-          // Add to existing queue
-          for (const session of generatedSessions) {
-            sessionManager.addDialogSession(session);
-          }
-        }
-      }
+      // Queue sessions into session manager
+      queueDialogSessions(
+        generatedSessions,
+        existingSessions,
+        currentSession.currentDialogIndex,
+        (sessions, startIndex) => sessionManager.setDialogSessions(sessions, startIndex),
+        (session) => sessionManager.addDialogSession(session)
+      );
     } catch (error) {
       console.error('Failed to pre-generate dialog sessions:', error);
       // Non-critical error - don't throw

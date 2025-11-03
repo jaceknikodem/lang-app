@@ -17,6 +17,7 @@ import { DialogService } from '../dialog/index.js';
 import { existsSync, mkdirSync } from 'fs';
 import { promises as fsPromises } from 'fs';
 import { dirname, join } from 'path';
+import { createIPCHandler } from './ipc-handler-helper.js';
 
 // Validation schemas for input sanitization
 const CreateWordSchema = z.object({
@@ -100,348 +101,239 @@ export function setupIPCHandlers(
  * Set up database-related IPC handlers
  */
 function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
-  ipcMain.handle(IPC_CHANNELS.DATABASE.INSERT_WORD, async (event, wordData) => {
-    try {
-      const validatedData = CreateWordSchema.parse(wordData);
-      return await databaseLayer.insertWord(validatedData);
-    } catch (error) {
-      console.error('Error inserting word:', error);
-      throw new Error(`Failed to insert word: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.INSERT_WORD,
+    createIPCHandler(CreateWordSchema, (wordData) => databaseLayer.insertWord(wordData), 'insert word')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.UPDATE_WORD_STRENGTH, async (event, wordId, strength) => {
-    try {
-      const validatedWordId = WordIdSchema.parse(wordId);
-      const validatedStrength = StrengthSchema.parse(strength);
-      return await databaseLayer.updateWordStrength(validatedWordId, validatedStrength);
-    } catch (error) {
-      console.error('Error updating word strength:', error);
-      throw new Error(`Failed to update word strength: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.UPDATE_WORD_STRENGTH,
+    createIPCHandler([WordIdSchema, StrengthSchema], (wordId, strength) => databaseLayer.updateWordStrength(wordId, strength), 'update word strength')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.MARK_WORD_KNOWN, async (event, wordId, known) => {
-    try {
-      const validatedWordId = WordIdSchema.parse(wordId);
-      const validatedKnown = BooleanSchema.parse(known);
-      return await databaseLayer.markWordKnown(validatedWordId, validatedKnown);
-    } catch (error) {
-      console.error('Error marking word known:', error);
-      throw new Error(`Failed to mark word known: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.MARK_WORD_KNOWN,
+    createIPCHandler([WordIdSchema, BooleanSchema], (wordId, known) => databaseLayer.markWordKnown(wordId, known), 'mark word known')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.MARK_WORD_IGNORED, async (event, wordId, ignored) => {
-    try {
-      const validatedWordId = WordIdSchema.parse(wordId);
-      const validatedIgnored = BooleanSchema.parse(ignored);
-      return await databaseLayer.markWordIgnored(validatedWordId, validatedIgnored);
-    } catch (error) {
-      console.error('Error marking word ignored:', error);
-      throw new Error(`Failed to mark word ignored: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.MARK_WORD_IGNORED,
+    createIPCHandler([WordIdSchema, BooleanSchema], (wordId, ignored) => databaseLayer.markWordIgnored(wordId, ignored), 'mark word ignored')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_WORDS_TO_STUDY, async (event, limit) => {
-    try {
-      const validatedLimit = LimitSchema.parse(limit);
-      return await databaseLayer.getWordsToStudy(validatedLimit);
-    } catch (error) {
-      console.error('Error getting words to study:', error);
-      throw new Error(`Failed to get words to study: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_WORDS_TO_STUDY,
+    createIPCHandler(LimitSchema, (limit) => databaseLayer.getWordsToStudy(limit), 'get words to study')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_WORD_BY_ID, async (event, wordId) => {
-    try {
-      const validatedWordId = WordIdSchema.parse(wordId);
-      return await databaseLayer.getWordById(validatedWordId);
-    } catch (error) {
-      console.error('Error getting word by ID:', error);
-      throw new Error(`Failed to get word by ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_WORD_BY_ID,
+    createIPCHandler(WordIdSchema, (wordId) => databaseLayer.getWordById(wordId), 'get word by ID')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_WORDS_BY_IDS, async (event, wordIds) => {
-    try {
-      const validatedWordIds = WordIdsSchema.parse(wordIds);
-      return await databaseLayer.getWordsByIds(validatedWordIds);
-    } catch (error) {
-      console.error('Error getting words by IDs:', error);
-      throw new Error(`Failed to get words by IDs: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_WORDS_BY_IDS,
+    createIPCHandler(WordIdsSchema, (wordIds) => databaseLayer.getWordsByIds(wordIds), 'get words by IDs')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.INSERT_SENTENCE, async (event, wordId, sentence, translation, audioPath, contextBefore, contextAfter, contextBeforeTranslation, contextAfterTranslation, sentenceParts, sentenceGenerationModel, audioGenerationService, audioGenerationModel, audioGenerationVoiceId) => {
-    try {
-      const validatedWordId = WordIdSchema.parse(wordId);
-      const validatedSentence = TextSchema.parse(sentence);
-      const validatedTranslation = TextSchema.parse(translation);
-      const validatedAudioPath = z.string().parse(audioPath);
-      const validatedContextBefore = contextBefore ? TextSchema.parse(contextBefore) : undefined;
-      const validatedContextAfter = contextAfter ? TextSchema.parse(contextAfter) : undefined;
-      const validatedContextBeforeTranslation = contextBeforeTranslation ? TextSchema.parse(contextBeforeTranslation) : undefined;
-      const validatedContextAfterTranslation = contextAfterTranslation ? TextSchema.parse(contextAfterTranslation) : undefined;
-      const validatedSentenceParts = sentenceParts ? z.array(z.string()).parse(sentenceParts) : undefined;
-      const validatedSentenceGenerationModel = sentenceGenerationModel ? z.string().parse(sentenceGenerationModel) : undefined;
-      const validatedAudioGenerationService = audioGenerationService ? z.string().parse(audioGenerationService) : undefined;
-      const validatedAudioGenerationModel = audioGenerationModel ? z.string().parse(audioGenerationModel) : undefined;
-      const validatedAudioGenerationVoiceId = audioGenerationVoiceId ? z.string().parse(audioGenerationVoiceId) : undefined;
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.INSERT_SENTENCE,
+    createIPCHandler(
+      [
+        WordIdSchema,
+        TextSchema,
+        TextSchema,
+        z.string(),
+        TextSchema.optional(),
+        TextSchema.optional(),
+        TextSchema.optional(),
+        TextSchema.optional(),
+        z.array(z.string()).optional(),
+        z.string().optional(),
+        z.string().optional(),
+        z.string().optional(),
+        z.string().optional()
+      ],
+      (wordId, sentence, translation, audioPath, contextBefore, contextAfter, contextBeforeTranslation, contextAfterTranslation, sentenceParts, sentenceGenerationModel, audioGenerationService, audioGenerationModel, audioGenerationVoiceId) =>
+        databaseLayer.insertSentence(
+          wordId,
+          sentence,
+          translation,
+          audioPath,
+          contextBefore,
+          contextAfter,
+          contextBeforeTranslation,
+          contextAfterTranslation,
+          sentenceParts,
+          sentenceGenerationModel,
+          audioGenerationService,
+          audioGenerationModel,
+          audioGenerationVoiceId
+        ),
+      'insert sentence'
+    )
+  );
 
-      return await databaseLayer.insertSentence(
-        validatedWordId,
-        validatedSentence,
-        validatedTranslation,
-        validatedAudioPath,
-        validatedContextBefore,
-        validatedContextAfter,
-        validatedContextBeforeTranslation,
-        validatedContextAfterTranslation,
-        validatedSentenceParts,
-        validatedSentenceGenerationModel,
-        validatedAudioGenerationService,
-        validatedAudioGenerationModel,
-        validatedAudioGenerationVoiceId
-      );
-    } catch (error) {
-      console.error('Error inserting sentence:', error);
-      throw new Error(`Failed to insert sentence: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_SENTENCES_BY_WORD,
+    createIPCHandler(WordIdSchema, (wordId) => databaseLayer.getSentencesByWord(wordId), 'get sentences by word')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_SENTENCES_BY_WORD, async (event, wordId) => {
-    try {
-      const validatedWordId = WordIdSchema.parse(wordId);
-      return await databaseLayer.getSentencesByWord(validatedWordId);
-    } catch (error) {
-      console.error('Error getting sentences by word:', error);
-      throw new Error(`Failed to get sentences by word: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_SENTENCES_BY_IDS,
+    createIPCHandler(SentenceIdsSchema, (sentenceIds) => databaseLayer.getSentencesByIds(sentenceIds), 'get sentences by IDs')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_SENTENCES_BY_IDS, async (event, sentenceIds) => {
-    try {
-      const validatedSentenceIds = SentenceIdsSchema.parse(sentenceIds);
-      return await databaseLayer.getSentencesByIds(validatedSentenceIds);
-    } catch (error) {
-      console.error('Error getting sentences by IDs:', error);
-      throw new Error(`Failed to get sentences by IDs: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.DELETE_SENTENCE,
+    createIPCHandler(SentenceIdSchema, (sentenceId) => databaseLayer.deleteSentence(sentenceId), 'delete sentence')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.DELETE_SENTENCE, async (event, sentenceId) => {
-    try {
-      const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
-      await databaseLayer.deleteSentence(validatedSentenceId);
-    } catch (error) {
-      console.error('Error deleting sentence:', error);
-      throw new Error(`Failed to delete sentence: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_LAST_SHOWN,
+    createIPCHandler(SentenceIdSchema, (sentenceId) => databaseLayer.updateSentenceLastShown(sentenceId), 'update sentence last shown')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_LAST_SHOWN, async (event, sentenceId) => {
-    try {
-      const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
-      return await databaseLayer.updateSentenceLastShown(validatedSentenceId);
-    } catch (error) {
-      console.error('Error updating sentence last shown:', error);
-      throw new Error(`Failed to update sentence last shown: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.INCREMENT_SENTENCE_PLAY_COUNT,
+    createIPCHandler(SentenceIdSchema, (sentenceId) => databaseLayer.incrementSentencePlayCount(sentenceId), 'increment sentence play count')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.INCREMENT_SENTENCE_PLAY_COUNT, async (event, sentenceId) => {
-    try {
-      const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
-      return await databaseLayer.incrementSentencePlayCount(validatedSentenceId);
-    } catch (error) {
-      console.error('Error incrementing sentence play count:', error);
-      throw new Error(`Failed to increment sentence play count: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.RECORD_PRONUNCIATION_ATTEMPT,
+    createIPCHandler(
+      [SentenceIdSchema, z.number().min(0).max(1), z.string(), z.string()],
+      (sentenceId, similarityScore, expectedText, transcribedText) => {
+        console.log(`[Pronunciation] Recording attempt: sentenceId=${sentenceId}, similarity=${similarityScore.toFixed(2)}`);
+        return databaseLayer.recordPronunciationAttempt(sentenceId, similarityScore, expectedText, transcribedText);
+      },
+      'record pronunciation attempt'
+    )
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.RECORD_PRONUNCIATION_ATTEMPT, async (event, sentenceId, similarityScore, expectedText, transcribedText) => {
-    try {
-      const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
-      // Validate similarity score is a number between 0 and 1
-      if (typeof similarityScore !== 'number' || similarityScore < 0 || similarityScore > 1) {
-        throw new Error('Similarity score must be a number between 0 and 1');
-      }
-      // Validate text fields are strings
-      if (typeof expectedText !== 'string' || typeof transcribedText !== 'string') {
-        throw new Error('Expected text and transcribed text must be strings');
-      }
-      console.log(`[Pronunciation] Recording attempt: sentenceId=${validatedSentenceId}, similarity=${similarityScore.toFixed(2)}`);
-      return await databaseLayer.recordPronunciationAttempt(validatedSentenceId, similarityScore, expectedText, transcribedText);
-    } catch (error) {
-      console.error('Error recording pronunciation attempt:', error);
-      throw new Error(`Failed to record pronunciation attempt: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_PRONUNCIATION_HISTORY,
+    createIPCHandler(
+      [SentenceIdSchema, z.number().int().positive().optional()],
+      (sentenceId, limit) => databaseLayer.getPronunciationHistory(
+        sentenceId,
+        limit !== undefined ? Math.max(1, Math.floor(limit)) : undefined
+      ),
+      'get pronunciation history'
+    )
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_PRONUNCIATION_HISTORY, async (event, sentenceId, limit) => {
-    try {
-      const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
-      const validatedLimit = limit !== undefined ? Math.max(1, Math.floor(Number(limit))) : undefined;
-      return await databaseLayer.getPronunciationHistory(validatedSentenceId, validatedLimit);
-    } catch (error) {
-      console.error('Error getting pronunciation history:', error);
-      throw new Error(`Failed to get pronunciation history: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_AUDIO_PATH,
+    createIPCHandler(
+      [SentenceIdSchema, AudioPathSchema, z.string().optional()],
+      (sentenceId, audioPath, audioGenerationVoiceId) => databaseLayer.updateSentenceAudioPath(sentenceId, audioPath, audioGenerationVoiceId),
+      'update sentence audio path'
+    )
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_AUDIO_PATH, async (event, sentenceId, audioPath, audioGenerationVoiceId) => {
-    try {
-      const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
-      const validatedAudioPath = AudioPathSchema.parse(audioPath);
-      const validatedAudioGenerationVoiceId = audioGenerationVoiceId ? z.string().parse(audioGenerationVoiceId) : undefined;
-      return await databaseLayer.updateSentenceAudioPath(validatedSentenceId, validatedAudioPath, validatedAudioGenerationVoiceId);
-    } catch (error) {
-      console.error('Error updating sentence audio path:', error);
-      throw new Error(`Failed to update sentence audio path: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.UPDATE_LAST_STUDIED,
+    createIPCHandler(WordIdSchema, (wordId) => databaseLayer.updateLastStudied(wordId), 'update last studied')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.UPDATE_LAST_STUDIED, async (event, wordId) => {
-    try {
-      const validatedWordId = WordIdSchema.parse(wordId);
-      return await databaseLayer.updateLastStudied(validatedWordId);
-    } catch (error) {
-      console.error('Error updating last studied:', error);
-      throw new Error(`Failed to update last studied: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_STUDY_STATS,
+    createIPCHandler(undefined, () => databaseLayer.getStudyStats(), 'get study stats')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_STUDY_STATS, async (event) => {
-    try {
-      return await databaseLayer.getStudyStats();
-    } catch (error) {
-      console.error('Error getting study stats:', error);
-      throw new Error(`Failed to get study stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.RECORD_STUDY_SESSION,
+    createIPCHandler(z.number().int().min(0), (wordsStudied) => databaseLayer.recordStudySession(wordsStudied), 'record study session')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.RECORD_STUDY_SESSION, async (event, wordsStudied) => {
-    try {
-      const validatedWordsStudied = z.number().int().min(0).parse(wordsStudied);
-      return await databaseLayer.recordStudySession(validatedWordsStudied);
-    } catch (error) {
-      console.error('Error recording study session:', error);
-      throw new Error(`Failed to record study session: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_ALL_WORDS,
+    createIPCHandler(
+      [z.boolean().optional(), z.boolean().optional()],
+      (includeKnown, includeIgnored) => databaseLayer.getAllWords(
+        includeKnown !== undefined ? includeKnown : true,
+        includeIgnored !== undefined ? includeIgnored : false
+      ),
+      'get all words'
+    )
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_ALL_WORDS, async (event, includeKnown, includeIgnored) => {
-    try {
-      const validatedIncludeKnown = includeKnown !== undefined ? BooleanSchema.parse(includeKnown) : true;
-      const validatedIncludeIgnored = includeIgnored !== undefined ? BooleanSchema.parse(includeIgnored) : false;
-      return await databaseLayer.getAllWords(validatedIncludeKnown, validatedIncludeIgnored);
-    } catch (error) {
-      console.error('Error getting all words:', error);
-      throw new Error(`Failed to get all words: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES,
+    createIPCHandler(
+      [z.boolean().optional(), z.boolean().optional()],
+      (includeKnown, includeIgnored) => databaseLayer.getWordsWithSentences(
+        includeKnown !== undefined ? includeKnown : true,
+        includeIgnored !== undefined ? includeIgnored : false
+      ),
+      'get words with sentences'
+    )
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES, async (event, includeKnown, includeIgnored) => {
-    try {
-      const validatedIncludeKnown = includeKnown !== undefined ? BooleanSchema.parse(includeKnown) : true;
-      const validatedIncludeIgnored = includeIgnored !== undefined ? BooleanSchema.parse(includeIgnored) : false;
-      return await databaseLayer.getWordsWithSentences(validatedIncludeKnown, validatedIncludeIgnored);
-    } catch (error) {
-      console.error('Error getting words with sentences:', error);
-      throw new Error(`Failed to get words with sentences: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES_ORDERED_BY_STRENGTH,
+    createIPCHandler(
+      [z.boolean().optional(), z.boolean().optional()],
+      (includeKnown, includeIgnored) => databaseLayer.getWordsWithSentencesOrderedByStrength(
+        includeKnown !== undefined ? includeKnown : true,
+        includeIgnored !== undefined ? includeIgnored : false
+      ),
+      'get words with sentences ordered by strength'
+    )
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES_ORDERED_BY_STRENGTH, async (event, includeKnown, includeIgnored) => {
-    try {
-      const validatedIncludeKnown = includeKnown !== undefined ? BooleanSchema.parse(includeKnown) : true;
-      const validatedIncludeIgnored = includeIgnored !== undefined ? BooleanSchema.parse(includeIgnored) : false;
-      return await databaseLayer.getWordsWithSentencesOrderedByStrength(validatedIncludeKnown, validatedIncludeIgnored);
-    } catch (error) {
-      console.error('Error getting words with sentences ordered by strength:', error);
-      throw new Error(`Failed to get words with sentences ordered by strength: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_RECENT_STUDY_SESSIONS,
+    createIPCHandler(
+      LimitSchema.optional(),
+      (limit) => databaseLayer.getRecentStudySessions(limit !== undefined ? limit : 10),
+      'get recent study sessions'
+    )
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_RECENT_STUDY_SESSIONS, async (event, limit) => {
-    try {
-      const validatedLimit = limit !== undefined ? LimitSchema.parse(limit) : 10;
-      return await databaseLayer.getRecentStudySessions(validatedLimit);
-    } catch (error) {
-      console.error('Error getting recent study sessions:', error);
-      throw new Error(`Failed to get recent study sessions: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_SETTING,
+    createIPCHandler(z.string().min(1).max(100), (key) => databaseLayer.getSetting(key), 'get setting')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_SETTING, async (event, key) => {
-    try {
-      const validatedKey = z.string().min(1).max(100).parse(key);
-      return await databaseLayer.getSetting(validatedKey);
-    } catch (error) {
-      console.error('Error getting setting:', error);
-      throw new Error(`Failed to get setting: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.SET_SETTING,
+    createIPCHandler(
+      [z.string().min(1).max(100), z.string().max(1000)],
+      (key, value) => databaseLayer.setSetting(key, value),
+      'set setting'
+    )
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.SET_SETTING, async (event, key, value) => {
-    try {
-      const validatedKey = z.string().min(1).max(100).parse(key);
-      const validatedValue = z.string().max(1000).parse(value);
-      return await databaseLayer.setSetting(validatedKey, validatedValue);
-    } catch (error) {
-      console.error('Error setting setting:', error);
-      throw new Error(`Failed to set setting: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_CURRENT_LANGUAGE,
+    createIPCHandler(undefined, () => databaseLayer.getCurrentLanguage(), 'get current language')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_CURRENT_LANGUAGE, async (event) => {
-    try {
-      return await databaseLayer.getCurrentLanguage();
-    } catch (error) {
-      console.error('Error getting current language:', error);
-      throw new Error(`Failed to get current language: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.SET_CURRENT_LANGUAGE,
+    createIPCHandler(LanguageSchema, (language) => databaseLayer.setCurrentLanguage(language), 'set current language')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.SET_CURRENT_LANGUAGE, async (event, language) => {
-    try {
-      const validatedLanguage = LanguageSchema.parse(language);
-      return await databaseLayer.setCurrentLanguage(validatedLanguage);
-    } catch (error) {
-      console.error('Error setting current language:', error);
-      throw new Error(`Failed to set current language: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_AVAILABLE_LANGUAGES,
+    createIPCHandler(undefined, () => databaseLayer.getAvailableLanguages(), 'get available languages')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_AVAILABLE_LANGUAGES, async (event) => {
-    try {
-      return await databaseLayer.getAvailableLanguages();
-    } catch (error) {
-      console.error('Error getting available languages:', error);
-      throw new Error(`Failed to get available languages: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_LANGUAGE_STATS,
+    createIPCHandler(undefined, () => databaseLayer.getLanguageStats(), 'get language stats')
+  );
 
-  ipcMain.handle(IPC_CHANNELS.DATABASE.GET_LANGUAGE_STATS, async (event) => {
-    try {
-      return await databaseLayer.getLanguageStats();
-    } catch (error) {
-      console.error('Error getting language stats:', error);
-      throw new Error(`Failed to get language stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
-
-  ipcMain.handle(IPC_CHANNELS.DATABASE.LOOKUP_DICTIONARY, async (event, word, language) => {
-    try {
-      const validatedWord = DictionaryWordSchema.parse(word);
-      const validatedLanguage = language ? LanguageSchema.parse(language) : undefined;
-      return await databaseLayer.lookupDictionary(validatedWord, validatedLanguage);
-    } catch (error) {
-      console.error('Error looking up dictionary entry:', error);
-      throw new Error(`Failed to lookup dictionary entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.LOOKUP_DICTIONARY,
+    createIPCHandler(
+      [DictionaryWordSchema, LanguageSchema.optional()],
+      (word, language) => databaseLayer.lookupDictionary(word, language),
+      'lookup dictionary entry'
+    )
+  );
 }
 
 /**
