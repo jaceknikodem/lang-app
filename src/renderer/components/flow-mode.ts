@@ -217,11 +217,27 @@ export class FlowMode extends LitElement {
     }
 
     try {
-      // If audio element exists and was paused, resume from pause position
+      // If audio element exists and was paused, resume from pause position minus 0.5s (but not negative)
       if (this.audioElement && !this.isPlaying) {
-        this.audioElement.currentTime = this.pausedPosition;
+        const resumePosition = Math.max(0, this.pausedPosition - 0.5);
+        this.audioElement.currentTime = resumePosition;
         
-        // Re-setup visualization if needed (audio context might be suspended)
+        // Show overlay first so canvas is in DOM
+        this.showOverlay = true;
+        this.isPlaying = true;
+        
+        // Wait for DOM to update so canvas is accessible
+        await this.updateComplete;
+        
+        // Re-acquire canvas reference since overlay was hidden
+        this.canvasElement = this.shadowRoot?.querySelector('.visualization-canvas') as HTMLCanvasElement;
+        if (this.canvasElement) {
+          // Set canvas size
+          this.canvasElement.width = 300;
+          this.canvasElement.height = 300;
+        }
+        
+        // Re-setup visualization if needed (audio context might be closed)
         if (!this.audioContext || this.audioContext.state === 'closed') {
           this.setupAudioVisualization();
         }
@@ -230,10 +246,8 @@ export class FlowMode extends LitElement {
         }
         
         await this.audioElement.play();
-        this.isPlaying = true;
-        this.showOverlay = true;
         
-        // Wait a frame for DOM to update and canvas to be rendered
+        // Wait another frame to ensure everything is ready
         await this.updateComplete;
         requestAnimationFrame(() => {
           // Restart visualization
@@ -508,6 +522,7 @@ export class FlowMode extends LitElement {
       if (ctx) {
         ctx.clearRect(0, 0, this.canvasElement.width, this.canvasElement.height);
       }
+      // Don't clear canvasElement reference - we'll re-acquire it when needed
     }
   }
 
