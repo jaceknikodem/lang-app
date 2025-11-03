@@ -9,6 +9,7 @@ import { router, RouteState, AppMode } from '../utils/router.js';
 import { sessionManager, SessionState } from '../utils/session-manager.js';
 import { sharedStyles } from '../styles/shared.js';
 import { keyboardManager, useKeyboardBindings, GlobalShortcuts } from '../utils/keyboard-manager.js';
+import type { ProficiencyLevel } from './language-proficiency-selector.js';
 import './topic-selector.js';
 import './word-selector.js';
 import './learning-mode.js';
@@ -16,6 +17,7 @@ import './quiz-mode.js';
 import './dialog-mode.js';
 import './flow-mode.js';
 import './settings-panel.js';
+import './language-proficiency-selector.js';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -53,6 +55,12 @@ export class AppRoot extends LitElement {
 
   @state()
   private wordCategoryStats: { known: number; strong: number; weak: number; new: number } | null = null;
+
+  @state()
+  private showProficiencySelector = false;
+
+  @state()
+  private currentProficiencyLevel: ProficiencyLevel | null = null;
 
   private static readonly WEAK_THRESHOLD = 30;
   private static readonly STRONG_THRESHOLD = 80;
@@ -590,12 +598,37 @@ export class AppRoot extends LitElement {
       const stats = await window.electronAPI.database.getStudyStats(this.currentLanguage || undefined);
       this.hasExistingWords = stats.totalWords > 0;
       console.log('Words check complete, found:', stats.totalWords);
+      
+      // Check proficiency level (will show selector if no words and no proficiency set)
+      if (this.currentLanguage) {
+        await this.checkProficiencyLevel();
+      }
+      
       if (this.hasExistingWords === false && router.isCurrentMode('learning')) {
         router.goToTopicSelection();
       }
     } catch (error) {
       console.error('Failed to check existing words:', error);
       this.hasExistingWords = false;
+    }
+  }
+
+  private async checkProficiencyLevel() {
+    if (!this.currentLanguage) {
+      return;
+    }
+
+    try {
+      const proficiencyKey = `language_proficiency_${this.currentLanguage}`;
+      const proficiency = await window.electronAPI.database.getSetting(proficiencyKey);
+      this.currentProficiencyLevel = proficiency as ProficiencyLevel | null;
+      
+      // Show proficiency selector if NO words exist and proficiency is not set
+      if (!this.hasExistingWords && !proficiency) {
+        this.showProficiencySelector = true;
+      }
+    } catch (error) {
+      console.error('Failed to check proficiency level:', error);
     }
   }
 
@@ -760,6 +793,30 @@ export class AppRoot extends LitElement {
       // Revert the selection
       select.value = this.currentLanguage;
     }
+  }
+
+  private async handleProficiencySelected(event: CustomEvent<{ level: ProficiencyLevel }>) {
+    const { level } = event.detail;
+    
+    if (!this.currentLanguage) {
+      return;
+    }
+
+    try {
+      const proficiencyKey = `language_proficiency_${this.currentLanguage}`;
+      await window.electronAPI.database.setSetting(proficiencyKey, level);
+      this.currentProficiencyLevel = level;
+      this.showProficiencySelector = false;
+      console.log(`Proficiency level set for ${this.currentLanguage}:`, level);
+    } catch (error) {
+      console.error('Failed to save proficiency level:', error);
+    }
+  }
+
+  private handleProficiencyCancelled() {
+    // User cancelled, but we still don't want to show it again until next session
+    // or they can dismiss it manually - for now, just hide it
+    this.showProficiencySelector = false;
   }
 
   private capitalizeLanguage(language: string): string {
@@ -1320,6 +1377,15 @@ export class AppRoot extends LitElement {
         <div class="flow-overlay" @click=${() => this.handleFlowPause()}>
           <div class="flow-pause-icon">⏸</div>
         </div>
+      ` : ''}
+
+      ${this.showProficiencySelector ? html`
+        <language-proficiency-selector
+          .language=${this.currentLanguage}
+          .currentLevel=${this.currentProficiencyLevel}
+          @proficiency-selected=${this.handleProficiencySelected}
+          @proficiency-cancelled=${this.handleProficiencyCancelled}
+        ></language-proficiency-selector>
       ` : ''}
     `;
   }
