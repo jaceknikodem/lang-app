@@ -42,12 +42,6 @@ export class AppRoot extends LitElement {
   private currentLanguage = '';
 
   @state()
-  private isFlowPlaying = false;
-
-  @state()
-  private showFlowOverlay = false;
-
-  @state()
   private autopilotEnabled = false;
 
   @state()
@@ -67,8 +61,6 @@ export class AppRoot extends LitElement {
 
   private routerUnsubscribe?: () => void;
   private keyboardUnsubscribe?: () => void;
-  private flowAudioElement: HTMLAudioElement | null = null;
-  private flowAudioPath: string | null = null;
   private autopilotIntervalId: number | null = null;
 
   static styles = [
@@ -976,11 +968,6 @@ export class AppRoot extends LitElement {
   }
 
   private async handleFlowPlay() {
-    if (this.isFlowPlaying) {
-      this.handleFlowPause();
-      return;
-    }
-
     // Prevent playing if there are no flow sentences available
     if (!this.hasFlowSentences) {
       return;
@@ -1001,108 +988,16 @@ export class AppRoot extends LitElement {
       }));
     }
 
-    try {
-      this.isFlowPlaying = true;
-
-      // Check if we need to re-stitch (file doesn't exist or is older than 2 hours)
-      let needsStitching = true;
-      const defaultAudioPath = 'audio/flow_stitched.mp3';
-      
-      // Check if cached file exists and is recent (within 2 hours)
-      const pathToCheck = this.flowAudioPath || defaultAudioPath;
-      const stats = await window.electronAPI.flow.getFileStats(pathToCheck);
-      if (stats) {
-        const fileAge = Date.now() - stats.mtime.getTime();
-        const twoHours = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
-        if (fileAge < twoHours) {
-          this.flowAudioPath = pathToCheck;
-          needsStitching = false;
-        }
+    // Navigate to flow mode - the flow-mode component will handle stitching and playing
+    router.goToFlow();
+    
+    // Trigger play in flow-mode component after a short delay to ensure it's mounted
+    setTimeout(() => {
+      const flowModeElement = this.shadowRoot?.querySelector('flow-mode') as any;
+      if (flowModeElement && typeof flowModeElement.handlePlay === 'function') {
+        flowModeElement.handlePlay();
       }
-
-      // Load flow sentences and stitch if needed
-      if (needsStitching) {
-        const sentences = await window.electronAPI.flow.getFlowSentences();
-        
-        // Collect all audio paths (limited to 200)
-        const audioPaths: string[] = [];
-        for (const item of sentences) {
-          if (item.beforeSentenceAudio) {
-            audioPaths.push(item.beforeSentenceAudio);
-          }
-          if (item.sentence.audioPath) {
-            audioPaths.push(item.sentence.audioPath);
-          }
-          audioPaths.push(...item.continuationAudios);
-          
-          // Stop collecting at 200 files
-          if (audioPaths.length >= 200) {
-            break;
-          }
-        }
-
-        // Limit to 200 files
-        if (audioPaths.length > 200) {
-          audioPaths.splice(200);
-        }
-
-        if (audioPaths.length === 0) {
-          alert('No audio files found. Please generate some sentences with audio first.');
-          this.isFlowPlaying = false;
-          return;
-        }
-
-        // Stitch audio files
-        this.flowAudioPath = await window.electronAPI.flow.stitchAudio(audioPaths);
-        if (!this.flowAudioPath) {
-          alert('Failed to stitch audio files. Please ensure ffmpeg is installed.');
-          this.isFlowPlaying = false;
-          return;
-        }
-      }
-
-      // Load and play audio
-      if (!this.flowAudioPath) {
-        throw new Error('Audio path not available');
-      }
-
-      console.log(`[Flow] Loading audio file: ${this.flowAudioPath}`);
-      const audioData = await window.electronAPI.audio.loadAudioBase64(this.flowAudioPath);
-      if (!audioData) {
-        throw new Error(`Failed to load audio file: ${this.flowAudioPath}`);
-      }
-
-      console.log(`[Flow] Audio loaded: ${audioData.data.byteLength} bytes, MIME type: ${audioData.mimeType}`);
-
-      // Create blob URL
-      const blob = new Blob([audioData.data], { type: audioData.mimeType });
-      const blobUrl = URL.createObjectURL(blob);
-
-      // Create audio element
-      this.flowAudioElement = new Audio(blobUrl);
-      
-      // Set up event handlers
-      this.flowAudioElement.addEventListener('ended', () => {
-        this.handleFlowStop();
-      });
-
-      this.flowAudioElement.addEventListener('error', (e) => {
-        const audioEl = e.target as HTMLAudioElement;
-        const errorCode = audioEl?.error?.code;
-        const errorMessage = audioEl?.error?.message || 'Unknown error';
-        console.error(`[Flow] Error playing audio: code=${errorCode}, message=${errorMessage}, path=${this.flowAudioPath}`, e);
-        console.error(`[Flow] Audio element state: src=${audioEl?.src}, readyState=${audioEl?.readyState}, networkState=${audioEl?.networkState}`);
-        this.handleFlowStop();
-      });
-
-      // Show overlay and play
-      this.showFlowOverlay = true;
-      await this.flowAudioElement.play();
-    } catch (error) {
-      console.error('Error playing flow audio:', error);
-      alert(`Failed to play audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      this.handleFlowStop();
-    }
+    }, 100);
   }
 
   private handleAutopilotToggle(event: Event) {
@@ -1128,7 +1023,7 @@ export class AppRoot extends LitElement {
     
     // Set up 30-second interval for flow mode
     this.autopilotIntervalId = window.setInterval(() => {
-      if (this.isFlowPlaying) {
+      if (router.isCurrentMode('flow')) {
         this.checkScoresAndNavigate();
       }
     }, 30000);
@@ -1188,49 +1083,12 @@ export class AppRoot extends LitElement {
     }
   }
 
-  private handleFlowPause() {
-    if (this.flowAudioElement) {
-      this.flowAudioElement.pause();
-      this.isFlowPlaying = false;
-      this.showFlowOverlay = false;
-    }
-  }
-
-  private handleFlowStop() {
-    if (this.flowAudioElement) {
-      this.flowAudioElement.pause();
-      this.flowAudioElement.currentTime = 0;
-      
-      // Clean up blob URL
-      const src = this.flowAudioElement.src;
-      if (src.startsWith('blob:')) {
-        URL.revokeObjectURL(src);
-      }
-      
-      this.flowAudioElement = null;
-    }
-    this.isFlowPlaying = false;
-    this.showFlowOverlay = false;
-  }
 
 
 
   private setupKeyboardBindings() {
-    const bindings = [
-      // Flow pause shortcut (space bar)
-      {
-        key: ' ',
-        action: () => {
-          if (this.showFlowOverlay && this.isFlowPlaying) {
-            this.handleFlowPause();
-          }
-        },
-        context: 'global',
-        description: 'Pause Flow audio'
-      }
-    ];
-
-    this.keyboardUnsubscribe = useKeyboardBindings(bindings);
+    // Flow-mode component handles its own keyboard bindings
+    this.keyboardUnsubscribe = useKeyboardBindings([]);
   }
 
   private updateKeyboardContext() {
@@ -1263,7 +1121,7 @@ export class AppRoot extends LitElement {
                 <button 
                   class="nav-button flow-button"
                   @click=${() => this.handleFlowPlay()}
-                  ?disabled=${this.isFlowPlaying || !this.hasFlowSentences}
+                  ?disabled=${!this.hasFlowSentences}
                   title=${this.hasFlowSentences ? 'Get into the Flow' : 'Not enough sentences with audio available'}
                 >
                   ▶
@@ -1372,12 +1230,6 @@ export class AppRoot extends LitElement {
           </div>
         </main>
       </div>
-
-      ${this.showFlowOverlay ? html`
-        <div class="flow-overlay" @click=${() => this.handleFlowPause()}>
-          <div class="flow-pause-icon">⏸</div>
-        </div>
-      ` : ''}
 
       ${this.showProficiencySelector ? html`
         <language-proficiency-selector

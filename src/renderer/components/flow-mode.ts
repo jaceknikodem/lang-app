@@ -2,7 +2,7 @@
  * Flow mode component for playing long stitched audio from all sentences
  */
 
-import { LitElement, html, css, nothing } from 'lit';
+import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { Word, Sentence } from '../../shared/types/core.js';
@@ -72,43 +72,75 @@ export class FlowMode extends LitElement {
       this.isLoading = true;
       this.error = '';
 
-      const sentences = await window.electronAPI.flow.getFlowSentences();
-      this.flowSentences = sentences;
-
-      // Collect all audio paths
-      const audioPaths: string[] = [];
-      for (const item of this.flowSentences) {
-        // Add before sentence audio if exists
-        if (item.beforeSentenceAudio) {
-          audioPaths.push(item.beforeSentenceAudio);
+      // Check cache first before loading sentences
+      let needsStitching = true;
+      const defaultAudioPath = 'audio/flow_stitched.mp3';
+      
+      // Check if cached file exists and is recent (within 2 hours)
+      const pathToCheck = this.stitchedAudioPath || defaultAudioPath;
+      const stats = await window.electronAPI.flow.getFileStats(pathToCheck);
+      if (stats) {
+        const fileAge = Date.now() - stats.mtime.getTime();
+        const twoHours = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+        if (fileAge < twoHours) {
+          this.stitchedAudioPath = pathToCheck;
+          needsStitching = false;
         }
-        
-        // Add main sentence audio
-        if (item.sentence.audioPath) {
-          audioPaths.push(item.sentence.audioPath);
-        }
-
-        // Add continuation audios
-        audioPaths.push(...item.continuationAudios);
       }
 
-      if (audioPaths.length === 0) {
-        this.error = 'No audio files found. Please generate some sentences with audio first.';
-        return;
-      }
+      // Only load sentences and stitch if cache is not valid
+      if (needsStitching) {
+        const sentences = await window.electronAPI.flow.getFlowSentences();
+        this.flowSentences = sentences;
 
-      // Stitch audio files
-      this.isStitching = true;
-      try {
-        this.stitchedAudioPath = await window.electronAPI.flow.stitchAudio(audioPaths);
-        if (!this.stitchedAudioPath) {
-          this.error = 'Failed to stitch audio files. Please ensure ffmpeg is installed.';
+        // Collect all audio paths (limited to 200)
+        const audioPaths: string[] = [];
+        for (const item of this.flowSentences) {
+          if (item.beforeSentenceAudio) {
+            audioPaths.push(item.beforeSentenceAudio);
+          }
+          if (item.sentence.audioPath) {
+            audioPaths.push(item.sentence.audioPath);
+          }
+          audioPaths.push(...item.continuationAudios);
+          
+          // Stop collecting at 200 files
+          if (audioPaths.length >= 200) {
+            break;
+          }
         }
-      } catch (err) {
-        console.error('Error stitching audio:', err);
-        this.error = `Failed to stitch audio: ${err instanceof Error ? err.message : 'Unknown error'}`;
-      } finally {
-        this.isStitching = false;
+
+        // Limit to 200 files
+        if (audioPaths.length > 200) {
+          audioPaths.splice(200);
+        }
+
+        if (audioPaths.length === 0) {
+          this.error = 'No audio files found. Please generate some sentences with audio first.';
+          return;
+        }
+
+        // Stitch audio files
+        this.isStitching = true;
+        try {
+          this.stitchedAudioPath = await window.electronAPI.flow.stitchAudio(audioPaths);
+          if (!this.stitchedAudioPath) {
+            this.error = 'Failed to stitch audio files. Please ensure ffmpeg is installed.';
+          }
+        } catch (err) {
+          console.error('Error stitching audio:', err);
+          this.error = `Failed to stitch audio: ${err instanceof Error ? err.message : 'Unknown error'}`;
+        } finally {
+          this.isStitching = false;
+        }
+      } else {
+        // If using cache, still load sentences for display purposes (but don't wait for it)
+        window.electronAPI.flow.getFlowSentences().then(sentences => {
+          this.flowSentences = sentences;
+          this.requestUpdate();
+        }).catch(err => {
+          console.warn('Failed to load flow sentences for display:', err);
+        });
       }
     } catch (err) {
       console.error('Error loading flow sentences:', err);
@@ -118,16 +150,39 @@ export class FlowMode extends LitElement {
     }
   }
 
-  private async handlePlay() {
-    if (!this.stitchedAudioPath) {
+  // Public method that can be called from app-root to start playing
+  async handlePlay() {
+    // Show overlay immediately, even if stitching is in progress
+    this.showOverlay = true;
+    
+    if (this.isPlaying) {
+      this.pauseAudio();
       return;
     }
 
-    if (this.isPlaying) {
-      this.pauseAudio();
-    } else {
-      await this.playAudio();
+    // If stitching is in progress, wait for it to complete
+    if (this.isStitching) {
+      // Wait for stitching to complete
+      const checkInterval = setInterval(() => {
+        if (!this.isStitching && this.stitchedAudioPath) {
+          clearInterval(checkInterval);
+          this.playAudio();
+        }
+      }, 100);
+      return;
     }
+
+    if (!this.stitchedAudioPath) {
+      // If no audio path yet, start loading/stitching
+      this.loadFlowSentences().then(() => {
+        if (this.stitchedAudioPath) {
+          this.playAudio();
+        }
+      });
+      return;
+    }
+
+    await this.playAudio();
   }
 
   private async playAudio() {
@@ -251,137 +306,63 @@ export class FlowMode extends LitElement {
         position: relative;
       }
 
-      .flow-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        height: 100%;
-        padding: var(--spacing-lg);
-      }
-
-      .play-button {
-        width: 120px;
-        height: 120px;
-        border-radius: 50%;
-        background: var(--primary-color);
-        color: white;
-        border: none;
-        font-size: 48px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: transform 0.2s, box-shadow 0.2s;
-        box-shadow: var(--shadow-medium);
-      }
-
-      .play-button:hover:not(:disabled) {
-        transform: scale(1.05);
-        box-shadow: var(--shadow-large);
-      }
-
-      .play-button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-
-      .loading, .error {
-        text-align: center;
-        padding: var(--spacing-lg);
-      }
-
-      .error {
-        color: var(--error-color);
-      }
-
-      .info {
-        margin-top: var(--spacing-md);
-        text-align: center;
-        color: var(--text-secondary);
-      }
-
       .overlay {
         position: fixed;
         top: 0;
         left: 0;
         right: 0;
         bottom: 0;
-        background: rgba(0, 0, 0, 0.95);
+        background: rgba(0, 0, 0, 1);
+        z-index: 10000;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.4s ease-in-out;
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: 10000;
       }
 
-      .pause-icon {
-        font-size: 200px;
-        color: white;
-        opacity: 0.9;
+      .overlay.visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .pause-button {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: white;
+        color: black;
+        border: none;
+        font-size: 32px;
         cursor: pointer;
-        user-select: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.2s, opacity 0.2s;
+        opacity: 0.9;
       }
 
-      .pause-icon:hover {
+      .pause-button:hover {
+        transform: scale(1.1);
         opacity: 1;
       }
     `
   ];
 
   render() {
-    if (this.isLoading || this.isStitching) {
-      return html`
-        <div class="flow-container">
-          <div class="loading">
-            ${this.isStitching ? 'Stitching audio files...' : 'Loading flow sentences...'}
-          </div>
-        </div>
-      `;
-    }
-
-    if (this.error) {
-      return html`
-        <div class="flow-container">
-          <div class="error">${this.error}</div>
-          <button 
-            class="button primary" 
-            @click=${this.loadFlowSentences}
-            style="margin-top: var(--spacing-md);"
-          >
-            Retry
-          </button>
-        </div>
-      `;
-    }
-
-    const sentenceCount = this.flowSentences.length;
-    const totalWords = this.flowSentences.reduce((sum, item) => sum + item.words.length, 0);
-
     return html`
-      <div class="flow-container">
-        <button
-          class="play-button"
-          @click=${this.handlePlay}
-          ?disabled=${!this.stitchedAudioPath}
-        >
-          ${this.isPlaying ? '⏸' : '▶'}
-        </button>
-        
-        <div class="info">
-          <p>${sentenceCount} sentences</p>
-          <p>${totalWords} connected words</p>
-          <p style="margin-top: var(--spacing-sm); font-size: 0.9em; opacity: 0.7;">
-            Press spacebar to pause
-          </p>
-        </div>
+      <div class="overlay ${this.showOverlay ? 'visible' : ''}">
+        ${this.showOverlay ? html`
+          <button
+            class="pause-button"
+            @click=${this.pauseAudio}
+            title="Pause"
+          >
+            ⏸
+          </button>
+        ` : ''}
       </div>
-
-      ${this.showOverlay ? html`
-        <div class="overlay" @click=${this.pauseAudio}>
-          <div class="pause-icon">⏸</div>
-        </div>
-      ` : nothing}
     `;
   }
 }
