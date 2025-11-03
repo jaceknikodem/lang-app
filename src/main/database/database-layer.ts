@@ -699,6 +699,18 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
   /**
    * Insert a new sentence for a word
+   * 
+   * This method creates two types of word-sentence linkages:
+   * 1. Direct link: sentences.word_id - the primary word this sentence was generated for
+   * 2. Junction table: sentence_words - links sentences to ALL words they contain
+   * 
+   * IMPORTANT: The primary word (wordId) is ALWAYS added to the sentence_words junction table,
+   * regardless of whether it was found by the matching algorithm or its known/ignored status.
+   * This ensures the junction table is the single source of truth for all sentence-word relationships.
+   * 
+   * Additionally, the method finds all other learning words that appear in the sentence and
+   * links them via the junction table, allowing sentences to be discoverable when studying
+   * any word they contain, not just the primary word.
    */
   async insertSentence(
     wordId: number, 
@@ -723,7 +735,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const serializedParts = serializeSentenceParts(parts);
       const serializedTokens = serializeTokenizedTokens(tokenizedTokens);
 
-      // Insert sentence with original wordId (for backwards compatibility)
+      // Insert sentence with primary wordId
       const stmt = db.prepare(`
         INSERT INTO sentences (
           word_id, sentence, translation, audio_path,
@@ -762,19 +774,27 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // Find all learning words that appear in the sentence
       const matchingWords = this.findMatchingLearningWords(sentence, word.language);
 
-      // Insert entries in junction table for all matching words
+      // Prepare junction table insert statement
+      const insertJunction = db.prepare(`
+        INSERT OR IGNORE INTO sentence_words (sentence_id, word_id)
+        VALUES (?, ?)
+      `);
+
+      const updateSentenceCount = db.prepare(`
+        UPDATE words 
+        SET sentence_count = sentence_count + 1
+        WHERE id = ?
+      `);
+
+      // Always ensure the primary word is in the junction table
+      // This guarantees that sentences.word_id is always backed by a sentence_words entry
+      // See documentation at top of insertSentence method for why this is important
+      insertJunction.run(sentenceId, wordId);
+
+      // Insert entries in junction table for all other matching words found in the sentence
+      // This allows sentences to be discoverable when studying any word they contain,
+      // not just the primary word they were generated for
       if (matchingWords.length > 0) {
-        const insertJunction = db.prepare(`
-          INSERT OR IGNORE INTO sentence_words (sentence_id, word_id)
-          VALUES (?, ?)
-        `);
-
-        const updateSentenceCount = db.prepare(`
-          UPDATE words 
-          SET sentence_count = sentence_count + 1
-          WHERE id = ?
-        `);
-
         for (const matchedWord of matchingWords) {
           try {
             insertJunction.run(sentenceId, matchedWord.id);
@@ -788,13 +808,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         }
       }
 
-      // Also update sentenceCount for the original word (if not already matched)
+      // Update sentenceCount for the primary word (if it wasn't already updated above)
       if (!matchingWords.find(w => w.id === wordId)) {
-        db.prepare(`
-          UPDATE words 
-          SET sentence_count = sentence_count + 1
-          WHERE id = ?
-        `).run(wordId);
+        updateSentenceCount.run(wordId);
       }
       
       return sentenceId;
@@ -805,25 +821,25 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
   /**
    * Get all sentences for a specific word in randomized order
+   * Uses the sentence_words junction table as the single source of truth
    */
   async getSentencesByWord(wordId: number): Promise<Sentence[]> {
     const db = this.getDb();
     
     try {
-      // First get sentence IDs from junction table
+      // Get sentence IDs from junction table (the single source of truth)
       const sentenceIdsStmt = db.prepare(`
         SELECT sentence_id FROM sentence_words WHERE word_id = ?
       `);
       
       const sentenceIdsResult = sentenceIdsStmt.all(wordId) as Array<{ sentence_id: number }>;
+      const sentenceIds = sentenceIdsResult.map(row => row.sentence_id);
       
-      if (sentenceIdsResult.length === 0) {
+      if (sentenceIds.length === 0) {
         return [];
       }
       
-      const sentenceIds = sentenceIdsResult.map(row => row.sentence_id);
-      
-      // Then fetch sentences by IDs using the junction table
+      // Fetch sentences by IDs
       const placeholders = sentenceIds.map(() => '?').join(',');
       const stmt = db.prepare(`
         SELECT * FROM sentences 
@@ -1205,10 +1221,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      // Get original wordId before deletion (for backwards compatibility fallback)
-      const sentence = db.prepare('SELECT word_id FROM sentences WHERE id = ?').get(sentenceId) as { word_id: number } | undefined;
-      
-      // Get all words linked to this sentence via junction table
+      // Get all words linked to this sentence via junction table (before deletion)
       const linkedWords = db.prepare('SELECT word_id FROM sentence_words WHERE sentence_id = ?').all(sentenceId) as Array<{ word_id: number }>;
       
       // Delete the sentence (junction table entries will be cascade deleted)
@@ -1229,13 +1242,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         WHERE id = ?
       `);
 
-      if (linkedWords.length > 0) {
-        for (const linkedWord of linkedWords) {
-          updateSentenceCount.run(linkedWord.word_id);
-        }
-      } else if (sentence?.word_id) {
-        // Fallback: if no junction table entries (old data), use original wordId
-        updateSentenceCount.run(sentence.word_id);
+      // Decrement sentence count for all words in junction table
+      for (const linkedWord of linkedWords) {
+        updateSentenceCount.run(linkedWord.word_id);
       }
     } catch (error) {
       throw new Error(`Failed to delete sentence: ${error instanceof Error ? error.message : 'Unknown error'}`);

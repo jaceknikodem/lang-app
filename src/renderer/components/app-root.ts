@@ -1015,17 +1015,18 @@ export class AppRoot extends LitElement {
         router.goToTopicSelection();
         break;
       case 'learning':
-        // Get all words from database for review
+        // Check if there are words with sentences available for review in the current language
         try {
-          const allWords = await window.electronAPI.database.getAllWords(true, false);
-          if (allWords.length > 0) {
+          const wordsWithSentences = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(true, false, this.currentLanguage || undefined);
+          if (wordsWithSentences.length > 0) {
             router.goToLearning();
           } else {
-            router.goToTopicSelection();
+            // Still navigate to learning mode - it will show appropriate empty state
+            router.goToLearning();
           }
         } catch (error) {
           console.error('Failed to load words for learning:', error);
-          router.goToTopicSelection();
+          router.goToLearning();
         }
         break;
       case 'quiz':
@@ -1320,7 +1321,6 @@ export class AppRoot extends LitElement {
                 <button 
                   class="nav-button ${router.isCurrentMode('learning') ? 'active' : ''}"
                   @click=${() => this.handleNavigation('learning')}
-                  ?disabled=${this.hasExistingWords === false}
                   title="Review existing words (Ctrl+2)"
                 >
                   Review

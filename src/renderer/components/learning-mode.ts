@@ -747,6 +747,18 @@ export class LearningMode extends LitElement {
       if (sessionWordIds.length) {
         sessionManager.startNewLearningSession(sessionWordIds, Math.min(20, sessionWordIds.length));
       }
+      
+      // If no words with sentences were found, check if there are any words at all for this language
+      // This helps us show a better error message
+      if (selectableWords.length === 0) {
+        const allWordsForLanguage = await window.electronAPI.database.getAllWords(true, false, this.currentLanguage ?? undefined);
+        console.log(`No words with sentences found. Total words for language ${this.currentLanguage}: ${allWordsForLanguage.length}`);
+        // Store all words (even without sentences) so we can show a helpful message
+        if (allWordsForLanguage.length > 0) {
+          this.selectedWords = allWordsForLanguage.slice(0, 20); // Store up to 20 for display purposes
+        }
+      }
+      
       console.log(`Loaded ${this.selectedWords.length} words with sentences for learning session: ${this.selectedWords.map(w => `${w.id}("${w.word}")`).join(', ')}`);
     } catch (error) {
       console.error('Failed to load words:', error);
@@ -2438,11 +2450,18 @@ export class LearningMode extends LitElement {
     }
 
     if (this.wordsWithSentences.length === 0) {
+      // Check if there are words but no sentences, vs no words at all
+      const hasWordsButNoSentences = this.selectedWords.length > 0;
       return html`
         <div class="learning-container">
           <div class="empty-state">
             <h3>No Learning Content Available</h3>
-            <p>No sentences were found for the selected words.</p>
+            ${hasWordsButNoSentences ? html`
+              <p>You have ${this.selectedWords.length} word${this.selectedWords.length === 1 ? '' : 's'}, but no sentences have been generated yet.</p>
+              <p>Please generate sentences for your words first, or select new words to review.</p>
+            ` : html`
+              <p>No words available for review. Please add words and generate sentences for them.</p>
+            `}
             <button class="action-button primary" @click=${this.goToTopicSelection}>
               Select Words
             </button>
