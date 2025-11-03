@@ -1784,11 +1784,13 @@ export function setupScoringHandlers(scoringService: import('../scoring/scoring-
       
       z.boolean().parse(options.initialTakeover);
       
-      return await scoringService.getNextMode({
+      const result = await scoringService.getNextMode({
         currentMode: options.currentMode as 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null,
         language: options.language,
         initialTakeover: options.initialTakeover
       });
+      
+      return result;
     } catch (error) {
       console.error('Error getting next mode:', error);
       throw new Error(`Failed to get next mode: ${error instanceof Error ? error.message : 'Unknown error'}`);

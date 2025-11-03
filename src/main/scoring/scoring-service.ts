@@ -122,18 +122,21 @@ export class ScoringService {
 
   /**
    * Get the next recommended mode based on scores with navigation decision logic
-   * Scores are calculated internally and never exposed to callers.
+   * Returns the next mode to navigate to, along with a ranked list of all modes by score.
    * 
    * This method tracks the previous mode internally to prevent bouncing between modes.
    * It excludes both the previous mode and current mode (if not initialTakeover) from selection,
    * and only returns a mode if the highest scoring mode is at least 1 point better than the current mode
-   * (unless initialTakeover is true).
+   * (unless initialTakeover is true). Topic-selection is always excluded from navigation.
    */
   async getNextMode(options: {
     currentMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null;
     language: string | null;
     initialTakeover: boolean;
-  }): Promise<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null> {
+  }): Promise<{
+    nextMode: 'learning' | 'quiz' | 'dialog' | 'flow' | null;
+    rankedModes: Array<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'>;
+  }> {
     try {
       const currentMode = options.currentMode ?? undefined;
       const language = options.language ?? undefined;
@@ -156,10 +159,11 @@ export class ScoringService {
         ? (modeScores.find(m => m.mode === currentMode)?.score ?? 0)
         : 0;
 
-      // Build exclude modes list - always exclude previous mode
+      // Build exclude modes list - always exclude previous mode and topic-selection
       // On initial takeover, only exclude previous mode (allow current mode)
       // Otherwise, exclude both current mode and previous mode
-      const excludeModes: Array<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'> = [];
+      // Always exclude topic-selection from navigation (we'll handle it separately via auto-add)
+      const excludeModes: Array<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'> = ['topic-selection'];
       
       if (this.previousMode) {
         excludeModes.push(this.previousMode);
@@ -169,11 +173,25 @@ export class ScoringService {
         excludeModes.push(currentMode);
       }
 
+      // Create ranked list of all modes by score (descending) - do this before filtering
+      const allModeScores = [
+        { mode: 'topic-selection' as const, score: scores.addWords },
+        { mode: 'learning' as const, score: scores.review },
+        { mode: 'quiz' as const, score: scores.quiz },
+        { mode: 'dialog' as const, score: scores.dialog },
+        { mode: 'flow' as const, score: scores.flow }
+      ].sort((a, b) => b.score - a.score);
+      
+      const rankedModes = allModeScores.map(m => m.mode);
+
       // Filter out excluded modes
       const availableModes = modeScores.filter(m => !excludeModes.includes(m.mode));
 
       if (availableModes.length === 0) {
-        return null;
+        return {
+          nextMode: null,
+          rankedModes
+        };
       }
 
       // Sort by score descending and get the highest available mode
@@ -182,7 +200,10 @@ export class ScoringService {
 
       // Only proceed if score > 0
       if (highestMode.score === 0) {
-        return null;
+        return {
+          nextMode: null,
+          rankedModes
+        };
       }
 
       // Calculate score difference
@@ -197,7 +218,10 @@ export class ScoringService {
 
       // Only return the mode if navigation should happen
       if (!shouldNavigate) {
-        return null;
+        return {
+          nextMode: null,
+          rankedModes
+        };
       }
 
       // Update previous mode when navigation will happen
@@ -208,10 +232,17 @@ export class ScoringService {
       // Log all scores in one line for debugging
       console.log(`Mode scores: topic-selection=${scores.addWords}, learning=${scores.review}, quiz=${scores.quiz}, dialog=${scores.dialog}, flow=${scores.flow} -> navigating to ${highestMode.mode}`);
 
-      return highestMode.mode;
+      // highestMode.mode cannot be 'topic-selection' because it's excluded from availableModes
+      return {
+        nextMode: highestMode.mode as 'learning' | 'quiz' | 'dialog' | 'flow',
+        rankedModes
+      };
     } catch (error) {
       console.error('Error getting next mode:', error);
-      return null;
+      return {
+        nextMode: null,
+        rankedModes: []
+      };
     }
   }
 
@@ -229,6 +260,7 @@ export class ScoringService {
   stop(): void {
     // No cleanup needed - service is used on-demand
   }
+
 
   /**
    * Clamp a value between min and max

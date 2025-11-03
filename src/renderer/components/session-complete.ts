@@ -289,18 +289,15 @@ export class SessionComplete extends LitElement {
       const currentMode: AppMode = this.sessionSummary.type === 'quiz' ? 'quiz' : 'learning';
       
       // Get next mode from scoring service (scores are calculated internally and never exposed)
-      const nextMode = await window.electronAPI.scoring.getNextMode({
+      const result = await window.electronAPI.scoring.getNextMode({
         currentMode: currentMode as 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null,
         language: currentLanguage || null,
         initialTakeover: false
       });
       
-      if (nextMode) {
+      if (result.nextMode) {
         // Navigate to the recommended mode
-        switch (nextMode) {
-          case 'topic-selection':
-            router.goToTopicSelection();
-            break;
+        switch (result.nextMode) {
           case 'learning':
             router.goToLearning(this.sessionSummary.completedWords);
             break;

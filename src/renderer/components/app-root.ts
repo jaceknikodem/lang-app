@@ -1132,23 +1132,33 @@ export class AppRoot extends LitElement {
       // Only pass current mode if it's a valid scoring mode
       const currentScoringMode = isScoringMode(currentMode) ? currentMode : undefined;
       
-      // Get next mode from scoring service (scores are calculated internally and never exposed)
-      const nextMode = await window.electronAPI.scoring.getNextMode({
+      // Get next mode and ranked modes from scoring service
+      const result = await window.electronAPI.scoring.getNextMode({
         currentMode: currentScoringMode ?? null,
         language: this.currentLanguage || null,
         initialTakeover: initialTakeover ?? false
       });
       
+      // Check if topic-selection is 1st or 2nd highest score
+      const topicSelectionRank = result.rankedModes.indexOf('topic-selection');
+      const isTopTwo = topicSelectionRank === 0 || topicSelectionRank === 1;
+      
+      // If topic-selection is in top 2, call autoAddNewWords in background (don't wait)
+      if (isTopTwo) {
+        console.log(`[Autopilot] Topic-selection is ranked #${topicSelectionRank + 1}, calling autoAddNewWords`);
+        void this.handleAutoAddNew();
+      }
+      
       // If no mode returned, navigation is not recommended
-      if (!nextMode) {
+      if (!result.nextMode) {
         return;
       }
       
       // Navigate to the recommended mode
-      await this.handleNavigation(nextMode);
+      await this.handleNavigation(result.nextMode);
       
       // If it's flow mode, also start playing
-      if (nextMode === 'flow') {
+      if (result.nextMode === 'flow') {
         setTimeout(async () => {
           await this.handleFlowPlay();
         }, 100);

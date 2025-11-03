@@ -220,7 +220,10 @@ export interface IPCBridge {
 
   // Scoring operations
   scoring: {
-    getNextMode: (options: { currentMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null; language: string | null; initialTakeover: boolean }) => Promise<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null>;
+    getNextMode: (options: { currentMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null; language: string | null; initialTakeover: boolean }) => Promise<{
+      nextMode: 'learning' | 'quiz' | 'dialog' | 'flow' | null;
+      rankedModes: Array<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'>;
+    }>;
   };
 }
 
