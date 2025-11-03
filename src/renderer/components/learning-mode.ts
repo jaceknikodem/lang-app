@@ -95,6 +95,9 @@ export class LearningMode extends LitElement {
   private currentSentenceDisplayLastSeen?: Date;
   private autoScrollTimer: number | null = null;
   
+  // Track which sentence last started playing audio (to detect if audio completed vs never started)
+  private lastSentenceWithAudioStarted: number | null = null;
+  
   // Track which words have already had their strength incremented in this session
   // This prevents double incrementing when multiple audio files play (before-sentence + main)
   // or when navigating next/previous
@@ -1166,6 +1169,32 @@ export class LearningMode extends LitElement {
     // Clear any existing timer when toggling off
     if (!this.autoScrollEnabled) {
       this.clearAutoScrollTimer();
+    } else {
+      // When enabling, check if current audio has already been played
+      const currentSentence = this.getCurrentSentence();
+      const currentSentenceId = currentSentence?.id;
+      
+      // If audio is currently playing, don't jump immediately - let existing logic handle it
+      // (will jump 1.5s after audio completes)
+      if (this.currentPlayingAudio !== null) {
+        // Audio is currently playing - let existing logic handle it
+        return;
+      }
+      
+      // Audio is not currently playing - check if it was already played
+      if (currentSentenceId && this.lastSentenceWithAudioStarted === currentSentenceId) {
+        // Audio was already played and completed - jump after 1.5s
+        this.clearAutoScrollTimer();
+        this.autoScrollTimer = window.setTimeout(() => {
+          if (!this.isLastSentence()) {
+            void this.goToNextSentence();
+          }
+          this.autoScrollTimer = null;
+        }, 1500); // 1.5 seconds delay
+      }
+      // If audio hasn't been played yet (lastSentenceWithAudioStarted !== currentSentenceId),
+      // don't jump immediately - let existing logic handle it when audio completes
+      // (will jump 1.5s after audio completes)
     }
   }
 
@@ -1218,6 +1247,8 @@ export class LearningMode extends LitElement {
           if (this.lastSeenSentenceId !== currentSentenceObj.id) {
             this.lastSeenSentenceId = currentSentenceObj.id;
             this.currentSentenceDisplayLastSeen = previousLastShown ? new Date(previousLastShown) : undefined;
+            // Reset audio tracking when sentence changes
+            this.lastSentenceWithAudioStarted = null;
           }
           
           // Update sentence.lastShown optimistically (but only if it's different)
@@ -2069,6 +2100,11 @@ export class LearningMode extends LitElement {
       // Play before sentence audio first if it exists
       await this.playBeforeSentenceAudio(currentSentence);
 
+      // Track that audio has started for this sentence
+      if (currentSentence.id) {
+        this.lastSentenceWithAudioStarted = currentSentence.id;
+      }
+
       // Now play current sentence audio
       // Set state to indicate main sentence audio is playing
       this.currentPlayingAudio = 'main';
@@ -2093,7 +2129,7 @@ export class LearningMode extends LitElement {
               console.warn('Failed to increment sentence play count:', err);
             });
           }
-          // Auto-scroll to next sentence after 2 seconds if enabled
+          // Auto-scroll to next sentence after 1.5 seconds if enabled
           if (this.autoScrollEnabled) {
             this.clearAutoScrollTimer();
             this.autoScrollTimer = window.setTimeout(() => {
@@ -2101,7 +2137,7 @@ export class LearningMode extends LitElement {
                 void this.goToNextSentence();
               }
               this.autoScrollTimer = null;
-            }, 2000);
+            }, 1500); // 1.5 seconds delay
           }
         });
 
@@ -2212,9 +2248,7 @@ export class LearningMode extends LitElement {
   }
 
   private handleSentenceAudioCompleted(event: CustomEvent<{ wordId?: number }>) {
-    // Auto-scroll to next sentence after audio finishes (2.5 seconds delay)
-    // The extra 0.5 seconds accounts for the buffer in the audio generator
-    // plus gives users a moment to process what they just heard
+    // Auto-scroll to next sentence after audio finishes (1.5 seconds delay)
     if (this.autoScrollEnabled) {
       this.clearAutoScrollTimer();
       this.autoScrollTimer = window.setTimeout(() => {
@@ -2222,7 +2256,7 @@ export class LearningMode extends LitElement {
           void this.goToNextSentence();
         }
         this.autoScrollTimer = null;
-      }, 2500); // 2.5 seconds delay after audio completes
+      }, 1500); // 1.5 seconds delay after audio completes
     }
   }
 
@@ -2558,7 +2592,7 @@ export class LearningMode extends LitElement {
                 <div 
                   class="auto-scroll-switch ${this.autoScrollEnabled ? 'active' : ''}"
                   @click=${this.isLastSentence() ? undefined : this.toggleAutoScroll}
-                  title=${this.isLastSentence() ? 'Auto-scroll disabled at end of session' : 'Auto-scroll to next sentence 2 seconds after audio stops'}
+                  title=${this.isLastSentence() ? 'Auto-scroll disabled at end of session' : 'Auto-scroll to next sentence 1.5 seconds after audio stops'}
                   style="width: 40px; height: 20px; ${this.isLastSentence() ? 'opacity: 0.5; cursor: not-allowed;' : 'cursor: pointer;'}"
                 >
                   <div class="auto-scroll-slider" style="width: 16px; height: 16px; top: 2px; left: 2px;"></div>

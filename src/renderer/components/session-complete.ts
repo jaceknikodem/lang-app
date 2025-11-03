@@ -354,8 +354,15 @@ export class SessionComplete extends LitElement {
     }));
   }
 
+  private getAutopilotEnabled(): boolean {
+    const appRoot = document.querySelector('app-root') as any;
+    return appRoot?.autopilotEnabled === true;
+  }
+
   render() {
     const isQuiz = this.sessionSummary.type === 'quiz';
+    const autopilotEnabled = this.getAutopilotEnabled();
+    
     return html`
       <div class="completion-container">
         ${isQuiz && this.sessionSummary.quizScore !== undefined && this.sessionSummary.quizTotal !== undefined ? html`
@@ -404,6 +411,7 @@ export class SessionComplete extends LitElement {
           </div>
         ` : ''}
 
+        ${!autopilotEnabled ? html`
         <div class="recommendation">
           <button
             class="action-button primary"
@@ -413,6 +421,7 @@ export class SessionComplete extends LitElement {
             Keep going!
           </button>
         </div>
+        ` : ''}
       </div>
     `;
   }

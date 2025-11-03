@@ -64,7 +64,7 @@ export class AppRoot extends LitElement {
   private transitionMessage: string | null = null;
 
   private static readonly WEAK_THRESHOLD = 30;
-  private static readonly STRONG_THRESHOLD = 80;
+  private static readonly STRONG_THRESHOLD = 70;
 
   private routerUnsubscribe?: () => void;
   private keyboardUnsubscribe?: () => void;
