@@ -9,7 +9,7 @@ import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
 import { useKeyboardBindings, CommonKeys } from '../utils/keyboard-manager.js';
 import { processSelectedWords, processKnownWords, setupWordProcessingSession } from '../utils/word-processor.js';
-import { GeneratedWord } from '../../shared/types/core.js';
+import { GeneratedWord, Word } from '../../shared/types/core.js';
 
 interface SelectableWord extends GeneratedWord {
   selected: boolean;
@@ -41,6 +41,9 @@ export class WordSelector extends LitElement {
 
   @state()
   private wordsProcessed = false; // Track if words have been processed
+
+  @state()
+  private queuedWordIds: number[] = []; // Track wordIds of queued words
 
   private keyboardUnsubscribe?: () => void;
   private autoNavigateTimeout?: number;
@@ -437,16 +440,96 @@ export class WordSelector extends LitElement {
       .map(({ selected, markedAsKnown, ...word }) => word);
   }
 
-  private handleGoToReview() {
+  private async handleGoToReview() {
     // Clear auto-navigate timeout if it exists
     if (this.autoNavigateTimeout !== undefined) {
       clearTimeout(this.autoNavigateTimeout);
       this.autoNavigateTimeout = undefined;
     }
-    // Clear the cached learning session to ensure fresh data is loaded
-    sessionManager.clearLearningSession();
+    
+    // Start a learning session with the queued words that are ready
+    // This ensures learning-mode can find the words
+    if (this.queuedWordIds.length > 0) {
+      try {
+        // Load word objects for words that are ready (have sentences)
+        const readyWords: Word[] = [];
+        for (const wordId of this.queuedWordIds) {
+          try {
+            const word = await window.electronAPI.database.getWordById(wordId);
+            if (word) {
+              const sentences = await window.electronAPI.database.getSentencesByWord(wordId);
+              if (sentences && sentences.length > 0) {
+                readyWords.push(word);
+              }
+            }
+          } catch (error) {
+            console.warn(`Failed to check word ${wordId}:`, error);
+          }
+        }
+        
+        if (readyWords.length > 0) {
+          // Start a new learning session with the ready words
+          const wordIds = readyWords.map(w => w.id);
+          sessionManager.startNewLearningSession(wordIds, Math.min(20, wordIds.length));
+          console.log(`Started learning session with ${readyWords.length} ready words`);
+        }
+      } catch (error) {
+        console.error('Failed to start learning session:', error);
+      }
+    }
+    
     router.goToLearning();
     window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
+  }
+
+  /**
+   * Poll until the first word in the queue has sentences ready
+   * Returns true if first word is ready, false if timeout is reached
+   */
+  private async waitForFirstWordReady(wordIds: number[], timeoutMs: number = 60000): Promise<boolean> {
+    if (wordIds.length === 0) {
+      return false;
+    }
+
+    const startTime = Date.now();
+    const pollIntervalMs = 1000; // Poll every 1 second
+    let wordIndex = 0; // Track which word we're checking
+
+    while (Date.now() - startTime < timeoutMs) {
+      // Check the current word
+      if (wordIndex >= wordIds.length) {
+        return false; // All words checked and none ready
+      }
+      
+      const currentWordId = wordIds[wordIndex];
+      
+      try {
+        // Get word processing status
+        const processingInfo = await window.electronAPI.jobs.getWordStatus(currentWordId);
+        
+        if (processingInfo && processingInfo.processingStatus === 'ready') {
+          // Word is ready, check if it has sentences
+          const sentences = await window.electronAPI.database.getSentencesByWord(currentWordId);
+          if (sentences && sentences.length > 0) {
+            console.log(`First word (ID: ${currentWordId}) is ready with ${sentences.length} sentences`);
+            return true;
+          }
+        } else if (processingInfo && processingInfo.processingStatus === 'failed') {
+          // Word failed, check next word
+          console.warn(`Word ${currentWordId} failed processing, checking next word`);
+          wordIndex++;
+          continue;
+        }
+      } catch (error) {
+        console.warn('Error checking word status:', error);
+      }
+
+      // Wait before next poll
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+    }
+
+    console.warn('Timeout waiting for first word to be ready');
+    return false;
   }
 
   private async handleStartLearning() {
@@ -495,6 +578,7 @@ export class WordSelector extends LitElement {
       const queuedCount = selectedResult.queuedCount;
       const processedKnown = knownResult.processedKnown;
       const failedWords = [...selectedResult.failedWords, ...knownResult.failedWords];
+      this.queuedWordIds = selectedResult.queuedWordIds;
 
       if (queuedCount === 0 && processedKnown === 0) {
         throw new Error(failedWords.length ? `Failed to process: ${failedWords.join(', ')}` : 'No words were processed. Please try again.');
@@ -518,11 +602,14 @@ export class WordSelector extends LitElement {
         this.wordsProcessed = true;
         window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
         
-        // Auto-navigate to Review after 3 seconds if words were queued
-        if (queuedCount > 0) {
-          this.autoNavigateTimeout = window.setTimeout(() => {
-            this.handleGoToReview();
-          }, 3000);
+        // Auto-navigate to Review once first word is ready
+        if (queuedCount > 0 && this.queuedWordIds.length > 0) {
+          // Wait for first word to be ready (non-blocking)
+          void this.waitForFirstWordReady([...this.queuedWordIds]).then(ready => {
+            if (ready) {
+              this.handleGoToReview();
+            }
+          });
         }
       }
 

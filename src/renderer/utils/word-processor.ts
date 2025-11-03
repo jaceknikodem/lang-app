@@ -16,6 +16,7 @@ export interface ProcessWordsResult {
   queuedCount: number;
   processedKnown: number;
   failedWords: string[];
+  queuedWordIds: number[];
 }
 
 /**
@@ -28,6 +29,7 @@ export async function processSelectedWords(
   const { language, topic, desiredSentenceCount = 3 } = options;
   let queuedCount = 0;
   const failedWords: string[] = [];
+  const queuedWordIds: number[] = [];
 
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
@@ -50,6 +52,7 @@ export async function processSelectedWords(
         desiredSentenceCount: desiredSentenceCount
       });
       queuedCount++;
+      queuedWordIds.push(wordId);
       console.log('Enqueued word for asynchronous processing:', word.word);
     } catch (wordError) {
       console.error(`Failed to process word ${word.word}:`, wordError);
@@ -57,7 +60,7 @@ export async function processSelectedWords(
     }
   }
 
-  return { queuedCount, processedKnown: 0, failedWords };
+  return { queuedCount, processedKnown: 0, failedWords, queuedWordIds };
 }
 
 /**
@@ -93,7 +96,7 @@ export async function processKnownWords(
     }
   }
 
-  return { queuedCount: 0, processedKnown, failedWords };
+  return { queuedCount: 0, processedKnown, failedWords, queuedWordIds: [] };
 }
 
 /**
