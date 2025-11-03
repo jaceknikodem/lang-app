@@ -44,7 +44,7 @@ export interface DatabaseLayer {
   getWordsByIds(wordIds: number[]): Promise<Word[]>;
   getKnownWordsForSentenceGeneration(language: string, limit?: number): Promise<string[]>;
   getKnownWords(language: string, minWordStrength: number, maxWords: number): Promise<string[]>;
-  getExistingWordsForDuplicateChecking(language: string): Promise<string[]>;
+  getExistingWordsForDuplicateChecking(language: string, topic?: string, limit?: number): Promise<string[]>;
   
   // SRS-specific operations
   updateWordSRS(

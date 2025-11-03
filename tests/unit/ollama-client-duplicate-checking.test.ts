@@ -8,7 +8,7 @@ import { GeneratedWord } from '../../dist/main/shared/types/core.js';
 // Mock database layer interface
 interface MockDatabaseLayer {
   getAllWords(includeKnown?: boolean, includeIgnored?: boolean): Promise<any[]>;
-  getExistingWordsForDuplicateChecking(language: string): Promise<string[]>;
+  getExistingWordsForDuplicateChecking(language: string, topic?: string, limit?: number): Promise<string[]>;
 }
 
 describe('OllamaClient Duplicate Checking', () => {
@@ -69,7 +69,7 @@ describe('OllamaClient Duplicate Checking', () => {
 
       const existingWords = await (ollamaClient as any).getExistingWords('Spanish');
 
-      expect(mockDatabaseLayer.getExistingWordsForDuplicateChecking).toHaveBeenCalledWith('Spanish');
+      expect(mockDatabaseLayer.getExistingWordsForDuplicateChecking).toHaveBeenCalledWith('Spanish', undefined, undefined);
       expect(existingWords).toEqual(['hola', 'casa']);
     });
 
@@ -253,7 +253,7 @@ describe('OllamaClient Duplicate Checking', () => {
       const result = await ollamaClient.generateTopicWords('food', 'Spanish', 3);
 
       expect(result).toHaveLength(3);
-      expect(mockDatabaseLayer.getExistingWordsForDuplicateChecking).toHaveBeenCalledWith('Spanish');
+      expect(mockDatabaseLayer.getExistingWordsForDuplicateChecking).toHaveBeenCalledWith('Spanish', 'food', 50);
     });
 
     it('should filter words from different states (known, ignored, learning)', async () => {

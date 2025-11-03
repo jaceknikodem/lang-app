@@ -41,7 +41,8 @@ export async function processSelectedWords(
       const wordId = await window.electronAPI.database.insertWord({
         word: word.word,
         language: language,
-        translation: word.translation
+        translation: word.translation,
+        topic: topic
       });
       console.log('Word inserted with ID:', wordId);
       

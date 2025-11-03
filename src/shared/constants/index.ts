@@ -30,6 +30,8 @@ export const LLM_CONFIG = {
   // Minimum threshold ratios for retry logic
   MIN_WORD_COUNT_THRESHOLD: 0.4, // Require at least 40% of requested words to be new (non-duplicate)
   MIN_SENTENCE_COUNT_THRESHOLD: 0.7, // Require at least 70% of requested sentences to be generated
+  // Maximum number of existing words to include in the prompt to avoid duplicates
+  MAX_EXISTING_WORDS_IN_PROMPT: 50,
   // Gemini configuration
   GEMINI_DEFAULT_MODEL: 'gemini-2.5-flash',
   GEMINI_DEFAULT_WORD_MODEL: 'gemini-2.5-flash-lite', // Fastest, most cost-effective for word generation

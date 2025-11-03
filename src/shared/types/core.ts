@@ -26,6 +26,7 @@ export interface Word {
   fsrsVersion?: string;
   processingStatus?: 'queued' | 'processing' | 'ready' | 'failed';
   sentenceCount?: number;
+  topic?: string;          // Topic the word was generated for
 }
 
 export interface DictionaryEntry {
@@ -106,6 +107,7 @@ export interface CreateWordRequest {
   language: string;
   translation: string;
   audioPath?: string;
+  topic?: string;
 }
 
 export interface AppState {

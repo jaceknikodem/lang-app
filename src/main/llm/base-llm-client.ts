@@ -74,7 +74,7 @@ export abstract class BaseLLMClient {
    */
   async generateTopicWords(topic: string, language: string, count: number, proficiencyLevel?: string): Promise<GeneratedWord[]> {
     // Get existing words to check for duplicates
-    const existingWords = await this.getExistingWords(language);
+    const existingWords = await this.getExistingWords(language, topic, LLM_CONFIG.MAX_EXISTING_WORDS_IN_PROMPT);
     const existingWordsSet = new Set(existingWords.map(w => w.toLowerCase()));
 
     const prompt = this.createTopicWordsPrompt(topic, language, count, existingWords, proficiencyLevel);
@@ -195,14 +195,14 @@ export abstract class BaseLLMClient {
   /**
    * Get existing words from database to avoid duplicates
    */
-  protected async getExistingWords(language: string): Promise<string[]> {
+  protected async getExistingWords(language: string, topic?: string, limit?: number): Promise<string[]> {
     if (!this.databaseLayer) {
       console.warn('Database layer not set, cannot check for duplicates');
       return [];
     }
 
     try {
-      return await this.databaseLayer.getExistingWordsForDuplicateChecking(language);
+      return await this.databaseLayer.getExistingWordsForDuplicateChecking(language, topic, limit);
     } catch (error) {
       console.error('Failed to get existing words for duplicate checking:', error);
       return [];
@@ -233,8 +233,12 @@ export abstract class BaseLLMClient {
     const example = `  {"word": "${language.toLowerCase()}_word1", "translation": "english_translation1"}`;
 
     // Create exclusion list for prompt
-    const exclusionText = existingWords.length > 0
-      ? `\nIMPORTANT: Do NOT include any of these existing words: ${existingWords.slice(0, 50).join(', ')}${existingWords.length > 50 ? '...' : ''}`
+    // Safeguard: truncate if somehow more words are passed than the config limit
+    // (normally this is handled at the database layer, but this protects against edge cases)
+    const wordsToInclude = existingWords.slice(0, LLM_CONFIG.MAX_EXISTING_WORDS_IN_PROMPT);
+    const hasMore = existingWords.length > LLM_CONFIG.MAX_EXISTING_WORDS_IN_PROMPT;
+    const exclusionText = wordsToInclude.length > 0
+      ? `\nIMPORTANT: Do NOT include any of these existing words: ${wordsToInclude.join(', ')}${hasMore ? '...' : ''}`
       : '';
 
     // Create proficiency level guidance

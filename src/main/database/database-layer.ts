@@ -101,7 +101,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         fsrs_last_rating INTEGER,
         fsrs_version TEXT DEFAULT 'fsrs-baseline',
         processing_status TEXT DEFAULT 'ready',
-        sentence_count INTEGER DEFAULT 0
+        sentence_count INTEGER DEFAULT 0,
+        topic TEXT
       )
     `);
 
@@ -134,6 +135,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     // Migration: Add audio_generation_voice_id column if it doesn't exist
     try {
       db.exec(`ALTER TABLE sentences ADD COLUMN audio_generation_voice_id TEXT`);
+    } catch (error) {
+      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
+      // Ignore error - this is expected for existing databases with the column
+    }
+
+    // Migration: Add topic column to words table if it doesn't exist
+    try {
+      db.exec(`ALTER TABLE words ADD COLUMN topic TEXT`);
     } catch (error) {
       // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
       // Ignore error - this is expected for existing databases with the column
@@ -227,6 +236,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_words_next_due ON words(next_due)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_words_srs_review ON words(next_due, strength)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_words_fsrs_state ON words(fsrs_stability, fsrs_difficulty)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_words_language_topic ON words(language, topic)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_sentences_word_id ON sentences(word_id)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_progress_when_studied ON progress(when_studied)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_word_lang ON dict(word, lang)`);
@@ -254,10 +264,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       const stmt = db.prepare(`
         INSERT INTO words (
-          word, language, translation, audio_path,
+          word, language, translation, audio_path, topic,
           strength, interval_days, ease_factor, next_due
         )
-        VALUES (?, ?, ?, ?, 20, 1, 2.5, ?)
+        VALUES (?, ?, ?, ?, ?, 20, 1, 2.5, ?)
       `);
       
       const result = stmt.run(
@@ -265,6 +275,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         wordData.language,
         wordData.translation,
         wordData.audioPath || null,
+        wordData.topic || null,
         tomorrow.toISOString()
       );
       
@@ -591,18 +602,28 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get all existing words for duplicate checking
    * Returns word strings only (includes learning, known, and ignored words)
+   * @param topic - Optional topic parameter to filter words by topic
+   * @param limit - Optional limit on the number of words to return
    */
-  async getExistingWordsForDuplicateChecking(language: string): Promise<string[]> {
+  async getExistingWordsForDuplicateChecking(language: string, topic?: string, limit?: number): Promise<string[]> {
     const db = this.getDb();
     
     try {
-      // Get all words (learning, known, and ignored) for the language
-      const stmt = db.prepare(`
-        SELECT word FROM words 
-        WHERE language = ?
-      `);
+      // Get words (learning, known, and ignored) for the language, optionally filtered by topic and limited
+      let query = `SELECT word FROM words WHERE language = ?`;
+      const params: any[] = [language];
       
-      const rows = stmt.all(language) as Array<{ word: string }>;
+      if (topic) {
+        query += ` AND topic = ?`;
+        params.push(topic);
+      }
+      
+      if (limit && limit > 0) {
+        query += ` LIMIT ${Math.floor(limit)}`;
+      }
+      
+      const stmt = db.prepare(query);
+      const rows = stmt.all(...params) as Array<{ word: string }>;
       return rows.map(row => row.word);
     } catch (error) {
       throw new Error(`Failed to get existing words for duplicate checking: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -2478,7 +2499,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       fsrsLastRating: row.fsrs_last_rating ?? undefined,
       fsrsVersion: row.fsrs_version ?? undefined,
       processingStatus: row.processing_status ?? 'ready',
-      sentenceCount: row.sentence_count ?? 0
+      sentenceCount: row.sentence_count ?? 0,
+      topic: row.topic ?? undefined
     };
   }
 

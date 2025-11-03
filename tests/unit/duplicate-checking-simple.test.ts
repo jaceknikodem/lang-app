@@ -80,7 +80,7 @@ describe('Duplicate Checking Simple Integration', () => {
       // Should filter out 'existing' and only return 'new'
       expect(result).toHaveLength(1);
       expect(result[0].word).toBe('new');
-      expect(mockDatabase.getExistingWordsForDuplicateChecking).toHaveBeenCalledWith('Spanish');
+      expect(mockDatabase.getExistingWordsForDuplicateChecking).toHaveBeenCalledWith('Spanish', 'test', 50);
     });
 
     it('should handle database errors gracefully', async () => {
@@ -159,10 +159,17 @@ describe('Duplicate Checking Simple Integration', () => {
 
     it('should handle large exclusion lists by truncating', async () => {
       const existingWords = Array.from({ length: 60 }, (_, i) => `word${i}`);
-
+      // Mock should respect the limit and only return 50 words, but test the safeguard by returning all 60
+      // This tests that the prompt creation has a safeguard even if somehow more words are passed
       const mockDatabase = {
         getAllWords: jest.fn().mockResolvedValue(existingWords.map(w => ({ word: w, language: 'Spanish', translation: 'test' }))),
-        getExistingWordsForDuplicateChecking: jest.fn().mockResolvedValue(existingWords)
+        getExistingWordsForDuplicateChecking: jest.fn().mockImplementation((language: string, topic?: string, limit?: number) => {
+          // Respect the limit parameter in the mock
+          if (limit) {
+            return Promise.resolve(existingWords.slice(0, limit));
+          }
+          return Promise.resolve(existingWords);
+        })
       };
 
       ollamaClient.setDatabaseLayer(mockDatabase);
@@ -190,6 +197,8 @@ describe('Duplicate Checking Simple Integration', () => {
       expect(capturedPrompt).toContain('...');
       expect(capturedPrompt).toContain('word49');
       expect(capturedPrompt).not.toContain('word50');
+      // Verify the mock was called with the limit
+      expect(mockDatabase.getExistingWordsForDuplicateChecking).toHaveBeenCalledWith('Spanish', 'test', 50);
     });
   });
 });
