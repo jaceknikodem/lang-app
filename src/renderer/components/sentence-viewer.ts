@@ -646,10 +646,16 @@ export class SentenceViewer extends LitElement {
     
     // Auto-play audio when sentence changes (if enabled)
     // This includes both when sentence changes AND when it's first set
-    if (sentenceChanged && this.autoplayEnabled && this.sentence?.audioPath) {
-      console.log('Autoplay triggered - sentence changed or first set');
-      // Handle auto-play asynchronously
-      this.handleAutoPlay();
+    // Reload autoplay setting when sentence changes to respect user toggles
+    if (sentenceChanged) {
+      // Reload autoplay setting to ensure it's up-to-date
+      void this.loadAutoplaySettings().then(() => {
+        if (this.autoplayEnabled && this.sentence?.audioPath) {
+          console.log('Autoplay triggered - sentence changed or first set');
+          // Handle auto-play asynchronously
+          this.handleAutoPlay();
+        }
+      });
     }
   }
 
