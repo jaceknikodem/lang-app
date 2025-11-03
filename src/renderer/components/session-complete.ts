@@ -78,6 +78,8 @@ export class SessionComplete extends LitElement {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
         gap: var(--spacing-md);
+        max-width: 600px;
+        margin: 0 auto;
       }
 
       .stat-item {
@@ -85,6 +87,7 @@ export class SessionComplete extends LitElement {
         border: 1px solid var(--border-color);
         border-radius: var(--border-radius);
         padding: var(--spacing-lg);
+        min-width: 150px;
       }
 
       .stat-value {
@@ -224,8 +227,17 @@ export class SessionComplete extends LitElement {
     super.connectedCallback();
     
     // Clear quiz session when quiz is finished to prevent reloading
+    // This is a safety check to ensure the session is removed from session manager
     if (this.sessionSummary?.type === 'quiz') {
-      sessionManager.clearQuizSession();
+      const savedQuizSession = sessionManager.getQuizSession();
+      if (savedQuizSession) {
+        if (!savedQuizSession.isComplete) {
+          // Safety check: if there's an incomplete session (shouldn't happen), log a warning
+          console.warn('[SessionComplete] Found incomplete quiz session, clearing it');
+        }
+        // Always clear the quiz session after completion
+        sessionManager.clearQuizSession();
+      }
     }
     
     this.loadUpdatedStats();

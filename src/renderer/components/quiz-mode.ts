@@ -1648,9 +1648,15 @@ export class QuizMode extends LitElement {
     this.isTranscribing = false;
 
     if (this.quizSession.currentQuestionIndex + 1 >= this.quizSession.totalQuestions) {
-      // Quiz complete - record the session
-      await this.recordQuizSession();
+      // Quiz complete - save progress one last time before recording
+      this.saveQuizProgressToSession();
+      
+      // Mark as complete before recording
       this.quizSession.isComplete = true;
+      
+      // Record the session
+      await this.recordQuizSession();
+      
       this.currentQuestion = null;
     } else {
       // Move to next question
@@ -1694,7 +1700,8 @@ export class QuizMode extends LitElement {
 
     } catch (error) {
       console.error('Error recording quiz session:', error);
-      // Don't block the UI for this error
+      // Don't block the UI for this error, but ensure session is cleared
+      sessionManager.clearQuizSession();
       this.showQuizCompletion();
       // Still trigger autopilot check even on error
       window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
@@ -2555,7 +2562,6 @@ export class QuizMode extends LitElement {
             <div class="progress-bar">
               <div class="progress-fill" style="width: ${progress}%"></div>
             </div>
-            <span>Score: ${this.quizSession.score}</span>
             <div class="audio-only-toggle" style="margin-bottom: 0;">
               <span class="audio-only-label" style="font-size: 12px;">Audio Only</span>
               <div 
