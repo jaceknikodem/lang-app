@@ -338,8 +338,6 @@ export class SettingsPanel extends LitElement {
   @state()
   private showConfirmation = false;
 
-  @state()
-  private autoplayAudioEnabled = false;
 
   @state()
   private availableLLMModels: string[] = [];
@@ -409,9 +407,6 @@ export class SettingsPanel extends LitElement {
 
   private async loadSettings() {
     try {
-      const autoplaySetting = await window.electronAPI.database.getSetting('autoplay_audio');
-      this.autoplayAudioEnabled = autoplaySetting === 'true';
-
       await this.loadSrsSettings();
 
       // Load language settings
@@ -588,21 +583,6 @@ export class SettingsPanel extends LitElement {
       // it's probably better to just log the error
     }
   }
-
-  private async toggleAutoplayAudio(event: Event) {
-    const checkbox = event.target as HTMLInputElement;
-    this.autoplayAudioEnabled = checkbox.checked;
-
-    try {
-      await window.electronAPI.database.setSetting('autoplay_audio', checkbox.checked ? 'true' : 'false');
-    } catch (error) {
-      console.error('Failed to save autoplay audio setting:', error);
-      // Revert the checkbox state if saving failed
-      this.autoplayAudioEnabled = !checkbox.checked;
-      checkbox.checked = !checkbox.checked;
-    }
-  }
-
 
   private async changeSrsAlgorithm(event: Event) {
     const select = event.target as HTMLSelectElement;
@@ -1072,24 +1052,6 @@ export class SettingsPanel extends LitElement {
             ${this.elevenLabsModel !== 'disabled' && !this.elevenLabsApiKey ? html`
               <br><span style="color: #dc3545;">⚠️ API key required for ElevenLabs TTS</span>
             ` : ''}
-          </div>
-        </div>
-
-        <div class="settings-section">
-          <h3>Learning Preferences</h3>
-          <div class="checkbox-row">
-            <input 
-              type="checkbox" 
-              id="autoplay-audio"
-              .checked=${this.autoplayAudioEnabled}
-              @change=${this.toggleAutoplayAudio}
-            />
-            <label for="autoplay-audio">
-              <strong>Autoplay Audio</strong>
-              <div class="checkbox-description">
-                Automatically play sentence audio when reviewing sentences in learning mode
-              </div>
-            </label>
           </div>
         </div>
 

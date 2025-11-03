@@ -45,6 +45,9 @@ export class AppRoot extends LitElement {
   private autopilotEnabled = false;
 
   @state()
+  private autoplayAudioEnabled = false;
+
+  @state()
   private hasFlowSentences = false;
 
   @state()
@@ -383,6 +386,70 @@ export class AppRoot extends LitElement {
         border-color: var(--primary-color);
       }
 
+      .autoplay-toggle-container {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        margin-right: var(--spacing-xs);
+      }
+
+      .autoplay-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-weight: 500;
+      }
+
+      .autoplay-switch {
+        position: relative;
+        width: 44px;
+        height: 24px;
+        cursor: pointer;
+      }
+
+      .autoplay-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .autoplay-slider {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: var(--background-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 24px;
+        transition: 0.3s;
+      }
+
+      .autoplay-slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 2px;
+        bottom: 2px;
+        background-color: white;
+        border-radius: 50%;
+        transition: 0.3s;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      }
+
+      .autoplay-switch input:checked + .autoplay-slider {
+        background-color: var(--primary-color);
+        border-color: var(--primary-color);
+      }
+
+      .autoplay-switch input:checked + .autoplay-slider:before {
+        transform: translateX(20px);
+      }
+
+      .autoplay-switch:hover .autoplay-slider {
+        border-color: var(--primary-color);
+      }
+
       .content-area {
         flex: 1;
         display: flex;
@@ -530,6 +597,9 @@ export class AppRoot extends LitElement {
       console.log('Loading current language...');
       await this.loadCurrentLanguage();
       console.log('Current language loaded');
+
+      // Load autoplay audio setting
+      await this.loadAutoplayAudioSetting();
 
       // Load stats for current language
       await this.loadWordStats();
@@ -1011,6 +1081,30 @@ export class AppRoot extends LitElement {
     }
   }
 
+  private async loadAutoplayAudioSetting() {
+    try {
+      const autoplaySetting = await window.electronAPI.database.getSetting('autoplay_audio');
+      this.autoplayAudioEnabled = autoplaySetting === 'true';
+    } catch (error) {
+      console.error('Failed to load autoplay audio setting:', error);
+      this.autoplayAudioEnabled = false;
+    }
+  }
+
+  private async toggleAutoplayAudio(event: Event) {
+    const target = event.target as HTMLInputElement;
+    this.autoplayAudioEnabled = target.checked;
+
+    try {
+      await window.electronAPI.database.setSetting('autoplay_audio', target.checked ? 'true' : 'false');
+    } catch (error) {
+      console.error('Failed to save autoplay audio setting:', error);
+      // Revert the checkbox state if saving failed
+      this.autoplayAudioEnabled = !target.checked;
+      target.checked = !target.checked;
+    }
+  }
+
   private startAutopilot() {
     // Stop existing intervals if any
     this.stopAutopilot();
@@ -1201,6 +1295,18 @@ export class AppRoot extends LitElement {
               ` : ''}
             </div>
             <div class="nav-right-group">
+              <div class="autoplay-toggle-container">
+                <span class="autoplay-label">Auto-play</span>
+                <label class="autoplay-switch">
+                  <input 
+                    type="checkbox"
+                    .checked=${this.autoplayAudioEnabled}
+                    @change=${this.toggleAutoplayAudio}
+                    title="Auto-play: Automatically play sentence audio when reviewing"
+                  />
+                  <span class="autoplay-slider"></span>
+                </label>
+              </div>
               <div class="autopilot-toggle-container">
                 <span class="autopilot-label">Autopilot</span>
                 <label class="autopilot-switch">
