@@ -6,7 +6,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { Word, Sentence } from '../../shared/types/core.js';
-import { keyboardManager, useKeyboardBindings, CommonKeys } from '../utils/keyboard-manager.js';
+import { keyboardManager, CommonKeys } from '../utils/keyboard-manager.js';
 
 interface FlowSentence {
   sentence: Sentence;
@@ -41,7 +41,7 @@ export class FlowMode extends LitElement {
   @state()
   private currentLanguage: string | null = null;
 
-  private keyboardUnsubscribe?: () => void;
+  private directKeyHandler?: (event: KeyboardEvent) => void;
   private audioElement: HTMLAudioElement | null = null;
   private playbackTimer: number | null = null;
   private playbackStartTime: number | 0 = 0;
@@ -58,21 +58,18 @@ export class FlowMode extends LitElement {
     super.connectedCallback();
     this.loadFlowSentences();
 
-    // Set up keyboard bindings
-    this.keyboardUnsubscribe = useKeyboardBindings([
-      {
-        key: CommonKeys.SPACE,
-        action: () => this.handleSpaceKey(),
-        description: 'Pause Flow audio'
-      }
-    ]);
+    // Set up direct keyboard listener for flow mode (handles space key when overlay is visible)
+    this.directKeyHandler = this.handleDirectKeyDown.bind(this);
+    document.addEventListener('keydown', this.directKeyHandler, true);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (this.keyboardUnsubscribe) {
-      this.keyboardUnsubscribe();
+    if (this.directKeyHandler) {
+      document.removeEventListener('keydown', this.directKeyHandler, true);
     }
+    // Ensure keyboard manager is re-enabled when component is destroyed
+    keyboardManager.setEnabled(true);
     this.stopAudio();
   }
 
@@ -390,9 +387,48 @@ export class FlowMode extends LitElement {
     this.pausedPosition = 0; // Reset pause position when stopping
   }
 
+  private handleDirectKeyDown(event: KeyboardEvent): void {
+    // Only handle when overlay is visible
+    if (!this.showOverlay) return;
+
+    // Don't handle keys when user is typing in input fields
+    const target = event.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      return;
+    }
+
+    // Handle space key for pause/resume
+    if (event.key === CommonKeys.SPACE) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (this.isPlaying) {
+        this.pauseAudio();
+      } else if (this.stitchedAudioPath) {
+        this.playAudio();
+      }
+      return;
+    }
+
+    // Block all other keys when overlay is visible
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
   private handleSpaceKey() {
+    // This method is kept for compatibility but handleDirectKeyDown is now used
     if (this.showOverlay && this.isPlaying) {
       this.pauseAudio();
+    }
+  }
+
+  // Watch for showOverlay changes to toggle keyboard manager
+  willUpdate(changedProperties: Map<string | symbol, unknown>): void {
+    super.willUpdate(changedProperties);
+    
+    if (changedProperties.has('showOverlay')) {
+      // Disable keyboard manager when overlay becomes visible
+      // Re-enable when overlay becomes hidden
+      keyboardManager.setEnabled(!this.showOverlay);
     }
   }
 
