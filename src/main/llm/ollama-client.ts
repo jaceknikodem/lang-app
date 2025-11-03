@@ -154,8 +154,7 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
         try {
           parsed = JSON.parse(cleanResponse);
         } catch (parseError) {
-          console.error('JSON parsing failed for response:', cleanResponse);
-          throw new Error(`Invalid JSON response: ${cleanResponse}...`);
+          throw new Error(`Invalid JSON response: ${cleanResponse.substring(0, 100)}...`);
         }
 
         return parsed;
@@ -175,7 +174,6 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
 
         // Wait before retry (exponential backoff)
         if (attempt < this.config.maxRetries!) {
-          console.log(`Attempt ${attempt} failed, retrying in ${Math.pow(2, attempt - 1)}s...`);
           await super.delay(Math.pow(2, attempt - 1) * 1000);
         }
       }

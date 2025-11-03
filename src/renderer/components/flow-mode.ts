@@ -414,12 +414,6 @@ export class FlowMode extends LitElement {
     event.stopPropagation();
   }
 
-  private handleSpaceKey() {
-    // This method is kept for compatibility but handleDirectKeyDown is now used
-    if (this.showOverlay && this.isPlaying) {
-      this.pauseAudio();
-    }
-  }
 
   // Watch for showOverlay changes to toggle keyboard manager
   willUpdate(changedProperties: Map<string | symbol, unknown>): void {

@@ -60,10 +60,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
   }
 
   async isAvailable(): Promise<boolean> {
-    console.log('Gemini isAvailable check - API key length:', this.apiKey?.length || 0);
-    
     if (!this.apiKey || this.apiKey.trim() === '') {
-      console.log('Gemini isAvailable: No API key configured');
       return false;
     }
     
@@ -76,15 +73,8 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         signal: AbortSignal.timeout(3000)
       });
       
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.log('Gemini isAvailable: Error response:', errorText);
-      }
-      
       return response.ok;
     } catch (error) {
-      console.log('Gemini isAvailable: Error:', error);
       return false;
     }
   }

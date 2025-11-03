@@ -21,8 +21,6 @@ export class TopicSelector extends LitElement {
   @state()
   private error = '';
 
-
-
   @state()
   private currentLanguage = '';
 

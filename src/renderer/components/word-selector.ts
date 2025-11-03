@@ -166,8 +166,6 @@ export class WordSelector extends LitElement {
         text-decoration: line-through;
       }
 
-
-
       .word-actions {
         position: absolute;
         top: var(--spacing-sm);

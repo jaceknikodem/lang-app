@@ -8,7 +8,7 @@ import { AppState } from '../../shared/types/core.js';
 import { router, RouteState, AppMode } from '../utils/router.js';
 import { sessionManager, SessionState } from '../utils/session-manager.js';
 import { sharedStyles } from '../styles/shared.js';
-import { keyboardManager, useKeyboardBindings, GlobalShortcuts } from '../utils/keyboard-manager.js';
+import { keyboardManager } from '../utils/keyboard-manager.js';
 import { autoAddNewWords } from '../utils/auto-add-words.js';
 import type { ProficiencyLevel } from './language-proficiency-selector.js';
 import './topic-selector.js';
@@ -518,8 +518,6 @@ export class AppRoot extends LitElement {
         justify-content: center;
       }
 
-
-
       @media (max-width: 768px) {
         .app-container {
           padding: var(--spacing-sm);
@@ -560,7 +558,6 @@ export class AppRoot extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback();
-    console.log('AppRoot connected!');
 
     // Subscribe to router changes
     this.routerUnsubscribe = router.subscribe((route) => {
@@ -576,8 +573,6 @@ export class AppRoot extends LitElement {
     // Listen for word updates to refresh stats
     this.addEventListener('words-updated', this.handleWordsUpdated);
 
-    // Setup keyboard bindings
-    this.setupKeyboardBindings();
 
     // Initialize current route
     this.currentRoute = router.getCurrentRoute();
@@ -606,29 +601,22 @@ export class AppRoot extends LitElement {
 
   private async initializeApp() {
     try {
-      console.log('Initializing app...');
-
       // Check if electronAPI is available
       if (!window.electronAPI) {
         console.error('electronAPI not available - preload script may have failed');
         this.isLoading = false;
         return;
       }
-      console.log('electronAPI is available');
 
       // Check if LLM is available (non-blocking)
       try {
-        console.log('Checking LLM availability...');
-        const llmAvailable = await window.electronAPI.llm.isAvailable();
-        console.log('LLM Available:', llmAvailable);
+        await window.electronAPI.llm.isAvailable();
       } catch (error) {
         console.warn('LLM check failed (this is OK):', error);
       }
 
       // Load current language
-      console.log('Loading current language...');
       await this.loadCurrentLanguage();
-      console.log('Current language loaded');
 
       // Load autoplay audio setting
       await this.loadAutoplayAudioSetting();
@@ -637,9 +625,7 @@ export class AppRoot extends LitElement {
       await this.loadWordStats();
 
       // Load saved session
-      console.log('Loading session...');
       await this.loadSession();
-      console.log('Session loaded');
 
       // Check for existing words in database (non-blocking - deferred)
       // This optimization speeds up initial render by deferring the check
@@ -652,9 +638,7 @@ export class AppRoot extends LitElement {
         }
       }, 0);
 
-      console.log('Ensuring learning session...');
       await this.ensureLearningSession();
-      console.log('Learning session ready');
 
       // Pre-generate dialog session asynchronously (non-blocking)
       setTimeout(async () => {
@@ -666,7 +650,6 @@ export class AppRoot extends LitElement {
         }
       }, 0);
 
-      console.log('App initialization complete');
       this.isLoading = false;
     } catch (error) {
       console.error('Failed to initialize app:', error);
@@ -686,12 +669,10 @@ export class AppRoot extends LitElement {
 
   private async checkExistingWords() {
     try {
-      console.log('Checking if words exist...');
       // Use getStudyStats which is much faster than loading all words
       // It only returns a count, not the full word data
       const stats = await window.electronAPI.database.getStudyStats(this.currentLanguage || undefined);
       this.hasExistingWords = stats.totalWords > 0;
-      console.log('Words check complete, found:', stats.totalWords);
       
       // Check proficiency level (will show selector if no words and no proficiency set)
       if (this.currentLanguage) {
@@ -728,7 +709,6 @@ export class AppRoot extends LitElement {
 
   private async checkFlowSentences() {
     try {
-      console.log('Checking if flow sentences are available...');
       const flowSentences = await window.electronAPI.flow.getFlowSentences();
       
       // Collect all audio paths using the same logic as handleFlowPlay()
@@ -745,7 +725,6 @@ export class AppRoot extends LitElement {
       
       // Only enable Flow button if we have at least one audio file
       this.hasFlowSentences = audioPaths.length > 0;
-      console.log('Flow sentences check complete, found:', flowSentences.length, 'sentences with', audioPaths.length, 'audio files');
     } catch (error) {
       console.error('Failed to check flow sentences:', error);
       this.hasFlowSentences = false;
@@ -796,7 +775,6 @@ export class AppRoot extends LitElement {
 
       if (sessionWordIds.length) {
         sessionManager.startNewLearningSession(sessionWordIds, Math.min(20, sessionWordIds.length));
-        console.log(`Initialized learning session with ${sessionWordIds.length} words`);
       }
     } catch (error) {
       console.error('Failed to ensure learning session:', error);
@@ -825,7 +803,6 @@ export class AppRoot extends LitElement {
       return;
     }
 
-      console.log('Language changed event received:', customEvent.detail);
       await this.refreshCurrentLanguage();
       // Reload stats for new language
       await this.loadWordStats();
@@ -884,8 +861,6 @@ export class AppRoot extends LitElement {
         composed: true
       }));
 
-      console.log('Language changed to:', this.currentLanguage);
-
       // Pre-generate dialog session for the new language
       this.pregenerateDialogSessionAfterLanguageChange();
     } catch (error) {
@@ -907,7 +882,6 @@ export class AppRoot extends LitElement {
       await window.electronAPI.database.setSetting(proficiencyKey, level);
       this.currentProficiencyLevel = level;
       this.showProficiencySelector = false;
-      console.log(`Proficiency level set for ${this.currentLanguage}:`, level);
     } catch (error) {
       console.error('Failed to save proficiency level:', error);
     }
@@ -928,9 +902,7 @@ export class AppRoot extends LitElement {
    */
   private async loadLemmatizationModel(language: string): Promise<void> {
     try {
-      console.log(`[Lemmatization] Loading model for language: ${language}`);
       await window.electronAPI.lemmatization.loadModel(language);
-      console.log(`[Lemmatization] Model loaded successfully for ${language}`);
     } catch (error) {
       console.warn(`[Lemmatization] Failed to load model for ${language} (non-critical):`, error);
     }
@@ -1221,7 +1193,6 @@ export class AppRoot extends LitElement {
       
       // If topic-selection is in top 2, call autoAddNewWords in background (don't wait)
       if (isTopTwo) {
-        console.log(`[Autopilot] Topic-selection is ranked #${topicSelectionRank + 1}, calling autoAddNewWords`);
         void this.handleAutoAddNew();
       }
       
@@ -1254,12 +1225,9 @@ export class AppRoot extends LitElement {
    */
   private async handleAutoAddNew(): Promise<void> {
     try {
-      console.log('[Auto Add] Starting auto-add new words flow...');
       const result = await autoAddNewWords(this.currentLanguage);
       
       if (result.success) {
-        console.log(`[Auto Add] Successfully added ${result.wordsAdded} words for topic: "${result.topic}"`);
-        
         // Reload stats and check existing words after adding
         await this.loadWordStats();
         await this.checkExistingWords();
@@ -1277,10 +1245,6 @@ export class AppRoot extends LitElement {
 
 
 
-  private setupKeyboardBindings() {
-    // Flow-mode component handles its own keyboard bindings
-    this.keyboardUnsubscribe = useKeyboardBindings([]);
-  }
 
   private updateKeyboardContext() {
     // Set keyboard context based on current route
@@ -1501,7 +1465,6 @@ export class AppRoot extends LitElement {
       // Check if we already have 5 sessions cached
       const existingSessions = sessionManager.getCurrentSession().dialogSessions || [];
       if (existingSessions.length >= 5) {
-        console.log('Dialog session queue already has 5 sessions. Skipping pre-generation.');
         return;
       }
 
@@ -1551,11 +1514,6 @@ export class AppRoot extends LitElement {
           createdAt: new Date().toISOString()
         };
 
-        console.log(`Dialog session ${index + 1}/${sessionsData.length} pre-generated:`, {
-          sentenceId: dialogSession.sentenceId,
-          variantsCount: dialogSession.responseOptions.length
-        });
-
         return dialogSession;
       });
 
@@ -1575,8 +1533,6 @@ export class AppRoot extends LitElement {
             sessionManager.addDialogSession(session);
           }
         }
-        
-        console.log(`Pre-generated ${generatedSessions.length} dialog session(s) and cached in queue. Total sessions: ${existingSessions.length + generatedSessions.length}`);
       }
     } catch (error) {
       console.error('Failed to pre-generate dialog sessions:', error);

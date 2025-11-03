@@ -488,13 +488,6 @@ export class SessionManager {
     this.saveSession({ selectedTopic: topic });
   }
 
-  /**
-   * Get the current dialog session state if available
-   * @deprecated Use getCurrentDialogSession() instead
-   */
-  getDialogSession(): DialogSessionState | undefined {
-    return this.getCurrentDialogSession();
-  }
 
   /**
    * Get the current dialog session from the queue

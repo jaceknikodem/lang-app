@@ -80,13 +80,6 @@ export class AudioService {
     }
   }
 
-  /**
-   * Check for ElevenLabs settings and switch if available
-   * @deprecated Use checkAndSwitchToAudioBackend instead
-   */
-  private async checkAndSwitchToElevenLabs(database: DatabaseLayer): Promise<void> {
-    return this.checkAndSwitchToAudioBackend(database);
-  }
 
   /**
    * Switch to ElevenLabs TTS if API key is provided
