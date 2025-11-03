@@ -40,6 +40,9 @@ export class SentenceViewer extends LitElement {
   @property({ type: Boolean })
   audioOnlyMode = false;
 
+  @property({ type: Boolean })
+  autoScrollEnabled = false;
+
   @state()
   private isPlayingAudio = false;
   
@@ -2048,7 +2051,7 @@ export class SentenceViewer extends LitElement {
           <button
             class="btn btn-secondary nav-action-btn"
             @click=${this.handlePrevious}
-            ?disabled=${this.isFirstSentence || this.isProcessing}
+            ?disabled=${this.isFirstSentence || this.isProcessing || this.autoScrollEnabled}
           >
             Previous <span class="keyboard-hint">(←)</span>
           </button>
@@ -2090,7 +2093,7 @@ export class SentenceViewer extends LitElement {
           <button
             class="btn btn-primary nav-action-btn"
             @click=${this.handleNext}
-            ?disabled=${this.isProcessing}
+            ?disabled=${this.isProcessing || this.autoScrollEnabled}
           >
             ${this.isLastSentence ? 'Finish' : 'Next'} <span class="keyboard-hint">(→)</span>
           </button>
