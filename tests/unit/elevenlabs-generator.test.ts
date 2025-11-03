@@ -1,5 +1,12 @@
 import { ElevenLabsAudioGenerator } from '../../src/main/audio/elevenlabs-generator';
 
+// Mock Electron app
+jest.mock('electron', () => ({
+  app: {
+    getPath: jest.fn().mockReturnValue('/tmp/test-app-data')
+  }
+}));
+
 // Mock fetch globally
 global.fetch = jest.fn();
 
@@ -56,7 +63,7 @@ describe('ElevenLabs Audio Generator', () => {
                 text: jest.fn().mockResolvedValue('Invalid API key')
             });
 
-            await expect(generator.generateAudio('hello', 'spanish'))
+            await expect(generator.generateAudio('hello', 'spanish', undefined, 1))
                 .rejects.toThrow('ElevenLabs API error');
         });
 
@@ -64,7 +71,7 @@ describe('ElevenLabs Audio Generator', () => {
             // Mock a network error
             (fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
 
-            await expect(generator.generateAudio('hello', 'spanish'))
+            await expect(generator.generateAudio('hello', 'spanish', undefined, 1))
                 .rejects.toThrow('ElevenLabs API call failed: Network error');
         });
     });

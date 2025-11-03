@@ -56,7 +56,8 @@ describe('Duplicate Checking Simple Integration', () => {
       const mockDatabase = {
         getAllWords: jest.fn().mockResolvedValue([
           { word: 'existing', language: 'Spanish', translation: 'existing' }
-        ])
+        ]),
+        getExistingWordsForDuplicateChecking: jest.fn().mockResolvedValue(['existing'])
       };
 
       ollamaClient.setDatabaseLayer(mockDatabase);
@@ -79,12 +80,13 @@ describe('Duplicate Checking Simple Integration', () => {
       // Should filter out 'existing' and only return 'new'
       expect(result).toHaveLength(1);
       expect(result[0].word).toBe('new');
-      expect(mockDatabase.getAllWords).toHaveBeenCalledWith(true, true);
+      expect(mockDatabase.getExistingWordsForDuplicateChecking).toHaveBeenCalledWith('Spanish');
     });
 
     it('should handle database errors gracefully', async () => {
       const mockDatabase = {
-        getAllWords: jest.fn().mockRejectedValue(new Error('Database error'))
+        getAllWords: jest.fn().mockRejectedValue(new Error('Database error')),
+        getExistingWordsForDuplicateChecking: jest.fn().mockRejectedValue(new Error('Database error'))
       };
 
       ollamaClient.setDatabaseLayer(mockDatabase);
@@ -123,7 +125,8 @@ describe('Duplicate Checking Simple Integration', () => {
         getAllWords: jest.fn().mockResolvedValue([
           { word: 'exclude1', language: 'Spanish', translation: 'test' },
           { word: 'exclude2', language: 'Spanish', translation: 'test' }
-        ])
+        ]),
+        getExistingWordsForDuplicateChecking: jest.fn().mockResolvedValue(['exclude1', 'exclude2'])
       };
 
       ollamaClient.setDatabaseLayer(mockDatabase);
@@ -155,14 +158,11 @@ describe('Duplicate Checking Simple Integration', () => {
     });
 
     it('should handle large exclusion lists by truncating', async () => {
-      const existingWords = Array.from({ length: 60 }, (_, i) => ({
-        word: `word${i}`,
-        language: 'Spanish',
-        translation: 'test'
-      }));
+      const existingWords = Array.from({ length: 60 }, (_, i) => `word${i}`);
 
       const mockDatabase = {
-        getAllWords: jest.fn().mockResolvedValue(existingWords)
+        getAllWords: jest.fn().mockResolvedValue(existingWords.map(w => ({ word: w, language: 'Spanish', translation: 'test' }))),
+        getExistingWordsForDuplicateChecking: jest.fn().mockResolvedValue(existingWords)
       };
 
       ollamaClient.setDatabaseLayer(mockDatabase);

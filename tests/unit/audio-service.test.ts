@@ -22,7 +22,7 @@ describe('Audio Service', () => {
 
     it('should allow missing language and use defaults', async () => {
       const mockGenerator = {
-        generateAudio: jest.fn().mockResolvedValue('audio/hello.aiff'),
+        generateAudio: jest.fn().mockResolvedValue('/tmp/test-app-data/audio/hello.aiff'),
         playAudio: jest.fn().mockResolvedValue(undefined),
         stopAudio: jest.fn(),
         audioExists: jest.fn().mockResolvedValue(true)
@@ -31,8 +31,8 @@ describe('Audio Service', () => {
       const service = new AudioService(mockGenerator);
       const result = await service.generateAudio('hello', '');
 
-      expect(result).toBe('audio/hello.aiff');
-      expect(mockGenerator.generateAudio).toHaveBeenCalledWith('hello', undefined, undefined);
+      expect(result).toBe('hello.aiff');
+      expect(mockGenerator.generateAudio).toHaveBeenCalledWith('hello', undefined, undefined, undefined, undefined, undefined);
     });
 
     it('should handle text trimming', async () => {
@@ -42,7 +42,7 @@ describe('Audio Service', () => {
       
       // Mock the audio generator to avoid actual TTS calls in tests
       const mockGenerator = {
-        generateAudio: jest.fn().mockResolvedValue('audio/hello_world.aiff'),
+        generateAudio: jest.fn().mockResolvedValue('/tmp/test-app-data/audio/hello_world.aiff'),
         playAudio: jest.fn().mockResolvedValue(undefined),
         stopAudio: jest.fn(),
         audioExists: jest.fn().mockResolvedValue(true)
@@ -51,7 +51,7 @@ describe('Audio Service', () => {
       const service = new AudioService(mockGenerator);
       await service.generateAudio(text, language);
       
-      expect(mockGenerator.generateAudio).toHaveBeenCalledWith('hello world', 'english', undefined);
+      expect(mockGenerator.generateAudio).toHaveBeenCalledWith('hello world', 'english', undefined, undefined, undefined, undefined);
     });
   });
 
@@ -66,8 +66,8 @@ describe('Audio Service', () => {
     it('should generate audio for multiple texts', async () => {
       const mockGenerator = {
         generateAudio: jest.fn()
-          .mockResolvedValueOnce('audio/hello.aiff')
-          .mockResolvedValueOnce('audio/world.aiff'),
+          .mockResolvedValueOnce('/tmp/test-app-data/audio/hello.aiff')
+          .mockResolvedValueOnce('/tmp/test-app-data/audio/world.aiff'),
         playAudio: jest.fn().mockResolvedValue(undefined),
         stopAudio: jest.fn(),
         audioExists: jest.fn().mockResolvedValue(true)
@@ -76,7 +76,7 @@ describe('Audio Service', () => {
       const service = new AudioService(mockGenerator);
       const results = await service.generateBatchAudio(['hello', 'world'], 'english');
       
-      expect(results).toEqual(['audio/hello.aiff', 'audio/world.aiff']);
+      expect(results).toEqual(['hello.aiff', 'world.aiff']);
       expect(mockGenerator.generateAudio).toHaveBeenCalledTimes(2);
     });
   });

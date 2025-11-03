@@ -34,6 +34,7 @@ describe('Core Types', () => {
       translation: 'Hello, how are you?',
       audioPath: 'audio/sentence_1.aiff',
       createdAt: new Date(),
+      playCount: 0,
     };
 
     expect(sentence.wordId).toBe(1);

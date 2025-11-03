@@ -8,6 +8,7 @@ import { GeneratedWord } from '../../dist/main/shared/types/core.js';
 // Mock database layer interface
 interface MockDatabaseLayer {
   getAllWords(includeKnown?: boolean, includeIgnored?: boolean): Promise<any[]>;
+  getExistingWordsForDuplicateChecking(language: string): Promise<string[]>;
 }
 
 describe('OllamaClient Duplicate Checking', () => {
@@ -33,7 +34,8 @@ describe('OllamaClient Duplicate Checking', () => {
 
     // Create mock database layer
     mockDatabaseLayer = {
-      getAllWords: jest.fn()
+      getAllWords: jest.fn(),
+      getExistingWordsForDuplicateChecking: jest.fn().mockResolvedValue([])
     };
   });
 
@@ -60,23 +62,19 @@ describe('OllamaClient Duplicate Checking', () => {
     });
 
     it('should return words for the specified language', async () => {
-      const mockWords = [
-        { id: 1, word: 'hola', language: 'Spanish', translation: 'hello' },
-        { id: 2, word: 'casa', language: 'Spanish', translation: 'house' },
-        { id: 3, word: 'bonjour', language: 'French', translation: 'hello' }
-      ];
+      const mockWords = ['hola', 'casa'];
 
-      mockDatabaseLayer.getAllWords = jest.fn().mockResolvedValue(mockWords);
+      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest.fn().mockResolvedValue(mockWords);
       ollamaClient.setDatabaseLayer(mockDatabaseLayer);
 
       const existingWords = await (ollamaClient as any).getExistingWords('Spanish');
 
-      expect(mockDatabaseLayer.getAllWords).toHaveBeenCalledWith(true, true);
+      expect(mockDatabaseLayer.getExistingWordsForDuplicateChecking).toHaveBeenCalledWith('Spanish');
       expect(existingWords).toEqual(['hola', 'casa']);
     });
 
     it('should handle database errors gracefully', async () => {
-      mockDatabaseLayer.getAllWords = jest.fn().mockRejectedValue(new Error('Database error'));
+      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest.fn().mockRejectedValue(new Error('Database error'));
       ollamaClient.setDatabaseLayer(mockDatabaseLayer);
 
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -132,7 +130,7 @@ describe('OllamaClient Duplicate Checking', () => {
       
       const prompt = (ollamaClient as any).createTopicWordsPrompt('', 'Spanish', 3, existingWords);
       
-      expect(prompt).toContain('basic conversation');
+      expect(prompt).toContain('related to ""');
       expect(prompt).toContain('Do NOT include any of these existing words: hola, casa');
     });
   });
@@ -155,12 +153,9 @@ describe('OllamaClient Duplicate Checking', () => {
     });
 
     it('should filter out duplicate words from generated results', async () => {
-      const mockWords = [
-        { id: 1, word: 'hola', language: 'Spanish', translation: 'hello' },
-        { id: 2, word: 'casa', language: 'Spanish', translation: 'house' }
-      ];
+      const mockWords = ['hola', 'casa'];
 
-      mockDatabaseLayer.getAllWords = jest.fn().mockResolvedValue(mockWords);
+      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest.fn().mockResolvedValue(mockWords);
       ollamaClient.setDatabaseLayer(mockDatabaseLayer);
 
       const result = await ollamaClient.generateTopicWords('food', 'Spanish', 3);
@@ -172,12 +167,9 @@ describe('OllamaClient Duplicate Checking', () => {
     });
 
     it('should work when no duplicates are found', async () => {
-      const mockWords = [
-        { id: 1, word: 'casa', language: 'Spanish', translation: 'house' },
-        { id: 2, word: 'perro', language: 'Spanish', translation: 'dog' }
-      ];
+      const mockWords = ['casa', 'perro'];
 
-      mockDatabaseLayer.getAllWords = jest.fn().mockResolvedValue(mockWords);
+      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest.fn().mockResolvedValue(mockWords);
       ollamaClient.setDatabaseLayer(mockDatabaseLayer);
 
       const result = await ollamaClient.generateTopicWords('food', 'Spanish', 3);
@@ -188,11 +180,9 @@ describe('OllamaClient Duplicate Checking', () => {
     });
 
     it('should handle case-insensitive duplicate checking', async () => {
-      const mockWords = [
-        { id: 1, word: 'HOLA', language: 'Spanish', translation: 'hello' }
-      ];
+      const mockWords = ['HOLA'];
 
-      mockDatabaseLayer.getAllWords = jest.fn().mockResolvedValue(mockWords);
+      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest.fn().mockResolvedValue(mockWords);
       ollamaClient.setDatabaseLayer(mockDatabaseLayer);
 
       const result = await ollamaClient.generateTopicWords('food', 'Spanish', 3);
@@ -217,13 +207,9 @@ describe('OllamaClient Duplicate Checking', () => {
       
       mockFetch.mockResolvedValue(mockResponse);
 
-      const mockWords = [
-        { id: 1, word: 'hola', language: 'Spanish', translation: 'hello' },
-        { id: 2, word: 'casa', language: 'Spanish', translation: 'house' },
-        { id: 3, word: 'perro', language: 'Spanish', translation: 'dog' }
-      ];
+      const mockWords = ['hola', 'casa', 'perro'];
 
-      mockDatabaseLayer.getAllWords = jest.fn().mockResolvedValue(mockWords);
+      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest.fn().mockResolvedValue(mockWords);
       ollamaClient.setDatabaseLayer(mockDatabaseLayer);
 
       await expect(ollamaClient.generateTopicWords('food', 'Spanish', 3))
@@ -261,23 +247,19 @@ describe('OllamaClient Duplicate Checking', () => {
     });
 
     it('should handle empty existing words list', async () => {
-      mockDatabaseLayer.getAllWords = jest.fn().mockResolvedValue([]);
+      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest.fn().mockResolvedValue([]);
       ollamaClient.setDatabaseLayer(mockDatabaseLayer);
 
       const result = await ollamaClient.generateTopicWords('food', 'Spanish', 3);
 
       expect(result).toHaveLength(3);
-      expect(mockDatabaseLayer.getAllWords).toHaveBeenCalledWith(true, true);
+      expect(mockDatabaseLayer.getExistingWordsForDuplicateChecking).toHaveBeenCalledWith('Spanish');
     });
 
     it('should filter words from different states (known, ignored, learning)', async () => {
-      const mockWords = [
-        { id: 1, word: 'test1', language: 'Spanish', known: true, ignored: false },
-        { id: 2, word: 'test2', language: 'Spanish', known: false, ignored: true },
-        { id: 3, word: 'test3', language: 'Spanish', known: false, ignored: false }
-      ];
+      const mockWords = ['test1', 'test2', 'test3'];
 
-      mockDatabaseLayer.getAllWords = jest.fn().mockResolvedValue(mockWords);
+      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest.fn().mockResolvedValue(mockWords);
       ollamaClient.setDatabaseLayer(mockDatabaseLayer);
 
       // This should throw an error because all words are duplicates
