@@ -366,8 +366,6 @@ export class SettingsPanel extends LitElement {
   @state()
   private isLoadingProviders = false;
 
-  @state()
-  private srsAlgorithm: 'classic' | 'fsrs' = 'classic';
 
 
 
@@ -407,8 +405,6 @@ export class SettingsPanel extends LitElement {
 
   private async loadSettings() {
     try {
-      await this.loadSrsSettings();
-
       // Load language settings
       await this.loadLanguageSettings();
 
@@ -424,15 +420,6 @@ export class SettingsPanel extends LitElement {
     }
   }
 
-  private async loadSrsSettings() {
-    try {
-      const algorithm = await window.electronAPI.database.getSetting('srs_algorithm');
-      this.srsAlgorithm = algorithm === 'fsrs' ? 'fsrs' : 'classic';
-    } catch (error) {
-      console.error('Failed to load SRS settings:', error);
-      this.srsAlgorithm = 'classic';
-    }
-  }
 
 
   private async loadLLMSettings() {
@@ -584,22 +571,6 @@ export class SettingsPanel extends LitElement {
     }
   }
 
-  private async changeSrsAlgorithm(event: Event) {
-    const select = event.target as HTMLSelectElement;
-    const selected = select.value === 'fsrs' ? 'fsrs' : 'classic';
-    const previous = this.srsAlgorithm;
-    this.srsAlgorithm = selected;
-
-    try {
-      await window.electronAPI.database.setSetting('srs_algorithm', selected);
-    } catch (error) {
-      console.error('Failed to save SRS algorithm setting:', error);
-      this.srsAlgorithm = previous;
-      select.value = previous;
-    }
-  }
-
-
   private getModelDisplayName(modelPath: string): string {
     if (!modelPath) return '';
 
@@ -626,12 +597,6 @@ export class SettingsPanel extends LitElement {
     return '';
   }
 
-  private getSrsEngineDescription(engine: 'classic' | 'fsrs'): string {
-    if (engine === 'fsrs') {
-      return 'FSRS baseline: estimates memory stability to schedule reviews for consistent retention.';
-    }
-    return "Classic scheduler: traditional ease-factor intervals similar to Anki's algorithm.";
-  }
 
   private async changeLLMModel(event: Event) {
     const select = event.target as HTMLSelectElement;
@@ -879,27 +844,6 @@ export class SettingsPanel extends LitElement {
   render() {
     return html`
       <div class="settings-container">
-        <div class="settings-section">
-          <h3>Spaced Repetition</h3>
-          <div class="dropdown-row">
-            <div class="dropdown-description">
-              <strong>Scheduling Engine</strong>
-              <p>Choose how review intervals are calculated for your study sessions</p>
-            </div>
-            <select
-              class="model-select"
-              .value=${this.srsAlgorithm}
-              @change=${this.changeSrsAlgorithm}
-            >
-              <option value="classic">Classic (Anki-style)</option>
-              <option value="fsrs">FSRS Baseline</option>
-            </select>
-          </div>
-          <div class="model-info">
-            ${this.getSrsEngineDescription(this.srsAlgorithm)}
-          </div>
-        </div>
-
         <div class="settings-section">
           <h3>Language Model (LLM)</h3>
           

@@ -1,7 +1,7 @@
 import { Word } from '../../shared/types/core.js';
 import { SRSReviewResult } from './srs-algorithm.js';
 
-export type SchedulerEngineName = 'classic' | 'fsrs';
+export type SchedulerEngineName = 'fsrs';
 
 export interface SchedulerEngineUpdate {
   nextDue: Date;

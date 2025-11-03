@@ -5,28 +5,23 @@
 import { DatabaseLayer } from '../../shared/types/database.js';
 import { Word } from '../../shared/types/core.js';
 import { SRSAlgorithm, SRSReviewResult } from './srs-algorithm.js';
-import { ClassicSrsEngine } from './classic-engine.js';
 import { FsrsEngine } from './fsrs-engine.js';
 import { SchedulerEngine, SchedulerEngineName, SchedulerEngineUpdate } from './engine.js';
 
 type UpdateWordSRSOptions = Parameters<DatabaseLayer['updateWordSRS']>[5];
 
 export class SRSService {
-  private readonly engines: Record<SchedulerEngineName, SchedulerEngine>;
+  private readonly engine: SchedulerEngine;
 
   constructor(private database: DatabaseLayer) {
-    this.engines = {
-      classic: new ClassicSrsEngine(),
-      fsrs: new FsrsEngine()
-    };
+    this.engine = new FsrsEngine();
   }
 
   /**
    * Process a word review and update SRS values
    */
   async processReview(wordId: number, reviewResult: SRSReviewResult): Promise<void> {
-    const engine = await this.getActiveEngine();
-    await this.processReviewWithEngine(wordId, reviewResult, engine, new Date());
+    await this.processReviewWithEngine(wordId, reviewResult, this.engine, new Date());
   }
 
   /**
@@ -42,8 +37,6 @@ export class SRSService {
       return;
     }
 
-    const engine = await this.getActiveEngine();
-
     for (const result of results) {
       const reviewResult = SRSAlgorithm.convertQuizPerformanceToRecall(
         result.correct,
@@ -51,7 +44,7 @@ export class SRSService {
         result.difficulty
       );
 
-      await this.processReviewWithEngine(result.wordId, reviewResult, engine, new Date());
+      await this.processReviewWithEngine(result.wordId, reviewResult, this.engine, new Date());
     }
   }
 
@@ -63,14 +56,10 @@ export class SRSService {
     const recommendedBatch = SRSAlgorithm.getRecommendedBatchSize(dueCount);
     const limit = maxWords ? Math.min(maxWords, recommendedBatch) : recommendedBatch;
 
-    const engine = await this.getActiveEngine();
-    const fetchLimit =
-      engine.name === 'fsrs'
-        ? Math.max(Math.min(limit * 3, limit + 50), limit)
-        : limit;
+    const fetchLimit = Math.max(Math.min(limit * 3, limit + 50), limit);
     const dueWords = await this.database.getWordsDueWithPriority(fetchLimit, language);
 
-    return engine.sortByPriority(dueWords, new Date()).slice(0, limit);
+    return this.engine.sortByPriority(dueWords, new Date()).slice(0, limit);
   }
 
   /**
@@ -108,8 +97,7 @@ export class SRSService {
    * Reset a word's SRS progress (useful for words marked as "unknown" again)
    */
   async resetWordProgress(wordId: number): Promise<void> {
-    const engine = await this.getActiveEngine();
-    const initValues = engine.initialize(new Date());
+    const initValues = this.engine.initialize(new Date());
 
     await this.database.updateWordSRS(
       wordId,
@@ -125,11 +113,10 @@ export class SRSService {
    * Get words that are overdue (for prioritization)
    */
   async getOverdueWords(language?: string): Promise<Word[]> {
-    const engine = await this.getActiveEngine();
     const allDue = await this.database.getWordsDueForReview(undefined, language);
     const now = new Date();
 
-    return allDue.filter(word => engine.isDue(word, now));
+    return allDue.filter(word => this.engine.isDue(word, now));
   }
 
   /**
@@ -137,7 +124,6 @@ export class SRSService {
    */
   async initializeExistingWords(language?: string): Promise<number> {
     const words = await this.database.getAllWords(false, false, language);
-    const engine = await this.getActiveEngine();
     const now = new Date();
     let updatedCount = 0;
 
@@ -151,7 +137,7 @@ export class SRSService {
         continue;
       }
 
-      const initValues = engine.initialize(now);
+      const initValues = this.engine.initialize(now);
 
       await this.database.updateWordSRS(
         word.id,
@@ -180,10 +166,10 @@ export class SRSService {
     }
 
     console.log(`[SRS Service] Processing review for word "${word.word}" (ID: ${wordId})`);
-    console.log(`[SRS Service] Using engine: ${engine.name}`);
+    console.log(`[SRS Service] Using engine: ${this.engine.name}`);
     console.log(`[SRS Service] Review result: recall=${reviewResult.recall} (${reviewResult.recall === 0 ? 'Failed' : reviewResult.recall === 1 ? 'Hard' : reviewResult.recall === 2 ? 'Good' : 'Easy'})`);
 
-    const update = engine.update(word, reviewResult, now);
+    const update = this.engine.update(word, reviewResult, now);
 
     console.log(`[SRS Service] Saving update to database for word "${word.word}" (ID: ${wordId})`);
     
@@ -199,22 +185,6 @@ export class SRSService {
     console.log(`[SRS Service] Successfully saved SRS update for word "${word.word}" (ID: ${wordId})\n`);
   }
 
-  private async getActiveEngine(): Promise<SchedulerEngine> {
-    try {
-      const preference = await this.database.getSetting('srs_algorithm');
-      if (preference && this.isValidEngineName(preference)) {
-        return this.engines[preference];
-      }
-    } catch (error) {
-      console.warn('Failed to load SRS engine preference; defaulting to classic algorithm:', error);
-    }
-
-    return this.engines.classic;
-  }
-
-  private isValidEngineName(value: string): value is SchedulerEngineName {
-    return value === 'classic' || value === 'fsrs';
-  }
 
   private extractFsrsOptions(update: SchedulerEngineUpdate): UpdateWordSRSOptions {
     const {
