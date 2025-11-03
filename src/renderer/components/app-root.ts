@@ -379,62 +379,48 @@ export class AppRoot extends LitElement {
         align-items: center;
         gap: var(--spacing-xs);
         margin-right: var(--spacing-xs);
+        font-size: 14px;
+        color: var(--text-secondary);
       }
 
       .autopilot-label {
         font-size: 12px;
         color: var(--text-secondary);
         font-weight: 500;
+        user-select: none;
       }
 
       .autopilot-switch {
         position: relative;
-        width: 44px;
-        height: 24px;
+        width: 40px;
+        height: 20px;
+        background: var(--border-color);
+        border-radius: 10px;
         cursor: pointer;
+        transition: background-color 0.3s ease;
       }
 
-      .autopilot-switch input {
-        opacity: 0;
-        width: 0;
-        height: 0;
+      .autopilot-switch.active {
+        background: var(--primary-color);
       }
 
       .autopilot-slider {
         position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: var(--background-secondary);
-        border: 1px solid var(--border-color);
-        border-radius: 24px;
-        transition: 0.3s;
-      }
-
-      .autopilot-slider:before {
-        position: absolute;
-        content: "";
-        height: 18px;
-        width: 18px;
+        top: 2px;
         left: 2px;
-        bottom: 2px;
-        background-color: white;
+        width: 16px;
+        height: 16px;
+        background: white;
         border-radius: 50%;
-        transition: 0.3s;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        transition: transform 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
       }
 
-      .autopilot-switch input:checked + .autopilot-slider {
-        background-color: var(--primary-color);
-        border-color: var(--primary-color);
-      }
-
-      .autopilot-switch input:checked + .autopilot-slider:before {
+      .autopilot-switch.active .autopilot-slider {
         transform: translateX(20px);
       }
 
-      .autopilot-switch:hover .autopilot-slider {
+      .autopilot-switch:hover {
         border-color: var(--primary-color);
       }
 
@@ -443,62 +429,48 @@ export class AppRoot extends LitElement {
         align-items: center;
         gap: var(--spacing-xs);
         margin-right: var(--spacing-xs);
+        font-size: 14px;
+        color: var(--text-secondary);
       }
 
       .autoplay-label {
         font-size: 12px;
         color: var(--text-secondary);
         font-weight: 500;
+        user-select: none;
       }
 
       .autoplay-switch {
         position: relative;
-        width: 44px;
-        height: 24px;
+        width: 40px;
+        height: 20px;
+        background: var(--border-color);
+        border-radius: 10px;
         cursor: pointer;
+        transition: background-color 0.3s ease;
       }
 
-      .autoplay-switch input {
-        opacity: 0;
-        width: 0;
-        height: 0;
+      .autoplay-switch.active {
+        background: var(--primary-color);
       }
 
       .autoplay-slider {
         position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: var(--background-secondary);
-        border: 1px solid var(--border-color);
-        border-radius: 24px;
-        transition: 0.3s;
-      }
-
-      .autoplay-slider:before {
-        position: absolute;
-        content: "";
-        height: 18px;
-        width: 18px;
+        top: 2px;
         left: 2px;
-        bottom: 2px;
-        background-color: white;
+        width: 16px;
+        height: 16px;
+        background: white;
         border-radius: 50%;
-        transition: 0.3s;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        transition: transform 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
       }
 
-      .autoplay-switch input:checked + .autoplay-slider {
-        background-color: var(--primary-color);
-        border-color: var(--primary-color);
-      }
-
-      .autoplay-switch input:checked + .autoplay-slider:before {
+      .autoplay-switch.active .autoplay-slider {
         transform: translateX(20px);
       }
 
-      .autoplay-switch:hover .autoplay-slider {
+      .autoplay-switch:hover {
         border-color: var(--primary-color);
       }
 
@@ -1120,8 +1092,8 @@ export class AppRoot extends LitElement {
   }
 
   private handleAutopilotToggle(event: Event) {
-    const target = event.target as HTMLInputElement;
-    this.autopilotEnabled = target.checked;
+    event.preventDefault();
+    this.autopilotEnabled = !this.autopilotEnabled;
     
     if (this.autopilotEnabled) {
       this.startAutopilot();
@@ -1141,16 +1113,16 @@ export class AppRoot extends LitElement {
   }
 
   private async toggleAutoplayAudio(event: Event) {
-    const target = event.target as HTMLInputElement;
-    this.autoplayAudioEnabled = target.checked;
+    event.preventDefault();
+    const previousValue = this.autoplayAudioEnabled;
+    this.autoplayAudioEnabled = !this.autoplayAudioEnabled;
 
     try {
-      await window.electronAPI.database.setSetting('autoplay_audio', target.checked ? 'true' : 'false');
+      await window.electronAPI.database.setSetting('autoplay_audio', this.autoplayAudioEnabled ? 'true' : 'false');
     } catch (error) {
       console.error('Failed to save autoplay audio setting:', error);
-      // Revert the checkbox state if saving failed
-      this.autoplayAudioEnabled = !target.checked;
-      target.checked = !target.checked;
+      // Revert the state if saving failed
+      this.autoplayAudioEnabled = previousValue;
     }
   }
 
@@ -1414,27 +1386,27 @@ export class AppRoot extends LitElement {
             <div class="nav-right-group">
               <div class="autoplay-toggle-container">
                 <span class="autoplay-label">Auto-play</span>
-                <label class="autoplay-switch">
-                  <input 
-                    type="checkbox"
-                    .checked=${this.autoplayAudioEnabled}
-                    @change=${this.toggleAutoplayAudio}
-                    title="Auto-play: Automatically play sentence audio when reviewing"
-                  />
-                  <span class="autoplay-slider"></span>
-                </label>
+                <div 
+                  class="autoplay-switch ${this.autoplayAudioEnabled ? 'active' : ''}"
+                  @click=${this.toggleAutoplayAudio}
+                  title="Auto-play: Automatically play sentence audio when reviewing"
+                  role="switch"
+                  aria-checked=${this.autoplayAudioEnabled}
+                >
+                  <div class="autoplay-slider"></div>
+                </div>
               </div>
               <div class="autopilot-toggle-container">
                 <span class="autopilot-label">Autopilot</span>
-                <label class="autopilot-switch">
-                  <input 
-                    type="checkbox"
-                    .checked=${this.autopilotEnabled}
-                    @change=${this.handleAutopilotToggle}
-                    title="Autopilot: Automatically navigate to highest-scoring mode"
-                  />
-                  <span class="autopilot-slider"></span>
-                </label>
+                <div 
+                  class="autopilot-switch ${this.autopilotEnabled ? 'active' : ''}"
+                  @click=${this.handleAutopilotToggle}
+                  title="Autopilot: Automatically navigate to highest-scoring mode"
+                  role="switch"
+                  aria-checked=${this.autopilotEnabled}
+                >
+                  <div class="autopilot-slider"></div>
+                </div>
               </div>
               <button 
                 class="settings-button ${router.isCurrentMode('settings') ? 'active' : ''}"
