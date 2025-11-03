@@ -1717,12 +1717,12 @@ export class DialogMode extends LitElement {
             `}
           ` : nothing}
           <div class="translations-toggle">
-            <span class="translations-label">Show EN</span>
+            <span class="translations-label">Hide English</span>
             <div 
-              class="translations-switch ${this.showTranslations ? 'active' : ''}"
+              class="translations-switch ${!this.showTranslations ? 'active' : ''}"
               @click=${() => { this.showTranslations = !this.showTranslations; }}
-              title=${this.showTranslations ? 'Hide translations' : 'Show translations'}
-              aria-label=${this.showTranslations ? 'Hide translations' : 'Show translations'}
+              title="Hide English translations"
+              aria-label="Hide English translations"
             >
               <div class="translations-slider"></div>
             </div>

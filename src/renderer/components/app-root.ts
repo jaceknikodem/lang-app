@@ -1324,35 +1324,35 @@ export class AppRoot extends LitElement {
                 <button 
                   class="nav-button ${router.isCurrentMode('topic-selection') || router.isCurrentMode('word-selection') ? 'active' : ''}"
                   @click=${() => this.handleNavigation('topic-selection')}
-                  title="Learn new words (Ctrl+1)"
+                  title="Learn new words"
                 >
                   Add new
                 </button>
                 <button 
                   class="nav-button ${router.isCurrentMode('learning') ? 'active' : ''}"
                   @click=${() => this.handleNavigation('learning')}
-                  title="Review existing words (Ctrl+2)"
+                  title="Review existing words"
                 >
                   Review
                 </button>
                 <button 
                   class="nav-button ${router.isCurrentMode('quiz') ? 'active' : ''}"
                   @click=${() => this.handleNavigation('quiz')}
-                  title="Take a quiz (Ctrl+3)"
+                  title="Take a quiz"
                 >
                   Quiz
                 </button>
                 <button 
                   class="nav-button ${router.isCurrentMode('dialog') ? 'active' : ''}"
                   @click=${() => this.handleNavigation('dialog')}
-                  title="Practice speaking (Ctrl+4)"
+                  title="Practice speaking"
                 >
                   Dialog
                 </button>
                 <button 
                   class="nav-button ${router.isCurrentMode('settings') ? 'active' : ''}"
                   @click=${() => this.handleNavigation('settings')}
-                  title="Settings (Ctrl+6)"
+                  title="Settings"
                 >
                   Settings
                 </button>
