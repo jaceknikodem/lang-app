@@ -8,6 +8,7 @@ import { ElectronApplication, Page } from 'playwright';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import { insertTestWord } from './test-helpers.js';
 
 let electronApp: ElectronApplication;
 let page: Page;
@@ -33,6 +34,11 @@ test.describe('Word Selection Flow', () => {
     
     // Wait for app to be ready
     await page.waitForLoadState('domcontentloaded');
+    
+    // Insert a test word early to prevent proficiency selector from showing
+    // This ensures the word is in the database before the app checks for existing words
+    await insertTestWord(page);
+    
     await page.waitForTimeout(3000); // Allow services to initialize
   });
 

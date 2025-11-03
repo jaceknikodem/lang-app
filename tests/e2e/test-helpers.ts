@@ -274,6 +274,111 @@ export function countAudioFiles(testDataDir: string): number {
 }
 
 /**
+ * Insert a word into the test database to prevent proficiency selector from showing
+ * This ensures hasExistingWords is true, so the modal won't appear
+ */
+export async function insertTestWord(page: Page, language: string = 'spanish'): Promise<void> {
+  // Wait for the app to be ready and IPC to be available
+  await page.waitForFunction(() => {
+    return typeof (window as any).electronAPI !== 'undefined' &&
+           typeof (window as any).electronAPI.database !== 'undefined';
+  }, { timeout: 10000 });
+
+  // Insert a test word into the database
+  // Also set a proficiency level to prevent modal from showing
+  const result = await page.evaluate(async (lang) => {
+    const electronAPI = (window as any).electronAPI;
+    
+    try {
+      // Get the actual current language from the database (may be different from what we pass in)
+      const currentLang = await electronAPI.database.getCurrentLanguage();
+      const langToUse = currentLang || lang || 'spanish';
+      
+      // Insert test word
+      const wordId = await electronAPI.database.insertWord({
+        word: 'test',
+        language: langToUse,
+        translation: 'test translation'
+      });
+      
+      // Set proficiency level to prevent modal (even if word check happens before word insertion)
+      // Set for both the passed-in language and the actual current language to be safe
+      await electronAPI.database.setSetting(`language_proficiency_${langToUse}`, 'newbie');
+      if (langToUse !== lang) {
+        await electronAPI.database.setSetting(`language_proficiency_${lang}`, 'newbie');
+      }
+      
+      // Verify word was inserted by checking directly
+      const stats = await electronAPI.database.getStudyStats(langToUse);
+      
+      return { wordId, totalWords: stats.totalWords, langUsed: langToUse, success: true };
+    } catch (error) {
+      return { 
+        error: error instanceof Error ? error.message : String(error),
+        success: false 
+      };
+    }
+  }, language);
+
+  if (!result.success) {
+    throw new Error(`Failed to insert test word: ${result.error || 'Unknown error'}`);
+  }
+
+  // Word insertion succeeded (we got a wordId), and we've set the proficiency level
+  // Setting the proficiency level is sufficient to prevent the modal from showing
+  // The modal only shows when BOTH no words exist AND no proficiency is set
+  // So even if the word count check doesn't see the word immediately, the proficiency setting will prevent the modal
+
+  // Wait for the app's initialization to complete and verify modal doesn't appear
+  // The app checks for words asynchronously, so we need to wait for that to complete
+  // Wait for the modal to NOT be visible - this ensures the app has checked and seen our proficiency setting
+  try {
+    // Wait up to 5 seconds for the modal to NOT appear
+    await page.waitForSelector('language-proficiency-selector', { 
+      state: 'hidden', 
+      timeout: 5000 
+    }).catch(() => {
+      // If selector never appears, that's fine - check if it's visible
+    });
+  } catch {
+    // Selector might not exist at all, which is fine
+  }
+
+  // Additional verification: ensure the modal is NOT visible after waiting
+  // If it's visible, wait a bit longer and try again
+  const maxWait = 5000;
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < maxWait) {
+    const modalVisible = await page.locator('language-proficiency-selector').isVisible().catch(() => false);
+    
+    if (!modalVisible) {
+      // Modal is not visible - good! Wait a bit more to ensure state is stable
+      await page.waitForTimeout(500);
+      break;
+    }
+    
+    // Modal is still visible, wait a bit and check again
+    await page.waitForTimeout(300);
+  }
+
+  // Final verification - modal should not be visible
+  const finalCheck = await page.locator('language-proficiency-selector').isVisible().catch(() => false);
+  if (finalCheck) {
+    // If modal is still visible, try one more time to wait
+    console.warn('Proficiency selector modal still visible after word/proficiency setup. Waiting longer...');
+    await page.waitForTimeout(2000);
+    
+    const finalCheck2 = await page.locator('language-proficiency-selector').isVisible().catch(() => false);
+    if (finalCheck2) {
+      // Even after extra wait, modal is visible - there might be an issue with the proficiency setting
+      // But we'll continue - the test might still work if it can dismiss the modal
+      console.warn('Proficiency selector modal still visible after extended wait. Test may need to handle dismissing it.');
+    }
+  }
+}
+
+/**
  * Mock LLM responses for testing
  */
 export const mockLLMResponses = {

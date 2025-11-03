@@ -8,6 +8,7 @@ import { ElectronApplication, Page } from 'playwright';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import { insertTestWord } from './test-helpers.js';
 
 test.describe('Word Selection Bug Fix', () => {
   let electronApp: ElectronApplication;
@@ -28,7 +29,12 @@ test.describe('Word Selection Bug Fix', () => {
     
     page = await electronApp.firstWindow();
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(3000);
+    
+    // Insert a test word early to prevent proficiency selector from showing
+    // This ensures the word is in the database before the app checks for existing words
+    await insertTestWord(page);
+    
+    await page.waitForTimeout(3000); // Allow services to initialize
   });
 
   test.afterEach(async () => {
