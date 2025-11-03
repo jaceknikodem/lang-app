@@ -1730,8 +1730,7 @@ function setupFlowHandlers(
       const AudioPathsSchema = z.array(z.string().min(1).max(500));
       const validatedPaths = AudioPathsSchema.parse(audioPaths);
       
-      console.log(`[Flow] Stitching ${validatedPaths.length} audio files`);
-      
+      // Don't log here - audioService.stitchAudio() will check cache first and log appropriately
       const stitchedPath = await audioService.stitchAudio(validatedPaths);
       
       if (!stitchedPath) {
@@ -1750,8 +1749,11 @@ function setupFlowHandlers(
       const FilePathSchema = z.string().min(1).max(500);
       const validatedPath = FilePathSchema.parse(filePath);
       
+      // Resolve relative paths to absolute paths
+      const absolutePath = AudioService.resolveAudioPath(validatedPath);
+      
       const { stat } = require('fs').promises;
-      const stats = await stat(validatedPath);
+      const stats = await stat(absolutePath);
       
       return {
         mtime: stats.mtime

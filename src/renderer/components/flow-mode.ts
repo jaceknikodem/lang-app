@@ -44,6 +44,7 @@ export class FlowMode extends LitElement {
   private playbackStartTime: number | 0 = 0;
   private totalPlaybackTime: number = 0; // Cumulative playback time in seconds
   private lastPauseTime: number | null = null;
+  private pausedPosition: number = 0; // Position where audio was paused (in seconds)
 
   connectedCallback() {
     super.connectedCallback();
@@ -191,8 +192,20 @@ export class FlowMode extends LitElement {
     }
 
     try {
-      // Stop any existing audio
-      this.stopAudio();
+      // If audio element exists and was paused, resume from pause position
+      if (this.audioElement && !this.isPlaying) {
+        this.audioElement.currentTime = this.pausedPosition;
+        await this.audioElement.play();
+        this.isPlaying = true;
+        this.showOverlay = true;
+        this.lastPauseTime = null;
+        return;
+      }
+
+      // Stop any existing audio (if playing or stopped)
+      if (this.audioElement) {
+        this.stopAudio();
+      }
 
       // Load audio file
       const audioData = await window.electronAPI.audio.loadAudioBase64(this.stitchedAudioPath);
@@ -206,6 +219,11 @@ export class FlowMode extends LitElement {
 
       // Create audio element
       this.audioElement = new Audio(blobUrl);
+      
+      // Set current time to paused position if we have one (resume from pause)
+      if (this.pausedPosition > 0) {
+        this.audioElement.currentTime = this.pausedPosition;
+      }
       
       // Set up event handlers
       this.audioElement.addEventListener('ended', () => {
@@ -221,8 +239,10 @@ export class FlowMode extends LitElement {
       // Set up timeupdate handler to track playback duration
       this.audioElement.addEventListener('timeupdate', () => {
         if (this.audioElement && this.isPlaying) {
-          // Calculate current playback time: accumulated time + current segment time
-          const currentPlaybackTime = this.totalPlaybackTime + this.audioElement.currentTime;
+          // Calculate current playback time for autopilot tracking
+          // currentTime is the absolute position in the audio file
+          // Use it directly for tracking (it already accounts for resume position)
+          const currentPlaybackTime = this.audioElement.currentTime;
           
           // Check if 2 minutes (120 seconds) have elapsed
           if (currentPlaybackTime >= 120 && this.playbackTimer === null) {
@@ -253,18 +273,14 @@ export class FlowMode extends LitElement {
 
   private pauseAudio() {
     if (this.audioElement && this.isPlaying) {
-      // Accumulate the time played in this playback segment
-      if (this.audioElement.currentTime > 0) {
-        this.totalPlaybackTime += this.audioElement.currentTime;
-      }
+      // Store the current position for resuming later
+      this.pausedPosition = this.audioElement.currentTime;
       
       this.audioElement.pause();
       this.isPlaying = false;
       this.showOverlay = false;
       
-      // Reset currentTime to 0 so next resume starts from beginning of audio
-      // This allows us to track cumulative playback time correctly
-      this.audioElement.currentTime = 0;
+      // Keep currentTime as-is (don't reset to 0) so we can resume from this position
       this.lastPauseTime = Date.now();
     }
   }
@@ -288,6 +304,7 @@ export class FlowMode extends LitElement {
     this.playbackTimer = null;
     this.totalPlaybackTime = 0;
     this.lastPauseTime = null;
+    this.pausedPosition = 0; // Reset pause position when stopping
   }
 
   private handleSpaceKey() {
