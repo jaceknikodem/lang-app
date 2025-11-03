@@ -145,25 +145,31 @@ export class SentenceViewer extends LitElement {
       }
 
       .audio-button {
-        display: flex;
+        background: var(--background-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 14px;
+        color: var(--text-secondary);
+        display: inline-flex;
         align-items: center;
-        gap: var(--spacing-xs);
-        padding: var(--spacing-sm) var(--spacing-md);
-        background: var(--primary-color);
-        color: white;
-        border: none;
-        border-radius: var(--border-radius-small);
+        justify-content: center;
         cursor: pointer;
-        font-size: 12px;
         transition: all 0.2s ease;
+        width: 32px;
+        height: 32px;
+        line-height: 1;
+        flex-shrink: 0;
       }
 
       .audio-button:hover:not(:disabled) {
-        background: var(--primary-hover);
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+        background: rgba(0, 0, 0, 0.03);
       }
 
       .audio-button:disabled {
-        opacity: 0.6;
+        opacity: 0.5;
         cursor: not-allowed;
       }
 
@@ -173,13 +179,15 @@ export class SentenceViewer extends LitElement {
       }
 
       .audio-button.secondary {
-        background: var(--background-secondary);
-        color: var(--text-primary);
+        background: var(--background-primary);
         border: 1px solid var(--border-color);
+        color: var(--text-secondary);
       }
 
       .audio-button.secondary:hover:not(:disabled) {
-        background: #e9e9e9;
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+        background: rgba(0, 0, 0, 0.03);
       }
 
       .word-strength {
@@ -1916,16 +1924,14 @@ export class SentenceViewer extends LitElement {
           </div>
           
           ${this.sentence.audioPath ? html`
-            <div class="flex gap-sm">
+            <div class="flex gap-xs" style="display: flex; align-items: center; gap: var(--spacing-xs);">
               <button
                 class="audio-button"
                 @click=${this.handlePlayAudio}
                 ?disabled=${this.isPlayingAudio || this.isRegeneratingAudio}
                 title="Play audio (Space)"
               >
-                <svg class="audio-icon" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-                </svg>
+                <span aria-hidden="true">🔊</span>
               </button>
               <button
                 class="audio-button secondary"
@@ -1933,7 +1939,7 @@ export class SentenceViewer extends LitElement {
                 ?disabled=${this.isPlayingAudio || this.isRegeneratingAudio}
                 title="Recreate audio"
               >
-                ♻
+                <span aria-hidden="true">♻</span>
               </button>
             </div>
           ` : ''}

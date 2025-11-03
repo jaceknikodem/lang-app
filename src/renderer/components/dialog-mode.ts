@@ -1109,8 +1109,8 @@ export class DialogMode extends LitElement {
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: var(--spacing-xl);
-        gap: var(--spacing-lg);
+        padding: var(--spacing-lg) var(--spacing-xl);
+        gap: var(--spacing-md);
         max-width: 800px;
         margin: 0 auto;
       }
@@ -1119,13 +1119,13 @@ export class DialogMode extends LitElement {
         display: flex;
         align-items: center;
         justify-content: flex-end;
-        gap: var(--spacing-sm);
+        gap: var(--spacing-xs);
         width: 100%;
         max-width: 600px;
-        padding: var(--spacing-sm) var(--spacing-md);
+        padding: 4px var(--spacing-md);
         background: var(--background-primary);
         border-bottom: 1px solid var(--border-color);
-        margin-bottom: var(--spacing-md);
+        margin-bottom: var(--spacing-sm);
       }
 
       .dialog-bubbles {
@@ -1522,55 +1522,77 @@ export class DialogMode extends LitElement {
       }
 
       .record-button {
-        background: var(--background-secondary);
+        background: var(--background-primary);
         border: 1px solid var(--border-color);
-        border-radius: var(--border-radius);
-        padding: var(--spacing-xs) var(--spacing-sm);
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 14px;
+        color: var(--text-secondary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         cursor: pointer;
         transition: all 0.2s ease;
-        font-size: 16px;
-        color: var(--text-primary);
+        width: 32px;
+        height: 32px;
+        line-height: 1;
+        flex-shrink: 0;
       }
 
       .record-button:hover {
-        background: var(--primary-light);
         border-color: var(--primary-color);
+        color: var(--primary-color);
+        background: rgba(0, 0, 0, 0.03);
       }
 
       .record-button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
+        background: var(--background-secondary);
+        border-color: var(--border-color);
+        color: var(--text-secondary);
+      }
+
+      .record-button:disabled:hover {
+        opacity: 0.5;
+        border-color: var(--border-color);
+        background: var(--background-secondary);
+        color: var(--text-secondary);
       }
 
       .record-button.recording {
-        background: var(--error-light);
-        border-color: var(--error-color);
-        color: var(--error-color);
-      }
-
-      .record-button.recording:hover {
         background: var(--error-color);
+        border-color: var(--error-color);
         color: white;
       }
 
+      .record-button.recording:hover {
+        background: var(--error-dark);
+        border-color: var(--error-dark);
+      }
+
       .audio-replay-button {
-        background: var(--background-secondary);
+        background: var(--background-primary);
         border: 1px solid var(--border-color);
-        border-radius: var(--border-radius-small);
-        padding: var(--spacing-xs) var(--spacing-sm);
+        border-radius: 999px;
+        padding: 4px 8px;
         font-size: 14px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        color: var(--text-primary);
+        color: var(--text-secondary);
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        width: 32px;
+        height: 32px;
+        line-height: 1;
+        flex-shrink: 0;
       }
 
       .audio-replay-button:hover {
         border-color: var(--primary-color);
         color: var(--primary-color);
-        background: var(--primary-light);
+        background: rgba(0, 0, 0, 0.03);
       }
 
       .audio-replay-button:disabled {
@@ -1584,6 +1606,12 @@ export class DialogMode extends LitElement {
         gap: var(--spacing-sm);
         font-size: 14px;
         color: var(--text-secondary);
+      }
+
+      .control-buttons {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
         margin-left: auto;
       }
 
@@ -1704,49 +1732,51 @@ export class DialogMode extends LitElement {
     return html`
       <div class="dialog-container">
         <div class="control-bar">
-          ${this.beforeSentenceAudio ? html`
-            <button 
-              class="audio-replay-button" 
-              @click=${this.playBeforeSentence}
-              ?disabled=${this.isRecording}
-              title="Replay trigger audio"
-              aria-label="Replay trigger audio"
-            >
-              <span aria-hidden="true">🔊</span>
-            </button>
-          ` : nothing}
-          ${this.responseOptions.length > 0 && !this.transcriptionResult ? html`
-            ${this.isRecording ? html`
-              <button 
-                class="record-button recording"
-                @click=${this.stopRecording}
-                title="Stop recording"
-                aria-label="Stop recording"
+          <div class="control-buttons">
+            <div class="translations-toggle">
+              <span class="translations-label">Hide English</span>
+              <div 
+                class="translations-switch ${!this.showTranslations ? 'active' : ''}"
+                @click=${() => { this.showTranslations = !this.showTranslations; }}
+                title="Hide English translations"
+                aria-label="Hide English translations"
               >
-                <span aria-hidden="true">⏹</span>
-              </button>
-            ` : html`
-              <button 
-                class="record-button"
-                @click=${this.startRecording}
-                ?disabled=${!this.speechRecognitionReady}
-                title=${this.speechRecognitionReady ? 'Start recording' : 'Speech recognition not ready'}
-                aria-label="Start recording"
-              >
-                <span aria-hidden="true">🎤</span>
-              </button>
-            `}
-          ` : nothing}
-          <div class="translations-toggle">
-            <span class="translations-label">Hide English</span>
-            <div 
-              class="translations-switch ${!this.showTranslations ? 'active' : ''}"
-              @click=${() => { this.showTranslations = !this.showTranslations; }}
-              title="Hide English translations"
-              aria-label="Hide English translations"
-            >
-              <div class="translations-slider"></div>
+                <div class="translations-slider"></div>
+              </div>
             </div>
+            ${this.beforeSentenceAudio ? html`
+              <button 
+                class="audio-replay-button" 
+                @click=${this.playBeforeSentence}
+                ?disabled=${this.isRecording}
+                title="Replay trigger audio"
+                aria-label="Replay trigger audio"
+              >
+                <span aria-hidden="true">🔊</span>
+              </button>
+            ` : nothing}
+            ${this.responseOptions.length > 0 && !this.transcriptionResult ? html`
+              ${this.isRecording ? html`
+                <button 
+                  class="record-button recording"
+                  @click=${this.stopRecording}
+                  title="Stop recording"
+                  aria-label="Stop recording"
+                >
+                  <span aria-hidden="true">⏹</span>
+                </button>
+              ` : html`
+                <button 
+                  class="record-button"
+                  @click=${this.startRecording}
+                  ?disabled=${!this.speechRecognitionReady}
+                  title=${this.speechRecognitionReady ? 'Start recording' : 'Speech recognition not ready'}
+                  aria-label="Start recording"
+                >
+                  <span aria-hidden="true">🎤</span>
+                </button>
+              `}
+            ` : nothing}
           </div>
         </div>
 
