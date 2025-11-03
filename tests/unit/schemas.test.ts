@@ -405,10 +405,15 @@ describe('DialogueVariantResponseSchema', () => {
 });
 
 describe('FollowUpResponseSchema', () => {
-  it('should accept string and transform to object', () => {
-    const input = 'Continuation text';
+  it('should accept string with blank-line separated translation', () => {
+    const input = 'Continuation text\n\nTranslation text';
     const result = FollowUpResponseSchema.parse(input);
-    expect(result).toEqual({ text: 'Continuation text', translation: '' });
+    expect(result).toEqual({ text: 'Continuation text', translation: 'Translation text' });
+  });
+
+  it('should reject string without translation (translation is required)', () => {
+    const input = 'Continuation text';
+    expect(() => FollowUpResponseSchema.parse(input)).toThrow('Translation is required');
   });
 
   it('should accept object with text property', () => {
@@ -417,33 +422,25 @@ describe('FollowUpResponseSchema', () => {
     expect(result).toEqual({ text: 'Continuation text', translation: 'Translation' });
   });
 
-  it('should accept object with continuation property', () => {
+  it('should normalize continuation property to text', () => {
     const input = { continuation: 'Continuation text', translation: 'Translation' };
-    // This matches the specific schema with continuation property first, which doesn't transform
     const result = FollowUpResponseSchema.parse(input);
-    // The continuation schema keeps continuation property as-is
-    expect((result as any).continuation).toBe('Continuation text');
-    expect((result as any).translation).toBe('Translation');
+    // The continuation schema normalizes continuation -> text
+    expect(result.text).toBe('Continuation text');
+    expect(result.translation).toBe('Translation');
   });
 
-  it('should accept object with text and english properties', () => {
+  it('should normalize english property to translation', () => {
     const input = { text: 'Continuation text', english: 'Translation' };
     const result = FollowUpResponseSchema.parse(input);
-    // This matches the specific schema with text and english (line 154-157)
-    // The schema has text as required and english as optional
-    expect((result as any).text).toBe('Continuation text');
-    // The specific schema has english property (not translation)
-    // So english should be present if provided
-    if ((result as any).english !== undefined) {
-      expect((result as any).english).toBe('Translation');
-    }
-    // It doesn't have translation property
+    // The schema normalizes english -> translation
+    expect(result.text).toBe('Continuation text');
+    expect(result.translation).toBe('Translation');
   });
 
-  it('should handle optional translation field', () => {
+  it('should require translation field', () => {
     const input = { text: 'Continuation text' };
-    const result = FollowUpResponseSchema.parse(input);
-    expect(result).toEqual({ text: 'Continuation text', translation: undefined });
+    expect(() => FollowUpResponseSchema.parse(input)).toThrow('Translation is required');
   });
 
   it('should handle generic record with text property', () => {
@@ -452,34 +449,23 @@ describe('FollowUpResponseSchema', () => {
     expect(result).toEqual({ text: 'Continuation', translation: 'Translation' });
   });
 
-  it('should handle generic record with continuation property', () => {
-    // The continuation schema (line 150-153) matches first since it has continuation property
-    // But it doesn't have english property, so it only keeps continuation and optional translation
-    // So when we have english, it's ignored by the continuation schema
-    // To test generic record, we need an object that doesn't match any specific schema
-    // The continuation schema matches if it has continuation, even with extra fields
+  it('should normalize continuation and english in generic record', () => {
     const input = { continuation: 'Continuation', english: 'Translation', extra: 'field' };
     const result = FollowUpResponseSchema.parse(input);
-    // The continuation schema matches first (has continuation property)
-    // It keeps continuation but doesn't have english, so translation might be undefined
-    expect((result as any).continuation).toBe('Continuation');
-    // Translation is optional in continuation schema, and english is not part of it
-    // So translation might be undefined unless explicitly provided
-    if ((result as any).translation !== undefined) {
-      expect((result as any).translation).toBe('Translation');
-    }
+    // Generic record normalizes continuation -> text and english -> translation
+    expect(result.text).toBe('Continuation');
+    expect(result.translation).toBe('Translation');
   });
 
-  it('should handle string in generic record', () => {
-    const input = 'Some text';
+  it('should handle string with blank-line separated translation in generic record', () => {
+    const input = 'Some text\n\nTranslation text';
     const result = FollowUpResponseSchema.parse(input);
-    expect(result).toEqual({ text: 'Some text', translation: '' });
+    expect(result).toEqual({ text: 'Some text', translation: 'Translation text' });
   });
 
-  it('should return empty strings for invalid generic record', () => {
+  it('should reject invalid generic record without translation', () => {
     const input = { invalid: 'data' };
-    const result = FollowUpResponseSchema.parse(input);
-    expect(result).toEqual({ text: '', translation: '' });
+    expect(() => FollowUpResponseSchema.parse(input)).toThrow('Translation is required');
   });
 
   it('should prefer text over continuation in generic record', () => {

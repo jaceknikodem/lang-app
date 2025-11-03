@@ -481,7 +481,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
-   * Get words that have sentences available for review, ordered by strength (weakest first)
+   * Get words that have sentences available for review, ordered by last_studied (least recently studied first)
    */
   async getWordsWithSentencesOrderedByStrength(includeKnown: boolean = true, includeIgnored: boolean = false, language?: string): Promise<Word[]> {
     const db = this.getDb();
@@ -505,7 +505,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         SELECT DISTINCT w.* FROM words w
         INNER JOIN sentence_words sw ON w.id = sw.word_id
         ${whereClause}
-        ORDER BY w.strength ASC, w.last_studied ASC NULLS FIRST
+        ORDER BY w.last_studied ASC NULLS FIRST
       `);
       
       const rows = stmt.all(currentLanguage) as any[];

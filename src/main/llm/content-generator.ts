@@ -337,6 +337,17 @@ export class ContentGenerator {
           const isLLMAvailable = await this.llmClient.isAvailable();
 
           if (isLLMAvailable) {
+            // Get proficiency level for the language (same as for sentence generation)
+            let proficiencyLevel: string | undefined;
+            if (database) {
+              try {
+                const proficiencyKey = `language_proficiency_${targetLanguage.toLowerCase()}`;
+                proficiencyLevel = await database.getSetting(proficiencyKey) || undefined;
+              } catch (error) {
+                console.warn('Failed to retrieve proficiency level for context generation:', error);
+              }
+            }
+
             // Generate context for each Tatoeba sentence
             const sentencesWithContext = await Promise.all(
               supplementalSentences.map(async (sentence) => {
@@ -344,7 +355,8 @@ export class ContentGenerator {
                   const context = await this.llmClient.generateContextSentences(
                     sentence.sentence,
                     sentence.translation,
-                    targetLanguage
+                    targetLanguage,
+                    proficiencyLevel
                   );
                   return {
                     ...sentence,

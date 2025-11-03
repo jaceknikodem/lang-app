@@ -82,13 +82,23 @@ export class DialogService {
     const triggerSentence = sentence.contextBefore || sentence.sentence;
     const triggerTranslation = sentence.contextBeforeTranslation || sentence.translation;
     
+    // Get proficiency level for the language
+    let proficiencyLevel: string | undefined;
+    try {
+      const proficiencyKey = `language_proficiency_${language.toLowerCase()}`;
+      proficiencyLevel = await this.database.getSetting(proficiencyKey) || undefined;
+    } catch (error) {
+      console.warn('Failed to retrieve proficiency level for dialogue variant generation:', error);
+    }
+    
     // Use LLM client method which handles prompt creation, JSON parsing, and validation
     const variantArray = await this.llmClient.generateDialogueVariants(
       triggerSentence,
       triggerTranslation,
       language,
       knownWords,
-      generateCount
+      generateCount,
+      proficiencyLevel
     );
     
     // Store all generated variants to cache them for future use
@@ -178,12 +188,22 @@ export class DialogService {
       };
     }
 
+    // Get proficiency level for the language
+    let proficiencyLevel: string | undefined;
+    try {
+      const proficiencyKey = `language_proficiency_${language.toLowerCase()}`;
+      proficiencyLevel = await this.database.getSetting(proficiencyKey) || undefined;
+    } catch (error) {
+      console.warn('Failed to retrieve proficiency level for follow-up generation:', error);
+    }
+
     // Use LLM client method which handles prompt creation, JSON parsing, and validation
     // Use the variant sentence as context (what the user said), not the original sentence
     const result = await this.llmClient.generateFollowUp(
       variant.variantSentence,
       variant.variantTranslation,
-      language
+      language,
+      proficiencyLevel
     );
 
     // Cache the continuation for this variant (use actual variant ID, not the pseudo ID)

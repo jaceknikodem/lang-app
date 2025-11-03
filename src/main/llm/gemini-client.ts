@@ -183,7 +183,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
     }
   }
 
-  async generateContextSentences(sentence: string, translation: string, language: string): Promise<{ contextBefore?: string; contextAfter?: string; contextBeforeTranslation?: string; contextAfterTranslation?: string }> {
+  async generateContextSentences(sentence: string, translation: string, language: string, proficiencyLevel?: string): Promise<{ contextBefore?: string; contextAfter?: string; contextBeforeTranslation?: string; contextAfterTranslation?: string }> {
     if (!this.apiKey || this.apiKey.trim() === '') {
       // Return empty context instead of throwing if API key not configured
       return {};
@@ -191,7 +191,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
 
     // Call base class implementation, but add validation logging
     try {
-      const context = await super.generateContextSentences(sentence, translation, language);
+      const context = await super.generateContextSentences(sentence, translation, language, proficiencyLevel);
       return context;
     } catch (error) {
       this.logValidationError(error, 'GEMINI CONTEXT SENTENCE VALIDATION FAILED');

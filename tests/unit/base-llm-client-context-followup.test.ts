@@ -213,10 +213,9 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
   });
 
   describe('generateFollowUp text parsing', () => {
-    it('should extract text and translation from text field with blank line separator', async () => {
-      const mockResponse = {
-        text: 'Continuación del texto\n\nEnglish translation here'
-      };
+    it('should extract text and translation from string with blank line separator', async () => {
+      // String response with blank-line separated translation
+      const mockResponse = 'Continuación del texto\n\nEnglish translation here';
 
       client.setMockResponse(mockResponse);
 
@@ -293,9 +292,8 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
     });
 
     it('should trim text and translation', async () => {
-      const mockResponse = {
-        text: '  Continuación del texto  \n\n  English translation  '
-      };
+      // String response with blank-line separated translation and whitespace
+      const mockResponse = '  Continuación del texto  \n\n  English translation  ';
 
       client.setMockResponse(mockResponse);
 
@@ -310,9 +308,8 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
     });
 
     it('should handle text with multiple blank lines', async () => {
-      const mockResponse = {
-        text: 'First part\n\nSecond part\n\nThird part\n\nTranslation here'
-      };
+      // String response with multiple blank lines - first part is text, rest is translation
+      const mockResponse = 'First part\n\nSecond part\n\nThird part\n\nTranslation here';
 
       client.setMockResponse(mockResponse);
 
@@ -388,9 +385,11 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
     });
 
     it('should handle missing translation when text has no blank line', async () => {
+      // Translation is now required, so missing translation should fail validation
+      // and return empty strings
       const mockResponse = {
         text: 'Continuación del texto'
-        // No translation field
+        // No translation field - will fail validation
       };
 
       client.setMockResponse(mockResponse);
@@ -401,7 +400,8 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
         'Spanish'
       );
 
-      expect(result.text).toBe('Continuación del texto');
+      // Validation fails because translation is required, returns empty strings
+      expect(result.text).toBe('');
       expect(result.translation).toBe('');
     });
 

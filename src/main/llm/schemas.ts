@@ -142,27 +142,58 @@ export const DialogueVariantResponseSchema = z.union([
 
 // Follow-up continuation schema for dialog practice
 export const FollowUpResponseSchema = z.union([
-  z.string().transform(text => ({ text, translation: '' })),
+  // Handle string - check for blank-line separated translation
+  z.string().transform(str => {
+    const parts = str.split('\n\n');
+    if (parts.length >= 2) {
+      return {
+        text: parts[0].trim(),
+        translation: parts.slice(1).join('\n').trim()
+      };
+    }
+    return { text: str.trim(), translation: '' };
+  }),
+  // Handle object with text and translation
   z.object({
     text: z.string(),
-    translation: z.string().optional()
+    translation: z.string()
   }),
+  // Handle object with continuation and translation (normalize continuation -> text)
   z.object({
     continuation: z.string(),
-    translation: z.string().optional()
-  }),
+    translation: z.string()
+  }).transform(obj => ({
+    text: obj.continuation.trim(),
+    translation: obj.translation.trim()
+  })),
+  // Handle object with text and english (normalize english -> translation)
   z.object({
     text: z.string(),
-    english: z.string().optional()
-  }),
-  z.record(z.any()).transform(obj => {
-    if (typeof obj === 'string') return { text: obj, translation: '' };
-    if (obj.text || obj.continuation) {
-      const text = String(obj.text || obj.continuation);
-      const translation = String(obj.translation || obj.english || '');
+    english: z.string()
+  }).transform(obj => ({
+    text: obj.text.trim(),
+    translation: obj.english.trim()
+  })),
+  // Generic record fallback - normalize all formats
+  z.union([
+    z.string().transform(str => {
+      const parts = str.split('\n\n');
+      if (parts.length >= 2) {
+        return {
+          text: parts[0].trim(),
+          translation: parts.slice(1).join('\n').trim()
+        };
+      }
+      return { text: str.trim(), translation: '' };
+    }),
+    z.record(z.any()).transform(obj => {
+      const text = String((obj as any).text || (obj as any).continuation || '').trim();
+      const translation = String((obj as any).translation || (obj as any).english || '').trim();
       return { text, translation };
-    }
-    return { text: '', translation: '' };
-  })
-]);
+    })
+  ])
+]).refine(
+  data => data.translation.length > 0,
+  { message: 'Translation is required' }
+);
 

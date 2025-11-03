@@ -23,8 +23,8 @@ class TestLLMClient extends BaseLLMClient {
     return this.createDialogueVariantPrompt(triggerSentence, triggerTranslation, language, knownWords, count);
   }
 
-  public testCreateFollowUpPrompt(sentence: string, translation: string, language: string): string {
-    return this.createFollowUpPrompt(sentence, translation, language);
+  public testCreateFollowUpPrompt(sentence: string, translation: string, language: string, proficiencyLevel?: string): string {
+    return this.createFollowUpPrompt(sentence, translation, language, proficiencyLevel);
   }
 
   // Abstract method implementation (not used in tests)
@@ -354,9 +354,28 @@ describe('BaseLLMClient Prompt Generation', () => {
     it('should specify continuation requirements', () => {
       const prompt = client.testCreateFollowUpPrompt('Hola', 'Hello', 'Spanish');
       
-      expect(prompt).toContain('Generate a natural continuation of about 3 sentences');
+      // Default proficiency level returns 2 sentences
+      expect(prompt).toContain('Generate a natural continuation of about 2 sentences');
       expect(prompt).toContain('NOT be a question');
       expect(prompt).toContain('Continue the thought or provide related context');
+    });
+
+    it('should vary sentence count based on proficiency level', () => {
+      // Test newbie - 1 sentence
+      const newbiePrompt = client.testCreateFollowUpPrompt('Hola', 'Hello', 'Spanish', 'newbie');
+      expect(newbiePrompt).toContain('Generate a natural continuation of about 1 sentence');
+
+      // Test a1 - 2 sentences
+      const a1Prompt = client.testCreateFollowUpPrompt('Hola', 'Hello', 'Spanish', 'a1');
+      expect(a1Prompt).toContain('Generate a natural continuation of about 2 sentences');
+
+      // Test a2 - 3 sentences
+      const a2Prompt = client.testCreateFollowUpPrompt('Hola', 'Hello', 'Spanish', 'a2');
+      expect(a2Prompt).toContain('Generate a natural continuation of about 3 sentences');
+
+      // Test b1 - 4 sentences
+      const b1Prompt = client.testCreateFollowUpPrompt('Hola', 'Hello', 'Spanish', 'b1');
+      expect(b1Prompt).toContain('Generate a natural continuation of about 4 sentences');
     });
 
     it('should require both language text and translation', () => {

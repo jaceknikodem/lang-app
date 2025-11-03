@@ -158,8 +158,8 @@ export abstract class BaseLLMClient {
   /**
    * Generate context sentences - shared implementation
    */
-  async generateContextSentences(sentence: string, translation: string, language: string): Promise<{ contextBefore?: string; contextAfter?: string; contextBeforeTranslation?: string; contextAfterTranslation?: string }> {
-    const prompt = this.createContextSentencesPrompt(sentence, translation, language);
+  async generateContextSentences(sentence: string, translation: string, language: string, proficiencyLevel?: string): Promise<{ contextBefore?: string; contextAfter?: string; contextBeforeTranslation?: string; contextAfterTranslation?: string }> {
+    const prompt = this.createContextSentencesPrompt(sentence, translation, language, proficiencyLevel);
 
     try {
       const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
@@ -263,6 +263,24 @@ export abstract class BaseLLMClient {
   }
 
   /**
+   * Get follow-up sentence count based on proficiency level
+   */
+  private getFollowUpSentenceCount(proficiencyLevel?: string): number {
+    switch (proficiencyLevel) {
+      case 'newbie':
+        return 1;
+      case 'a1':
+        return 2;
+      case 'a2':
+        return 3;
+      case 'b1':
+        return 4;
+      default:
+        return 2;
+    }
+  }
+
+  /**
    * Create prompt for topic word generation
    */
   protected createTopicWordsPrompt(topic: string, language: string, count: number, existingWords: string[] = [], proficiencyLevel?: string): string {
@@ -363,13 +381,16 @@ Rules:
   /**
    * Create prompt for context sentence generation
    */
-  protected createContextSentencesPrompt(sentence: string, translation: string, language: string): string {
+  protected createContextSentencesPrompt(sentence: string, translation: string, language: string, proficiencyLevel?: string): string {
+    // Create proficiency level guidance
+    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence');
+    
     return `CRITICAL: Return ONLY a JSON object, no explanations or extra text.
 
 Task: Given this sentence in ${language} and its English translation, suggest what sentence would make sense BEFORE and AFTER it to provide context for language learning.
 
 Sentence in ${language}: "${sentence}"
-English translation: "${translation}"
+English translation: "${translation}"${proficiencyText}
 
 Expected output format:
 {
@@ -397,14 +418,16 @@ Rules:
     triggerTranslation: string,
     language: string,
     knownWords: string[],
-    count: number
+    count: number,
+    proficiencyLevel?: string
   ): Promise<Array<{ sentence: string; translation: string }>> {
     const prompt = this.createDialogueVariantPrompt(
       triggerSentence,
       triggerTranslation,
       language,
       knownWords,
-      count
+      count,
+      proficiencyLevel
     );
 
     try {
@@ -446,7 +469,8 @@ Rules:
     triggerTranslation: string,
     language: string,
     knownWords: string[],
-    count: number
+    count: number,
+    proficiencyLevel?: string
   ): string {
     const languageName = language.charAt(0).toUpperCase() + language.slice(1);
     const examples = Array.from({ length: count }, (_, i) =>
@@ -460,10 +484,13 @@ Rules:
       ? `\nIMPORTANT: Use words from this list when possible: ${knownWords.slice(0, 20).join(', ')}`
       : '';
     
+    // Create proficiency level guidance
+    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence');
+    
     return `CRITICAL: You must return exactly ${count} ${languageName} response sentence(s) in a JSON array. No more, no less.
 CRITICAL: Return ONLY the JSON array, no explanations or extra text.
 
-Task: Generate exactly ${count} diverse ${languageName} response sentence(s) that could naturally follow this trigger sentence.${knownWordsText}
+Task: Generate exactly ${count} diverse ${languageName} response sentence(s) that could naturally follow this trigger sentence.${knownWordsText}${proficiencyText}
 
 Trigger sentence: "${triggerSentence}"
 Trigger translation: "${triggerTranslation}"
@@ -487,8 +514,8 @@ ${knownWords.length > 0 ? '7. Prefer using words from the provided list when pos
   /**
    * Generate follow-up continuation - shared implementation
    */
-  async generateFollowUp(sentence: string, translation: string, language: string): Promise<{ text: string; translation: string }> {
-    const prompt = this.createFollowUpPrompt(sentence, translation, language);
+  async generateFollowUp(sentence: string, translation: string, language: string, proficiencyLevel?: string): Promise<{ text: string; translation: string }> {
+    const prompt = this.createFollowUpPrompt(sentence, translation, language, proficiencyLevel);
 
     try {
       const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
@@ -502,37 +529,8 @@ ${knownWords.length > 0 ? '7. Prefer using words from the provided list when pos
         return { text: '', translation: '' };
       }
 
-      const parsedData = parseResult.data;
-
-      // Extract text and translation
-      let text = '';
-      let translation = '';
-
-      if ('text' in parsedData) {
-        text = String(parsedData.text || '');
-        // Check if text contains translation separated by blank line
-        const parts = text.split('\n\n');
-        if (parts.length >= 2) {
-          text = parts[0].trim();
-          translation = parts.slice(1).join('\n').trim();
-        }
-      } else if ('continuation' in parsedData) {
-        text = String(parsedData.continuation || '');
-      }
-
-      // If we don't have translation from text parsing, check object properties
-      if (!translation) {
-        if ('translation' in parsedData && parsedData.translation) {
-          translation = String(parsedData.translation);
-        } else if ('english' in parsedData && parsedData.english) {
-          translation = String(parsedData.english);
-        }
-      }
-
-      return {
-        text: text.trim(),
-        translation: translation.trim()
-      };
+      // Zod already normalizes the data to { text: string, translation: string }
+      return parseResult.data;
     } catch (error) {
       if (error instanceof z.ZodError) {
         console.warn('Follow-up generation validation failed, returning empty result:', error);
@@ -547,19 +545,26 @@ ${knownWords.length > 0 ? '7. Prefer using words from the provided list when pos
   /**
    * Create prompt for follow-up continuation generation
    */
-  protected createFollowUpPrompt(sentence: string, translation: string, language: string): string {
+  protected createFollowUpPrompt(sentence: string, translation: string, language: string, proficiencyLevel?: string): string {
     const languageName = language.charAt(0).toUpperCase() + language.slice(1);
+    
+    // Get sentence count based on proficiency level
+    const sentenceCount = this.getFollowUpSentenceCount(proficiencyLevel);
+    const sentenceText = sentenceCount === 1 ? 'sentence' : 'sentences';
+    
+    // Create proficiency level guidance
+    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence');
     
     return `Given this ${languageName} sentence and its English translation:
 
 "${sentence}"
 "${translation}"
 
-Generate a natural continuation of about 3 sentences in ${languageName}. This should:
+Generate a natural continuation of about ${sentenceCount} ${sentenceText} in ${languageName}. This should:
 1. NOT be a question
 2. Continue the thought or provide related context
 3. Be suitable for reading/listening practice
-4. Be natural and coherent
+4. Be natural and coherent${proficiencyText}
 
 IMPORTANT: You must return BOTH the ${languageName} text AND its English translation.
 
