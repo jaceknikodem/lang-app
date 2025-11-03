@@ -540,12 +540,28 @@ export class SessionManager {
   /**
    * Add a dialog session to the queue (FIFO - up to 5 sessions)
    * If queue is full, removes the oldest session and adds the new one at the end
+   * Prevents adding duplicate sessions with the same sentenceId
    */
   addDialogSession(newSession: DialogSessionState): void {
     const session = this.getCurrentSession();
     const languageKey = this.getActiveLanguageKey();
     
     const existingSessions = session.dialogSessions || [];
+    
+    // Check if a session with the same sentenceId already exists in the queue
+    const duplicateExists = existingSessions.some(
+      existingSession => existingSession.sentenceId === newSession.sentenceId
+    );
+    
+    if (duplicateExists) {
+      console.log('[SessionManager] addDialogSession - duplicate sentenceId detected, skipping', {
+        newSessionId: newSession.id,
+        newSentenceId: newSession.sentenceId,
+        existingSessionsCount: existingSessions.length
+      });
+      return; // Don't add duplicate
+    }
+    
     let updatedSessions: DialogSessionState[];
     let updatedCurrentIndex: number | undefined;
     
