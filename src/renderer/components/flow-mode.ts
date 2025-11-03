@@ -45,6 +45,11 @@ export class FlowMode extends LitElement {
   private totalPlaybackTime: number = 0; // Cumulative playback time in seconds
   private lastPauseTime: number | null = null;
   private pausedPosition: number = 0; // Position where audio was paused (in seconds)
+  private audioContext: AudioContext | null = null;
+  private analyser: AnalyserNode | null = null;
+  private dataArray: Uint8Array | null = null;
+  private animationFrameId: number | null = null;
+  private canvasElement: HTMLCanvasElement | null = null;
 
   connectedCallback() {
     super.connectedCallback();
@@ -195,9 +200,26 @@ export class FlowMode extends LitElement {
       // If audio element exists and was paused, resume from pause position
       if (this.audioElement && !this.isPlaying) {
         this.audioElement.currentTime = this.pausedPosition;
+        
+        // Re-setup visualization if needed (audio context might be suspended)
+        if (!this.audioContext || this.audioContext.state === 'closed') {
+          this.setupAudioVisualization();
+        }
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+          await this.audioContext.resume();
+        }
+        
         await this.audioElement.play();
         this.isPlaying = true;
         this.showOverlay = true;
+        
+        // Wait a frame for DOM to update and canvas to be rendered
+        await this.updateComplete;
+        requestAnimationFrame(() => {
+          // Restart visualization
+          this.startVisualization();
+        });
+        
         this.lastPauseTime = null;
         return;
       }
@@ -224,6 +246,9 @@ export class FlowMode extends LitElement {
       if (this.pausedPosition > 0) {
         this.audioElement.currentTime = this.pausedPosition;
       }
+
+      // Set up Web Audio API for visualization
+      this.setupAudioVisualization();
       
       // Set up event handlers
       this.audioElement.addEventListener('ended', () => {
@@ -259,6 +284,13 @@ export class FlowMode extends LitElement {
       this.isPlaying = true;
       this.showOverlay = true;
       
+      // Wait a frame for DOM to update and canvas to be rendered
+      await this.updateComplete;
+      requestAnimationFrame(() => {
+        // Start animation loop for visualization
+        this.startVisualization();
+      });
+      
       // When starting/resuming playback, the audio element will continue from its current position
       // We track totalPlaybackTime separately to handle pauses correctly
       this.lastPauseTime = null;
@@ -280,12 +312,29 @@ export class FlowMode extends LitElement {
       this.isPlaying = false;
       this.showOverlay = false;
       
+      // Stop visualization
+      this.stopVisualization();
+      
       // Keep currentTime as-is (don't reset to 0) so we can resume from this position
       this.lastPauseTime = Date.now();
     }
   }
 
   private stopAudio() {
+    // Stop visualization
+    this.stopVisualization();
+    
+    // Close audio context if it exists
+    if (this.audioContext) {
+      this.audioContext.close().catch(err => {
+        console.warn('Error closing audio context:', err);
+      });
+      this.audioContext = null;
+    }
+    
+    this.analyser = null;
+    this.dataArray = null;
+    
     if (this.audioElement) {
       this.audioElement.pause();
       this.audioElement.currentTime = 0;
@@ -310,6 +359,135 @@ export class FlowMode extends LitElement {
   private handleSpaceKey() {
     if (this.showOverlay && this.isPlaying) {
       this.pauseAudio();
+    }
+  }
+
+  private setupAudioVisualization() {
+    if (!this.audioElement) {
+      console.warn('[Flow] No audio element available for visualization');
+      return;
+    }
+    
+    try {
+      // Create audio context (resume if suspended)
+      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // Resume context if suspended (required for some browsers)
+      if (this.audioContext.state === 'suspended') {
+        this.audioContext.resume().catch(err => {
+          console.warn('[Flow] Failed to resume audio context:', err);
+        });
+      }
+      
+      this.analyser = this.audioContext.createAnalyser();
+      this.analyser.fftSize = 256;
+      this.analyser.smoothingTimeConstant = 0.8;
+      
+      const bufferLength = this.analyser.frequencyBinCount;
+      // Create Uint8Array with explicit buffer to satisfy TypeScript
+      const buffer = new ArrayBuffer(bufferLength);
+      this.dataArray = new Uint8Array(buffer);
+      
+      // Connect audio element to analyser
+      // Note: createMediaElementSource disconnects the audio element from its default output
+      const source = this.audioContext.createMediaElementSource(this.audioElement);
+      source.connect(this.analyser);
+      this.analyser.connect(this.audioContext.destination);
+      
+      console.log('[Flow] Audio visualization setup complete');
+    } catch (err) {
+      console.error('[Flow] Failed to set up audio visualization:', err);
+      // Non-critical - visualization will just not work
+    }
+  }
+
+  private startVisualization() {
+    // Get canvas reference - it might not exist until overlay is shown
+    if (!this.canvasElement) {
+      this.canvasElement = this.shadowRoot?.querySelector('.visualization-canvas') as HTMLCanvasElement;
+      if (this.canvasElement) {
+        // Set canvas size
+        this.canvasElement.width = 300;
+        this.canvasElement.height = 300;
+      }
+    }
+    
+    if (!this.canvasElement || !this.analyser || !this.dataArray || !this.isPlaying) {
+      console.log('[Flow] Visualization not ready:', {
+        canvas: !!this.canvasElement,
+        analyser: !!this.analyser,
+        dataArray: !!this.dataArray,
+        isPlaying: this.isPlaying
+      });
+      return;
+    }
+
+    const canvas = this.canvasElement;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const baseRadius = 80; // Base radius of the circle (reduced to stay within canvas)
+    const maxRadiusChange = 40; // Maximum change in radius based on amplitude
+
+    const animate = () => {
+      if (!this.isPlaying || !this.analyser || !this.dataArray) {
+        return;
+      }
+
+      // Get audio data - use frequency data for more reactive visualization
+      if (!this.dataArray) return;
+      
+      // Use type assertion to satisfy TypeScript - the API accepts Uint8Array
+      // Use getByteFrequencyData for more noticeable visual response
+      this.analyser.getByteFrequencyData(this.dataArray as any);
+      
+      // Calculate average amplitude from frequency data
+      let sum = 0;
+      for (let i = 0; i < this.dataArray.length; i++) {
+        sum += this.dataArray[i];
+      }
+      const average = sum / this.dataArray.length;
+      const normalizedAmplitude = average / 255; // Normalize to 0-1 (frequency data is 0-255)
+      
+      // Calculate radius based on amplitude (with more dramatic effect)
+      // Apply exponential scaling for more pronounced wobble
+      const amplifiedAmplitude = Math.pow(normalizedAmplitude, 0.7); // Make it more sensitive to changes
+      const radiusChange = amplifiedAmplitude * maxRadiusChange * 2.0; // Increased multiplier for more wobble
+      const currentRadius = baseRadius + radiusChange;
+      
+      // Calculate opacity pulse (more noticeable)
+      const opacity = 0.5 + (normalizedAmplitude * 0.4); // Range: 0.5 to 0.9
+      
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw wobbling circle
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, currentRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(150, 150, 150, ${opacity})`; // Grey color
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      
+      // Continue animation
+      this.animationFrameId = requestAnimationFrame(animate);
+    };
+
+    this.animationFrameId = requestAnimationFrame(animate);
+  }
+
+  private stopVisualization() {
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+    
+    if (this.canvasElement) {
+      const ctx = this.canvasElement.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, this.canvasElement.width, this.canvasElement.height);
+      }
     }
   }
 
@@ -344,40 +522,62 @@ export class FlowMode extends LitElement {
         pointer-events: auto;
       }
 
-      .pause-button {
-        width: 80px;
-        height: 80px;
-        border-radius: 50%;
-        background: white;
-        color: black;
-        border: none;
-        font-size: 32px;
-        cursor: pointer;
+      .visualization-container {
+        position: relative;
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: transform 0.2s, opacity 0.2s;
-        opacity: 0.9;
+        cursor: pointer;
       }
 
-      .pause-button:hover {
-        transform: scale(1.1);
+      .visualization-canvas {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .pause-icon {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 48px;
+        color: rgba(150, 150, 150, 0.9);
+        z-index: 1;
+        pointer-events: none;
+        user-select: none;
+        transition: opacity 0.2s, transform 0.2s, font-size 0.2s;
+        opacity: 0.8;
+      }
+
+      .visualization-container:hover .pause-icon {
         opacity: 1;
+        transform: translate(-50%, -50%) scale(1.3);
+        font-size: 62px;
       }
     `
   ];
+
+  firstUpdated(changedProperties: Map<string | number | symbol, unknown>) {
+    super.firstUpdated(changedProperties);
+    // Get canvas reference after first render
+    this.canvasElement = this.shadowRoot?.querySelector('.visualization-canvas') as HTMLCanvasElement;
+    if (this.canvasElement) {
+      // Set canvas size
+      this.canvasElement.width = 300;
+      this.canvasElement.height = 300;
+    }
+  }
 
   render() {
     return html`
       <div class="overlay ${this.showOverlay ? 'visible' : ''}">
         ${this.showOverlay ? html`
-          <button
-            class="pause-button"
-            @click=${this.pauseAudio}
-            title="Pause"
-          >
-            ⏸
-          </button>
+          <div class="visualization-container" @click=${this.pauseAudio} title="Pause">
+            <canvas class="visualization-canvas"></canvas>
+            <div class="pause-icon">⏸</div>
+          </div>
         ` : ''}
       </div>
     `;
