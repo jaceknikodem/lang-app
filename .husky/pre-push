@@ -10,6 +10,13 @@ npm run lint || {
   exit 1
 }
 
+# Unit tests
+echo "🧪 Running unit tests..."
+npm run test:unit || {
+  echo "❌ Unit tests failed. Please fix failing tests before pushing."
+  exit 1
+}
+
 # Full build
 echo "🔨 Full build..."
 npm run build || {
