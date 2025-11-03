@@ -577,6 +577,9 @@ export class AppRoot extends LitElement {
     // Listen for language changes
     this.addEventListener('language-changed', this.handleLanguageChanged);
 
+    // Listen for word updates to refresh stats
+    this.addEventListener('words-updated', this.handleWordsUpdated);
+
     // Setup keyboard bindings
     this.setupKeyboardBindings();
 
@@ -602,6 +605,7 @@ export class AppRoot extends LitElement {
       this.transitionMessageTimeout = null;
     }
     this.removeEventListener('language-changed', this.handleLanguageChanged);
+    this.removeEventListener('words-updated', this.handleWordsUpdated);
   }
 
   private async initializeApp() {
@@ -830,6 +834,12 @@ export class AppRoot extends LitElement {
       // Reload stats for new language
       await this.loadWordStats();
     };
+
+  private handleWordsUpdated = async () => {
+    // Reload word stats when words are added/updated
+    await this.loadWordStats();
+    this.requestUpdate();
+  };
 
   /**
    * Pre-generate dialog session after language changes

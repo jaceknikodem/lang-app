@@ -298,11 +298,11 @@ export class WordSelector extends LitElement {
       }
 
       .success-message {
-        color: var(--success-color);
-        background: #e8f5e9;
+        color: var(--text-primary);
+        background: var(--background-secondary);
         padding: var(--spacing-md);
         border-radius: var(--border-radius);
-        border: 1px solid #c8e6c9;
+        border: 1px solid var(--border-color);
         text-align: center;
       }
 
@@ -602,6 +602,12 @@ export class WordSelector extends LitElement {
         this.wordsProcessed = true;
         window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
         
+        // Dispatch event to update word stats in top panel
+        window.dispatchEvent(new CustomEvent('words-updated', {
+          bubbles: true,
+          composed: true
+        }));
+        
         // Auto-navigate to Review once first word is ready
         if (queuedCount > 0 && this.queuedWordIds.length > 0) {
           // Wait for first word to be ready (non-blocking)
@@ -699,10 +705,16 @@ export class WordSelector extends LitElement {
         ` : ''}
 
         <div class="word-list">
-          ${this.selectableWords.map((word, index) => html`
+          ${(this.wordsProcessed 
+            ? this.selectableWords.filter(w => w.selected || w.markedAsKnown)
+            : this.selectableWords
+          ).map((word, index) => {
+            // Find the original index in selectableWords array
+            const originalIndex = this.selectableWords.findIndex(w => w.word === word.word && w.translation === word.translation);
+            return html`
             <div 
               class="word-item ${word.selected ? 'selected' : ''} ${word.markedAsKnown ? 'known' : ''} ${this.wordsProcessed ? 'disabled' : ''}"
-              @click=${() => !this.wordsProcessed && this.toggleWordSelection(index)}
+              @click=${() => !this.wordsProcessed && this.toggleWordSelection(originalIndex)}
             >
               <div class="word-actions">
                 ${word.frequencyTier ? html`
@@ -712,7 +724,7 @@ export class WordSelector extends LitElement {
                   ${word.markedAsKnown ? html`
                     <button
                       class="undo-btn"
-                      @click=${(e: Event) => this.markWordAsKnown(index, e)}
+                      @click=${(e: Event) => this.markWordAsKnown(originalIndex, e)}
                       title="Undo mark as known"
                     >
                       Undo
@@ -720,7 +732,7 @@ export class WordSelector extends LitElement {
                   ` : html`
                     <button
                       class="known-btn"
-                      @click=${(e: Event) => this.markWordAsKnown(index, e)}
+                      @click=${(e: Event) => this.markWordAsKnown(originalIndex, e)}
                       title="Mark as known"
                     >
                       Mark as known
@@ -734,7 +746,8 @@ export class WordSelector extends LitElement {
                 <p class="word-translation">${word.translation}</p>
               </div>
             </div>
-          `)}
+          `;
+          })}
         </div>
 
         ${this.error ? html`
@@ -748,13 +761,9 @@ export class WordSelector extends LitElement {
             ${this.statusMessage}
             ${this.wordsProcessed && this.statusMessage.includes('queued for review') ? html`
               <div style="margin-top: var(--spacing-md);">
-                <button
-                  class="btn btn-primary"
-                  @click=${this.handleGoToReview}
-                  style="min-width: 200px;"
-                >
-                  Go to Review
-                </button>
+                <p style="margin: 0; color: var(--text-secondary);">
+                  You will be redirected when words are ready.
+                </p>
               </div>
             ` : ''}
           </div>

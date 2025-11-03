@@ -1605,6 +1605,12 @@ export class SentenceViewer extends LitElement {
         bubbles: true,
         composed: true
       }));
+
+      // Dispatch event to update word stats in top panel
+      window.dispatchEvent(new CustomEvent('words-updated', {
+        bubbles: true,
+        composed: true
+      }));
       
       return newWord || null;
     } catch (error) {
