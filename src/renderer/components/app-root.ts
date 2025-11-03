@@ -337,6 +337,30 @@ export class AppRoot extends LitElement {
         background: var(--background-secondary);
       }
 
+      .settings-button {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        border: none;
+        background: transparent;
+        color: var(--text-tertiary);
+        border-radius: var(--border-radius-small);
+        cursor: pointer;
+        font-size: 16px;
+        line-height: 1;
+        transition: all 0.2s ease;
+        opacity: 0.5;
+      }
+
+      .settings-button:hover {
+        color: var(--text-secondary);
+        opacity: 0.8;
+        background: var(--background-secondary);
+      }
+
+      .settings-button.active {
+        opacity: 1;
+        color: var(--primary-color);
+      }
+
       .nav-left-group {
         display: flex;
         align-items: center;
@@ -1349,13 +1373,6 @@ export class AppRoot extends LitElement {
                 >
                   Dialog
                 </button>
-                <button 
-                  class="nav-button ${router.isCurrentMode('settings') ? 'active' : ''}"
-                  @click=${() => this.handleNavigation('settings')}
-                  title="Settings"
-                >
-                  Settings
-                </button>
               ` : ''}
               ${this.currentLanguage ? html`
                 <div class="language-dropdown">
@@ -1419,6 +1436,13 @@ export class AppRoot extends LitElement {
                   <span class="autopilot-slider"></span>
                 </label>
               </div>
+              <button 
+                class="settings-button ${router.isCurrentMode('settings') ? 'active' : ''}"
+                @click=${() => this.handleNavigation('settings')}
+                title="Settings"
+              >
+                ⚙️
+              </button>
               <button 
                 class="close-button"
                 @click=${this.handleCloseApp}
