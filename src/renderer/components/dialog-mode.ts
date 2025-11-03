@@ -87,6 +87,9 @@ export class DialogMode extends LitElement {
   @state()
   private showTranslations = true;
 
+  @state()
+  private autoplayEnabled = false;
+
   private recordingTimer: number | null = null;
   private recordingStatusCheckTimer: number | null = null;
   private speechRecognitionCheckTimer: number | null = null;
@@ -149,6 +152,7 @@ export class DialogMode extends LitElement {
     
     this.loadDialogSession();
     this.checkSpeechRecognitionReady();
+    this.loadAutoplaySetting();
     
     // Set up periodic checks
     this.speechRecognitionCheckTimer = window.setInterval(() => {
@@ -236,6 +240,9 @@ export class DialogMode extends LitElement {
           responseOptionsCount: cachedSession.responseOptions.length
         });
         
+        // Reload autoplay setting to ensure it's up-to-date
+        await this.loadAutoplaySetting();
+        
         // Get current language to verify cached session is for the correct language
         const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
         
@@ -279,8 +286,8 @@ export class DialogMode extends LitElement {
               
               this.isLoading = false;
               
-              // Auto-play trigger audio if available
-              if (this.beforeSentenceAudio) {
+              // Auto-play trigger audio if available and autoplay is enabled
+              if (this.beforeSentenceAudio && this.autoplayEnabled) {
                 requestAnimationFrame(() => {
                   setTimeout(() => {
                     this.playBeforeSentence();
@@ -311,6 +318,10 @@ export class DialogMode extends LitElement {
 
       // No cached session - generate new one
       console.log('[DialogMode] loadDialogSession - no cached session, generating new');
+      
+      // Reload autoplay setting to ensure it's up-to-date
+      await this.loadAutoplaySetting();
+      
       // Step 1: Select a sentence with high word strengths
       const sentence = await window.electronAPI.dialog.selectSentence();
       
@@ -411,8 +422,8 @@ export class DialogMode extends LitElement {
         }
       }
       
-      // Auto-play trigger audio if available (after component updates)
-      if (this.beforeSentenceAudio) {
+      // Auto-play trigger audio if available and autoplay is enabled (after component updates)
+      if (this.beforeSentenceAudio && this.autoplayEnabled) {
         // Use requestAnimationFrame to ensure component has rendered
         requestAnimationFrame(() => {
           setTimeout(() => {
@@ -433,6 +444,16 @@ export class DialogMode extends LitElement {
     } catch (error) {
       console.error('Failed to check speech recognition readiness:', error);
       this.speechRecognitionReady = false;
+    }
+  }
+
+  private async loadAutoplaySetting() {
+    try {
+      const autoplaySetting = await window.electronAPI.database.getSetting('autoplay_audio');
+      this.autoplayEnabled = autoplaySetting === 'true';
+    } catch (error) {
+      console.error('Failed to load autoplay setting:', error);
+      this.autoplayEnabled = false;
     }
   }
 
@@ -896,8 +917,8 @@ export class DialogMode extends LitElement {
       }
       this.showFollowUp = true;
       
-      // Auto-play continuation audio if available
-      if (this.followUpAudio) {
+      // Auto-play continuation audio if available and autoplay is enabled
+      if (this.followUpAudio && this.autoplayEnabled) {
         requestAnimationFrame(() => {
           setTimeout(() => {
             this.playFollowUpAudio();
