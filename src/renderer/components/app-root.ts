@@ -60,12 +60,16 @@ export class AppRoot extends LitElement {
   @state()
   private currentProficiencyLevel: ProficiencyLevel | null = null;
 
+  @state()
+  private transitionMessage: string | null = null;
+
   private static readonly WEAK_THRESHOLD = 30;
   private static readonly STRONG_THRESHOLD = 80;
 
   private routerUnsubscribe?: () => void;
   private keyboardUnsubscribe?: () => void;
   private autopilotIntervalId: number | null = null;
+  private transitionMessageTimeout: number | null = null;
 
   static styles = [
     sharedStyles,
@@ -222,6 +226,29 @@ export class AppRoot extends LitElement {
         outline: none;
         border-color: var(--primary-color);
         box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+      }
+
+      .transition-indicator {
+        position: fixed;
+        top: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000;
+        background: var(--background-primary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-small);
+        padding: var(--spacing-sm) var(--spacing-md);
+        font-size: 13px;
+        color: var(--text-secondary);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease-in-out;
+        white-space: nowrap;
+      }
+
+      .transition-indicator.visible {
+        opacity: 1;
       }
 
       .language-option {
@@ -569,6 +596,10 @@ export class AppRoot extends LitElement {
     }
     if (this.keyboardUnsubscribe) {
       this.keyboardUnsubscribe();
+    }
+    if (this.transitionMessageTimeout !== null) {
+      clearTimeout(this.transitionMessageTimeout);
+      this.transitionMessageTimeout = null;
     }
     this.removeEventListener('language-changed', this.handleLanguageChanged);
   }
@@ -1120,6 +1151,44 @@ export class AppRoot extends LitElement {
     }
   }
 
+  /**
+   * Get transition message text for a mode
+   */
+  private getTransitionMessage(mode: 'learning' | 'quiz' | 'dialog' | 'flow'): string {
+    switch (mode) {
+      case 'learning':
+        return "Let's review some words";
+      case 'quiz':
+        return "Let's quiz some words";
+      case 'dialog':
+        return "Let's practice speaking";
+      case 'flow':
+        return "Let's get into the flow";
+      default:
+        return '';
+    }
+  }
+
+  /**
+   * Show transition message and clear it after a delay
+   */
+  private showTransitionMessage(message: string): void {
+    // Clear any existing timeout
+    if (this.transitionMessageTimeout !== null) {
+      clearTimeout(this.transitionMessageTimeout);
+      this.transitionMessageTimeout = null;
+    }
+
+    // Set the message
+    this.transitionMessage = message;
+
+    // Clear after 3 seconds
+    this.transitionMessageTimeout = window.setTimeout(() => {
+      this.transitionMessage = null;
+      this.transitionMessageTimeout = null;
+    }, 3000);
+  }
+
   private async checkScoresAndNavigate(initialTakeover = false) {
     try {
       // Get current mode - only pass valid scoring modes to the service
@@ -1153,6 +1222,10 @@ export class AppRoot extends LitElement {
       if (!result.nextMode) {
         return;
       }
+      
+      // Show transition message
+      const message = this.getTransitionMessage(result.nextMode);
+      this.showTransitionMessage(message);
       
       // Navigate to the recommended mode
       await this.handleNavigation(result.nextMode);
@@ -1353,6 +1426,12 @@ export class AppRoot extends LitElement {
           </div>
         </main>
       </div>
+
+      ${this.transitionMessage ? html`
+        <div class="transition-indicator visible">
+          ${this.transitionMessage}
+        </div>
+      ` : ''}
 
       <!-- Flow mode overlay - always rendered, appears on top when active -->
       <flow-mode></flow-mode>
