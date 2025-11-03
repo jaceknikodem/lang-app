@@ -38,6 +38,9 @@ export class FlowMode extends LitElement {
   @state()
   private stitchedAudioPath: string | null = null;
 
+  @state()
+  private currentLanguage: string | null = null;
+
   private keyboardUnsubscribe?: () => void;
   private audioElement: HTMLAudioElement | null = null;
   private playbackTimer: number | null = null;
@@ -78,12 +81,22 @@ export class FlowMode extends LitElement {
       this.isLoading = true;
       this.error = '';
 
+      // Get current language for per-language caching
+      try {
+        this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+      } catch (error) {
+        console.warn('[Flow] Failed to get current language:', error);
+        this.currentLanguage = null;
+      }
+
       // Check cache first before loading sentences
       let needsStitching = true;
-      const defaultAudioPath = 'audio/flow_stitched.mp3';
+      const languageSuffix = this.currentLanguage ? `_${this.currentLanguage}` : '';
+      const defaultAudioPath = `audio/flow_stitched${languageSuffix}.mp3`;
       
       // Check if cached file exists and is recent (within 2 hours)
-      const pathToCheck = this.stitchedAudioPath || defaultAudioPath;
+      // Always check the current language-specific path, not a previously cached path
+      const pathToCheck = defaultAudioPath;
       const stats = await window.electronAPI.flow.getFileStats(pathToCheck);
       if (stats) {
         const fileAge = Date.now() - stats.mtime.getTime();
@@ -92,6 +105,9 @@ export class FlowMode extends LitElement {
           this.stitchedAudioPath = pathToCheck;
           needsStitching = false;
         }
+      } else {
+        // If the language-specific cache doesn't exist, clear any previous path
+        this.stitchedAudioPath = null;
       }
 
       // Only load sentences and stitch if cache is not valid
@@ -126,10 +142,14 @@ export class FlowMode extends LitElement {
           return;
         }
 
-        // Stitch audio files
+        // Stitch audio files with language for per-language caching
         this.isStitching = true;
         try {
-          this.stitchedAudioPath = await window.electronAPI.flow.stitchAudio(audioPaths);
+          // Language is required for stitching
+          if (!this.currentLanguage) {
+            throw new Error('Current language is required for flow mode audio stitching');
+          }
+          this.stitchedAudioPath = await window.electronAPI.flow.stitchAudio(audioPaths, this.currentLanguage);
           if (!this.stitchedAudioPath) {
             this.error = 'Failed to stitch audio files. Please ensure ffmpeg is installed.';
           }

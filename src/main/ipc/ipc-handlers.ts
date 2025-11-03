@@ -1725,13 +1725,23 @@ function setupFlowHandlers(
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.FLOW.STITCH_AUDIO, async (event, audioPaths: string[]) => {
+  ipcMain.handle(IPC_CHANNELS.FLOW.STITCH_AUDIO, async (event, audioPaths: string[], language: string) => {
     try {
       const AudioPathsSchema = z.array(z.string().min(1).max(500));
       const validatedPaths = AudioPathsSchema.parse(audioPaths);
       
+      // Validate language parameter
+      if (!language || typeof language !== 'string') {
+        // If not provided, get from database as fallback
+        try {
+          language = await databaseLayer.getCurrentLanguage();
+        } catch (error) {
+          throw new Error('Language parameter is required for stitching audio');
+        }
+      }
+      
       // Don't log here - audioService.stitchAudio() will check cache first and log appropriately
-      const stitchedPath = await audioService.stitchAudio(validatedPaths);
+      const stitchedPath = await audioService.stitchAudio(validatedPaths, language);
       
       if (!stitchedPath) {
         throw new Error('Failed to stitch audio files');

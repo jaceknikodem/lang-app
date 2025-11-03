@@ -309,8 +309,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     flow: {
       getFlowSentences: () =>
         ipcRenderer.invoke(IPC_CHANNELS.FLOW.GET_FLOW_SENTENCES),
-      stitchAudio: (audioPaths: string[]) =>
-        ipcRenderer.invoke(IPC_CHANNELS.FLOW.STITCH_AUDIO, audioPaths),
+      stitchAudio: (audioPaths: string[], language: string) =>
+        ipcRenderer.invoke(IPC_CHANNELS.FLOW.STITCH_AUDIO, audioPaths, language),
       getFileStats: (filePath: string) =>
         ipcRenderer.invoke(IPC_CHANNELS.FLOW.GET_FILE_STATS, filePath)
     },
@@ -511,7 +511,7 @@ declare global {
           beforeSentenceAudio?: string;
           continuationAudios: string[];
         }>>;
-        stitchAudio: (audioPaths: string[]) => Promise<string>;
+        stitchAudio: (audioPaths: string[], language: string) => Promise<string>;
         getFileStats: (filePath: string) => Promise<{ mtime: Date } | null>;
       };
       scoring: {

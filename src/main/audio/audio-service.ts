@@ -297,8 +297,10 @@ export class AudioService {
    * Stitch multiple audio files together with 2 seconds silence between them
    * Uses ffmpeg to concatenate audio files
    * Returns path to the stitched audio file
+   * @param audioPaths - Array of audio file paths to stitch
+   * @param language - Language code for cache per language (e.g., 'spanish', 'italian') - required
    */
-  async stitchAudio(audioPaths: string[]): Promise<string | null> {
+  async stitchAudio(audioPaths: string[], language: string): Promise<string | null> {
     try {
       if (!audioPaths || audioPaths.length === 0) {
         return null;
@@ -364,8 +366,9 @@ export class AudioService {
         return null;
       }
 
-      // Create output file path
-      const outputPath = join(audioDir, 'flow_stitched.mp3');
+      // Create output file path with language suffix for per-language caching
+      const languageSuffix = `_${language}`;
+      const outputPath = join(audioDir, `flow_stitched${languageSuffix}.mp3`);
 
       // Check if output file exists and is recent (within 2 hours) to use cache
       const { stat, unlink } = require('fs').promises;
