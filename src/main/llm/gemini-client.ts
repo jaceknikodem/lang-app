@@ -124,12 +124,12 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
     }
   }
 
-  async generateTopicWords(topic: string, language: string, count: number): Promise<GeneratedWord[]> {
+  async generateTopicWords(topic: string, language: string, count: number, proficiencyLevel?: string): Promise<GeneratedWord[]> {
     this.ensureApiKey();
 
     // Call base class implementation, but add validation logging
     try {
-      const words = await super.generateTopicWords(topic, language, count);
+      const words = await super.generateTopicWords(topic, language, count, proficiencyLevel);
       return words;
     } catch (error) {
       this.logValidationError(error, 'GEMINI VALIDATION FAILED');
@@ -137,12 +137,12 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
     }
   }
 
-  async generateSentences(word: string, language: string, count: number, topic?: string): Promise<GeneratedSentence[]> {
+  async generateSentences(word: string, language: string, count: number, topic?: string, proficiencyLevel?: string): Promise<GeneratedSentence[]> {
     this.ensureApiKey();
 
     // Call base class implementation, but add validation logging
     try {
-      const sentences = await super.generateSentences(word, language, count, topic);
+      const sentences = await super.generateSentences(word, language, count, topic, proficiencyLevel);
       return sentences;
     } catch (error) {
       this.logValidationError(error, 'GEMINI SENTENCE VALIDATION FAILED');

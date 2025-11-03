@@ -156,7 +156,7 @@ export class ContentGenerator {
       }
 
       // Otherwise, use LLM-based topic generation
-      return await this.generateLLMTopicVocabulary(topicText, targetLanguage, wordCount);
+      return await this.generateLLMTopicVocabulary(topicText, targetLanguage, wordCount, database);
 
     } catch (error) {
       throw this.handleContentGenerationError(error, 'vocabulary generation');
@@ -229,7 +229,8 @@ export class ContentGenerator {
   private async generateLLMTopicVocabulary(
     topicText: string,
     targetLanguage: string,
-    wordCount: number
+    wordCount: number,
+    database?: DatabaseLayer
   ): Promise<GeneratedWord[]> {
     // Validate LLM availability before attempting generation
     const isAvailable = await this.llmClient.isAvailable();
@@ -246,8 +247,19 @@ export class ContentGenerator {
 
     console.log(`Generating LLM vocabulary: topic="${topicText}", language="${targetLanguage}", count=${wordCount}`);
 
+    // Get proficiency level for the language
+    let proficiencyLevel: string | undefined;
+    if (database) {
+      try {
+        const proficiencyKey = `language_proficiency_${targetLanguage.toLowerCase()}`;
+        proficiencyLevel = await database.getSetting(proficiencyKey) || undefined;
+      } catch (error) {
+        console.warn('Failed to retrieve proficiency level:', error);
+      }
+    }
+
     const words = await this.executeWithRetry(
-      () => this.llmClient.generateTopicWords(topicText, targetLanguage, wordCount),
+      () => this.llmClient.generateTopicWords(topicText, targetLanguage, wordCount, proficiencyLevel),
       `generate vocabulary for topic: ${topicText || 'general'}`
     );
 
@@ -376,9 +388,20 @@ export class ContentGenerator {
         }
       }
 
+      // Get proficiency level for the language
+      let proficiencyLevel: string | undefined;
+      if (database) {
+        try {
+          const proficiencyKey = `language_proficiency_${targetLanguage.toLowerCase()}`;
+          proficiencyLevel = await database.getSetting(proficiencyKey) || undefined;
+        } catch (error) {
+          console.warn('Failed to retrieve proficiency level:', error);
+        }
+      }
+
       // Always use context sentences
       const sentences = await this.executeWithRetry(
-        () => this.llmClient.generateSentences(word.trim(), targetLanguage, sentenceCount, topic),
+        () => this.llmClient.generateSentences(word.trim(), targetLanguage, sentenceCount, topic, proficiencyLevel),
         `generate sentences for word: ${word}`
       );
 

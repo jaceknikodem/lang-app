@@ -72,12 +72,12 @@ export abstract class BaseLLMClient {
   /**
    * Generate topic words - shared implementation
    */
-  async generateTopicWords(topic: string, language: string, count: number): Promise<GeneratedWord[]> {
+  async generateTopicWords(topic: string, language: string, count: number, proficiencyLevel?: string): Promise<GeneratedWord[]> {
     // Get existing words to check for duplicates
     const existingWords = await this.getExistingWords(language);
     const existingWordsSet = new Set(existingWords.map(w => w.toLowerCase()));
 
-    const prompt = this.createTopicWordsPrompt(topic, language, count, existingWords);
+    const prompt = this.createTopicWordsPrompt(topic, language, count, existingWords, proficiencyLevel);
 
     try {
       const response = await this.makeRequest(prompt, this.getWordGenerationModel());
@@ -122,10 +122,10 @@ export abstract class BaseLLMClient {
   /**
    * Generate sentences - shared implementation
    */
-  async generateSentences(word: string, language: string, count: number, topic?: string): Promise<GeneratedSentence[]> {
+  async generateSentences(word: string, language: string, count: number, topic?: string, proficiencyLevel?: string): Promise<GeneratedSentence[]> {
     // Get known words to include in sentences when possible
     const knownWords = await this.getKnownWords(language);
-    const prompt = this.createSentencesPrompt(word, language, count, knownWords, topic);
+    const prompt = this.createSentencesPrompt(word, language, count, knownWords, topic, proficiencyLevel);
 
     try {
       const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
@@ -229,7 +229,7 @@ export abstract class BaseLLMClient {
   /**
    * Create prompt for topic word generation
    */
-  protected createTopicWordsPrompt(topic: string, language: string, count: number, existingWords: string[] = []): string {
+  protected createTopicWordsPrompt(topic: string, language: string, count: number, existingWords: string[] = [], proficiencyLevel?: string): string {
     const example = `  {"word": "${language.toLowerCase()}_word1", "translation": "english_translation1"}`;
 
     // Create exclusion list for prompt
@@ -237,12 +237,33 @@ export abstract class BaseLLMClient {
       ? `\nIMPORTANT: Do NOT include any of these existing words: ${existingWords.slice(0, 50).join(', ')}${existingWords.length > 50 ? '...' : ''}`
       : '';
 
+    // Create proficiency level guidance
+    let proficiencyText = '';
+    if (proficiencyLevel) {
+      let levelGuidance = '';
+      switch (proficiencyLevel) {
+        case 'newbie':
+          levelGuidance = 'Use very simple, basic words that beginners can understand';
+          break;
+        case 'a1':
+          levelGuidance = 'Use simple, everyday words appropriate for A1 beginners';
+          break;
+        case 'a2':
+          levelGuidance = 'Use common words appropriate for A2 elementary learners';
+          break;
+        case 'b1':
+          levelGuidance = 'Use intermediate vocabulary appropriate for B1 learners';
+          break;
+      }
+      proficiencyText = `\nIMPORTANT: The user's proficiency level is ${proficiencyLevel.toUpperCase()}. Adjust vocabulary complexity accordingly: ${levelGuidance}`;
+    }
+
     // Topic is always specified when this method is called
     return `CRITICAL: You must return exactly ${count} words in a JSON array. No more, no less.
 CRITICAL: Return ONLY the JSON array, no explanations or extra text.
 CRITICAL: All words must be in their canonical dictionary form (infinitive for verbs, singular for nouns, base form for adjectives).
 
-Task: Generate exactly ${count} different ${language} words related to "${topic}".${exclusionText}
+Task: Generate exactly ${count} different ${language} words related to "${topic}".${proficiencyText}${exclusionText}
 
 Expected output format (${count} items):
 [
@@ -266,7 +287,7 @@ Rules:
   /**
    * Create prompt for sentence generation
    */
-  protected createSentencesPrompt(word: string, language: string, count: number, knownWords: string[] = [], topic?: string): string {
+  protected createSentencesPrompt(word: string, language: string, count: number, knownWords: string[] = [], topic?: string, proficiencyLevel?: string): string {
     const example = `  {
     "sentence": "${language.toLowerCase()}_sentence1_with_${word}",
     "translation": "english_translation1",
@@ -286,10 +307,31 @@ Rules:
       ? `\nIMPORTANT: All sentences should relate to or be contextually relevant to the topic: "${topic.trim()}"`
       : '';
 
+    // Create proficiency level guidance
+    let proficiencyText = '';
+    if (proficiencyLevel) {
+      let levelGuidance = '';
+      switch (proficiencyLevel) {
+        case 'newbie':
+          levelGuidance = 'Use very simple sentence structures, basic grammar, and common words';
+          break;
+        case 'a1':
+          levelGuidance = 'Use simple sentence structures appropriate for A1 beginners';
+          break;
+        case 'a2':
+          levelGuidance = 'Use common sentence structures appropriate for A2 elementary learners';
+          break;
+        case 'b1':
+          levelGuidance = 'Use intermediate sentence structures appropriate for B1 learners';
+          break;
+      }
+      proficiencyText = `\nIMPORTANT: The user's proficiency level is ${proficiencyLevel.toUpperCase()}. Adjust sentence complexity accordingly: ${levelGuidance}`;
+    }
+
     return `CRITICAL: You must return exactly ${count} sentences in a JSON array. No more, no less.
 CRITICAL: Return ONLY the JSON array, no explanations or extra text.
 
-Task: Generate exactly ${count} natural, conversational sentences in ${language} using the word '${word}' (note: this word is in its canonical dictionary form).${knownWordsText}${topicText}
+Task: Generate exactly ${count} natural, conversational sentences in ${language} using the word '${word}' (note: this word is in its canonical dictionary form).${knownWordsText}${topicText}${proficiencyText}
 
 Expected output format (${count} items):
 [
