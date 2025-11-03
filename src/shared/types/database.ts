@@ -125,8 +125,8 @@ export interface DatabaseLayer {
   getRandomSentenceForWord(wordId: number): Promise<Sentence | null>;
   
   // Dialog-specific operations
-  getRandomDialogSentence(minStrength: number, language?: string): Promise<Sentence | null>;
-  getRandomDialogSentences(count: number, minStrength: number, language?: string): Promise<Sentence[]>;
+  getRandomDialogSentence(language?: string): Promise<Sentence | null>;
+  getRandomDialogSentences(count: number, language?: string): Promise<Sentence[]>;
   
   // Settings management
   getSetting(key: string): Promise<string | null>;

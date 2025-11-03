@@ -49,14 +49,11 @@ export class DialogService {
   }
 
   /**
-   * Select a sentence where word strengths are high
+   * Select a sentence for dialog practice
    * All filtering and random selection is handled at the database level for efficiency
    */
   async selectSentence(language: string): Promise<Sentence | null> {
-    const sentence = await this.database.getRandomDialogSentence(
-      this.config.minWordStrength!,
-      language
-    );
+    const sentence = await this.database.getRandomDialogSentence(language);
     
     return sentence;
   }
@@ -216,11 +213,7 @@ export class DialogService {
     }
 
     // Step 1: Batch query - get all sentences at once from database
-    const sentences = await this.database.getRandomDialogSentences(
-      count,
-      this.config.minWordStrength!,
-      language
-    );
+    const sentences = await this.database.getRandomDialogSentences(count, language);
 
     if (sentences.length === 0) {
       return [];
