@@ -9,6 +9,7 @@ import { router, RouteState, AppMode } from '../utils/router.js';
 import { sessionManager, SessionState } from '../utils/session-manager.js';
 import { sharedStyles } from '../styles/shared.js';
 import { keyboardManager, useKeyboardBindings, GlobalShortcuts } from '../utils/keyboard-manager.js';
+import { autoAddNewWords } from '../utils/auto-add-words.js';
 import type { ProficiencyLevel } from './language-proficiency-selector.js';
 import './topic-selector.js';
 import './word-selector.js';
@@ -1154,6 +1155,32 @@ export class AppRoot extends LitElement {
       }
     } catch (error) {
       console.error('Error checking scores for autopilot:', error);
+    }
+  }
+
+  /**
+   * Automatically add new words by selecting a random topic, generating words,
+   * and processing 5 top words automatically.
+   */
+  private async handleAutoAddNew(): Promise<void> {
+    try {
+      console.log('[Auto Add] Starting auto-add new words flow...');
+      const result = await autoAddNewWords(this.currentLanguage);
+      
+      if (result.success) {
+        console.log(`[Auto Add] Successfully added ${result.wordsAdded} words for topic: "${result.topic}"`);
+        
+        // Reload stats and check existing words after adding
+        await this.loadWordStats();
+        await this.checkExistingWords();
+        
+        // Trigger autopilot check
+        window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
+      } else {
+        console.error(`[Auto Add] Failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('[Auto Add] Error in handleAutoAddNew:', error);
     }
   }
 

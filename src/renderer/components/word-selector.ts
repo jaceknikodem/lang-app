@@ -8,6 +8,7 @@ import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
 import { useKeyboardBindings, CommonKeys } from '../utils/keyboard-manager.js';
+import { processSelectedWords, processKnownWords, setupWordProcessingSession } from '../utils/word-processor.js';
 import { GeneratedWord } from '../../shared/types/core.js';
 
 interface SelectableWord extends GeneratedWord {
@@ -469,10 +470,10 @@ export class WordSelector extends LitElement {
     try {
       console.log('Processing', selectedWords.length, 'selected words and', knownWords.length, 'known words...');
 
-      // Set the current language in database to match the words being inserted
-      await window.electronAPI.database.setCurrentLanguage(this.language);
-      console.log('Set current language to:', this.language);
-      sessionManager.setActiveLanguage(this.language);
+      // Set up processing session (language and topic)
+      await setupWordProcessingSession(this.language, this.topic);
+      
+      // Dispatch language changed event for UI updates
       this.dispatchEvent(new CustomEvent('language-changed', {
         detail: { language: this.language },
         bubbles: true,
@@ -480,64 +481,20 @@ export class WordSelector extends LitElement {
       }));
 
       // Process known words first (simpler - no sentences needed)
-      let processedKnown = 0;
-      const failedWords: string[] = [];
+      const knownResult = await processKnownWords(knownWords, {
+        language: this.language
+      });
 
-      for (let i = 0; i < knownWords.length; i++) {
-        const word = knownWords[i];
-        console.log(`Processing known word ${i + 1}/${knownWords.length}: ${word.word}`);
+      // Process selected words (insert and enqueue for generation)
+      const selectedResult = await processSelectedWords(selectedWords, {
+        language: this.language,
+        topic: this.topic,
+        desiredSentenceCount: 3
+      });
 
-        try {
-          // Insert word into database
-          const wordId = await window.electronAPI.database.insertWord({
-            word: word.word,
-            language: this.language,
-            translation: word.translation
-          });
-
-          // Mark as known immediately
-          await window.electronAPI.database.markWordKnown(wordId, true);
-          console.log('Known word processed:', word.word);
-          processedKnown++;
-        } catch (wordError) {
-          console.error(`Failed to process known word ${word.word}:`, wordError);
-          failedWords.push(word.word);
-        }
-      }
-
-      // Store selected words in database and enqueue jobs for asynchronous processing
-      let queuedCount = 0;
-
-      for (let i = 0; i < selectedWords.length; i++) {
-        const word = selectedWords[i];
-        console.log(`Processing word ${i + 1}/${selectedWords.length}: ${word.word}`);
-
-        try {
-          // Insert word into database
-          console.log('Inserting word into database:', word.word);
-          const wordId = await window.electronAPI.database.insertWord({
-            word: word.word,
-            language: this.language,
-            translation: word.translation
-          });
-          console.log('Word inserted with ID:', wordId);
-          await window.electronAPI.jobs.enqueueWordGeneration(wordId, {
-            language: this.language,
-            topic: this.topic,
-            desiredSentenceCount: 3
-          });
-          queuedCount++;
-          console.log('Enqueued word for asynchronous processing:', word.word);
-        } catch (wordError) {
-          console.error(`Failed to process word ${word.word}:`, wordError);
-          failedWords.push(word.word);
-        }
-      }
-
-      // Update session with topic
-      if (this.topic) {
-        sessionManager.updateSelectedTopic(this.topic);
-      }
+      const queuedCount = selectedResult.queuedCount;
+      const processedKnown = knownResult.processedKnown;
+      const failedWords = [...selectedResult.failedWords, ...knownResult.failedWords];
 
       if (queuedCount === 0 && processedKnown === 0) {
         throw new Error(failedWords.length ? `Failed to process: ${failedWords.join(', ')}` : 'No words were processed. Please try again.');
