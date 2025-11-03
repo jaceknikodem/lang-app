@@ -969,10 +969,8 @@ export class AppRoot extends LitElement {
     // Update session manager with current route state
     const routeData = router.getRouteData();
 
-      // Only update mode if it's not 'flow' (flow doesn't have a session state)
-      if (this.currentRoute.mode !== 'flow') {
-        sessionManager.updateCurrentMode(this.currentRoute.mode as 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'dialog' | 'settings');
-      }
+      // Update mode (flow is not a route, so it won't be in currentRoute)
+      sessionManager.updateCurrentMode(this.currentRoute.mode as 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'dialog' | 'settings');
 
     if (routeData?.topic) {
       sessionManager.updateSelectedTopic(routeData.topic);
@@ -1006,22 +1004,8 @@ export class AppRoot extends LitElement {
         router.goToDialog();
         break;
       case 'flow':
-        // Stop previously played audio
-        try {
-          await window.electronAPI.audio.stopAudio();
-        } catch (err) {
-          // Ignore errors when stopping (might not be playing)
-        }
-
-        // If we were in review mode (learning mode), stop auto-scroll
-        if (this.currentRoute.mode === 'learning') {
-          window.dispatchEvent(new CustomEvent('stop-auto-scroll', {
-            bubbles: true,
-            composed: true
-          }));
-        }
-
-        router.goToFlow();
+        // Flow mode is now just an overlay, no navigation needed
+        // Just trigger play in flow-mode component
         break;
       case 'settings':
         router.goToSettings();
@@ -1037,7 +1021,7 @@ export class AppRoot extends LitElement {
     }
   }
 
-  private async handleFlowPlay() {
+  async handleFlowPlay() {
     // Prevent playing if there are no flow sentences available
     if (!this.hasFlowSentences) {
       return;
@@ -1058,16 +1042,14 @@ export class AppRoot extends LitElement {
       }));
     }
 
-    // Navigate to flow mode - the flow-mode component will handle stitching and playing
-    router.goToFlow();
-    
-    // Trigger play in flow-mode component after a short delay to ensure it's mounted
+    // Don't navigate - flow mode is just an overlay
+    // Trigger play in flow-mode component
     setTimeout(() => {
       const flowModeElement = this.shadowRoot?.querySelector('flow-mode') as any;
       if (flowModeElement && typeof flowModeElement.handlePlay === 'function') {
         flowModeElement.handlePlay();
       }
-    }, 100);
+    }, 50);
   }
 
   private handleAutopilotToggle(event: Event) {
@@ -1115,11 +1097,9 @@ export class AppRoot extends LitElement {
     // Set up event listeners for specific actions
     window.addEventListener('autopilot-check-trigger', this.handleAutopilotCheckTrigger);
     
-    // Set up 30-second interval for flow mode
+    // Set up 30-second interval for checking scores periodically
     this.autopilotIntervalId = window.setInterval(() => {
-      if (router.isCurrentMode('flow')) {
-        this.checkScoresAndNavigate();
-      }
+      this.checkScoresAndNavigate();
     }, 30000);
   }
 
@@ -1337,6 +1317,9 @@ export class AppRoot extends LitElement {
         </main>
       </div>
 
+      <!-- Flow mode overlay - always rendered, appears on top when active -->
+      <flow-mode></flow-mode>
+
       ${this.showProficiencySelector ? html`
         <language-proficiency-selector
           .language=${this.currentLanguage}
@@ -1374,9 +1357,6 @@ export class AppRoot extends LitElement {
 
       case 'dialog':
         return html`<dialog-mode></dialog-mode>`;
-
-      case 'flow':
-        return html`<flow-mode></flow-mode>`;
 
       case 'settings':
         return html`<settings-panel></settings-panel>`;
