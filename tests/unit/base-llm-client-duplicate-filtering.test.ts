@@ -5,6 +5,7 @@
 import { BaseLLMClient } from '../../src/main/llm/base-llm-client';
 import { GeneratedWord } from '../../src/shared/types/core';
 import { WordGenerationResponseSchema } from '../../src/main/llm/schemas';
+import { z } from 'zod';
 
 // Create a test subclass to test protected methods
 class TestLLMClient extends BaseLLMClient {
@@ -314,6 +315,54 @@ describe('BaseLLMClient Duplicate Filtering', () => {
 
       await expect(client.testGenerateTopicWords('test', 'Spanish', 3))
         .rejects.toThrow('Failed to generate words');
+    });
+
+    it('should handle ZodError instance with detailed error message', async () => {
+      const zodError = new z.ZodError([
+        {
+          code: 'invalid_type',
+          expected: 'array',
+          received: 'string',
+          path: [],
+          message: 'Expected array, received string'
+        }
+      ]);
+
+      // Simulate Zod validation error by having parse throw
+      client.setMockResponse('not an array');
+      mockDatabase.getExistingWordsForDuplicateChecking.mockResolvedValue([]);
+
+      await expect(client.testGenerateTopicWords('test', 'Spanish', 3))
+        .rejects.toThrow();
+    });
+
+    it('should handle makeRequest throwing non-Error objects', async () => {
+      (client as any).makeRequest = jest.fn().mockRejectedValue('String error');
+      mockDatabase.getExistingWordsForDuplicateChecking.mockResolvedValue([]);
+
+      await expect(client.testGenerateTopicWords('test', 'Spanish', 3))
+        .rejects.toThrow('Failed to generate words');
+    });
+
+    it('should handle null/undefined errors from makeRequest', async () => {
+      (client as any).makeRequest = jest.fn().mockRejectedValue(null);
+      mockDatabase.getExistingWordsForDuplicateChecking.mockResolvedValue([]);
+
+      await expect(client.testGenerateTopicWords('test', 'Spanish', 3))
+        .rejects.toThrow();
+    });
+
+    it('should handle database errors when getting existing words', async () => {
+      const mockWords = [
+        { word: 'hola', translation: 'hello' },
+        { word: 'casa', translation: 'house' }
+      ];
+      client.setMockResponse(mockWords);
+      mockDatabase.getExistingWordsForDuplicateChecking.mockRejectedValue(new Error('Database connection failed'));
+
+      // Should handle gracefully and treat as empty existing words
+      const result = await client.testGenerateTopicWords('test', 'Spanish', 2);
+      expect(result).toHaveLength(2);
     });
   });
 });

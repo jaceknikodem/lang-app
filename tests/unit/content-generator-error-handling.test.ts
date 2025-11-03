@@ -283,56 +283,69 @@ describe('ContentGenerator Error Handling', () => {
   });
 
   describe('validateGeneratedWords', () => {
-    it('should filter out invalid words', () => {
+    it('should filter out invalid words (empty, whitespace, missing translation)', () => {
       const words: GeneratedWord[] = [
         { word: 'hola', translation: 'hello' },
         { word: '', translation: 'empty' }, // Invalid
+        { word: '   ', translation: 'whitespace' }, // Invalid
         { word: 'casa', translation: 'house' },
         { word: 'perro', translation: '' } // Invalid
       ];
 
       const validWords = (generator as any).validateGeneratedWords(words);
-
       expect(validWords).toHaveLength(2);
       expect(validWords.map((w: GeneratedWord) => w.word)).toEqual(['hola', 'casa']);
     });
 
-    it('should filter out words with only whitespace', () => {
+    it('should filter out words exceeding length limits', () => {
       const words: GeneratedWord[] = [
         { word: 'hola', translation: 'hello' },
-        { word: '   ', translation: 'whitespace' }, // Invalid
-        { word: 'casa', translation: 'house' }
-      ];
-
-      const validWords = (generator as any).validateGeneratedWords(words);
-
-      expect(validWords).toHaveLength(2);
-      expect(validWords.map((w: GeneratedWord) => w.word)).toEqual(['hola', 'casa']);
-    });
-
-    it('should return all valid words', () => {
-      const words: GeneratedWord[] = [
-        { word: 'hola', translation: 'hello' },
-        { word: 'casa', translation: 'house' },
+        { word: 'a'.repeat(51), translation: 'too long' }, // Word > 50 chars
+        { word: 'casa', translation: 'b'.repeat(101) }, // Translation > 100 chars
         { word: 'perro', translation: 'dog' }
       ];
 
       const validWords = (generator as any).validateGeneratedWords(words);
-
-      expect(validWords).toHaveLength(3);
-      expect(validWords).toEqual(words);
+      expect(validWords).toHaveLength(2);
+      expect(validWords.map((w: GeneratedWord) => w.word)).toEqual(['hola', 'perro']);
     });
 
-    it('should handle empty array', () => {
-      const words: GeneratedWord[] = [];
-      const validWords = (generator as any).validateGeneratedWords(words);
+    it('should handle non-array input', () => {
+      expect((generator as any).validateGeneratedWords(null)).toEqual([]);
+      expect((generator as any).validateGeneratedWords(undefined)).toEqual([]);
+      expect((generator as any).validateGeneratedWords('not an array')).toEqual([]);
+      expect((generator as any).validateGeneratedWords({})).toEqual([]);
+    });
 
-      expect(validWords).toHaveLength(0);
+    it('should handle words with null/undefined fields', () => {
+      const words: any[] = [
+        { word: 'hola', translation: 'hello' },
+        { word: null, translation: 'hello' }, // Invalid
+        { word: 'casa', translation: undefined }, // Invalid
+        { word: undefined, translation: null }, // Invalid
+        { word: 'perro', translation: 'dog' }
+      ];
+
+      const validWords = (generator as any).validateGeneratedWords(words);
+      expect(validWords).toHaveLength(2);
+      expect(validWords.map((w: GeneratedWord) => w.word)).toEqual(['hola', 'perro']);
+    });
+
+    it('should preserve valid words with frequency info', () => {
+      const words: GeneratedWord[] = [
+        { word: 'hola', translation: 'hello', frequencyPosition: 1, frequencyTier: 'top 100' },
+        { word: 'casa', translation: 'house', frequencyPosition: 2 }
+      ];
+
+      const validWords = (generator as any).validateGeneratedWords(words);
+      expect(validWords).toHaveLength(2);
+      expect(validWords[0].frequencyPosition).toBe(1);
+      expect(validWords[0].frequencyTier).toBe('top 100');
     });
   });
 
   describe('validateGeneratedSentences', () => {
-    it('should filter out invalid sentences', () => {
+    it('should filter out invalid sentences (empty, missing translation)', () => {
       const sentences: GeneratedSentence[] = [
         { sentence: 'Hola mundo', translation: 'Hello world' },
         { sentence: '', translation: 'empty' }, // Invalid
@@ -340,22 +353,120 @@ describe('ContentGenerator Error Handling', () => {
         { sentence: 'Adiós', translation: '' } // Invalid
       ];
 
-      const validSentences = (generator as any).validateGeneratedSentences(sentences);
-
+      const validSentences = (generator as any).validateGeneratedSentences(sentences, 'hola');
       expect(validSentences).toHaveLength(2);
       expect(validSentences.map((s: GeneratedSentence) => s.sentence)).toEqual(['Hola mundo', 'Buenos días']);
     });
 
-    it('should return all valid sentences', () => {
-      const sentences: GeneratedSentence[] = [
+    it('should handle non-array input', () => {
+      expect((generator as any).validateGeneratedSentences(null, 'test')).toEqual([]);
+      expect((generator as any).validateGeneratedSentences(undefined, 'test')).toEqual([]);
+      expect((generator as any).validateGeneratedSentences('not an array', 'test')).toEqual([]);
+    });
+
+    it('should handle sentences with null/undefined fields', () => {
+      const sentences: any[] = [
         { sentence: 'Hola mundo', translation: 'Hello world' },
-        { sentence: 'Buenos días', translation: 'Good morning' }
+        { sentence: null, translation: 'Hello' }, // Invalid
+        { sentence: 'Buenos días', translation: undefined }, // Invalid
+        { sentence: undefined, translation: null }, // Invalid
+        { sentence: 'Adiós', translation: 'Goodbye' }
       ];
 
-      const validSentences = (generator as any).validateGeneratedSentences(sentences);
-
+      const validSentences = (generator as any).validateGeneratedSentences(sentences, 'hola');
       expect(validSentences).toHaveLength(2);
-      expect(validSentences).toEqual(sentences);
+      expect(validSentences.map((s: GeneratedSentence) => s.sentence)).toEqual(['Hola mundo', 'Adiós']);
+    });
+
+    it('should filter out sentences exceeding length limits', () => {
+      const sentences: GeneratedSentence[] = [
+        { sentence: 'Hola mundo', translation: 'Hello world' },
+        { sentence: 'a'.repeat(201), translation: 'too long' }, // Sentence > 200 chars
+        { sentence: 'Buenos días', translation: 'b'.repeat(301) }, // Translation > 300 chars
+        { sentence: 'Adiós', translation: 'Goodbye' }
+      ];
+
+      const validSentences = (generator as any).validateGeneratedSentences(sentences, 'hola');
+      expect(validSentences).toHaveLength(2);
+      expect(validSentences.map((s: GeneratedSentence) => s.sentence)).toEqual(['Hola mundo', 'Adiós']);
+    });
+  });
+
+  describe('shuffleArray', () => {
+    it('should shuffle array elements', () => {
+      const original = [1, 2, 3, 4, 5];
+      const shuffled = (generator as any).shuffleArray(original);
+
+      // Should have same length
+      expect(shuffled).toHaveLength(original.length);
+
+      // Should contain all elements
+      original.forEach(item => {
+        expect(shuffled).toContain(item);
+      });
+
+      // Should preserve element count
+      const shuffledSorted = [...shuffled].sort();
+      const originalSorted = [...original].sort();
+      expect(shuffledSorted).toEqual(originalSorted);
+    });
+
+    it('should handle empty array', () => {
+      const result = (generator as any).shuffleArray([]);
+      expect(result).toEqual([]);
+    });
+
+    it('should handle single element array', () => {
+      const result = (generator as any).shuffleArray([1]);
+      expect(result).toEqual([1]);
+    });
+
+    it('should handle array of strings', () => {
+      const original = ['hola', 'casa', 'perro', 'gato'];
+      const shuffled = (generator as any).shuffleArray(original);
+
+      expect(shuffled).toHaveLength(original.length);
+      original.forEach(item => {
+        expect(shuffled).toContain(item);
+      });
+    });
+
+    it('should handle array of objects', () => {
+      const original = [
+        { word: 'hola', translation: 'hello' },
+        { word: 'casa', translation: 'house' },
+        { word: 'perro', translation: 'dog' }
+      ];
+      const shuffled = (generator as any).shuffleArray(original);
+
+      expect(shuffled).toHaveLength(original.length);
+      // Check that all original objects are present
+      original.forEach(item => {
+        expect(shuffled).toContainEqual(item);
+      });
+    });
+
+    it('should not mutate original array', () => {
+      const original = [1, 2, 3, 4, 5];
+      const originalCopy = [...original];
+      (generator as any).shuffleArray(original);
+
+      expect(original).toEqual(originalCopy);
+    });
+
+    it('should return different order on multiple calls (statistically)', () => {
+      const original = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+      const results: number[][] = [];
+
+      // Run shuffle multiple times
+      for (let i = 0; i < 10; i++) {
+        results.push((generator as any).shuffleArray(original));
+      }
+
+      // Check that at least some shuffles are different (statistical test)
+      // With 10 elements, probability of all being same is extremely low
+      const allSame = results.every(arr => JSON.stringify(arr) === JSON.stringify(original));
+      expect(allSame).toBe(false); // Very unlikely all 10 shuffles match original
     });
   });
 });
