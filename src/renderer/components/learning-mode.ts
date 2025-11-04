@@ -1747,12 +1747,6 @@ export class LearningMode extends LitElement {
         description: 'Play sentence audio'
       },
       {
-        ...GlobalShortcuts.REPLAY_AUDIO,
-        action: () => this.handlePlayCurrentAudio(),
-        context: 'learning',
-        description: 'Replay sentence audio'
-      },
-      {
         ...GlobalShortcuts.TOGGLE_AUDIO_ONLY,
         action: () => this.toggleAudioOnlyMode(),
         context: 'learning',

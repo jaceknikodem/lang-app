@@ -162,7 +162,6 @@ export const CommonKeys = {
 export const GlobalShortcuts = {
   // Audio
   PLAY_AUDIO: { key: CommonKeys.SPACE, description: 'Play/Stop audio' },
-  REPLAY_AUDIO: { key: 'r', description: 'Replay audio' },
   
   // Learning actions
   NEXT: { key: CommonKeys.ARROW_RIGHT, description: 'Next item' },

@@ -666,7 +666,7 @@ export class DialogMode extends LitElement {
       },
       // Toggle translation visibility
       {
-        key: 't',
+        ...GlobalShortcuts.TOGGLE_AUDIO_ONLY,
         action: () => {
           this.showTranslations = !this.showTranslations;
         },
