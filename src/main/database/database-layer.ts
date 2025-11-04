@@ -226,6 +226,15 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       )
     `);
 
+    // Sentence lemmas table - stores all lemmas from sentences, even for words not in database yet
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS sentence_lemmas (
+        sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
+        lemma TEXT NOT NULL,
+        PRIMARY KEY (sentence_id, lemma)
+      )
+    `);
+
     // Dialogue variants table
     db.exec(`
       CREATE TABLE IF NOT EXISTS dialogue_variants (
@@ -266,6 +275,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_word_generation_queue_status ON word_generation_queue(status, updated_at)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_sentence_words_sentence_id ON sentence_words(sentence_id)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_sentence_words_word_id ON sentence_words(word_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_sentence_lemmas_lemma ON sentence_lemmas(lemma)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_sentence_lemmas_sentence_id ON sentence_lemmas(sentence_id)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_dialogue_variants_sentence_id ON dialogue_variants(sentence_id)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_dialogue_variants_created_at ON dialogue_variants(created_at)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_pronunciation_attempts_sentence_id ON pronunciation_attempts(sentence_id)`);
@@ -276,6 +287,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
   /**
    * Insert a new word into the database
+   * Also checks for existing sentences containing this word's lemma and links them
    */
   async insertWord(wordData: CreateWordRequest): Promise<number> {
     const db = this.getDb();
@@ -300,8 +312,43 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         wordData.topic || null,
         tomorrow.toISOString()
       );
+
+      const wordId = result.lastInsertRowid as number;
+
+      // Find existing sentences that contain this word's lemma (same language only)
+      const normalizedWord = wordData.word.toLowerCase().trim();
       
-      return result.lastInsertRowid as number;
+      const findSentencesStmt = db.prepare(`
+        SELECT DISTINCT sl.sentence_id 
+        FROM sentence_lemmas sl
+        INNER JOIN sentences s ON sl.sentence_id = s.id
+        WHERE sl.lemma = ? AND s.language = ?
+      `);
+      
+      const matchingSentences = findSentencesStmt.all(normalizedWord, wordData.language) as Array<{ sentence_id: number }>;
+      
+      if (matchingSentences.length > 0) {
+        // Link these sentences to the new word via sentence_words junction table
+        const insertJunction = db.prepare(`
+          INSERT OR IGNORE INTO sentence_words (sentence_id, word_id)
+          VALUES (?, ?)
+        `);
+
+        const updateSentenceCount = db.prepare(`
+          UPDATE words 
+          SET sentence_count = sentence_count + 1
+          WHERE id = ?
+        `);
+
+        for (const row of matchingSentences) {
+          insertJunction.run(row.sentence_id, wordId);
+          updateSentenceCount.run(wordId);
+        }
+
+        console.log(`[insertWord] Linked ${matchingSentences.length} existing sentences to new word ${wordData.word} (ID: ${wordId})`);
+      }
+      
+      return wordId;
     } catch (error) {
       throw new Error(`Failed to insert word: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -856,6 +903,40 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       if (!matchingWords.find(w => w.id === wordId)) {
         updateSentenceCount.run(wordId);
       }
+
+      // If tokenizedTokens were provided, also store lemmas immediately
+      if (tokenizedTokens && tokenizedTokens.length > 0) {
+        try {
+          // tokenizedTokens is already an array, not a serialized string
+          const parsedTokens = tokenizedTokens;
+          const lemmas = new Set<string>();
+          
+          parsedTokens.forEach((token: any) => {
+            if (token.lemma) {
+              lemmas.add(token.lemma.toLowerCase().trim());
+            } else if (token.dictionaryForm) {
+              lemmas.add(token.dictionaryForm.toLowerCase().trim());
+            }
+          });
+
+          if (lemmas.size > 0) {
+            const insertLemma = db.prepare(`
+              INSERT OR IGNORE INTO sentence_lemmas (sentence_id, lemma)
+              VALUES (?, ?)
+            `);
+
+            lemmas.forEach(lemma => {
+              if (lemma && lemma.length > 0) {
+                insertLemma.run(sentenceId, lemma);
+              }
+            });
+
+            console.log(`[insertSentence] Stored ${lemmas.size} lemmas for sentence ${sentenceId}`);
+          }
+        } catch (error) {
+          console.warn(`Failed to store lemmas for sentence ${sentenceId} during insertion:`, error);
+        }
+      }
       
       return sentenceId;
     } catch (error) {
@@ -999,6 +1080,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
   /**
    * Update sentence tokens (precomputed tokenization)
+   * Also stores all lemmas in sentence_lemmas table for future word matching
    */
   async updateSentenceTokens(sentenceId: number, tokens: any[]): Promise<void> {
     const db = this.getDb();
@@ -1014,6 +1096,47 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       if (result.changes === 0) {
         throw new Error(`Sentence with ID ${sentenceId} not found`);
       }
+
+      // Parse tokens to extract all lemmas
+      // tokens is already an array, not a serialized string
+      const parsedTokens = tokens;
+      if (!parsedTokens || parsedTokens.length === 0) {
+        return;
+      }
+      
+      const lemmas = new Set<string>();
+      
+      parsedTokens.forEach((token: any) => {
+        // Collect lemmas (normalized)
+        if (token.lemma) {
+          lemmas.add(token.lemma.toLowerCase().trim());
+        }
+        // Also use dictionaryForm as fallback if no lemma
+        else if (token.dictionaryForm) {
+          lemmas.add(token.dictionaryForm.toLowerCase().trim());
+        }
+      });
+
+      // Store all lemmas in sentence_lemmas table (even for words not in database yet)
+      const insertLemma = db.prepare(`
+        INSERT OR IGNORE INTO sentence_lemmas (sentence_id, lemma)
+        VALUES (?, ?)
+      `);
+
+      // Remove old lemmas for this sentence
+      const deleteOldLemmas = db.prepare(`
+        DELETE FROM sentence_lemmas WHERE sentence_id = ?
+      `);
+      deleteOldLemmas.run(sentenceId);
+
+      // Insert all lemmas
+      lemmas.forEach(lemma => {
+        if (lemma && lemma.length > 0) {
+          insertLemma.run(sentenceId, lemma);
+        }
+      });
+
+      console.log(`[updateSentenceTokens] Stored ${lemmas.size} lemmas for sentence ${sentenceId}`);
     } catch (error) {
       throw new Error(`Failed to update sentence tokens: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
