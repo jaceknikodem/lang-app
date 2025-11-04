@@ -2314,15 +2314,11 @@ export class QuizMode extends LitElement {
       // Get the expected sentence (foreign language)
       const expectedSentence = this.currentQuestion.sentence.sentence;
 
-      // Get the current language for the multiplier
-      const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
-
       // Compare typed text with expected sentence (same logic as transcription comparison)
       const comparison = await window.electronAPI.audio.compareTranscription(
         typedText,
         expectedSentence,
-        this.currentProficiencyLevel,
-        currentLanguage
+        this.currentProficiencyLevel
       );
 
       console.log('Text comparison:', comparison);
@@ -2444,8 +2440,7 @@ export class QuizMode extends LitElement {
       const comparison = await window.electronAPI.audio.compareTranscription(
         transcriptionResult.text,
         expectedSentence,
-        this.currentProficiencyLevel,
-        currentLanguage
+        this.currentProficiencyLevel
       );
 
       console.log('Transcription comparison:', comparison);

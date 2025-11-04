@@ -180,13 +180,14 @@ export class SpeechRecognitionService {
       // This prevents decoder issues where corrupted headers make the file appear hours long
       const fileToTranscribe = await this.fixWavFile(filePath);
       
-      // Don't specify language - let Whisper auto-detect
-      console.log(`Transcribing audio without specifying language (auto-detect)`);
+      // Convert app language to Whisper language code
+      const whisperLanguageCode = this.mapLanguageToWhisperCode(options.language);
+      console.log(`Transcribing audio with language: ${options.language} (Whisper code: ${whisperLanguageCode})`);
 
       // Use Whisper.cpp Server API format: /inference with file parameter
       // API: curl 127.0.0.1:8080/inference -H "Content-Type: multipart/form-data" 
       //      -F file="@<file-path>" -F temperature="0.0" -F response_format="json"
-      //      -F translate="false"
+      //      -F translate="false" -F language="es"
       const url = `${this.whisperServerUrl}/inference`;
       console.log(`Transcribing audio via Whisper server: ${url}`);
 
@@ -202,7 +203,8 @@ export class SpeechRecognitionService {
       const audioBlob = new Blob([fileBuffer], { type: 'audio/wav' });
       formData.append('file', audioBlob, filename);
       
-      // Don't specify language - let Whisper auto-detect
+      // Specify language for Whisper
+      formData.append('language', whisperLanguageCode);
       
       // Set temperature (default to 0.0 for deterministic output)
       const temperature = options.temperature !== undefined ? options.temperature : 0.0;
@@ -370,7 +372,7 @@ export class SpeechRecognitionService {
 
       return {
         text: cleanedResult,
-        language: undefined, // Language is auto-detected by Whisper
+        language: whisperLanguageCode,
         confidence: confidence
       };
 
@@ -462,13 +464,11 @@ export class SpeechRecognitionService {
    * Compare transcribed text with expected text using Jaro-Winkler similarity
    * Returns similarity score and word-level analysis for color coding
    * @param proficiencyLevel Optional proficiency level to adjust similarity thresholds
-   * @param languageScore Optional language score multiplier (0-1 scale) - active language's average pronunciation score
    */
   compareTranscription(
     transcribed: string,
     expected: string,
-    proficiencyLevel?: ProficiencyLevel | null,
-    languageScore?: number | null
+    proficiencyLevel?: ProficiencyLevel | null
   ): {
     similarity: number;
     normalizedTranscribed: string;
@@ -530,21 +530,9 @@ export class SpeechRecognitionService {
     }
 
     // Calculate overall similarity (average of word similarities)
-    let overallSimilarity = expectedWordMatches.length > 0
+    const overallSimilarity = expectedWordMatches.length > 0
       ? expectedWordMatches.reduce((sum, w) => sum + w.similarity, 0) / expectedWordMatches.length
       : 0;
-
-    // Apply language score multiplier if provided
-    // languageScore should be 0-1 scale (normalized from 0-10 average pronunciation score)
-    // Made more forgiving: use a minimum multiplier of 0.7 and apply a less aggressive scaling
-    if (languageScore !== null && languageScore !== undefined && languageScore > 0) {
-      // Apply a minimum multiplier floor to prevent too harsh reductions
-      const MIN_MULTIPLIER = 0.7;
-      // Scale the multiplier more gently: map 0-1 to 0.7-1.0 range
-      const adjustedMultiplier = MIN_MULTIPLIER + (languageScore * (1.0 - MIN_MULTIPLIER));
-      overallSimilarity = overallSimilarity * adjustedMultiplier;
-      console.log(`Applied language score multiplier: ${languageScore.toFixed(3)} -> ${adjustedMultiplier.toFixed(3)}, adjusted similarity: ${overallSimilarity.toFixed(3)}`);
-    }
 
     return {
       similarity: overallSimilarity,

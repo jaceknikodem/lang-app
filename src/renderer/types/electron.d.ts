@@ -75,7 +75,7 @@ declare global {
         getRecordingInfo: (filePath: string) => Promise<{ size: number; duration?: number } | null>;
         initializeSpeechRecognition: () => Promise<void>;
         transcribeAudio: (filePath: string, options?: any) => Promise<any>;
-        compareTranscription: (transcribed: string, expected: string, proficiencyLevel?: string | null, language?: string | null) => Promise<any>;
+        compareTranscription: (transcribed: string, expected: string, proficiencyLevel?: string | null) => Promise<any>;
         isSpeechRecognitionReady: () => Promise<boolean>;
         switchToElevenLabs: (apiKey: string) => Promise<void>;
         switchToSystemTTS: () => Promise<void>;

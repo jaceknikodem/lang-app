@@ -895,12 +895,28 @@ export class AppRoot extends LitElement {
       this.transitionMessageTimeout = null;
     }
 
-    // Set the message
+    // Set the message first
     this.uiState = { ...this.uiState, transitionMessage: message };
+
+    // Force a re-render and then add visible class after a tiny delay
+    this.requestUpdate();
+    requestAnimationFrame(() => {
+      const indicator = this.shadowRoot?.querySelector('.transition-indicator');
+      if (indicator) {
+        indicator.classList.add('visible');
+      }
+    });
 
     // Clear after 3 seconds
     this.transitionMessageTimeout = window.setTimeout(() => {
-      this.uiState = { ...this.uiState, transitionMessage: null };
+      const indicator = this.shadowRoot?.querySelector('.transition-indicator');
+      if (indicator) {
+        indicator.classList.remove('visible');
+      }
+      // Clear the message after transition completes
+      setTimeout(() => {
+        this.uiState = { ...this.uiState, transitionMessage: null };
+      }, 300); // Wait for transition to complete
       this.transitionMessageTimeout = null;
     }, 3000);
   }
@@ -1120,11 +1136,11 @@ export class AppRoot extends LitElement {
         </main>
       </div>
 
-      ${this.uiState.transitionMessage ? html`
-        <div class="transition-indicator visible">
-          ${this.uiState.transitionMessage}
+      ${html`
+        <div class="transition-indicator ${this.uiState.transitionMessage ? 'visible' : ''}">
+          ${this.uiState.transitionMessage || ''}
         </div>
-      ` : ''}
+      `}
 
       <!-- Flow mode overlay - always rendered, appears on top when active -->
       <flow-mode></flow-mode>

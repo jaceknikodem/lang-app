@@ -904,8 +904,7 @@ export class DialogMode extends LitElement {
           const comparison = await window.electronAPI.audio.compareTranscription(
             transcription.text,
             option.variantSentence,
-            this.currentProficiencyLevel,
-            currentLanguage
+            this.currentProficiencyLevel
           );
           return {
             option,
