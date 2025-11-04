@@ -250,10 +250,11 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.GET_ALL_WORDS,
     createIPCHandler(
-      [z.boolean().optional(), z.boolean().optional()],
-      (includeKnown, includeIgnored) => databaseLayer.getAllWords(
+      [z.boolean().optional(), z.boolean().optional(), LanguageSchema.optional()],
+      (includeKnown, includeIgnored, language) => databaseLayer.getAllWords(
         includeKnown !== undefined ? includeKnown : true,
-        includeIgnored !== undefined ? includeIgnored : false
+        includeIgnored !== undefined ? includeIgnored : false,
+        language
       ),
       'get all words'
     )
@@ -262,10 +263,11 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES,
     createIPCHandler(
-      [z.boolean().optional(), z.boolean().optional()],
-      (includeKnown, includeIgnored) => databaseLayer.getWordsWithSentences(
+      [z.boolean().optional(), z.boolean().optional(), LanguageSchema.optional()],
+      (includeKnown, includeIgnored, language) => databaseLayer.getWordsWithSentences(
         includeKnown !== undefined ? includeKnown : true,
-        includeIgnored !== undefined ? includeIgnored : false
+        includeIgnored !== undefined ? includeIgnored : false,
+        language
       ),
       'get words with sentences'
     )
@@ -274,10 +276,11 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES_ORDERED_BY_STRENGTH,
     createIPCHandler(
-      [z.boolean().optional(), z.boolean().optional()],
-      (includeKnown, includeIgnored) => databaseLayer.getWordsWithSentencesOrderedByStrength(
+      [z.boolean().optional(), z.boolean().optional(), LanguageSchema.optional()],
+      (includeKnown, includeIgnored, language) => databaseLayer.getWordsWithSentencesOrderedByStrength(
         includeKnown !== undefined ? includeKnown : true,
-        includeIgnored !== undefined ? includeIgnored : false
+        includeIgnored !== undefined ? includeIgnored : false,
+        language
       ),
       'get words with sentences ordered by strength'
     )
