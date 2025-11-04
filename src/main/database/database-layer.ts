@@ -257,9 +257,18 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         similarity_score REAL NOT NULL,
         expected_text TEXT NOT NULL,
         transcribed_text TEXT NOT NULL,
+        audio_path TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Migration: Add audio_path column to pronunciation_attempts table if it doesn't exist
+    try {
+      db.exec(`ALTER TABLE pronunciation_attempts ADD COLUMN audio_path TEXT`);
+    } catch (error) {
+      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
+      // Ignore error - this is expected for existing databases with the column
+    }
 
     // Create indexes for better query performance
     db.exec(`CREATE INDEX IF NOT EXISTS idx_words_strength ON words(strength)`);
@@ -1172,17 +1181,18 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     sentenceId: number, 
     similarityScore: number, 
     expectedText: string, 
-    transcribedText: string
+    transcribedText: string,
+    audioPath?: string | null
   ): Promise<void> {
     const db = this.getDb();
     
     try {
       // Insert into pronunciation_attempts history table
       const insertAttempt = db.prepare(`
-        INSERT INTO pronunciation_attempts (sentence_id, similarity_score, expected_text, transcribed_text)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO pronunciation_attempts (sentence_id, similarity_score, expected_text, transcribed_text, audio_path)
+        VALUES (?, ?, ?, ?, ?)
       `);
-      insertAttempt.run(sentenceId, similarityScore, expectedText, transcribedText);
+      insertAttempt.run(sentenceId, similarityScore, expectedText, transcribedText, audioPath || null);
     } catch (error) {
       throw new Error(`Failed to record pronunciation attempt: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -1197,6 +1207,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     similarityScore: number;
     expectedText: string;
     transcribedText: string;
+    audioPath: string | null;
     createdAt: Date;
   }>> {
     const db = this.getDb();
@@ -1215,6 +1226,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         similarityScore: row.similarity_score,
         expectedText: row.expected_text,
         transcribedText: row.transcribed_text,
+        audioPath: row.audio_path || null,
         createdAt: new Date(row.created_at)
       }));
     } catch (error) {

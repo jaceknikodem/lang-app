@@ -2457,7 +2457,8 @@ export class QuizMode extends LitElement {
             this.currentQuestion.sentence.id,
             comparison.similarity,
             expectedSentence, // Expected text
-            transcriptionResult.text // Transcribed text
+            transcriptionResult.text, // Transcribed text
+            this.currentRecording?.filePath || null // Audio path
           );
         } catch (error) {
           console.warn('Failed to record pronunciation attempt:', error);

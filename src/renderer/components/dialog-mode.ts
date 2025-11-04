@@ -904,6 +904,11 @@ export class DialogMode extends LitElement {
       };
       this.selectedOption = bestMatch.option;
 
+      // Store the recorded audio path for later playback
+      if (this.currentRecording) {
+        this.recordedAudioPath = this.currentRecording.filePath;
+      }
+
       // Record pronunciation attempt in database (tracks full history)
       if (this.currentSentence?.id) {
         try {
@@ -911,16 +916,12 @@ export class DialogMode extends LitElement {
             this.currentSentence.id,
             bestMatch.comparison.similarity,
             bestMatch.option.variantSentence, // Expected text (the variant that matched)
-            transcription.text // Transcribed text
+            transcription.text, // Transcribed text
+            this.currentRecording?.filePath || null // Audio path
           );
         } catch (error) {
           console.warn('Failed to record pronunciation attempt:', error);
         }
-      }
-
-      // Store the recorded audio path for later playback
-      if (this.currentRecording) {
-        this.recordedAudioPath = this.currentRecording.filePath;
       }
 
       // If similarity is high enough (based on proficiency level), mark as success and continue

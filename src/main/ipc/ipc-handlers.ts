@@ -202,10 +202,10 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.RECORD_PRONUNCIATION_ATTEMPT,
     createIPCHandler(
-      [SentenceIdSchema, z.number().min(0).max(1), z.string(), z.string()],
-      (sentenceId, similarityScore, expectedText, transcribedText) => {
-        console.log(`[Pronunciation] Recording attempt: sentenceId=${sentenceId}, similarity=${similarityScore.toFixed(2)}`);
-        return databaseLayer.recordPronunciationAttempt(sentenceId, similarityScore, expectedText, transcribedText);
+      [SentenceIdSchema, z.number().min(0).max(1), z.string(), z.string(), z.string().optional().nullable()],
+      (sentenceId, similarityScore, expectedText, transcribedText, audioPath) => {
+        console.log(`[Pronunciation] Recording attempt: sentenceId=${sentenceId}, similarity=${similarityScore.toFixed(2)}, audioPath=${audioPath || 'none'}`);
+        return databaseLayer.recordPronunciationAttempt(sentenceId, similarityScore, expectedText, transcribedText, audioPath || null);
       },
       'record pronunciation attempt'
     )

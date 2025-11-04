@@ -76,8 +76,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_AUDIO_PATH, sentenceId, audioPath, audioGenerationVoiceId),
     incrementSentencePlayCount: (sentenceId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.INCREMENT_SENTENCE_PLAY_COUNT, sentenceId),
-    recordPronunciationAttempt: (sentenceId: number, similarityScore: number, expectedText: string, transcribedText: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.RECORD_PRONUNCIATION_ATTEMPT, sentenceId, similarityScore, expectedText, transcribedText),
+    recordPronunciationAttempt: (sentenceId: number, similarityScore: number, expectedText: string, transcribedText: string, audioPath?: string | null) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.RECORD_PRONUNCIATION_ATTEMPT, sentenceId, similarityScore, expectedText, transcribedText, audioPath),
     getPronunciationHistory: (sentenceId: number, limit?: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_PRONUNCIATION_HISTORY, sentenceId, limit),
     updateLastStudied: (wordId: number) => 
@@ -351,13 +351,14 @@ declare global {
         updateSentenceLastShown: (sentenceId: number) => Promise<void>;
         updateSentenceAudioPath: (sentenceId: number, audioPath: string) => Promise<void>;
         incrementSentencePlayCount: (sentenceId: number) => Promise<void>;
-        recordPronunciationAttempt: (sentenceId: number, similarityScore: number, expectedText: string, transcribedText: string) => Promise<void>;
+        recordPronunciationAttempt: (sentenceId: number, similarityScore: number, expectedText: string, transcribedText: string, audioPath?: string | null) => Promise<void>;
         getPronunciationHistory: (sentenceId: number, limit?: number) => Promise<Array<{
           id: number;
           sentenceId: number;
           similarityScore: number;
           expectedText: string;
           transcribedText: string;
+          audioPath: string | null;
           createdAt: Date;
         }>>;
         updateLastStudied: (wordId: number) => Promise<void>;
