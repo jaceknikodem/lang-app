@@ -53,7 +53,7 @@ export class WordSelector extends LitElement {
     css`
       :host {
         display: block;
-        max-width: 800px;
+        max-width: 1000px;
         margin: 0 auto;
       }
 
@@ -121,8 +121,12 @@ export class WordSelector extends LitElement {
 
       .word-list {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
         gap: var(--spacing-md);
+      }
+
+      .word-list.processed {
+        grid-template-columns: repeat(2, 1fr);
       }
 
       .word-item {
@@ -215,11 +219,15 @@ export class WordSelector extends LitElement {
       }
 
       .word-content {
-        margin-right: calc(var(--spacing-lg) + 70px);
+        margin-right: calc(var(--spacing-lg) + 120px);
         display: flex;
         align-items: baseline;
         gap: var(--spacing-sm);
         flex-wrap: wrap;
+      }
+
+      .word-item.disabled .word-content {
+        margin-right: var(--spacing-sm);
       }
 
       .word-foreign {
@@ -715,7 +723,7 @@ export class WordSelector extends LitElement {
           </div>
         ` : ''}
 
-        <div class="word-list">
+        <div class="word-list ${this.wordsProcessed ? 'processed' : ''}">
           ${(this.wordsProcessed 
             ? this.selectableWords.filter(w => w.selected || w.markedAsKnown)
             : this.selectableWords
@@ -753,8 +761,8 @@ export class WordSelector extends LitElement {
               </div>
               <div class="word-content">
                 <h4 class="word-foreign">${word.word}</h4>
-                •
-                <p class="word-translation">${word.translation}</p>
+                ${!this.wordsProcessed ? html`•` : ''}
+                ${!this.wordsProcessed ? html`<p class="word-translation">${word.translation}</p>` : ''}
               </div>
             </div>
           `;
