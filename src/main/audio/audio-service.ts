@@ -287,7 +287,7 @@ export class AudioService {
   }
 
   /**
-   * Stitch multiple audio files together with 2 seconds silence between them
+   * Stitch multiple audio files together with 1.5 seconds silence between them
    * Uses ffmpeg to concatenate audio files
    * Returns path to the stitched audio file
    * @param audioPaths - Array of audio file paths to stitch
@@ -318,7 +318,7 @@ export class AudioService {
         existingPaths.splice(200);
       }
 
-      // Create a 2 second silence audio file
+      // Create a 1.5 second silence audio file
       const { execFile } = require('child_process');
       const { promisify } = require('util');
       const execFileAsync = promisify(execFile);
@@ -326,9 +326,10 @@ export class AudioService {
       const { existsSync, mkdirSync, writeFileSync, unlinkSync } = require('fs');
 
       const audioDir = join(app.getPath('userData'), 'audio');
-      const silencePath = join(audioDir, 'silence.wav');
+      const silencePath = join(audioDir, 'silence.mp3');
 
-      // Create or regenerate silence file (2 seconds, 16kHz, mono, WAV)
+      // Create or regenerate silence file (1.5 seconds, 44.1kHz, stereo, MP3)
+      // Use MP3 format to match output format and ensure proper concatenation
       // Delete existing file to ensure it's regenerated with correct duration
       if (existsSync(silencePath)) {
         try {
@@ -343,17 +344,28 @@ export class AudioService {
           mkdirSync(audioDir, { recursive: true });
         }
 
+        console.log(`[Flow] Creating silence file: ${silencePath}`);
         await execFileAsync('ffmpeg', [
           '-f', 'lavfi',
           '-i', 'anullsrc=r=44100:cl=stereo',
-          '-t', '2',
-          '-acodec', 'pcm_s16le',
+          '-t', '1.5',
+          '-c:a', 'libmp3lame', // Encode to MP3 to match output format
+          '-b:a', '128k', // Bitrate
+          '-ar', '44100', // Sample rate
+          '-ac', '2', // Stereo
           '-y',
           silencePath
         ], {
-          timeout: 5000,
+          timeout: 5000, // 5 seconds timeout for 1.5 second silence generation
           maxBuffer: 1024 * 1024
         });
+        
+        // Verify silence file was created
+        if (!existsSync(silencePath)) {
+          console.error('[Flow] Silence file was not created after ffmpeg command');
+          return null;
+        }
+        console.log(`[Flow] Silence file created successfully: ${silencePath}`);
       } catch (error) {
         console.error('Failed to create silence file:', error);
         return null;
@@ -391,14 +403,27 @@ export class AudioService {
         console.log(`[Flow] Creating new stitched audio file with ${existingPaths.length} audio files`);
       }
 
+      // Verify silence file exists before building list
+      if (!existsSync(silencePath)) {
+        console.error(`[Flow] Silence file does not exist: ${silencePath}`);
+        return null;
+      }
+
       // Build list of audio files to concatenate (with silence between each)
       const inputList: string[] = [];
       for (let i = 0; i < existingPaths.length; i++) {
+        // Verify each audio file exists
+        if (!existsSync(existingPaths[i])) {
+          console.warn(`[Flow] Audio file does not exist, skipping: ${existingPaths[i]}`);
+          continue;
+        }
         inputList.push(existingPaths[i]);
         if (i < existingPaths.length - 1) {
           inputList.push(silencePath);
         }
       }
+
+      console.log(`[Flow] Built input list with ${inputList.length} files (${existingPaths.length} audio + ${inputList.length - existingPaths.length} silence)`);
 
       // Create a temporary file list for ffmpeg concat demuxer
       const fileListPath = join(audioDir, 'flow_concat_list.txt');
@@ -406,20 +431,41 @@ export class AudioService {
       // Write file list for concat demuxer (escape single quotes in paths)
       const fileListContent = inputList.map(path => `file '${path.replace(/'/g, "'\\''")}'`).join('\n');
       writeFileSync(fileListPath, fileListContent);
+      
+      // Log the concat list for debugging (first 500 chars)
+      console.log(`[Flow] Concat list (first 500 chars): ${fileListContent.substring(0, 500)}`);
 
       try {
-        // Use ffmpeg concat demuxer to concatenate files with re-encoding
-        // Force resample all inputs to 44.1kHz stereo before encoding to avoid midstream changes
+        // Use ffmpeg concat filter instead of concat demuxer to handle mixed formats better
+        // The concat filter properly handles format differences and ensures silence is included
         console.log(`[Flow] Stitching audio files with re-encoding (this may take a moment)...`);
+        
+        // Build filter complex: normalize all inputs to same format, then concat
+        // Format: [0:a]aresample=44100:resampler=soxr:ochl=stereo[a0]; [1:a]aresample=44100:resampler=soxr:ochl=stereo[a1]; ...
+        // Then: [a0][a1][a2]...concat=n=N:v=0:a=1[out]
+        const inputArgs: string[] = [];
+        const filterParts: string[] = [];
+        
+        // Add all inputs
+        for (let i = 0; i < inputList.length; i++) {
+          inputArgs.push('-i', inputList[i]);
+          filterParts.push(`[${i}:a]aresample=44100:resampler=soxr:ochl=stereo[a${i}]`);
+        }
+        
+        // Build concat filter
+        const concatInputs = inputList.map((_, i) => `[a${i}]`).join('');
+        filterParts.push(`${concatInputs}concat=n=${inputList.length}:v=0:a=1[out]`);
+        
+        const filterComplex = filterParts.join('; ');
+        
         await execFileAsync('ffmpeg', [
-          '-f', 'concat',
-          '-safe', '0',
-          '-i', fileListPath,
-          '-af', 'aresample=44100:resampler=soxr:ochl=stereo', // Force resample to 44.1kHz stereo
+          ...inputArgs,
+          '-filter_complex', filterComplex,
+          '-map', '[out]',
           '-c:a', 'libmp3lame', // Encode to MP3
           '-b:a', '128k', // Bitrate
-          '-ar', '44100', // Sample rate (should match aresample output)
-          '-ac', '2', // Stereo (should match aresample output)
+          '-ar', '44100', // Sample rate
+          '-ac', '2', // Stereo
           '-y',
           outputPath
         ], {
