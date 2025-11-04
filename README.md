@@ -6,7 +6,7 @@ A privacy-first desktop language learning application that operates entirely off
 
 - **Immersive Context**: Every word appears in natural sentences with audio
 - **Smarter Spacing**: SRS-powered review adapts precisely to memory strength, keeping recall sharp with less grind
-- **Pronunciation Feedback**: Instant, character-level feedback shows exactly where you're off (all privately on your device)
+- **Pronunciation Feedback**: Instant, word-level feedback shows exactly where you're off (all privately on your device)
 - **Micro-Dialogues**: Choose your reply, speak it aloud, and hear the natural response — real conversation built from what you already know
 - **Flow Mode**: Hands-free listening sessions (10–60 min) that train your ear and rhythm without screens or clicks
 - **Autopilot Learning**: The app glides between modes — review, quiz, dialogue, flow — so you can just focus on language

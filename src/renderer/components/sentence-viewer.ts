@@ -1110,11 +1110,16 @@ export class SentenceViewer extends LitElement {
     return `${language}|${trimmed.toLowerCase()}`;
   }
 
-  private async ensureDictionaryEntry(word: string, key: string): Promise<void> {
-    await this.getDictionaryEntries(word, key);
+  private async ensureDictionaryEntry(word: string, key: string, lemma?: string): Promise<void> {
+    await this.getDictionaryEntries(word, key, undefined, lemma);
   }
 
-  private async getDictionaryEntries(word: string, key?: string, languageOverride?: string): Promise<DictionaryEntry[] | null> {
+  private async getDictionaryEntries(
+    word: string, 
+    key?: string, 
+    languageOverride?: string,
+    lemma?: string
+  ): Promise<DictionaryEntry[] | null> {
     const dictionaryKey = key ?? this.buildDictionaryKey(word, languageOverride);
 
     if (!dictionaryKey) {
@@ -1138,6 +1143,7 @@ export class SentenceViewer extends LitElement {
           setTimeout(() => reject(new Error('Dictionary lookup timeout')), 10000); // 10 second timeout
         });
         
+        // Try original word lookup first
         const entries = await Promise.race([
           window.electronAPI.database.lookupDictionary(
             word,
@@ -1146,8 +1152,31 @@ export class SentenceViewer extends LitElement {
           timeoutPromise
         ]);
         
-        const normalizedEntries = Array.isArray(entries) && entries.length > 0 ? entries : null;
-        // Update cache
+        let normalizedEntries = Array.isArray(entries) && entries.length > 0 ? entries : null;
+        
+        // If original lookup failed and we have a lemma, try lemma lookup
+        if (!normalizedEntries && lemma && lemma.toLowerCase().trim() !== word.toLowerCase().trim()) {
+          try {
+            const lemmaEntries = await Promise.race([
+              window.electronAPI.database.lookupDictionary(
+                lemma,
+                languageOverride ?? this.targetWord?.language
+              ),
+              timeoutPromise
+            ]);
+            
+            normalizedEntries = Array.isArray(lemmaEntries) && lemmaEntries.length > 0 ? lemmaEntries : null;
+            
+            if (normalizedEntries) {
+              console.log(`[Dictionary] Original word "${word}" not found, using lemma "${lemma}" for lookup`);
+            }
+          } catch (lemmaError) {
+            console.warn(`[Dictionary] Lemma lookup also failed for "${lemma}":`, lemmaError);
+            // Continue with null entries
+          }
+        }
+        
+        // Update cache with final result (use original dictionaryKey so tooltip can find it)
         this.dictionaryCache[dictionaryKey] = normalizedEntries;
         return normalizedEntries;
       } catch (error) {
@@ -1246,7 +1275,11 @@ export class SentenceViewer extends LitElement {
       // Trigger lookup if not already in progress or cached
       if (!this.dictionaryLookupInFlight.has(wordInfo.dictionaryKey) && 
           this.dictionaryCache[wordInfo.dictionaryKey] === undefined) {
-        void this.ensureDictionaryEntry(wordInfo.dictionaryForm ?? '', wordInfo.dictionaryKey);
+        void this.ensureDictionaryEntry(
+          wordInfo.dictionaryForm ?? '', 
+          wordInfo.dictionaryKey,
+          wordInfo.lemma // Pass lemma for fallback lookup
+        );
       }
 
       const cachedEntries = this.dictionaryCache[wordInfo.dictionaryKey];
