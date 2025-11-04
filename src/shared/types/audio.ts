@@ -52,7 +52,7 @@ export interface RecordingSession {
 }
 
 export interface TranscriptionOptions {
-  language?: string;
+  language: string; // Required - must be provided
   model?: 'tiny' | 'base' | 'small' | 'medium' | 'large';
   temperature?: number;
   best_of?: number;
@@ -70,13 +70,7 @@ export interface TranscriptionOptions {
 
 export interface TranscriptionResult {
   text: string;
-  confidence?: number;
   language?: string;
-  segments?: Array<{
-    start: number;
-    end: number;
-    text: string;
-  }>;
 }
 
 export interface TranscriptionComparison {

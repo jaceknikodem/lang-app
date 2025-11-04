@@ -813,8 +813,12 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
   ipcMain.handle(IPC_CHANNELS.AUDIO.TRANSCRIBE_AUDIO, async (event, filePath, options) => {
     try {
       const validatedFilePath = AudioPathSchema.parse(filePath);
-      const validatedOptions = options ? z.object({
-        language: z.string().optional(),
+      if (!options || !options.language) {
+        throw new Error('Language is required for transcription');
+      }
+      
+      const validatedOptions = z.object({
+        language: z.string(),
         model: z.enum(['tiny', 'base', 'small', 'medium', 'large']).optional(),
         temperature: z.number().optional(),
         best_of: z.number().optional(),
@@ -828,19 +832,11 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
         compression_ratio_threshold: z.number().optional(),
         logprob_threshold: z.number().optional(),
         no_speech_threshold: z.number().optional()
-      }).parse(options) : undefined;
+      }).parse(options);
 
       // Create progress callback that sends IPC events
-      const transcriptionOptions = validatedOptions ? {
+      const transcriptionOptions = {
         ...validatedOptions,
-        onProgress: (text: string, isFinal: boolean) => {
-          // Send progress updates via IPC event
-          event.sender.send(IPC_CHANNELS.AUDIO.TRANSCRIBE_AUDIO_PROGRESS, {
-            text,
-            isFinal
-          });
-        }
-      } : {
         onProgress: (text: string, isFinal: boolean) => {
           // Send progress updates via IPC event
           event.sender.send(IPC_CHANNELS.AUDIO.TRANSCRIBE_AUDIO_PROGRESS, {
@@ -1424,6 +1420,56 @@ function setupDialogHandlers(
     } catch (error) {
       console.error('Error generating follow-up:', error);
       throw new Error(`Failed to generate follow-up: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DIALOG.GENERATE_FOLLOW_UP_FROM_TEXT, async (event, userText, userTranslation) => {
+    try {
+      if (!userText || typeof userText !== 'string' || userText.trim().length === 0) {
+        throw new Error('User text is required');
+      }
+
+      const language = await databaseLayer.getCurrentLanguage();
+      
+      // Generate follow-up from text (no caching)
+      const followUp = await dialogService.generateFollowUpFromText(
+        userText,
+        userTranslation || '',
+        language
+      );
+
+      // Generate audio on-demand if continuation text exists
+      let continuationAudio: string | undefined;
+      if (followUp.text && followUp.text.trim().length > 0) {
+        try {
+          const currentLanguage = await databaseLayer.getCurrentLanguage();
+          const audioPath = await audioService.generateAudio(
+            followUp.text,
+            currentLanguage,
+            undefined,
+            undefined,
+            undefined,
+            undefined // No variant ID - this is for open-ended conversation
+          );
+          
+          if (audioPath) {
+            continuationAudio = audioPath;
+            console.log('[IPC] Generated continuation audio for open-ended dialog:', audioPath);
+          }
+        } catch (audioError) {
+          console.error('[IPC] Failed to generate continuation audio:', audioError);
+          // Continue without audio - non-critical
+        }
+      }
+      
+      return {
+        text: followUp.text,
+        translation: followUp.translation,
+        audio: continuationAudio
+      };
+    } catch (error) {
+      console.error('Error generating follow-up from text:', error);
+      throw new Error(`Failed to generate follow-up from text: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
 

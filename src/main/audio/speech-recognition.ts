@@ -13,7 +13,7 @@ import { promisify } from 'util';
 const execFileAsync = promisify(execFile);
 
 export interface TranscriptionOptions {
-  language?: string;
+  language: string; // Required - must be provided
   model?: 'tiny' | 'base' | 'small' | 'medium' | 'large';
   temperature?: number;
   best_of?: number;
@@ -32,13 +32,7 @@ export interface TranscriptionOptions {
 
 export interface TranscriptionResult {
   text: string;
-  confidence?: number;
   language?: string;
-  segments?: Array<{
-    start: number;
-    end: number;
-    text: string;
-  }>;
 }
 
 export interface SpeechRecognitionError extends Error {
@@ -152,8 +146,15 @@ export class SpeechRecognitionService {
   /**
    * Transcribe audio file to text using Whisper HTTP server
    */
-  async transcribeAudio(filePath: string, options: TranscriptionOptions = {}): Promise<TranscriptionResult> {
+  async transcribeAudio(filePath: string, options: TranscriptionOptions): Promise<TranscriptionResult> {
     try {
+      // Validate that language is provided
+      if (!options.language) {
+        const error = new Error('Language is required for transcription') as SpeechRecognitionError;
+        error.code = 'TRANSCRIPTION_FAILED';
+        throw error;
+      }
+
       // Check server availability before transcribing
       const available = await this.isServerAvailable();
       if (!available) {
@@ -177,8 +178,8 @@ export class SpeechRecognitionService {
       // This prevents decoder issues where corrupted headers make the file appear hours long
       const fileToTranscribe = await this.fixWavFile(filePath);
       
-      // Map language to Whisper language code (default to Spanish if not specified)
-      const inputLanguage = options.language && options.language !== 'auto' ? options.language : 'spanish';
+      // Map language to Whisper language code
+      const inputLanguage = options.language !== 'auto' ? options.language : 'spanish';
       const whisperLanguageCode = this.mapLanguageToWhisperCode(inputLanguage);
       console.log(`Using language: ${inputLanguage} -> Whisper code: ${whisperLanguageCode}`);
 
@@ -217,16 +218,6 @@ export class SpeechRecognitionService {
       formData.append('best_of', '1');            // Use single best candidate
       formData.append('beam_size', '1');          // Use beam size of 1 for speed
       
-      console.log('FormData fields:', {
-        file: filename,
-        language: whisperLanguageCode,
-        temperature: temperature.toString(),
-        response_format: 'json',
-        no_speech_thold: '0.8',
-        no_timestamps: 'true',
-        best_of: '1',
-        beam_size: '1'
-      });
 
       let transcriptionResult: string | null = null;
 

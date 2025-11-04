@@ -786,7 +786,7 @@ export class AudioService {
   /**
    * Transcribe recorded audio to text
    */
-  async transcribeAudio(filePath: string, options?: TranscriptionOptions): Promise<TranscriptionResult> {
+  async transcribeAudio(filePath: string, options: TranscriptionOptions): Promise<TranscriptionResult> {
     try {
       return await this.speechRecognition.transcribeAudio(filePath, options);
     } catch (error) {
