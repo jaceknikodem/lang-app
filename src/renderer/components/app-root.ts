@@ -924,12 +924,10 @@ export class AppRoot extends LitElement {
         initialTakeover: initialTakeover ?? false
       });
       
-      // Check if topic-selection is 1st or 2nd highest score
-      const topicSelectionRank = result.rankedModes.indexOf('topic-selection');
-      const isTopTwo = topicSelectionRank === 0 || topicSelectionRank === 1;
+      // Check if we have fewer than 5 unreviewed words, and if so, add more
+      const unreviewedCount = await window.electronAPI.database.getNewWordCount(this.languageState.currentLanguage);
       
-      // If topic-selection is in top 2, call autoAddNewWords in background (don't wait)
-      if (isTopTwo) {
+      if (unreviewedCount < 5) {
         void this.handleAutoAddNew();
       }
       

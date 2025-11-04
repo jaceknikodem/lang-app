@@ -99,7 +99,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getLanguageStats: () => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_LANGUAGE_STATS),
     lookupDictionary: (word: string, language?: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.LOOKUP_DICTIONARY, word, language)
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.LOOKUP_DICTIONARY, word, language),
+    getNewWordCount: (language?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_NEW_WORD_COUNT, language)
   },
 
   // LLM operations
@@ -371,6 +373,7 @@ declare global {
           glosses: string[];
           lang: string;
         }>>;
+        getNewWordCount: (language?: string) => Promise<number>;
       };
       llm: {
         generateWords: (topic: string | undefined, language: string) => Promise<any[]>;

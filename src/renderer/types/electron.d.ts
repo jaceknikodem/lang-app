@@ -50,6 +50,7 @@ declare global {
         getAvailableLanguages: () => Promise<string[]>;
         getLanguageStats: () => Promise<Array<{language: string, totalWords: number, studiedWords: number}>>;
         lookupDictionary: (word: string, language?: string) => Promise<DictionaryEntry[]>;
+        getNewWordCount: (language?: string) => Promise<number>;
       };
       llm: {
         generateWords: (topic: string | undefined, language: string) => Promise<GeneratedWord[]>;

@@ -77,6 +77,18 @@ export async function autoAddNewWords(language?: string): Promise<AutoAddWordsRe
       targetLanguage = await window.electronAPI.database.getCurrentLanguage();
     }
 
+    // Check if there are too many unreviewed/new words before adding more
+    const unreviewedCount = await window.electronAPI.database.getNewWordCount(targetLanguage);
+    
+    if (unreviewedCount > 10) {
+      return {
+        success: false,
+        topic: '',
+        wordsAdded: 0,
+        error: `Too many unreviewed words (${unreviewedCount}). Not adding more.`
+      };
+    }
+
     // Step 1: Randomly select a topic
     const randomIndex = Math.floor(Math.random() * ALL_TOPIC_SUGGESTIONS.length);
     const selectedTopic = ALL_TOPIC_SUGGESTIONS[randomIndex];

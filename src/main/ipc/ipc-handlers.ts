@@ -337,6 +337,15 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       'lookup dictionary entry'
     )
   );
+
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_NEW_WORD_COUNT,
+    createIPCHandler(
+      LanguageSchema.optional(),
+      (language) => databaseLayer.getNewWordCount(language),
+      'get new word count'
+    )
+  );
 }
 
 /**
