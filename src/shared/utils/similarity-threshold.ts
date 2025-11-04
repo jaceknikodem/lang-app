@@ -19,11 +19,7 @@ interface SimilarityThresholds {
 /**
  * Get similarity thresholds based on proficiency level
  * 
- * Thresholds are adjusted to be more lenient for beginners and stricter for advanced learners:
- * - newbie: Very lenient (0.55 success threshold)
- * - a1: Lenient (0.60 success threshold)
- * - a2: Moderate (0.65 success threshold) - default
- * - b1: Stricter (0.70 success threshold)
+ * Thresholds are adjusted to be more lenient for beginners and stricter for advanced learners.
  */
 export function getSimilarityThresholds(proficiencyLevel: ProficiencyLevel | null | undefined): SimilarityThresholds {
   // Default to newbie (very lenient) if no proficiency level is set
@@ -32,21 +28,21 @@ export function getSimilarityThresholds(proficiencyLevel: ProficiencyLevel | nul
   switch (level) {
     case 'a1':
       return {
-        successThreshold: 0.60,
+        successThreshold: 0.70,
         excellentThreshold: 0.82,
         goodThreshold: 0.72,
         fairThreshold: 0.60,
       };
     case 'a2':
       return {
-        successThreshold: 0.65,
+        successThreshold: 0.80,
         excellentThreshold: 0.85,
         goodThreshold: 0.75,
         fairThreshold: 0.65,
       };
     case 'b1':
       return {
-        successThreshold: 0.70,
+        successThreshold: 0.90,
         excellentThreshold: 0.86,
         goodThreshold: 0.78,
         fairThreshold: 0.70,
@@ -54,7 +50,7 @@ export function getSimilarityThresholds(proficiencyLevel: ProficiencyLevel | nul
     default:
       // Fallback to newbie
       return {
-        successThreshold: 0.45,
+        successThreshold: 0.70,
         excellentThreshold: 0.80,
         goodThreshold: 0.70,
         fairThreshold: 0.55,

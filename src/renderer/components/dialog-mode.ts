@@ -956,18 +956,119 @@ export class DialogMode extends LitElement {
   }
 
   /**
+   * Parse sentence text into words while preserving punctuation and whitespace
+   */
+  private parseSentenceWords(text: string): Array<{ word: string; normalized: string; trailing: string; leading: string }> {
+    // Match words (Unicode letters and numbers) and capture surrounding whitespace/punctuation
+    const words: Array<{ word: string; normalized: string; trailing: string; leading: string }> = [];
+    const wordRegex = /[\p{L}\p{N}]+/gu;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = wordRegex.exec(text)) !== null) {
+      // Add any text before this word as leading
+      const leading = match.index > lastIndex ? text.substring(lastIndex, match.index) : '';
+
+      const normalized = match[0].toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+      words.push({
+        word: match[0],
+        normalized,
+        trailing: '',
+        leading
+      });
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Add any remaining text as trailing from last word
+    if (lastIndex < text.length) {
+      const remaining = text.substring(lastIndex);
+      if (words.length > 0) {
+        words[words.length - 1].trailing = remaining;
+      }
+    }
+
+    return words;
+  }
+
+  /**
+   * Get word color based on similarity score
+   */
+  private getWordColor(wordInfo: { word: string; similarity: number; matched: boolean }): string {
+    if (!wordInfo.matched) {
+      return '#ffcccc'; // Light red for unmatched (visible on blue background)
+    } else if (wordInfo.similarity >= 0.9) {
+      return '#ccffcc'; // Light green for well-matched
+    } else {
+      return '#ffffcc'; // Light yellow for partial match
+    }
+  }
+
+  /**
    * Unified helper method to render a user bubble
    */
   private renderUserBubble(
     userText: string,
     userTranslation: string,
-    similarity?: number
+    similarity?: number,
+    expectedWords?: Array<{ word: string; similarity: number; matched: boolean }>
   ): TemplateResult {
+    // Parse sentence into words if we have expectedWords for color coding
+    let bubbleTextContent: TemplateResult;
+    if (expectedWords && expectedWords.length > 0) {
+      const parsedWords = this.parseSentenceWords(userText);
+      
+      // Match parsed words to expectedWords by position and normalized comparison
+      const wordElements: TemplateResult[] = [];
+      let expectedWordIndex = 0;
+
+      for (const parsedWord of parsedWords) {
+        let wordInfo: { word: string; similarity: number; matched: boolean } | null = null;
+
+        // Try to find matching expected word
+        if (expectedWordIndex < expectedWords.length) {
+          const expectedWord = expectedWords[expectedWordIndex];
+          // Normalize expected word for comparison (it's already normalized but may have slight differences)
+          const expectedNormalized = expectedWord.word.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+          
+          if (parsedWord.normalized === expectedNormalized || 
+              parsedWord.normalized.startsWith(expectedNormalized) ||
+              expectedNormalized.startsWith(parsedWord.normalized)) {
+            wordInfo = expectedWord;
+            expectedWordIndex++;
+          } else {
+            // Try to find a match later in the array (in case of word order differences)
+            for (let i = expectedWordIndex + 1; i < expectedWords.length; i++) {
+              const otherExpected = expectedWords[i];
+              const otherNormalized = otherExpected.word.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+              if (parsedWord.normalized === otherNormalized) {
+                wordInfo = otherExpected;
+                expectedWordIndex = i + 1;
+                break;
+              }
+            }
+          }
+        }
+
+        const color = wordInfo ? this.getWordColor(wordInfo) : 'white'; // Default to white if no match
+        wordElements.push(html`
+          ${parsedWord.leading}<span style="color: ${color}; font-weight: ${wordInfo && !wordInfo.matched ? 'bold' : 'normal'};">
+            ${parsedWord.word}
+          </span>${parsedWord.trailing}
+        `);
+      }
+
+      bubbleTextContent = html`${wordElements}`;
+    } else {
+      // No color coding, render as plain text
+      bubbleTextContent = html`${userText}`;
+    }
+
     return html`
       <div class="dialog-bubble bubble-right">
         <div class="bubble-content">
           <div class="bubble-text-container">
-            <p class="bubble-text">${userText}</p>
+            <p class="bubble-text">${bubbleTextContent}</p>
             ${similarity !== undefined ? html`
               <span class="similarity-badge ${this.getSimilarityClass(similarity)}">
                 ${Math.round(similarity * 100)}%
@@ -1272,6 +1373,11 @@ export class DialogMode extends LitElement {
         margin: 0;
         line-height: 1.5;
         flex: 1;
+      }
+
+      .bubble-text span {
+        display: inline;
+        transition: color 0.2s ease;
       }
 
       .similarity-badge {
@@ -1917,7 +2023,8 @@ export class DialogMode extends LitElement {
             ${this.renderUserBubble(
               this.selectedOption.variantSentence,
               this.selectedOption.variantTranslation || '',
-              this.transcriptionResult.similarity
+              this.transcriptionResult.similarity,
+              this.transcriptionResult.expectedWords
             )}
           ` : this.responseOptions.length > 0 && !this.transcriptionResult ? html`
             <div class="response-options">
