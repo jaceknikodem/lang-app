@@ -8,7 +8,7 @@ import { AppState } from '../../shared/types/core.js';
 import { router, RouteState, AppMode } from '../utils/router.js';
 import { sessionManager, SessionState } from '../utils/session-manager.js';
 import { sharedStyles } from '../styles/shared.js';
-import { keyboardManager } from '../utils/keyboard-manager.js';
+import { keyboardManager, useKeyboardBindings, GlobalShortcuts } from '../utils/keyboard-manager.js';
 import { autoAddNewWords } from '../utils/auto-add-words.js';
 import { loadCurrentLanguageWithSession, changeLanguage, loadLemmatizationModel, capitalizeLanguage, getLanguageFlag, getSupportedLanguages } from '../utils/language-manager.js';
 import { calculateWordCategoryStats } from '../utils/word-stats.js';
@@ -480,6 +480,9 @@ export class AppRoot extends LitElement {
     this.currentRoute = router.getCurrentRoute();
     // Ensure keyboard context is set on initial load
     this.updateKeyboardContext();
+
+    // Setup keyboard bindings
+    this.setupKeyboardBindings();
 
     await this.initializeApp();
   }
@@ -1027,6 +1030,23 @@ export class AppRoot extends LitElement {
   private updateKeyboardContext() {
     // Set keyboard context based on current route
     keyboardManager.setContext(this.currentRoute.mode);
+  }
+
+  private setupKeyboardBindings() {
+    const bindings = [
+      {
+        ...GlobalShortcuts.ESCAPE,
+        action: () => {
+          // Close proficiency pop-up if it's shown
+          if (this.languageState.showProficiencySelector) {
+            this.handleProficiencyCancelled();
+          }
+        },
+        description: 'Close proficiency pop-up'
+      }
+    ];
+
+    this.keyboardUnsubscribe = useKeyboardBindings(bindings);
   }
 
 
