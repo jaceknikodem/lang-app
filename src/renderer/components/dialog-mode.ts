@@ -102,6 +102,7 @@ export class DialogMode extends LitElement {
     assistantText: string;
     assistantTranslation: string;
     assistantAudio: string | null;
+    similarity?: number;
   }> = [];
 
   @state()
@@ -625,25 +626,23 @@ export class DialogMode extends LitElement {
   }
 
   private async playLatestAssistantAudio() {
-    // In open-ended mode, play the latest assistant audio
-    if (this.isOpenEndedMode) {
-      // Get latest assistant audio from current follow-up or conversation history
-      if (this.followUpAudio) {
-        await this.playFollowUpAudio();
+    // Always prioritize the most recent assistant audio
+    // 1. Check for current follow-up audio (most recent)
+    if (this.followUpAudio) {
+      await this.playFollowUpAudio();
+      return;
+    }
+    
+    // 2. Check conversation history for latest assistant audio
+    if (this.conversationHistory.length > 0) {
+      const latestExchange = this.conversationHistory[this.conversationHistory.length - 1];
+      if (latestExchange.assistantAudio) {
+        await this.playAssistantAudio(latestExchange.assistantAudio);
         return;
-      }
-      
-      // Otherwise, play the latest from conversation history
-      if (this.conversationHistory.length > 0) {
-        const latestExchange = this.conversationHistory[this.conversationHistory.length - 1];
-        if (latestExchange.assistantAudio) {
-          await this.playAssistantAudio(latestExchange.assistantAudio);
-          return;
-        }
       }
     }
     
-    // Fallback to before sentence audio
+    // 3. Fallback to before sentence audio (initial trigger)
     if (this.beforeSentenceAudio) {
       await this.playBeforeSentence();
     }
@@ -721,7 +720,8 @@ export class DialogMode extends LitElement {
         userTranslation: this.selectedOption.variantTranslation || '',
         assistantText: this.followUpText,
         assistantTranslation: this.followUpTranslation,
-        assistantAudio: this.followUpAudio
+        assistantAudio: this.followUpAudio,
+        similarity: this.transcriptionResult?.similarity
       });
       
       // Clear current exchange
@@ -967,7 +967,8 @@ export class DialogMode extends LitElement {
             const comparison = await window.electronAPI.audio.compareTranscription(
               transcription.text,
               option.variantSentence,
-              this.currentProficiencyLevel
+              this.currentProficiencyLevel,
+              currentLanguage
             );
             return {
               option,
@@ -1010,7 +1011,7 @@ export class DialogMode extends LitElement {
         // If similarity is high enough (based on proficiency level), mark as success and continue
         // (follow-up will be generated after transcription is marked as complete)
         const thresholds = getSimilarityThresholds(this.currentProficiencyLevel);
-        if (bestMatch.comparison.similarity >= thresholds.overallSuccessThreshold) {
+        if (bestMatch.comparison.similarity >= thresholds.successThreshold) {
           // Mark transcription as complete first
           this.isTranscribing = false;
           this.streamingTranscriptionText = null;
@@ -1053,7 +1054,7 @@ export class DialogMode extends LitElement {
         <div class="bubble-content">
           <div class="bubble-text-container">
             <p class="bubble-text">${userText}</p>
-            ${similarity !== undefined && !this.isOpenEndedMode ? html`
+            ${similarity !== undefined ? html`
               <span class="similarity-badge ${this.getSimilarityClass(similarity)}">
                 ${Math.round(similarity * 100)}%
               </span>
@@ -1062,9 +1063,9 @@ export class DialogMode extends LitElement {
           ${this.showTranslations && userTranslation ? html`
             <p class="bubble-translation">${userTranslation}</p>
           ` : nothing}
-          ${!this.isOpenEndedMode && similarity !== undefined && (() => {
+          ${similarity !== undefined && (() => {
             const thresholds = getSimilarityThresholds(this.currentProficiencyLevel);
-            return similarity < thresholds.overallSuccessThreshold;
+            return similarity < thresholds.successThreshold;
           })() ? html`
             <button 
               class="btn btn-primary try-again-button"
@@ -1107,7 +1108,8 @@ export class DialogMode extends LitElement {
             userTranslation: this.selectedOption.variantTranslation || '',
             assistantText: this.followUpText,
             assistantTranslation: this.followUpTranslation,
-            assistantAudio: assistantAudioToSave
+            assistantAudio: assistantAudioToSave,
+            similarity: this.transcriptionResult?.similarity
           });
           
           // Auto-play continuation audio if available and autoplay is enabled
@@ -2021,13 +2023,13 @@ export class DialogMode extends LitElement {
                 <div class="translations-slider"></div>
               </div>
             </div>
-            ${(this.beforeSentenceAudio || (this.isOpenEndedMode && (this.followUpAudio || this.conversationHistory.length > 0))) ? html`
+            ${(this.beforeSentenceAudio || this.followUpAudio || this.conversationHistory.length > 0) ? html`
               <button 
                 class="audio-replay-button" 
-                @click=${this.isOpenEndedMode ? this.playLatestAssistantAudio : this.playBeforeSentence}
+                @click=${this.playLatestAssistantAudio}
                 ?disabled=${this.isRecording}
-                title=${this.isOpenEndedMode ? 'Replay latest assistant audio' : 'Replay trigger audio'}
-                aria-label=${this.isOpenEndedMode ? 'Replay latest assistant audio' : 'Replay trigger audio'}
+                title="Replay latest assistant audio"
+                aria-label="Replay latest assistant audio"
               >
                 <span aria-hidden="true">🔊</span>
               </button>
@@ -2072,7 +2074,7 @@ export class DialogMode extends LitElement {
           ${this.isOpenEndedMode ? html`
             ${this.conversationHistory.map((exchange) => html`
               <!-- User message -->
-              ${this.renderUserBubble(exchange.userText, exchange.userTranslation)}
+              ${this.renderUserBubble(exchange.userText, exchange.userTranslation, exchange.similarity)}
               <!-- Assistant response -->
               <div class="dialog-bubble bubble-left">
                 <div class="bubble-content">

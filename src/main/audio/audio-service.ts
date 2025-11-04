@@ -800,19 +800,34 @@ export class AudioService {
    * Compare transcribed text with expected sentence
    * Returns similarity analysis for pronunciation feedback
    * @param proficiencyLevel Optional proficiency level to adjust similarity thresholds
+   * @param language Optional language to get average pronunciation score for multiplier
    */
-  compareTranscription(
+  async compareTranscription(
     transcribed: string,
     expected: string,
-    proficiencyLevel?: string | null
-  ): {
+    proficiencyLevel?: string | null,
+    language?: string | null
+  ): Promise<{
     similarity: number;
     normalizedTranscribed: string;
     normalizedExpected: string;
     expectedWords: Array<{ word: string; similarity: number; matched: boolean }>;
     transcribedWords: string[];
-  } {
-    return this.speechRecognition.compareTranscription(transcribed, expected, proficiencyLevel as any);
+  }> {
+    // Get average pronunciation score for the active language as multiplier
+    let languageScore: number | null = null;
+    if (this.database && language) {
+      try {
+        const avgScore = await this.database.getAveragePronunciationScore(language);
+        // Convert from 0-10 scale to 0-1 scale for multiplier
+        languageScore = avgScore > 0 ? avgScore / 10 : null;
+        console.log(`Retrieved language score for ${language}: ${avgScore} (multiplier: ${languageScore?.toFixed(3)})`);
+      } catch (error) {
+        console.warn('Failed to get average pronunciation score for language multiplier:', error);
+      }
+    }
+
+    return this.speechRecognition.compareTranscription(transcribed, expected, proficiencyLevel as any, languageScore);
   }
 
   /**

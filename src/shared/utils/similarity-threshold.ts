@@ -10,8 +10,7 @@ export type ProficiencyLevel = 'newbie' | 'a1' | 'a2' | 'b1';
  * Higher proficiency = stricter thresholds (more accurate pronunciation required)
  */
 interface SimilarityThresholds {
-  wordMatchThreshold: number;      // Threshold for individual word matching (0-1)
-  overallSuccessThreshold: number;  // Threshold for overall sentence success (0-1)
+  successThreshold: number;        // Single threshold for passing (0-1) - used for both word matching and overall success
   excellentThreshold: number;       // Threshold for "excellent" rating (0-1)
   goodThreshold: number;             // Threshold for "good" rating (0-1)
   fairThreshold: number;             // Threshold for "fair" rating (0-1)
@@ -21,56 +20,44 @@ interface SimilarityThresholds {
  * Get similarity thresholds based on proficiency level
  * 
  * Thresholds are adjusted to be more lenient for beginners and stricter for advanced learners:
- * - newbie: Very lenient (0.60 word match, 0.65 overall success)
- * - a1: Lenient (0.65 word match, 0.70 overall success)
- * - a2: Moderate (0.70 word match, 0.75 overall success) - default
- * - b1: Stricter (0.75 word match, 0.80 overall success)
+ * - newbie: Very lenient (0.55 success threshold)
+ * - a1: Lenient (0.60 success threshold)
+ * - a2: Moderate (0.65 success threshold) - default
+ * - b1: Stricter (0.70 success threshold)
  */
 export function getSimilarityThresholds(proficiencyLevel: ProficiencyLevel | null | undefined): SimilarityThresholds {
-  // Default to a2 (moderate) if no proficiency level is set
-  const level = proficiencyLevel || 'a2';
+  // Default to newbie (very lenient) if no proficiency level is set
+  const level = proficiencyLevel || 'newbie';
 
   switch (level) {
-    case 'newbie':
-      return {
-        wordMatchThreshold: 0.60,
-        overallSuccessThreshold: 0.65,
-        excellentThreshold: 0.90,
-        goodThreshold: 0.80,
-        fairThreshold: 0.65,
-      };
     case 'a1':
       return {
-        wordMatchThreshold: 0.65,
-        overallSuccessThreshold: 0.70,
-        excellentThreshold: 0.92,
-        goodThreshold: 0.82,
-        fairThreshold: 0.70,
+        successThreshold: 0.60,
+        excellentThreshold: 0.82,
+        goodThreshold: 0.72,
+        fairThreshold: 0.60,
       };
     case 'a2':
       return {
-        wordMatchThreshold: 0.70,
-        overallSuccessThreshold: 0.75,
-        excellentThreshold: 0.95,
-        goodThreshold: 0.85,
-        fairThreshold: 0.75,
+        successThreshold: 0.65,
+        excellentThreshold: 0.85,
+        goodThreshold: 0.75,
+        fairThreshold: 0.65,
       };
     case 'b1':
       return {
-        wordMatchThreshold: 0.75,
-        overallSuccessThreshold: 0.80,
-        excellentThreshold: 0.96,
-        goodThreshold: 0.88,
-        fairThreshold: 0.80,
+        successThreshold: 0.70,
+        excellentThreshold: 0.86,
+        goodThreshold: 0.78,
+        fairThreshold: 0.70,
       };
     default:
-      // Fallback to a2
+      // Fallback to newbie
       return {
-        wordMatchThreshold: 0.70,
-        overallSuccessThreshold: 0.75,
-        excellentThreshold: 0.95,
-        goodThreshold: 0.85,
-        fairThreshold: 0.75,
+        successThreshold: 0.45,
+        excellentThreshold: 0.80,
+        goodThreshold: 0.70,
+        fairThreshold: 0.55,
       };
   }
 }

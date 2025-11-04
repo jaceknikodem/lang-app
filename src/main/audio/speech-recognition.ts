@@ -34,6 +34,7 @@ export interface TranscriptionOptions {
 export interface TranscriptionResult {
   text: string;
   language?: string;
+  confidence?: number; // Confidence score from Whisper (0-1)
 }
 
 export interface SpeechRecognitionError extends Error {
@@ -179,15 +180,13 @@ export class SpeechRecognitionService {
       // This prevents decoder issues where corrupted headers make the file appear hours long
       const fileToTranscribe = await this.fixWavFile(filePath);
       
-      // Map language to Whisper language code
-      const inputLanguage = options.language !== 'auto' ? options.language : 'spanish';
-      const whisperLanguageCode = this.mapLanguageToWhisperCode(inputLanguage);
-      console.log(`Using language: ${inputLanguage} -> Whisper code: ${whisperLanguageCode}`);
+      // Don't specify language - let Whisper auto-detect
+      console.log(`Transcribing audio without specifying language (auto-detect)`);
 
       // Use Whisper.cpp Server API format: /inference with file parameter
       // API: curl 127.0.0.1:8080/inference -H "Content-Type: multipart/form-data" 
       //      -F file="@<file-path>" -F temperature="0.0" -F response_format="json"
-      //      -F translate="false" -F language="es"
+      //      -F translate="false"
       const url = `${this.whisperServerUrl}/inference`;
       console.log(`Transcribing audio via Whisper server: ${url}`);
 
@@ -203,8 +202,7 @@ export class SpeechRecognitionService {
       const audioBlob = new Blob([fileBuffer], { type: 'audio/wav' });
       formData.append('file', audioBlob, filename);
       
-      // Add language code (mapped from app language name to Whisper code)
-      formData.append('language', whisperLanguageCode);
+      // Don't specify language - let Whisper auto-detect
       
       // Set temperature (default to 0.0 for deterministic output)
       const temperature = options.temperature !== undefined ? options.temperature : 0.0;
@@ -221,6 +219,7 @@ export class SpeechRecognitionService {
       
 
       let transcriptionResult: string | null = null;
+      let confidence: number | undefined;
 
       try {
         console.log('Sending request to Whisper server (streaming mode)...');
@@ -292,6 +291,18 @@ export class SpeechRecognitionService {
           try {
             const json = JSON.parse(buffer);
             transcriptionResult = json.text || '';
+            
+            // Extract confidence score from Whisper response
+            // Whisper.cpp may return confidence, avg_logprob, or similar fields
+            if (json.confidence !== undefined) {
+              confidence = typeof json.confidence === 'number' ? json.confidence : undefined;
+            } else if (json.avg_logprob !== undefined) {
+              // Convert logprob to confidence (logprob is typically negative, normalize to 0-1)
+              // Typical range: -1.0 to 0.0, convert to 0-1
+              const logprob = typeof json.avg_logprob === 'number' ? json.avg_logprob : 0;
+              confidence = Math.max(0, Math.min(1, (logprob + 1.0) / 1.0));
+            }
+            
             // Emit final update if different from last progress update
             if (options.onProgress && transcriptionResult && transcriptionResult !== accumulatedText) {
               options.onProgress(transcriptionResult, true);
@@ -333,6 +344,9 @@ export class SpeechRecognitionService {
         }
 
         console.log(`Successfully transcribed using Whisper server endpoint: /inference (streaming)`);
+        if (confidence !== undefined) {
+          console.log(`Whisper confidence score: ${confidence.toFixed(3)}`);
+        }
         transcriptionResult = transcriptionResult.trim();
         
       } catch (fetchError) {
@@ -356,7 +370,8 @@ export class SpeechRecognitionService {
 
       return {
         text: cleanedResult,
-        language: whisperLanguageCode
+        language: undefined, // Language is auto-detected by Whisper
+        confidence: confidence
       };
 
     } catch (error) {
@@ -447,11 +462,13 @@ export class SpeechRecognitionService {
    * Compare transcribed text with expected text using Jaro-Winkler similarity
    * Returns similarity score and word-level analysis for color coding
    * @param proficiencyLevel Optional proficiency level to adjust similarity thresholds
+   * @param languageScore Optional language score multiplier (0-1 scale) - active language's average pronunciation score
    */
   compareTranscription(
     transcribed: string,
     expected: string,
-    proficiencyLevel?: ProficiencyLevel | null
+    proficiencyLevel?: ProficiencyLevel | null,
+    languageScore?: number | null
   ): {
     similarity: number;
     normalizedTranscribed: string;
@@ -499,7 +516,7 @@ export class SpeechRecognitionService {
 
       // Use proficiency-based threshold for word matching
       const thresholds = getSimilarityThresholds(proficiencyLevel);
-      const matched = bestSimilarity >= thresholds.wordMatchThreshold;
+      const matched = bestSimilarity >= thresholds.successThreshold;
 
       if (matched && bestIndex >= 0) {
         usedTranscribedIndices.add(bestIndex);
@@ -513,9 +530,16 @@ export class SpeechRecognitionService {
     }
 
     // Calculate overall similarity (average of word similarities)
-    const overallSimilarity = expectedWordMatches.length > 0
+    let overallSimilarity = expectedWordMatches.length > 0
       ? expectedWordMatches.reduce((sum, w) => sum + w.similarity, 0) / expectedWordMatches.length
       : 0;
+
+    // Apply language score multiplier if provided
+    // languageScore should be 0-1 scale (normalized from 0-10 average pronunciation score)
+    if (languageScore !== null && languageScore !== undefined && languageScore > 0) {
+      overallSimilarity = overallSimilarity * languageScore;
+      console.log(`Applied language score multiplier: ${languageScore.toFixed(3)}, adjusted similarity: ${overallSimilarity.toFixed(3)}`);
+    }
 
     return {
       similarity: overallSimilarity,

@@ -185,8 +185,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeListener(channel, listener);
       };
     },
-    compareTranscription: (transcribed: string, expected: string, proficiencyLevel?: string | null) => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.COMPARE_TRANSCRIPTION, transcribed, expected, proficiencyLevel),
+    compareTranscription: (transcribed: string, expected: string, proficiencyLevel?: string | null, language?: string | null) => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.COMPARE_TRANSCRIPTION, transcribed, expected, proficiencyLevel, language),
     isSpeechRecognitionReady: () => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.IS_SPEECH_RECOGNITION_READY),
     switchToElevenLabs: (apiKey: string) => 
@@ -411,7 +411,7 @@ declare global {
         onTranscriptionProgress: (
           callback: (payload: { text: string; isFinal: boolean }) => void
         ) => () => void;
-        compareTranscription: (transcribed: string, expected: string, proficiencyLevel?: string | null) => Promise<any>;
+        compareTranscription: (transcribed: string, expected: string, proficiencyLevel?: string | null, language?: string | null) => Promise<any>;
         isSpeechRecognitionReady: () => Promise<boolean>;
         switchToElevenLabs: (apiKey: string) => Promise<void>;
         switchToSystemTTS: () => Promise<void>;
