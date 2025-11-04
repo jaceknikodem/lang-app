@@ -1651,7 +1651,9 @@ function setupFlowHandlers(
 ): void {
   ipcMain.handle(IPC_CHANNELS.FLOW.GET_FLOW_SENTENCES, async (event) => {
     try {
-      const flowSentences = await databaseLayer.getFlowSentences();
+      // Get current language explicitly to ensure correct filtering
+      const currentLanguage = await databaseLayer.getCurrentLanguage();
+      const flowSentences = await databaseLayer.getFlowSentences(currentLanguage);
       
       // Check which audio files actually exist and filter accordingly
       const result = await Promise.all(

@@ -209,7 +209,7 @@ export interface IPCBridge {
 
   // Flow operations
   flow: {
-    getFlowSentences: () => Promise<Array<{
+    getFlowSentences: (language?: string) => Promise<Array<{
       sentence: Sentence;
       words: Word[];
       beforeSentenceAudio?: string;
