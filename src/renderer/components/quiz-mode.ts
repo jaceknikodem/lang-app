@@ -1683,6 +1683,9 @@ export class QuizMode extends LitElement {
       // Save progress immediately when moving to next question
       this.saveQuizProgressToSession();
       
+      // Reload autoplay setting to respect user toggles
+      await this.loadAutoplaySetting();
+      
       // Start audio playback immediately (don't wait for loading)
       void this.maybeAutoplayCurrentQuestion();
       
