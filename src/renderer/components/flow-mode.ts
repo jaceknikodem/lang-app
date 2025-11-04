@@ -88,23 +88,29 @@ export class FlowMode extends LitElement {
 
       // Check cache first before loading sentences
       let needsStitching = true;
-      const languageSuffix = this.currentLanguage ? `_${this.currentLanguage}` : '';
-      const defaultAudioPath = `audio/flow_stitched${languageSuffix}.mp3`;
-      
-      // Check if cached file exists and is recent (within 2 hours)
-      // Always check the current language-specific path, not a previously cached path
-      const pathToCheck = defaultAudioPath;
-      const stats = await window.electronAPI.flow.getFileStats(pathToCheck);
-      if (stats) {
-        const fileAge = Date.now() - stats.mtime.getTime();
-        const twoHours = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
-        if (fileAge < twoHours) {
-          this.stitchedAudioPath = pathToCheck;
-          needsStitching = false;
-        }
+      // Ensure we have a valid language before constructing the path
+      if (!this.currentLanguage) {
+        console.warn('[Flow] No current language available, cannot use cache');
+        needsStitching = true;
       } else {
-        // If the language-specific cache doesn't exist, clear any previous path
-        this.stitchedAudioPath = null;
+        const languageSuffix = `_${this.currentLanguage}`;
+        const defaultAudioPath = `audio/flow_stitched${languageSuffix}.mp3`;
+        
+        // Check if cached file exists and is recent (within 2 hours)
+        // Always check the current language-specific path, not a previously cached path
+        const pathToCheck = defaultAudioPath;
+        const stats = await window.electronAPI.flow.getFileStats(pathToCheck);
+        if (stats) {
+          const fileAge = Date.now() - stats.mtime.getTime();
+          const twoHours = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+          if (fileAge < twoHours) {
+            this.stitchedAudioPath = pathToCheck;
+            needsStitching = false;
+          }
+        } else {
+          // If the language-specific cache doesn't exist, clear any previous path
+          this.stitchedAudioPath = null;
+        }
       }
 
       // Only load sentences and stitch if cache is not valid
