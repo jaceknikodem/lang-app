@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e  # Exit on any error
 
+# Save the script's directory (where bootstrap.sh is located)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -111,7 +115,7 @@ fi
 
 # 4. Run uv sync
 echo -e "\n${YELLOW}Running uv sync...${NC}"
-LEMMATIZATION_DIR="src/main/lemmatization"
+LEMMATIZATION_DIR="$SCRIPT_DIR/src/main/lemmatization"
 
 if [ ! -d "$LEMMATIZATION_DIR" ]; then
     echo -e "${RED}✗ Lemmatization directory not found: $LEMMATIZATION_DIR${NC}"
@@ -129,6 +133,80 @@ if uv sync; then
 else
     echo -e "${RED}✗ uv sync failed${NC}"
     exit 1
+fi
+
+# 5. Start lemmatization service and download all models
+echo -e "\n${YELLOW}Starting lemmatization service...${NC}"
+STANZA_PORT=8888
+STANZA_URL="http://127.0.0.1:${STANZA_PORT}"
+
+# Check if port is already in use
+if command_exists lsof && lsof -ti:${STANZA_PORT} > /dev/null 2>&1; then
+    echo -e "${YELLOW}⚠ Port ${STANZA_PORT} is already in use. Assuming service is running.${NC}"
+    SERVICE_RUNNING=true
+else
+    echo -e "${YELLOW}Starting lemmatization service on port ${STANZA_PORT}...${NC}"
+    cd "$LEMMATIZATION_DIR"
+    nohup uv run python stanza-service.py > /tmp/stanza-service.log 2>&1 &
+    STANZA_PID=$!
+    SERVICE_RUNNING=false
+    
+    # Wait for service to be ready (max 30 seconds)
+    echo -e "${YELLOW}Waiting for service to start...${NC}"
+    for i in {1..30}; do
+        if curl -s -f "${STANZA_URL}/status" > /dev/null 2>&1; then
+            SERVICE_RUNNING=true
+            echo -e "${GREEN}✓ Lemmatization service started (PID: $STANZA_PID)${NC}"
+            break
+        fi
+        sleep 1
+    done
+    
+    if [ "$SERVICE_RUNNING" = false ]; then
+        echo -e "${RED}✗ Failed to start lemmatization service${NC}"
+        echo -e "${YELLOW}   Check logs at: /tmp/stanza-service.log${NC}"
+        exit 1
+    fi
+fi
+
+# 6. Download all Stanza models by loading them
+echo -e "\n${YELLOW}Downloading Stanza models...${NC}"
+LANGUAGES=("es:Spanish" "it:Italian" "pt:Portuguese" "pl:Polish" "id:Indonesian")
+
+for lang_pair in "${LANGUAGES[@]}"; do
+    IFS=':' read -r lang_code lang_name <<< "$lang_pair"
+    echo -e "${YELLOW}Loading ${lang_name} (${lang_code}) model (this will download if needed)...${NC}"
+    
+    # Make POST request to load_model endpoint
+    RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${STANZA_URL}/load_model" \
+        -H "Content-Type: application/json" \
+        -d "{\"language\": \"${lang_code}\"}" 2>/dev/null || echo -e "\n000")
+    
+    HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+    BODY=$(echo "$RESPONSE" | sed '$d')
+    
+    if [ "$HTTP_CODE" = "200" ]; then
+        # Check if it was already loaded or newly loaded
+        if echo "$BODY" | grep -q "already_loaded"; then
+            echo -e "${GREEN}✓ ${lang_name} (${lang_code}) model already loaded${NC}"
+        else
+            echo -e "${GREEN}✓ ${lang_name} (${lang_code}) model downloaded and loaded${NC}"
+        fi
+    else
+        echo -e "${RED}✗ Failed to load ${lang_name} (${lang_code}) model (HTTP ${HTTP_CODE})${NC}"
+        if [ "$SERVICE_RUNNING" = true ] && [ -z "$STANZA_PID" ]; then
+            # Service was already running, don't exit
+            echo -e "${YELLOW}   Service was already running - may need manual intervention${NC}"
+        else
+            exit 1
+        fi
+    fi
+done
+
+if [ -n "$STANZA_PID" ]; then
+    echo -e "\n${YELLOW}Lemmatization service is running (PID: $STANZA_PID)${NC}"
+    echo -e "${YELLOW}   Logs available at: /tmp/stanza-service.log${NC}"
+    echo -e "${YELLOW}   To stop the service: kill $STANZA_PID${NC}"
 fi
 
 echo -e "\n${GREEN}✅ Bootstrap setup completed successfully!${NC}"
