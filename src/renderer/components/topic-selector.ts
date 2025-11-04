@@ -246,6 +246,8 @@ export class TopicSelector extends LitElement {
     await this.loadCurrentLanguage();
     this.selectRandomSuggestions();
     this.setupKeyboardBindings();
+    // Listen for language changes
+    window.addEventListener('language-changed', this.handleExternalLanguageChange);
   }
 
   disconnectedCallback() {
@@ -253,11 +255,37 @@ export class TopicSelector extends LitElement {
     if (this.keyboardUnsubscribe) {
       this.keyboardUnsubscribe();
     }
+    window.removeEventListener('language-changed', this.handleExternalLanguageChange);
   }
 
   private async loadCurrentLanguage() {
     this.currentLanguage = await loadCurrentLanguage('spanish');
   }
+
+  private handleExternalLanguageChange = async (event: Event) => {
+    const detail = (event as CustomEvent<{ language?: string }>).detail;
+    const newLanguage = detail?.language;
+
+    if (!newLanguage || newLanguage === this.currentLanguage) {
+      return;
+    }
+
+    this.currentLanguage = newLanguage;
+    
+    // Update session manager with new language to ensure it uses correct language's session
+    sessionManager.setActiveLanguage(newLanguage);
+    
+    // Reload lemmatization model for the new language (async, non-blocking)
+    void loadLemmatizationModel(newLanguage);
+    
+    // Reset state for the new language
+    this.topic = '';
+    this.error = '';
+    this.selectRandomSuggestions();
+    
+    // Request update to reflect changes
+    this.requestUpdate();
+  };
 
   private selectRandomSuggestions() {
     const shuffled = [...this.ALL_TOPIC_SUGGESTIONS].sort(() => Math.random() - 0.5);

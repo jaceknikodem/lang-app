@@ -335,6 +335,8 @@ export class WordSelector extends LitElement {
     super.connectedCallback();
     this.initializeWords();
     this.setupKeyboardBindings();
+    // Listen for language changes
+    window.addEventListener('language-changed', this.handleExternalLanguageChange);
   }
 
   disconnectedCallback() {
@@ -345,6 +347,7 @@ export class WordSelector extends LitElement {
     if (this.autoNavigateTimeout !== undefined) {
       clearTimeout(this.autoNavigateTimeout);
     }
+    window.removeEventListener('language-changed', this.handleExternalLanguageChange);
   }
 
   private initializeWords() {
@@ -355,6 +358,22 @@ export class WordSelector extends LitElement {
       markedAsKnown: false
     }));
   }
+
+  private handleExternalLanguageChange = async (event: Event) => {
+    const detail = (event as CustomEvent<{ language?: string }>).detail;
+    const newLanguage = detail?.language;
+
+    if (!newLanguage || newLanguage === this.language) {
+      return;
+    }
+
+    // Update session manager with new language to ensure it uses correct language's session
+    sessionManager.setActiveLanguage(newLanguage);
+    
+    // When language changes in word-selection mode, navigate back to topic-selection
+    // since the generated words are for the old language
+    router.goToTopicSelection();
+  };
 
   private toggleWordSelection(index: number) {
     const word = this.selectableWords[index];
