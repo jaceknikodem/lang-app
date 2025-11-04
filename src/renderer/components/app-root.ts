@@ -189,6 +189,18 @@ export class AppRoot extends LitElement {
         color: rgba(156, 39, 176, 0.7);
       }
 
+      .stat-box.proficiency {
+        background: rgba(0, 150, 136, 0.05);
+      }
+
+      .stat-box.proficiency .stat-value {
+        color: rgba(0, 150, 136, 0.7);
+      }
+
+      .proficiency-level-badge {
+        color: rgba(0, 150, 136, 0.8);
+      }
+
       .tooltip {
         position: absolute;
         bottom: 100%;
@@ -1127,8 +1139,11 @@ export class AppRoot extends LitElement {
                     const pronunciationScore = currentLangStats?.averagePronunciationScore;
                     const pronunciationAttemptCount = currentLangStats?.pronunciationAttemptCount || 0;
                     const hasStats = this.sessionDataState.wordCategoryStats || (pronunciationScore !== null && pronunciationScore !== undefined);
+                    const proficiencyLevelDisplay = this.languageState.currentProficiencyLevel 
+                      ? (this.languageState.currentProficiencyLevel === 'newbie' ? 'New' : this.languageState.currentProficiencyLevel.toUpperCase()).substring(0, 3)
+                      : null;
                     
-                    if (!hasStats) return '';
+                    if (!hasStats && !proficiencyLevelDisplay) return '';
                     
                     return html`
                       <div class="stats-display">
@@ -1154,6 +1169,12 @@ export class AppRoot extends LitElement {
                           <div class="stat-box pronunciation">
                             <span class="stat-value">${pronunciationScore.toFixed(1)}/10</span>
                             <div class="tooltip">Average pronunciation score (0-10 scale) based on ${pronunciationAttemptCount} attempt${pronunciationAttemptCount !== 1 ? 's' : ''}</div>
+                          </div>
+                        ` : ''}
+                        ${proficiencyLevelDisplay ? html`
+                          <div class="stat-box proficiency">
+                            <span class="stat-value">${proficiencyLevelDisplay}</span>
+                            <div class="tooltip">Proficiency level</div>
                           </div>
                         ` : ''}
                       </div>
