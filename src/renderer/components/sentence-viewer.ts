@@ -406,11 +406,22 @@ export class SentenceViewer extends LitElement {
         padding: var(--spacing-xs) var(--spacing-sm);
         border-radius: var(--border-radius-small);
         font-size: 12px;
-        white-space: nowrap;
+        white-space: normal;
+        max-width: 600px;
+        min-width: 150px;
+        width: fit-content;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.2s ease;
         z-index: 10;
+        margin-bottom: var(--spacing-xs);
+      }
+
+      .tooltip.left {
+        left: auto;
+        right: 0;
       }
 
       .word-in-sentence:hover .tooltip {
@@ -425,6 +436,11 @@ export class SentenceViewer extends LitElement {
         transform: none;
         border: 4px solid transparent;
         border-top-color: var(--text-primary);
+      }
+
+      .tooltip.left::after {
+        left: auto;
+        right: 14px;
       }
 
       .word-popup {
@@ -1201,108 +1217,55 @@ export class SentenceViewer extends LitElement {
     return `word-strength-${strengthLevel}`;
   }
 
+  private truncateTooltipText(text: string, maxLength: number = 200): string {
+    if (text.length <= maxLength) {
+      return text;
+    }
+    return text.substring(0, maxLength - 3) + '...';
+  }
+
   private getWordTooltip(wordInfo: WordInSentence): string {
     // No tooltip for whitespace or punctuation
     if (/^\s+$/.test(wordInfo.text) || /^[.,!?;:]+$/.test(wordInfo.text)) {
       return '';
     }
     
-    // NOTE: This method is read-only - it only displays lemma if available from parseSentence().
-    // Lemmatization happens once during parseSentence(), not here.
-    // Old sentences (with precomputed tokens) won't have lemmas - that's expected.
-    
-    // Show lemmatized version first if available
     const parts: string[] = [];
     
+    // Show lemma if available and different from the word
     if (wordInfo.lemma) {
       const dictionaryForm = wordInfo.dictionaryForm || wordInfo.text.trim();
       const cleanText = dictionaryForm.toLowerCase();
-      // Only show lemma if it's different from the original word
       if (wordInfo.lemma.toLowerCase() !== cleanText) {
         parts.push(`Lemma: ${wordInfo.lemma}`);
       }
     }
-    
-    if (wordInfo.isTargetWord) {
-      if (parts.length > 0) {
-        return `${parts.join(' • ')} • Target word`;
-      }
-      return 'Target word';
-    }
 
-    const word = wordInfo.wordData;
-    
-    if (!word) {
-      if (!wordInfo.dictionaryKey) {
-        // No word data and no dictionary key - show lemma if available
-        if (parts.length > 0) {
-          return parts.join(' • ');
-        }
-        return '';
-      }
-
-      if (this.dictionaryLookupInFlight.has(wordInfo.dictionaryKey)) {
-        // Dictionary lookup in progress - show lemma if available
-        if (parts.length > 0) {
-          return `${parts.join(' • ')} • Looking up dictionary…`;
-        }
-        return 'Looking up dictionary…';
+    // Show dictionary definition if available
+    if (wordInfo.dictionaryKey) {
+      // Trigger lookup if not already in progress or cached
+      if (!this.dictionaryLookupInFlight.has(wordInfo.dictionaryKey) && 
+          this.dictionaryCache[wordInfo.dictionaryKey] === undefined) {
+        void this.ensureDictionaryEntry(wordInfo.dictionaryForm ?? '', wordInfo.dictionaryKey);
       }
 
       const cachedEntries = this.dictionaryCache[wordInfo.dictionaryKey];
-
-      if (cachedEntries === undefined) {
-        // Trigger lookup if somehow missing (should already be queued)
-        // But don't keep it marked as in-flight indefinitely
-        const wasInFlight = this.dictionaryLookupInFlight.has(wordInfo.dictionaryKey!);
-        if (!wasInFlight) {
-          void this.ensureDictionaryEntry(wordInfo.dictionaryForm ?? '', wordInfo.dictionaryKey);
-        }
-        // Show lemma if available while looking up
+      if (cachedEntries && cachedEntries.length > 0) {
+        const formatted = this.formatDictionaryTooltip(cachedEntries);
         if (parts.length > 0) {
-          return `${parts.join(' • ')} • Looking up dictionary…`;
+          const result = parts.join(' • ') + ' • ' + formatted;
+          return this.truncateTooltipText(result);
         }
-        return 'Looking up dictionary…';
+        return this.truncateTooltipText(formatted);
       }
-
-      if (!cachedEntries || cachedEntries.length === 0) {
-        // No dictionary entries found (or lookup failed) - show lemma if available
-        if (parts.length > 0) {
-          return parts.join(' • ');
-        }
-        return '';
-      }
-
-      // Show lemma first, then dictionary entries
-      const formatted = this.formatDictionaryTooltip(cachedEntries);
-      if (parts.length > 0) {
-        parts.push(formatted);
-        return parts.join(' • ');
-      }
-      return formatted;
-    }
-    
-    if (word.ignored) {
-      if (parts.length > 0) {
-        parts.push(`Ignored: ${word.translation}`);
-        return parts.join(' • ');
-      }
-      return `Ignored: ${word.translation}`;
-    }
-    
-    if (word.known) {
-      if (parts.length > 0) {
-        parts.push(`Known: ${word.translation}`);
-        return parts.join(' • ');
-      }
-      return `Known: ${word.translation}`;
     }
 
+    // If we have lemma but no dictionary definition, show just lemma
     if (parts.length > 0) {
-      parts.push(`Learning (${word.strength}%): ${word.translation}`);
-      return parts.join(' • ');
+      return this.truncateTooltipText(parts.join(' • '));
     }
-    return `Learning (${word.strength}%): ${word.translation}`;
+
+    return '';
   }
 
   private async handleWordClick(wordInfo: WordInSentence, event: MouseEvent) {
@@ -1339,6 +1302,44 @@ export class SentenceViewer extends LitElement {
   private closeWordPopup() {
     this.wordPopup = null;
     this.requestUpdate();
+  }
+
+  private handleTooltipPosition(event: MouseEvent) {
+    const wordElement = event.currentTarget as HTMLElement;
+    const tooltip = wordElement.querySelector('.tooltip') as HTMLElement;
+    if (!tooltip) return;
+
+    const wordRect = wordElement.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    
+    // Calculate optimal width based on content length
+    const tooltipText = tooltip.textContent || '';
+    const textLength = tooltipText.length;
+    
+    // For short text (under 50 chars), use narrower width
+    // For medium text (50-150 chars), use medium width
+    // For long text (150+ chars), allow it to grow but keep it narrower
+    let optimalWidth: number;
+    if (textLength < 50) {
+      optimalWidth = Math.max(150, textLength * 6); // Roughly 6px per character
+    } else if (textLength < 150) {
+      optimalWidth = Math.min(400, Math.max(200, textLength * 4));
+    } else {
+      optimalWidth = 450; // Narrower width for long content
+    }
+    
+    // Ensure it doesn't exceed viewport
+    optimalWidth = Math.min(optimalWidth, viewportWidth - 40);
+    tooltip.style.width = `${optimalWidth}px`;
+    
+    // Position tooltip to left if word is on the right side of the screen
+    // Use 60% threshold to account for tooltip width and ensure it doesn't overflow
+    const wordCenter = wordRect.left + wordRect.width / 2;
+    if (wordCenter > viewportWidth * 0.6) {
+      tooltip.classList.add('left');
+    } else {
+      tooltip.classList.remove('left');
+    }
   }
 
   private getPopupStyle(): string {
@@ -1969,6 +1970,7 @@ export class SentenceViewer extends LitElement {
                 <span
                   class="word-in-sentence ${this.getWordClass(wordInfo)}"
                   @click=${(e: MouseEvent) => this.handleWordClick(wordInfo, e)}
+                  @mouseenter=${(e: MouseEvent) => this.handleTooltipPosition(e)}
                   aria-label=${tooltipText || nothing}
                 >
                   ${wordInfo.text}
