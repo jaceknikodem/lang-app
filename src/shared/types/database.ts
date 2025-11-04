@@ -135,7 +135,7 @@ export interface DatabaseLayer {
   getCurrentLanguage(): Promise<string>;
   setCurrentLanguage(language: string): Promise<void>;
   getAvailableLanguages(): Promise<string[]>;
-  getLanguageStats(): Promise<Array<{language: string, totalWords: number, studiedWords: number}>>;
+  getLanguageStats(): Promise<Array<{language: string, totalWords: number, studiedWords: number, averagePronunciationScore: number | null, pronunciationAttemptCount: number}>>;
   lookupDictionary(word: string, language?: string): Promise<DictionaryEntry[]>;
   updateWordProcessingStatus(wordId: number, status: WordProcessingStatus): Promise<void>;
   getWordProcessingInfo(wordId: number): Promise<{ processingStatus: WordProcessingStatus; sentenceCount: number } | null>;

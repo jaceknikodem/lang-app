@@ -50,6 +50,9 @@ export class AppRoot extends LitElement {
   @state()
   private sessionDataState: SessionDataState = createInitialSessionDataState();
 
+  @state()
+  private languageStats: Array<{language: string, totalWords: number, studiedWords: number, averagePronunciationScore: number | null, pronunciationAttemptCount: number}> = [];
+
 
   private routerUnsubscribe?: () => void;
   private keyboardUnsubscribe?: () => void;
@@ -176,6 +179,14 @@ export class AppRoot extends LitElement {
 
       .stat-box.new .stat-value {
         color: rgba(158, 158, 158, 0.7);
+      }
+
+      .stat-box.pronunciation {
+        background: rgba(156, 39, 176, 0.05);
+      }
+
+      .stat-box.pronunciation .stat-value {
+        color: rgba(156, 39, 176, 0.7);
       }
 
       .tooltip {
@@ -512,6 +523,9 @@ export class AppRoot extends LitElement {
       // Load stats for current language
       await this.loadWordStats();
 
+      // Load language stats (for all languages)
+      await this.loadLanguageStats();
+
       // Load saved session
       await this.loadSession();
 
@@ -652,6 +666,8 @@ export class AppRoot extends LitElement {
   private handleWordsUpdated = async () => {
     // Reload word stats when words are added/updated
     await this.loadWordStats();
+    // Also reload language stats (pronunciation scores may have changed)
+    await this.loadLanguageStats();
     this.requestUpdate();
   };
 
@@ -679,6 +695,8 @@ export class AppRoot extends LitElement {
     try {
       await changeLanguage(selectedLanguage, async (newLanguage) => {
         this.languageState = { ...this.languageState, currentLanguage: newLanguage };
+        // Reload language stats after language change
+        await this.loadLanguageStats();
         this.sessionState = sessionManager.getCurrentSession();
         
         await this.checkExistingWords();
@@ -733,6 +751,15 @@ export class AppRoot extends LitElement {
     this.languageState = { ...this.languageState, showProficiencySelector: false };
   }
 
+
+  private async loadLanguageStats() {
+    try {
+      this.languageStats = await window.electronAPI.database.getLanguageStats();
+    } catch (error) {
+      console.error('Failed to load language stats:', error);
+      this.languageStats = [];
+    }
+  }
 
   private async loadWordStats() {
     try {
@@ -1075,26 +1102,43 @@ export class AppRoot extends LitElement {
                       </option>
                     `)}
                   </select>
-                  ${this.sessionDataState.wordCategoryStats ? html`
-                    <div class="stats-display">
-                      <div class="stat-box known">
-                        <span class="stat-value">${this.sessionDataState.wordCategoryStats.known}</span>
-                        <div class="tooltip">Known: confidently remembered (strength > 80)</div>
+                  ${(() => {
+                    const currentLangStats = this.languageStats.find(s => s.language === this.languageState.currentLanguage);
+                    const pronunciationScore = currentLangStats?.averagePronunciationScore;
+                    const pronunciationAttemptCount = currentLangStats?.pronunciationAttemptCount || 0;
+                    const hasStats = this.sessionDataState.wordCategoryStats || (pronunciationScore !== null && pronunciationScore !== undefined);
+                    
+                    if (!hasStats) return '';
+                    
+                    return html`
+                      <div class="stats-display">
+                        ${this.sessionDataState.wordCategoryStats ? html`
+                          <div class="stat-box known">
+                            <span class="stat-value">${this.sessionDataState.wordCategoryStats.known}</span>
+                            <div class="tooltip">Known: confidently remembered (strength > 80)</div>
+                          </div>
+                          <div class="stat-box strong">
+                            <span class="stat-value">${this.sessionDataState.wordCategoryStats.strong}</span>
+                            <div class="tooltip">Strong: mostly remembered (30–80)</div>
+                          </div>
+                          <div class="stat-box weak">
+                            <span class="stat-value">${this.sessionDataState.wordCategoryStats.weak}</span>
+                            <div class="tooltip">Weak: shaky or forgotten (&lt;30)</div>
+                          </div>
+                          <div class="stat-box new">
+                            <span class="stat-value">${this.sessionDataState.wordCategoryStats.new}</span>
+                            <div class="tooltip">New: not yet reviewed</div>
+                          </div>
+                        ` : ''}
+                        ${pronunciationScore !== null && pronunciationScore !== undefined ? html`
+                          <div class="stat-box pronunciation">
+                            <span class="stat-value">${pronunciationScore.toFixed(1)}/10</span>
+                            <div class="tooltip">Average pronunciation score (0-10 scale) based on ${pronunciationAttemptCount} attempt${pronunciationAttemptCount !== 1 ? 's' : ''}</div>
+                          </div>
+                        ` : ''}
                       </div>
-                      <div class="stat-box strong">
-                        <span class="stat-value">${this.sessionDataState.wordCategoryStats.strong}</span>
-                        <div class="tooltip">Strong: mostly remembered (30–80)</div>
-                      </div>
-                      <div class="stat-box weak">
-                        <span class="stat-value">${this.sessionDataState.wordCategoryStats.weak}</span>
-                        <div class="tooltip">Weak: shaky or forgotten (&lt;30)</div>
-                      </div>
-                      <div class="stat-box new">
-                        <span class="stat-value">${this.sessionDataState.wordCategoryStats.new}</span>
-                        <div class="tooltip">New: not yet reviewed</div>
-                      </div>
-                    </div>
-                  ` : ''}
+                    `;
+                  })()}
                 </div>
               ` : ''}
             </div>

@@ -58,7 +58,7 @@ export interface IPCBridge {
     getCurrentLanguage: () => Promise<string>;
     setCurrentLanguage: (language: string) => Promise<void>;
     getAvailableLanguages: () => Promise<string[]>;
-    getLanguageStats: () => Promise<Array<{ language: string, totalWords: number, studiedWords: number }>>;
+    getLanguageStats: () => Promise<Array<{ language: string, totalWords: number, studiedWords: number, averagePronunciationScore: number | null, pronunciationAttemptCount: number }>>;
     lookupDictionary: (word: string, language?: string) => Promise<DictionaryEntry[]>;
     getNewWordCount: (language?: string) => Promise<number>;
     resetLanguageProgress: (language: string) => Promise<void>;

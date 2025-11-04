@@ -1864,11 +1864,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get word count statistics per language
    */
-  async getLanguageStats(): Promise<Array<{language: string, totalWords: number, studiedWords: number}>> {
+  async getLanguageStats(): Promise<Array<{language: string, totalWords: number, studiedWords: number, averagePronunciationScore: number | null, pronunciationAttemptCount: number}>> {
     const db = this.getDb();
     
     try {
-      const stmt = db.prepare(`
+      // Get word counts per language
+      const wordStatsStmt = db.prepare(`
         SELECT 
           language,
           COUNT(*) as totalWords,
@@ -1879,13 +1880,43 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ORDER BY language ASC
       `);
       
-      const rows = stmt.all() as any[];
+      const wordStatsRows = wordStatsStmt.all() as any[];
       
-      return rows.map(row => ({
-        language: row.language,
-        totalWords: row.totalWords || 0,
-        studiedWords: row.studiedWords || 0
-      }));
+      // Get average pronunciation scores and count per language
+      const pronunciationStatsStmt = db.prepare(`
+        SELECT 
+          s.language,
+          AVG(pa.similarity_score) * 10 as averagePronunciationScore,
+          COUNT(*) as pronunciationAttemptCount
+        FROM pronunciation_attempts pa
+        INNER JOIN sentences s ON pa.sentence_id = s.id
+        GROUP BY s.language
+      `);
+      
+      const pronunciationStatsRows = pronunciationStatsStmt.all() as any[];
+      
+      // Create a map of language -> pronunciation data for quick lookup
+      const pronunciationDataMap = new Map<string, { score: number; count: number }>();
+      pronunciationStatsRows.forEach((row: any) => {
+        if (row.averagePronunciationScore !== null) {
+          pronunciationDataMap.set(row.language, {
+            score: row.averagePronunciationScore,
+            count: row.pronunciationAttemptCount || 0
+          });
+        }
+      });
+      
+      // Combine word stats with pronunciation scores
+      return wordStatsRows.map(row => {
+        const pronunciationData = pronunciationDataMap.get(row.language);
+        return {
+          language: row.language,
+          totalWords: row.totalWords || 0,
+          studiedWords: row.studiedWords || 0,
+          averagePronunciationScore: pronunciationData?.score ?? null,
+          pronunciationAttemptCount: pronunciationData?.count ?? 0
+        };
+      });
     } catch (error) {
       throw new Error(`Failed to get language stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
