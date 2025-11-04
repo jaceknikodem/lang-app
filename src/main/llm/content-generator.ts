@@ -513,19 +513,23 @@ export class ContentGenerator {
             supplementalSentences = sentencesWithContext;
           }
         }
-
-        if (supplementalSentences.length >= 3) {
-          const shuffled = this.shuffleArray(supplementalSentences);
-          const trimmed = shuffled.slice(0, sentenceCount);
-          return trimmed.length ? trimmed : shuffled;
-        }
-
-        supplementalSentences = supplementalSentences.slice(0, sentenceCount);
       } catch (supplementError) {
         console.warn('Failed to fetch Tatoeba examples:', supplementError);
       }
 
-      // Validate LLM availability (only needed if Tatoeba did not satisfy the request)
+      // Calculate how many more sentences are needed
+      const needed = sentenceCount - supplementalSentences.length;
+
+      // If we have enough sentences from Tatoeba, return them directly
+      if (needed <= 0) {
+        if (supplementalSentences.length === 0) {
+          throw new Error(`No valid sentences were generated for word: ${word}. Please try again.`);
+        }
+        const shuffled = this.shuffleArray(supplementalSentences);
+        return shuffled.slice(0, sentenceCount);
+      }
+
+      // Validate LLM availability (only needed if we need more sentences)
       const isAvailable = await this.llmClient.isAvailable();
       if (!isAvailable) {
         const providerName = this.getCurrentProvider();
@@ -549,9 +553,9 @@ export class ContentGenerator {
         }
       }
 
-      // Always use context sentences
+      // Generate only the needed number of sentences
       const sentences = await this.executeWithRetry(
-        () => this.llmClient.generateSentences(word.trim(), targetLanguage, sentenceCount, topic, proficiencyLevel),
+        () => this.llmClient.generateSentences(word.trim(), targetLanguage, needed, topic, proficiencyLevel),
         `generate sentences for word: ${word}`
       );
 
