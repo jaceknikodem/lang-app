@@ -108,12 +108,32 @@ export class FrequencyWordManager {
     }
 
     /**
+     * Get the minimum starting position based on proficiency level
+     */
+    private getMinPositionForProficiency(proficiencyLevel?: string): number {
+        if (!proficiencyLevel) return 0;
+        
+        const level = proficiencyLevel.toLowerCase();
+        switch (level) {
+            case 'a1':
+                return 200; // Skip top 200 words for A1
+            case 'a2':
+                return 500; // Skip top 500 words for A2
+            case 'b1':
+                return 1000; // Skip top 1000 words for B1
+            default:
+                return 0; // No minimum for other levels
+        }
+    }
+
+    /**
      * Get the next batch of words to process for a language
      */
     async getNextWordsToProcess(
         language: string,
         database: DatabaseLayer,
-        count?: number
+        count?: number,
+        proficiencyLevel?: string
     ): Promise<WordEntry[]> {
         const batchSize = count || this.config.batchSize;
 
@@ -130,11 +150,22 @@ export class FrequencyWordManager {
         // Update position based on what's already in the database
         await this.updatePositionFromDatabase(language, database);
 
+        // Calculate minimum starting position based on proficiency level
+        const minPositionForProficiency = this.getMinPositionForProficiency(proficiencyLevel);
         const currentPosition = this.wordPositions.get(language) || 0;
+        
+        // Use the maximum of current position and minimum position for proficiency
+        // This ensures we skip words that are too frequent for the proficiency level
+        const startPosition = Math.max(currentPosition, minPositionForProficiency);
+        
+        if (minPositionForProficiency > 0 && startPosition === minPositionForProficiency) {
+            console.log(`Starting at position ${startPosition} for proficiency level ${proficiencyLevel} (skipping top ${minPositionForProficiency} words)`);
+        }
+
         const nextWords: WordEntry[] = [];
 
         // Get the next batch of words that aren't already in the database
-        let position = currentPosition;
+        let position = startPosition;
         while (nextWords.length < batchSize && position < wordList.length) {
             const wordEntry = wordList[position];
 

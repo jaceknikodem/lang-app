@@ -154,12 +154,24 @@ export class ContentGenerator {
     const topicText = topic?.trim() || '';
 
     try {
+      // Get proficiency level to determine generation method
+      let proficiencyLevel: string | undefined;
+      if (database) {
+        try {
+          const proficiencyKey = `language_proficiency_${targetLanguage.toLowerCase()}`;
+          proficiencyLevel = await database.getSetting(proficiencyKey) || undefined;
+        } catch (error) {
+          console.warn('Failed to retrieve proficiency level:', error);
+        }
+      }
+
       // If no topic is provided and we have a database, use frequency-based selection
-      if (!topicText && database) {
+      // EXCEPT for B1 proficiency, which should use LLM-based generation
+      if (!topicText && database && proficiencyLevel?.toLowerCase() !== 'b1') {
         return await this.generateFrequencyBasedVocabulary(targetLanguage.toLowerCase(), wordCount, database);
       }
 
-      // Otherwise, use LLM-based topic generation
+      // Otherwise, use LLM-based topic generation (including B1 proficiency)
       return await this.generateLLMTopicVocabulary(topicText, targetLanguage, wordCount, database);
 
     } catch (error) {
@@ -193,7 +205,8 @@ export class ContentGenerator {
     }
 
     // Get the next words from the frequency list
-    const nextWordEntries = await this.frequencyWordManager.getNextWordsToProcess(language, database, count);
+    // Pass proficiency level to adjust starting position (A1 starts at 200, A2 at 500, B1 at 1000)
+    const nextWordEntries = await this.frequencyWordManager.getNextWordsToProcess(language, database, count, proficiencyLevel);
 
     if (nextWordEntries.length === 0) {
       throw new Error(`No new words available from frequency list for ${language}`);
