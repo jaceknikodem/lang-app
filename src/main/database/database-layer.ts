@@ -163,6 +163,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // Ignore error - this is expected for existing databases with the column
     }
 
+    // Migration: Add before_sentence_audio_path column to sentences table if it doesn't exist
+    try {
+      db.exec(`ALTER TABLE sentences ADD COLUMN before_sentence_audio_path TEXT`);
+    } catch (error) {
+      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
+      // Ignore error - this is expected for existing databases with the column
+    }
+
     // Progress table
     db.exec(`
       CREATE TABLE IF NOT EXISTS progress (
@@ -970,6 +978,26 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
+   * Update before sentence audio path after successful generation
+   */
+  async updateBeforeSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void> {
+    const db = this.getDb();
+    try {
+      const stmt = db.prepare(`
+        UPDATE sentences
+        SET before_sentence_audio_path = ?
+        WHERE id = ?
+      `);
+      const result = stmt.run(audioPath, sentenceId);
+      if (result.changes === 0) {
+        throw new Error(`Sentence with ID ${sentenceId} not found`);
+      }
+    } catch (error) {
+      throw new Error(`Failed to update before sentence audio path: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Update sentence tokens (precomputed tokenization)
    */
   async updateSentenceTokens(sentenceId: number, tokens: any[]): Promise<void> {
@@ -1524,10 +1552,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           }
         }
         
-        // Check for before sentence audio (pattern: <lang>/word_<word_id>/before_sentence_<sentence_id>.<ext>)
-        // Use the word's ID to construct the path - we need to get the word first
-        const wordId = sentence.wordId;
-        const beforeSentenceAudioPath = wordId ? `${currentLanguage}/word_${wordId}/before_sentence_${sentence.id}.aiff` : undefined;
+        // Get before sentence audio path from database (if stored)
+        const beforeSentenceAudioPath = sentence.beforeSentenceAudioPath || undefined;
         
         // Get dialogue variants and their continuation audio
         const variantsStmt = db.prepare(`
@@ -2511,7 +2537,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       sentenceGenerationModel: row.sentence_generation_model || undefined,
       audioGenerationService: row.audio_generation_service || undefined,
       audioGenerationModel: row.audio_generation_model || undefined,
-      audioGenerationVoiceId: row.audio_generation_voice_id || undefined
+      audioGenerationVoiceId: row.audio_generation_voice_id || undefined,
+      beforeSentenceAudioPath: row.before_sentence_audio_path || undefined
     };
   }
 

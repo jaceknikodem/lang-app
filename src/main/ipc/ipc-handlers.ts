@@ -1504,6 +1504,13 @@ function setupDialogHandlers(
           // Check if audio was generated successfully
           if (audioPath && await audioService.audioExists(audioPath)) {
             beforeSentenceAudio = audioPath;
+            // Save the path to database
+            try {
+              await databaseLayer.updateBeforeSentenceAudioPath(session.sentenceId, audioPath);
+            } catch (dbError) {
+              console.warn('[IPC] Failed to save beforeSentence audio path to database:', dbError);
+              // Continue - audio exists even if DB update fails
+            }
           }
         } catch (error) {
           console.warn('[IPC] Failed to generate beforeSentence audio during pre-generation:', error);
@@ -1555,6 +1562,13 @@ function setupDialogHandlers(
             // Check if audio was generated successfully
             if (audioPath && await audioService.audioExists(audioPath)) {
               beforeSentenceAudio = audioPath;
+              // Save the path to database
+              try {
+                await databaseLayer.updateBeforeSentenceAudioPath(session.sentenceId, audioPath);
+              } catch (dbError) {
+                console.warn(`[IPC] Failed to save beforeSentence audio path to database for session ${session.sentenceId}:`, dbError);
+                // Continue - audio exists even if DB update fails
+              }
             }
           } catch (error) {
             console.warn(`[IPC] Failed to generate beforeSentence audio for session ${session.sentenceId}:`, error);
@@ -1595,6 +1609,11 @@ function setupDialogHandlers(
         return null;
       }
 
+      // If audio path already exists in database, return it
+      if (sentence.beforeSentenceAudioPath) {
+        return sentence.beforeSentenceAudioPath;
+      }
+
       // Get word ID from sentence
       const language = await databaseLayer.getCurrentLanguage();
       
@@ -1606,6 +1625,11 @@ function setupDialogHandlers(
         sentence.wordId,
         validatedSentenceId
       );
+
+      // Save the path to database
+      if (audioPath) {
+        await databaseLayer.updateBeforeSentenceAudioPath(validatedSentenceId, audioPath);
+      }
 
       return audioPath;
     } catch (error) {

@@ -94,6 +94,7 @@ export interface DatabaseLayer {
   deleteSentence(sentenceId: number): Promise<void>;
   updateSentenceLastShown(sentenceId: number): Promise<void>;
   updateSentenceAudioPath(sentenceId: number, audioPath: string, audioGenerationVoiceId?: string): Promise<void>;
+  updateBeforeSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void>;
   updateSentenceTokens(sentenceId: number, tokens: any[]): Promise<void>;
   incrementSentencePlayCount(sentenceId: number): Promise<void>;
   recordPronunciationAttempt(sentenceId: number, similarityScore: number, expectedText: string, transcribedText: string): Promise<void>;
