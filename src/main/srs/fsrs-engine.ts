@@ -52,8 +52,7 @@ export class FsrsEngine implements SchedulerEngine {
       fsrsDifficulty: DEFAULT_DIFFICULTY,
       fsrsStability: DEFAULT_STABILITY,
       fsrsLapses: 0,
-      fsrsLastRating: null,
-      fsrsVersion: 'fsrs-baseline'
+      fsrsLastRating: null
     };
   }
 
@@ -184,8 +183,7 @@ export class FsrsEngine implements SchedulerEngine {
       fsrsDifficulty: newDifficulty,
       fsrsStability: newStability,
       fsrsLapses: lapses,
-      fsrsLastRating: recall,
-      fsrsVersion: 'fsrs-baseline'
+      fsrsLastRating: recall
     };
 
     console.log('[FSRS] Output state:', {

@@ -12,7 +12,6 @@ export interface SchedulerEngineUpdate {
   fsrsStability?: number;
   fsrsLapses?: number;
   fsrsLastRating?: number | null;
-  fsrsVersion?: string;
 }
 
 export interface SchedulerEngine {

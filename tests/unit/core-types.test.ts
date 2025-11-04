@@ -11,7 +11,6 @@ describe('Core Types', () => {
       word: 'hola',
       language: 'spanish',
       translation: 'hello',
-      audioPath: 'audio/hola.aiff',
       strength: 50,
       known: false,
       ignored: false,

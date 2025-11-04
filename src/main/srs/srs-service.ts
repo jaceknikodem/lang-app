@@ -191,16 +191,14 @@ export class SRSService {
       fsrsDifficulty,
       fsrsStability,
       fsrsLapses,
-      fsrsLastRating,
-      fsrsVersion
+      fsrsLastRating
     } = update;
 
     const hasFsrsValues =
       fsrsDifficulty !== undefined ||
       fsrsStability !== undefined ||
       fsrsLapses !== undefined ||
-      fsrsLastRating !== undefined ||
-      fsrsVersion !== undefined;
+      fsrsLastRating !== undefined;
 
     if (!hasFsrsValues) {
       return undefined;
@@ -210,8 +208,7 @@ export class SRSService {
       fsrsDifficulty,
       fsrsStability,
       fsrsLapses,
-      fsrsLastRating: fsrsLastRating ?? null,
-      fsrsVersion
+      fsrsLastRating: fsrsLastRating ?? null
     };
   }
 }

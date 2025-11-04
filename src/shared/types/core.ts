@@ -7,7 +7,6 @@ export interface Word {
   word: string;
   language: string;
   translation: string;
-  audioPath: string;
   strength: number;        // User mastery level (0+), can exceed 100
   known: boolean;
   ignored: boolean;
@@ -23,7 +22,6 @@ export interface Word {
   fsrsStability?: number;
   fsrsLapses?: number;
   fsrsLastRating?: number;
-  fsrsVersion?: string;
   processingStatus?: 'queued' | 'processing' | 'ready' | 'failed';
   sentenceCount?: number;
   topic?: string;          // Topic the word was generated for
@@ -107,7 +105,6 @@ export interface CreateWordRequest {
   word: string;
   language: string;
   translation: string;
-  audioPath?: string;
   topic?: string;
 }
 

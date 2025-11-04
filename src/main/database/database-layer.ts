@@ -83,9 +83,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       CREATE TABLE IF NOT EXISTS words (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         word TEXT NOT NULL,
-        language TEXT NOT NULL DEFAULT 'spanish',
+        language TEXT NOT NULL,
         translation TEXT NOT NULL,
-        audio_path TEXT,
         strength INTEGER DEFAULT 0,
         known BOOLEAN DEFAULT FALSE,
         ignored BOOLEAN DEFAULT FALSE,
@@ -99,7 +98,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         fsrs_stability REAL DEFAULT 1.0,
         fsrs_lapses INTEGER DEFAULT 0,
         fsrs_last_rating INTEGER,
-        fsrs_version TEXT DEFAULT 'fsrs-baseline',
         processing_status TEXT DEFAULT 'ready',
         sentence_count INTEGER DEFAULT 0,
         topic TEXT
@@ -127,9 +125,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         audio_generation_model TEXT,
         audio_generation_voice_id TEXT,
         sentence_tokens TEXT,
-        similarity_score REAL,
-        play_count INTEGER DEFAULT 0,
-        pronunciation_count INTEGER DEFAULT 0
+        play_count INTEGER DEFAULT 0
       )
     `);
 
@@ -283,17 +279,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       const stmt = db.prepare(`
         INSERT INTO words (
-          word, language, translation, audio_path, topic,
+          word, language, translation, topic,
           strength, interval_days, ease_factor, next_due
         )
-        VALUES (?, ?, ?, ?, ?, 20, 1, 2.5, ?)
+        VALUES (?, ?, ?, ?, 20, 1, 2.5, ?)
       `);
       
       const result = stmt.run(
         wordData.word,
         wordData.language,
         wordData.translation,
-        wordData.audioPath || null,
         wordData.topic || null,
         tomorrow.toISOString()
       );
@@ -1019,10 +1014,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
   /**
    * Record a pronunciation attempt for a sentence (tracks full history)
-   * This method:
-   * 1. Inserts into pronunciation_attempts table for history (with expected and transcribed text)
-   * 2. Updates the latest similarity_score in sentences table
-   * 3. Increments the pronunciation_count in sentences table
+   * This method inserts into pronunciation_attempts table for history (with expected and transcribed text).
+   * Pronunciation stats can be queried from the pronunciation_attempts table.
    */
   async recordPronunciationAttempt(
     sentenceId: number, 
@@ -1033,28 +1026,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      // Use a transaction to ensure atomicity
-      db.transaction(() => {
-        // 1. Insert into pronunciation_attempts history table
-        const insertAttempt = db.prepare(`
-          INSERT INTO pronunciation_attempts (sentence_id, similarity_score, expected_text, transcribed_text)
-          VALUES (?, ?, ?, ?)
-        `);
-        insertAttempt.run(sentenceId, similarityScore, expectedText, transcribedText);
-
-        // 2. Update latest similarity_score and increment count in sentences table
-        const updateSentence = db.prepare(`
-          UPDATE sentences
-          SET similarity_score = ?,
-              pronunciation_count = COALESCE(pronunciation_count, 0) + 1
-          WHERE id = ?
-        `);
-        const result = updateSentence.run(similarityScore, sentenceId);
-        
-        if (result.changes === 0) {
-          throw new Error(`Sentence with ID ${sentenceId} not found`);
-        }
-      })();
+      // Insert into pronunciation_attempts history table
+      const insertAttempt = db.prepare(`
+        INSERT INTO pronunciation_attempts (sentence_id, similarity_score, expected_text, transcribed_text)
+        VALUES (?, ?, ?, ?)
+      `);
+      insertAttempt.run(sentenceId, similarityScore, expectedText, transcribedText);
     } catch (error) {
       throw new Error(`Failed to record pronunciation attempt: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -2033,7 +2010,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       fsrsStability?: number;
       fsrsLapses?: number;
       fsrsLastRating?: number | null;
-      fsrsVersion?: string;
     }
   ): Promise<void> {
     const db = this.getDb();
@@ -2073,10 +2049,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         if (options.fsrsLastRating !== undefined) {
           updates.push('fsrs_last_rating = ?');
           params.push(options.fsrsLastRating);
-        }
-        if (options.fsrsVersion !== undefined) {
-          updates.push('fsrs_version = ?');
-          params.push(options.fsrsVersion);
         }
       }
 
@@ -2499,7 +2471,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       word: row.word,
       language: row.language,
       translation: row.translation,
-      audioPath: row.audio_path || '',
       strength: row.strength,
       known: Boolean(row.known),
       ignored: Boolean(row.ignored),
@@ -2514,7 +2485,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       fsrsStability: row.fsrs_stability ?? undefined,
       fsrsLapses: row.fsrs_lapses ?? undefined,
       fsrsLastRating: row.fsrs_last_rating ?? undefined,
-      fsrsVersion: row.fsrs_version ?? undefined,
       processingStatus: row.processing_status ?? 'ready',
       sentenceCount: row.sentence_count ?? 0,
       topic: row.topic ?? undefined

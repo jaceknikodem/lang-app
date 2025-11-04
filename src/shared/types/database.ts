@@ -58,7 +58,6 @@ export interface DatabaseLayer {
       fsrsStability?: number;
       fsrsLapses?: number;
       fsrsLastRating?: number | null;
-      fsrsVersion?: string;
     }
   ): Promise<void>;
   getWordsDueForReview(limit?: number, language?: string): Promise<Word[]>;
