@@ -165,7 +165,7 @@ export interface IPCBridge {
     getRecordingInfo: (filePath: string) => Promise<{ size: number; duration?: number } | null>;
     initializeSpeechRecognition: () => Promise<void>;
     transcribeAudio: (filePath: string, options?: TranscriptionOptions) => Promise<TranscriptionResult>;
-    compareTranscription: (transcribed: string, expected: string) => Promise<TranscriptionComparison>;
+    compareTranscription: (transcribed: string, expected: string, proficiencyLevel?: string | null) => Promise<TranscriptionComparison>;
     isSpeechRecognitionReady: () => Promise<boolean>;
     switchToElevenLabs: (apiKey: string) => Promise<void>;
     switchToSystemTTS: () => Promise<void>;

@@ -799,15 +799,20 @@ export class AudioService {
   /**
    * Compare transcribed text with expected sentence
    * Returns similarity analysis for pronunciation feedback
+   * @param proficiencyLevel Optional proficiency level to adjust similarity thresholds
    */
-  compareTranscription(transcribed: string, expected: string): {
+  compareTranscription(
+    transcribed: string,
+    expected: string,
+    proficiencyLevel?: string | null
+  ): {
     similarity: number;
     normalizedTranscribed: string;
     normalizedExpected: string;
     expectedWords: Array<{ word: string; similarity: number; matched: boolean }>;
     transcribedWords: string[];
   } {
-    return this.speechRecognition.compareTranscription(transcribed, expected);
+    return this.speechRecognition.compareTranscription(transcribed, expected, proficiencyLevel as any);
   }
 
   /**

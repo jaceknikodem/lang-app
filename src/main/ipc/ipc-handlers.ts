@@ -853,12 +853,12 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.AUDIO.COMPARE_TRANSCRIPTION, async (event, transcribed, expected) => {
+  ipcMain.handle(IPC_CHANNELS.AUDIO.COMPARE_TRANSCRIPTION, async (event, transcribed, expected, proficiencyLevel) => {
     try {
       const validatedTranscribed = TextSchema.parse(transcribed);
       const validatedExpected = TextSchema.parse(expected);
       
-      return audioService.compareTranscription(validatedTranscribed, validatedExpected);
+      return audioService.compareTranscription(validatedTranscribed, validatedExpected, proficiencyLevel);
     } catch (error) {
       console.error('Error comparing transcription:', error);
       throw new Error(`Failed to compare transcription: ${error instanceof Error ? error.message : 'Unknown error'}`);

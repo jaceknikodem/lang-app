@@ -9,6 +9,7 @@ import * as http from 'http';
 import { app } from 'electron';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { getSimilarityThresholds, type ProficiencyLevel } from '../../shared/utils/similarity-threshold.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -445,8 +446,13 @@ export class SpeechRecognitionService {
   /**
    * Compare transcribed text with expected text using Jaro-Winkler similarity
    * Returns similarity score and word-level analysis for color coding
+   * @param proficiencyLevel Optional proficiency level to adjust similarity thresholds
    */
-  compareTranscription(transcribed: string, expected: string): {
+  compareTranscription(
+    transcribed: string,
+    expected: string,
+    proficiencyLevel?: ProficiencyLevel | null
+  ): {
     similarity: number;
     normalizedTranscribed: string;
     normalizedExpected: string;
@@ -491,9 +497,9 @@ export class SpeechRecognitionService {
         }
       }
 
-      // Use threshold: if similarity is above 0.7, consider it a match
-      const threshold = 0.7;
-      const matched = bestSimilarity >= threshold;
+      // Use proficiency-based threshold for word matching
+      const thresholds = getSimilarityThresholds(proficiencyLevel);
+      const matched = bestSimilarity >= thresholds.wordMatchThreshold;
 
       if (matched && bestIndex >= 0) {
         usedTranscribedIndices.add(bestIndex);

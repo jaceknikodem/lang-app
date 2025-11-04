@@ -14,6 +14,8 @@ import './session-complete.js';
 import type { SessionSummary } from './session-complete.js';
 import type { RecordingResult } from './audio-recorder.js';
 import type { RecordingOptions, RecordingSession } from '../../shared/types/audio.js';
+import { checkProficiencyLevel } from '../utils/app-initializer.js';
+import { getSimilarityThresholds, getSimilarityClass, type ProficiencyLevel } from '../../shared/utils/similarity-threshold.js';
 
 @customElement('quiz-mode')
 export class QuizMode extends LitElement {
@@ -104,6 +106,8 @@ export class QuizMode extends LitElement {
   private blobUrlCache: Map<string, string> = new Map(); // audioPath -> blob URL (for cleanup)
   // HTML5 Audio instances for playing cached audio
   private currentAudioElement: HTMLAudioElement | null = null;
+  
+  private currentProficiencyLevel: ProficiencyLevel | null = null;
 
   private handleExternalLanguageChange = async (event: Event) => {
     const detail = (event as CustomEvent<{ language?: string }>).detail;
@@ -117,6 +121,10 @@ export class QuizMode extends LitElement {
     try {
       this.isLoading = true;
       this.error = null;
+      
+      // Load proficiency level for the new language
+      const proficiency = await checkProficiencyLevel(newLanguage);
+      this.currentProficiencyLevel = proficiency as ProficiencyLevel | null;
       
       // Load words from database for the new language
       await this.loadSelectedWords();
@@ -1263,6 +1271,15 @@ export class QuizMode extends LitElement {
 
     // Load autoplay preference
     await this.loadAutoplaySetting();
+    
+    // Load proficiency level
+    try {
+      const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+      const proficiency = await checkProficiencyLevel(currentLanguage);
+      this.currentProficiencyLevel = proficiency as ProficiencyLevel | null;
+    } catch (error) {
+      console.warn('Failed to load proficiency level:', error);
+    }
 
     // Check if there's an existing quiz session to restore
     const savedQuizSession = sessionManager.getQuizSession();
@@ -2297,7 +2314,8 @@ export class QuizMode extends LitElement {
       // Compare typed text with expected sentence (same logic as transcription comparison)
       const comparison = await window.electronAPI.audio.compareTranscription(
         typedText,
-        expectedSentence
+        expectedSentence,
+        this.currentProficiencyLevel
       );
 
       console.log('Text comparison:', comparison);
@@ -2418,7 +2436,8 @@ export class QuizMode extends LitElement {
       // Compare transcription with expected sentence
       const comparison = await window.electronAPI.audio.compareTranscription(
         transcriptionResult.text,
-        expectedSentence
+        expectedSentence,
+        this.currentProficiencyLevel
       );
 
       console.log('Transcription comparison:', comparison);
@@ -2811,18 +2830,8 @@ export class QuizMode extends LitElement {
     const similarity = result.similarity;
     const similarityPercentage = Math.round(similarity * 100);
 
-    // Determine similarity level
-    let similarityClass = 'poor';
-
-    if (similarity >= 0.95) {
-      similarityClass = 'excellent';
-    } else if (similarity >= 0.85) {
-      similarityClass = 'good';
-    } else if (similarity >= 0.75) {
-      similarityClass = 'fair';
-    } else {
-      similarityClass = 'poor';
-    }
+    // Determine similarity level based on proficiency level
+    const similarityClass = getSimilarityClass(similarity, this.currentProficiencyLevel);
 
     return html`
       <div class="transcription-results">

@@ -10,6 +10,8 @@ import { useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keybo
 import { sessionManager } from '../utils/session-manager.js';
 import { router } from '../utils/router.js';
 import type { RecordingOptions, RecordingSession } from '../../shared/types/audio.js';
+import { checkProficiencyLevel } from '../utils/app-initializer.js';
+import { getSimilarityThresholds, getSimilarityClass, type ProficiencyLevel } from '../../shared/utils/similarity-threshold.js';
 
 // DialogueVariant is now imported from shared/types/core.js
 
@@ -112,6 +114,7 @@ export class DialogMode extends LitElement {
   private transcriptionProgressUnsubscribe: (() => void) | null = null;
   private keyboardUnsubscribe?: () => void;
   private currentLanguage = '';
+  private currentProficiencyLevel: ProficiencyLevel | null = null;
   private dialogCount = 0; // Track number of dialogs completed in this session
 
   private handleExternalLanguageChange = async (event: Event) => {
@@ -123,6 +126,10 @@ export class DialogMode extends LitElement {
     }
 
     this.currentLanguage = newLanguage;
+    
+    // Load proficiency level for the new language
+    const proficiency = await checkProficiencyLevel(newLanguage);
+    this.currentProficiencyLevel = proficiency as ProficiencyLevel | null;
     
     // Update session manager with new language to ensure it uses correct language's session
     sessionManager.setActiveLanguage(newLanguage);
@@ -160,9 +167,11 @@ export class DialogMode extends LitElement {
     // Listen for language changes
     document.addEventListener('language-changed', this.handleExternalLanguageChange);
     
-    // Load current language
-    window.electronAPI.database.getCurrentLanguage().then(language => {
+    // Load current language and proficiency level
+    window.electronAPI.database.getCurrentLanguage().then(async language => {
       this.currentLanguage = language;
+      const proficiency = await checkProficiencyLevel(language);
+      this.currentProficiencyLevel = proficiency as ProficiencyLevel | null;
     }).catch(err => {
       console.error('Failed to load current language:', err);
     });
@@ -957,7 +966,8 @@ export class DialogMode extends LitElement {
           this.responseOptions.map(async (option) => {
             const comparison = await window.electronAPI.audio.compareTranscription(
               transcription.text,
-              option.variantSentence
+              option.variantSentence,
+              this.currentProficiencyLevel
             );
             return {
               option,
@@ -997,9 +1007,10 @@ export class DialogMode extends LitElement {
           this.recordedAudioPath = this.currentRecording.filePath;
         }
 
-        // If similarity is high enough (>= 0.75), mark as success and continue
+        // If similarity is high enough (based on proficiency level), mark as success and continue
         // (follow-up will be generated after transcription is marked as complete)
-        if (bestMatch.comparison.similarity >= 0.75) {
+        const thresholds = getSimilarityThresholds(this.currentProficiencyLevel);
+        if (bestMatch.comparison.similarity >= thresholds.overallSuccessThreshold) {
           // Mark transcription as complete first
           this.isTranscribing = false;
           this.streamingTranscriptionText = null;
@@ -1051,7 +1062,10 @@ export class DialogMode extends LitElement {
           ${this.showTranslations && userTranslation ? html`
             <p class="bubble-translation">${userTranslation}</p>
           ` : nothing}
-          ${!this.isOpenEndedMode && similarity !== undefined && similarity < 0.75 ? html`
+          ${!this.isOpenEndedMode && similarity !== undefined && (() => {
+            const thresholds = getSimilarityThresholds(this.currentProficiencyLevel);
+            return similarity < thresholds.overallSuccessThreshold;
+          })() ? html`
             <button 
               class="btn btn-primary try-again-button"
               @click=${this.startRecording}
@@ -1275,10 +1289,7 @@ export class DialogMode extends LitElement {
   }
 
   private getSimilarityClass(similarity: number): string {
-    if (similarity >= 0.95) return 'excellent';
-    if (similarity >= 0.85) return 'good';
-    if (similarity >= 0.75) return 'fair';
-    return 'poor';
+    return getSimilarityClass(similarity, this.currentProficiencyLevel);
   }
 
   private goToTopicSelection() {
