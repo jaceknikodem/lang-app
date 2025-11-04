@@ -536,9 +536,14 @@ export class SpeechRecognitionService {
 
     // Apply language score multiplier if provided
     // languageScore should be 0-1 scale (normalized from 0-10 average pronunciation score)
+    // Made more forgiving: use a minimum multiplier of 0.7 and apply a less aggressive scaling
     if (languageScore !== null && languageScore !== undefined && languageScore > 0) {
-      overallSimilarity = overallSimilarity * languageScore;
-      console.log(`Applied language score multiplier: ${languageScore.toFixed(3)}, adjusted similarity: ${overallSimilarity.toFixed(3)}`);
+      // Apply a minimum multiplier floor to prevent too harsh reductions
+      const MIN_MULTIPLIER = 0.7;
+      // Scale the multiplier more gently: map 0-1 to 0.7-1.0 range
+      const adjustedMultiplier = MIN_MULTIPLIER + (languageScore * (1.0 - MIN_MULTIPLIER));
+      overallSimilarity = overallSimilarity * adjustedMultiplier;
+      console.log(`Applied language score multiplier: ${languageScore.toFixed(3)} -> ${adjustedMultiplier.toFixed(3)}, adjusted similarity: ${overallSimilarity.toFixed(3)}`);
     }
 
     return {

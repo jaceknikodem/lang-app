@@ -93,9 +93,6 @@ export class DialogMode extends LitElement {
   private autoplayEnabled = false;
 
   @state()
-  private isOpenEndedMode = false; // True after first follow-up - allows free conversation
-
-  @state()
   private conversationHistory: Array<{
     userText: string;
     userTranslation: string;
@@ -152,7 +149,6 @@ export class DialogMode extends LitElement {
     this.streamingTranscriptionText = null;
     this.recordedAudioPath = null;
     this.dialogCount = 0; // Reset dialog count on language change
-    this.isOpenEndedMode = false; // Reset open-ended mode on language change
     this.conversationHistory = []; // Reset conversation history
     
     // Reload dialog session for the new language
@@ -695,8 +691,7 @@ export class DialogMode extends LitElement {
   }
 
   private async toggleRecording() {
-    // In open-ended mode, don't require responseOptions
-    if (!this.speechRecognitionReady || (!this.isOpenEndedMode && !this.responseOptions.length)) {
+    if (!this.speechRecognitionReady || !this.responseOptions.length) {
       return;
     }
     
@@ -708,29 +703,8 @@ export class DialogMode extends LitElement {
   }
 
   private async startRecording() {
-    // In open-ended mode, don't require responseOptions
-    if (this.isRecording || !this.speechRecognitionReady || (!this.isOpenEndedMode && !this.responseOptions.length)) {
+    if (this.isRecording || !this.speechRecognitionReady || !this.responseOptions.length) {
       return;
-    }
-
-    // In open-ended mode, move current exchange to history when starting new recording
-    if (this.isOpenEndedMode && this.selectedOption && this.showFollowUp && this.followUpText) {
-      this.conversationHistory.push({
-        userText: this.selectedOption.variantSentence,
-        userTranslation: this.selectedOption.variantTranslation || '',
-        assistantText: this.followUpText,
-        assistantTranslation: this.followUpTranslation,
-        assistantAudio: this.followUpAudio,
-        similarity: this.transcriptionResult?.similarity
-      });
-      
-      // Clear current exchange
-      this.transcriptionResult = null;
-      this.selectedOption = null;
-      this.showFollowUp = false;
-      this.followUpText = '';
-      this.followUpTranslation = '';
-      this.followUpAudio = null;
     }
 
     // Reset audio playing state when starting recording
@@ -903,8 +877,7 @@ export class DialogMode extends LitElement {
   }
 
   private async performSpeechRecognition() {
-    // In open-ended mode, don't require responseOptions
-    if (!this.currentRecording || (!this.isOpenEndedMode && !this.responseOptions.length) || !this.speechRecognitionReady) {
+    if (!this.currentRecording || !this.responseOptions.length || !this.speechRecognitionReady) {
       return;
     }
 
@@ -924,107 +897,69 @@ export class DialogMode extends LitElement {
         }
       );
 
-      if (this.isOpenEndedMode) {
-        // Open-ended mode: Use transcription directly, no variant comparison
-        // Since we can't compare against expected text, we accept any transcription
-        // Use a default similarity of 1.0 (100%) to indicate transcription was successful
-        const similarity = 1.0;
-        
-        // Create a pseudo-option from what the user said
-        this.selectedOption = {
-          id: -Date.now(), // Temporary negative ID
-          sentenceId: 0,
-          variantSentence: transcription.text,
-          variantTranslation: '', // Could translate if needed
-          createdAt: new Date()
-        };
+      // Compare with response options
+      // Compare with all three candidate sentences
+      const comparisons = await Promise.all(
+        this.responseOptions.map(async (option) => {
+          const comparison = await window.electronAPI.audio.compareTranscription(
+            transcription.text,
+            option.variantSentence,
+            this.currentProficiencyLevel,
+            currentLanguage
+          );
+          return {
+            option,
+            comparison
+          };
+        })
+      );
 
-        this.transcriptionResult = {
-          text: transcription.text,
-          similarity: similarity, // Accept any transcription in open-ended mode
-          normalizedTranscribed: transcription.text,
-          normalizedExpected: transcription.text,
-          expectedWords: [],
-          transcribedWords: transcription.text.split(/\s+/)
-        };
+      // Find the best match
+      const bestMatch = comparisons.reduce((best, current) => {
+        return current.comparison.similarity > best.comparison.similarity ? current : best;
+      }, comparisons[0]);
 
-        // Store the recorded audio path for later playback
-        if (this.currentRecording) {
-          this.recordedAudioPath = this.currentRecording.filePath;
+      this.transcriptionResult = {
+        text: transcription.text,
+        ...bestMatch.comparison
+      };
+      this.selectedOption = bestMatch.option;
+
+      // Record pronunciation attempt in database (tracks full history)
+      if (this.currentSentence?.id) {
+        try {
+          await window.electronAPI.database.recordPronunciationAttempt(
+            this.currentSentence.id,
+            bestMatch.comparison.similarity,
+            bestMatch.option.variantSentence, // Expected text (the variant that matched)
+            transcription.text // Transcribed text
+          );
+        } catch (error) {
+          console.warn('Failed to record pronunciation attempt:', error);
         }
+      }
 
-        // Mark transcription as complete
+      // Store the recorded audio path for later playback
+      if (this.currentRecording) {
+        this.recordedAudioPath = this.currentRecording.filePath;
+      }
+
+      // If similarity is high enough (based on proficiency level), mark as success and continue
+      // (follow-up will be generated after transcription is marked as complete)
+      const thresholds = getSimilarityThresholds(this.currentProficiencyLevel);
+      if (bestMatch.comparison.similarity >= thresholds.successThreshold) {
+        // Mark transcription as complete first
         this.isTranscribing = false;
         this.streamingTranscriptionText = null;
-
-        // Generate follow-up directly from what the user said
-        await this.generateFollowUpFromText(transcription.text);
+        
+        // Then generate follow-up continuation
+        await this.generateFollowUp();
       } else {
-        // Original mode: Compare with response options
-        // Compare with all three candidate sentences
-        const comparisons = await Promise.all(
-          this.responseOptions.map(async (option) => {
-            const comparison = await window.electronAPI.audio.compareTranscription(
-              transcription.text,
-              option.variantSentence,
-              this.currentProficiencyLevel,
-              currentLanguage
-            );
-            return {
-              option,
-              comparison
-            };
-          })
-        );
-
-        // Find the best match
-        const bestMatch = comparisons.reduce((best, current) => {
-          return current.comparison.similarity > best.comparison.similarity ? current : best;
-        }, comparisons[0]);
-
-        this.transcriptionResult = {
-          text: transcription.text,
-          ...bestMatch.comparison
-        };
-        this.selectedOption = bestMatch.option;
-
-        // Record pronunciation attempt in database (tracks full history)
-        // Skip in open-ended mode since there's no expected text to compare against
-        if (!this.isOpenEndedMode && this.currentSentence?.id) {
-          try {
-            await window.electronAPI.database.recordPronunciationAttempt(
-              this.currentSentence.id,
-              bestMatch.comparison.similarity,
-              bestMatch.option.variantSentence, // Expected text (the variant that matched)
-              transcription.text // Transcribed text
-            );
-          } catch (error) {
-            console.warn('Failed to record pronunciation attempt:', error);
-          }
-        }
-
-        // Store the recorded audio path for later playback
-        if (this.currentRecording) {
-          this.recordedAudioPath = this.currentRecording.filePath;
-        }
-
-        // If similarity is high enough (based on proficiency level), mark as success and continue
-        // (follow-up will be generated after transcription is marked as complete)
-        const thresholds = getSimilarityThresholds(this.currentProficiencyLevel);
-        if (bestMatch.comparison.similarity >= thresholds.successThreshold) {
-          // Mark transcription as complete first
-          this.isTranscribing = false;
-          this.streamingTranscriptionText = null;
-          
-          // Then generate follow-up continuation
-          await this.generateFollowUp();
-        } else {
-          // Similarity too low - mark transcription as complete
-          this.isTranscribing = false;
-          this.streamingTranscriptionText = null;
-        }
-        // If similarity is too low, show "Try Again" button next to the similarity badge
+        // Similarity too low - mark transcription as complete
+        this.isTranscribing = false;
+        this.streamingTranscriptionText = null;
       }
+      // If similarity is too low, show "Try Again" button next to the similarity badge
     } catch (error) {
       console.error('Speech recognition failed:', error);
       this.transcriptionResult = {
@@ -1094,50 +1029,13 @@ export class DialogMode extends LitElement {
       this.followUpAudio = followUp.audio || null;
       this.showFollowUp = true;
       
-      // After first follow-up, enter open-ended mode
-      if (!this.isOpenEndedMode) {
-        this.isOpenEndedMode = true;
-        this.responseOptions = []; // Clear variants - no longer needed
-        
-        // Add first exchange to conversation history
-        if (this.selectedOption) {
-          const assistantAudioToSave = this.followUpAudio;
-          
-          this.conversationHistory.push({
-            userText: this.selectedOption.variantSentence,
-            userTranslation: this.selectedOption.variantTranslation || '',
-            assistantText: this.followUpText,
-            assistantTranslation: this.followUpTranslation,
-            assistantAudio: assistantAudioToSave,
-            similarity: this.transcriptionResult?.similarity
-          });
-          
-          // Auto-play continuation audio if available and autoplay is enabled
-          if (assistantAudioToSave && this.autoplayEnabled) {
-            requestAnimationFrame(() => {
-              setTimeout(() => {
-                this.playAssistantAudio(assistantAudioToSave);
-              }, 300);
-            });
-          }
-          
-          // Clear current exchange so user can record again (will be shown in history)
-          this.transcriptionResult = null;
-          this.selectedOption = null;
-          this.showFollowUp = false;
-          this.followUpText = '';
-          this.followUpTranslation = '';
-          this.followUpAudio = null;
-        }
-      } else {
-        // In open-ended mode, just play audio - exchange will be moved to history when user records again
-        if (this.followUpAudio && this.autoplayEnabled) {
-          requestAnimationFrame(() => {
-            setTimeout(() => {
-              this.playFollowUpAudio();
-            }, 300);
-          });
-        }
+      // Auto-play continuation audio if available and autoplay is enabled
+      if (this.followUpAudio && this.autoplayEnabled) {
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            this.playFollowUpAudio();
+          }, 300);
+        });
       }
     } catch (error) {
       console.error('Failed to generate follow-up:', error);
@@ -1148,42 +1046,9 @@ export class DialogMode extends LitElement {
     }
   }
 
-  private async generateFollowUpFromText(userText: string) {
-    if (!userText || userText.trim().length === 0 || this.isGeneratingFollowUp) {
-      return;
-    }
-
-    try {
-      this.isGeneratingFollowUp = true;
-      // Generate follow-up directly from user's transcribed text
-      const followUp = await window.electronAPI.dialog.generateFollowUpFromText(userText, '');
-      this.followUpText = followUp.text || '';
-      this.followUpTranslation = followUp.translation || '';
-      this.followUpAudio = followUp.audio || null;
-      this.showFollowUp = true;
-      
-      // Auto-play continuation audio if available and autoplay is enabled
-      if (this.followUpAudio && this.autoplayEnabled) {
-        requestAnimationFrame(() => {
-          setTimeout(() => {
-            this.playFollowUpAudio();
-          }, 300);
-        });
-      }
-    } catch (error) {
-      console.error('Failed to generate follow-up from text:', error);
-      this.followUpText = '';
-      this.followUpTranslation = '';
-    } finally {
-      this.isGeneratingFollowUp = false;
-    }
-  }
-
   private async nextDialog() {
     console.log('[DialogMode] nextDialog - user clicked next, consuming current session');
     
-    // Reset open-ended mode when starting a new dialog
-    this.isOpenEndedMode = false;
     this.transcriptionResult = null;
     this.selectedOption = null;
     this.followUpText = '';
@@ -1299,9 +1164,8 @@ export class DialogMode extends LitElement {
   }
 
   private renderRecordingSection() {
-    // Show recording section in open-ended mode or when response options exist
-    const shouldShow = this.isOpenEndedMode || this.responseOptions.length > 0;
-    if (!shouldShow) return '';
+    // Show recording section when response options exist
+    if (!this.responseOptions.length) return '';
 
     // Only show if actively recording or transcribing
     if (!this.isRecording && !this.isTranscribing) {
@@ -2034,7 +1898,7 @@ export class DialogMode extends LitElement {
                 <span aria-hidden="true">🔊</span>
               </button>
             ` : nothing}
-            ${(this.isOpenEndedMode || (this.responseOptions.length > 0 && !this.transcriptionResult)) ? html`
+            ${(this.responseOptions.length > 0 && !this.transcriptionResult) ? html`
               ${this.isRecording ? html`
                 <button 
                   class="record-button recording"
@@ -2046,7 +1910,7 @@ export class DialogMode extends LitElement {
                 </button>
               ` : html`
                 <button 
-                  class="record-button ${this.isOpenEndedMode && !this.isRecording && !this.isTranscribing && !this.isGeneratingFollowUp && !this.isAudioPlaying ? 'user-turn' : ''}"
+                  class="record-button"
                   @click=${this.startRecording}
                   ?disabled=${!this.speechRecognitionReady}
                   title=${this.speechRecognitionReady ? 'Start recording' : 'Speech recognition not ready'}
@@ -2071,22 +1935,6 @@ export class DialogMode extends LitElement {
             </div>
           ` : nothing}
 
-          ${this.isOpenEndedMode ? html`
-            ${this.conversationHistory.map((exchange) => html`
-              <!-- User message -->
-              ${this.renderUserBubble(exchange.userText, exchange.userTranslation, exchange.similarity)}
-              <!-- Assistant response -->
-              <div class="dialog-bubble bubble-left">
-                <div class="bubble-content">
-                  <p class="bubble-text">${exchange.assistantText}</p>
-                  ${this.showTranslations && exchange.assistantTranslation ? html`
-                    <p class="bubble-translation">${exchange.assistantTranslation}</p>
-                  ` : nothing}
-                </div>
-              </div>
-            `)}
-          ` : nothing}
-
           ${this.transcriptionResult && this.selectedOption ? html`
             ${this.renderUserBubble(
               this.selectedOption.variantSentence,
@@ -2106,56 +1954,28 @@ export class DialogMode extends LitElement {
           </div>
         ` : nothing}
 
-          ${!this.isOpenEndedMode ? html`
-            ${this.isGeneratingFollowUp && !this.isTranscribing ? html`
-              <div class="dialog-bubble bubble-left">
-                <div class="bubble-content">
-                  <p class="bubble-text typing-indicator">
-                    <span class="typing-dot"></span>
-                    <span class="typing-dot"></span>
-                    <span class="typing-dot"></span>
-                  </p>
-                </div>
+          ${this.isGeneratingFollowUp && !this.isTranscribing ? html`
+            <div class="dialog-bubble bubble-left">
+              <div class="bubble-content">
+                <p class="bubble-text typing-indicator">
+                  <span class="typing-dot"></span>
+                  <span class="typing-dot"></span>
+                  <span class="typing-dot"></span>
+                </p>
               </div>
-            ` : nothing}
+            </div>
+          ` : nothing}
 
-            ${this.showFollowUp && this.followUpText ? html`
-              <div class="dialog-bubble bubble-left">
-                <div class="bubble-content">
-                  <p class="bubble-text">${this.followUpText}</p>
-                  ${this.showTranslations && this.followUpTranslation ? html`
-                    <p class="bubble-translation">${this.followUpTranslation}</p>
-                  ` : nothing}
-                </div>
+          ${this.showFollowUp && this.followUpText ? html`
+            <div class="dialog-bubble bubble-left">
+              <div class="bubble-content">
+                <p class="bubble-text">${this.followUpText}</p>
+                ${this.showTranslations && this.followUpTranslation ? html`
+                  <p class="bubble-translation">${this.followUpTranslation}</p>
+                ` : nothing}
               </div>
-            ` : nothing}
-          ` : html`
-            <!-- User bubble is already rendered above for both modes -->
-
-            ${this.isGeneratingFollowUp && !this.isTranscribing ? html`
-              <div class="dialog-bubble bubble-left">
-                <div class="bubble-content">
-                  <p class="bubble-text typing-indicator">
-                    <span class="typing-dot"></span>
-                    <span class="typing-dot"></span>
-                    <span class="typing-dot"></span>
-                  </p>
-                </div>
-              </div>
-            ` : nothing}
-
-            ${this.showFollowUp && this.followUpText ? html`
-              <!-- Current assistant response -->
-              <div class="dialog-bubble bubble-left">
-                <div class="bubble-content">
-                  <p class="bubble-text">${this.followUpText}</p>
-                  ${this.showTranslations && this.followUpTranslation ? html`
-                    <p class="bubble-translation">${this.followUpTranslation}</p>
-                  ` : nothing}
-                </div>
-              </div>
-            ` : nothing}
-          `}
+            </div>
+          ` : nothing}
         </div>
 
         ${this.renderRecordingSection()}
