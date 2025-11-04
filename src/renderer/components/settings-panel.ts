@@ -338,6 +338,14 @@ export class SettingsPanel extends LitElement {
   @state()
   private showConfirmation = false;
 
+  @state()
+  private showResetProgressConfirmation = false;
+
+  @state()
+  private resetProgressStatus = '';
+
+  @state()
+  private isResettingProgress = false;
 
   @state()
   private availableLLMModels: string[] = [];
@@ -533,6 +541,31 @@ export class SettingsPanel extends LitElement {
 
   private hideRestartConfirmation() {
     this.showConfirmation = false;
+  }
+
+  private showResetProgressConfirmationDialog() {
+    this.showResetProgressConfirmation = true;
+  }
+
+  private hideResetProgressConfirmation() {
+    this.showResetProgressConfirmation = false;
+  }
+
+  private async confirmResetProgress() {
+    this.showResetProgressConfirmation = false;
+    this.isResettingProgress = true;
+    this.resetProgressStatus = '';
+
+    try {
+      const language = this.currentLanguage || await window.electronAPI.database.getCurrentLanguage();
+      await window.electronAPI.database.resetLanguageProgress(language);
+      this.resetProgressStatus = `Progress for ${this.capitalizeLanguage(language)} has been reset successfully.`;
+    } catch (error) {
+      console.error('Failed to reset progress:', error);
+      this.resetProgressStatus = `Failed to reset progress: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    } finally {
+      this.isResettingProgress = false;
+    }
   }
 
   private async confirmRestartAll() {
@@ -1055,6 +1088,24 @@ export class SettingsPanel extends LitElement {
               ${this.restartStatus}
             </div>
           ` : ''}
+          <div class="settings-row">
+            <div class="settings-description">
+              <strong>Reset Progress</strong>
+              <p>Reset all learning progress for ${this.capitalizeLanguage(this.currentLanguage || 'the active language')}: pronunciation history, FSRS values, sentence counts, and last seen timestamps. Words marked as known/ignored will be deleted entirely. This cannot be undone!</p>
+            </div>
+            <button 
+              class="action-button danger" 
+              @click=${this.showResetProgressConfirmationDialog}
+              ?disabled=${this.isResettingProgress}
+            >
+              ${this.isResettingProgress ? 'Resetting...' : 'Reset Progress'}
+            </button>
+          </div>
+          ${this.resetProgressStatus ? html`
+            <div class="status-message ${this.resetProgressStatus.includes('Failed') ? 'status-error' : 'status-success'}">
+              ${this.resetProgressStatus}
+            </div>
+          ` : ''}
         </div>
 
         ${this.showConfirmation ? html`
@@ -1080,6 +1131,38 @@ export class SettingsPanel extends LitElement {
                 <button 
                   class="action-button" 
                   @click=${this.hideRestartConfirmation}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+
+        ${this.showResetProgressConfirmation ? html`
+          <div class="confirmation-dialog">
+            <div class="confirmation-content">
+              <h3>⚠️ Confirm Reset Progress</h3>
+              <p>This will reset all learning progress for <strong>${this.capitalizeLanguage(this.currentLanguage || 'the active language')}</strong>:</p>
+              <ul style="text-align: left; margin: 1rem 0;">
+                <li>All historical pronunciation attempts</li>
+                <li>All sentence counts</li>
+                <li>All FSRS values (difficulty, stability, lapses)</li>
+                <li>All words marked as known/ignored (deleted entirely)</li>
+                <li>All last seen timestamps</li>
+                <li>All sentence play counts</li>
+              </ul>
+              <p><strong>This action cannot be undone!</strong></p>
+              <div class="confirmation-actions">
+                <button 
+                  class="action-button danger" 
+                  @click=${this.confirmResetProgress}
+                >
+                  Yes, Reset Progress
+                </button>
+                <button 
+                  class="action-button" 
+                  @click=${this.hideResetProgressConfirmation}
                 >
                   Cancel
                 </button>

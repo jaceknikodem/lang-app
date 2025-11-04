@@ -61,6 +61,7 @@ export interface IPCBridge {
     getLanguageStats: () => Promise<Array<{ language: string, totalWords: number, studiedWords: number }>>;
     lookupDictionary: (word: string, language?: string) => Promise<DictionaryEntry[]>;
     getNewWordCount: (language?: string) => Promise<number>;
+    resetLanguageProgress: (language: string) => Promise<void>;
   };
 
   // SRS operations
@@ -262,7 +263,8 @@ export const IPC_CHANNELS = {
     GET_AVAILABLE_LANGUAGES: 'database:getAvailableLanguages',
     GET_LANGUAGE_STATS: 'database:getLanguageStats',
     LOOKUP_DICTIONARY: 'database:lookupDictionary',
-    GET_NEW_WORD_COUNT: 'database:getNewWordCount'
+    GET_NEW_WORD_COUNT: 'database:getNewWordCount',
+    RESET_LANGUAGE_PROGRESS: 'database:resetLanguageProgress'
   },
   LLM: {
     GENERATE_WORDS: 'llm:generateWords',

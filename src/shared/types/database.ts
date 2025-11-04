@@ -173,6 +173,9 @@ export interface DatabaseLayer {
   // Database lifecycle
   initialize(): Promise<void>;
   close(): Promise<void>;
+
+  // Language progress reset
+  resetLanguageProgress(language: string): Promise<void>;
 }
 
 export interface DatabaseConfig {

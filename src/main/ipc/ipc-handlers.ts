@@ -346,6 +346,15 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       'get new word count'
     )
   );
+
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.RESET_LANGUAGE_PROGRESS,
+    createIPCHandler(
+      LanguageSchema,
+      (language) => databaseLayer.resetLanguageProgress(language),
+      'reset language progress'
+    )
+  );
 }
 
 /**

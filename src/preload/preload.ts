@@ -101,7 +101,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     lookupDictionary: (word: string, language?: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.LOOKUP_DICTIONARY, word, language),
     getNewWordCount: (language?: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_NEW_WORD_COUNT, language)
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_NEW_WORD_COUNT, language),
+    resetLanguageProgress: (language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.RESET_LANGUAGE_PROGRESS, language)
   },
 
   // LLM operations
@@ -374,6 +376,7 @@ declare global {
           lang: string;
         }>>;
         getNewWordCount: (language?: string) => Promise<number>;
+        resetLanguageProgress: (language: string) => Promise<void>;
       };
       llm: {
         generateWords: (topic: string | undefined, language: string) => Promise<any[]>;
