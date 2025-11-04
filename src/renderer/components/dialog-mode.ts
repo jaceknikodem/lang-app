@@ -93,16 +93,6 @@ export class DialogMode extends LitElement {
   private autoplayEnabled = false;
 
   @state()
-  private conversationHistory: Array<{
-    userText: string;
-    userTranslation: string;
-    assistantText: string;
-    assistantTranslation: string;
-    assistantAudio: string | null;
-    similarity?: number;
-  }> = [];
-
-  @state()
   private isAudioPlaying = false;
 
   private recordingTimer: number | null = null;
@@ -149,7 +139,6 @@ export class DialogMode extends LitElement {
     this.streamingTranscriptionText = null;
     this.recordedAudioPath = null;
     this.dialogCount = 0; // Reset dialog count on language change
-    this.conversationHistory = []; // Reset conversation history
     
     // Reload dialog session for the new language
     await this.loadDialogSession();
@@ -629,16 +618,7 @@ export class DialogMode extends LitElement {
       return;
     }
     
-    // 2. Check conversation history for latest assistant audio
-    if (this.conversationHistory.length > 0) {
-      const latestExchange = this.conversationHistory[this.conversationHistory.length - 1];
-      if (latestExchange.assistantAudio) {
-        await this.playAssistantAudio(latestExchange.assistantAudio);
-        return;
-      }
-    }
-    
-    // 3. Fallback to before sentence audio (initial trigger)
+    // 2. Fallback to before sentence audio (initial trigger)
     if (this.beforeSentenceAudio) {
       await this.playBeforeSentence();
     }
@@ -1055,7 +1035,6 @@ export class DialogMode extends LitElement {
     this.followUpAudio = null;
     this.showFollowUp = false;
     this.recordedAudioPath = null;
-    this.conversationHistory = []; // Reset conversation history
     
     // Consume the current dialog session (mark it as used and advance to next)
     const currentSession = sessionManager.getCurrentDialogSession();
@@ -1886,7 +1865,7 @@ export class DialogMode extends LitElement {
                 <div class="translations-slider"></div>
               </div>
             </div>
-            ${(this.beforeSentenceAudio || this.followUpAudio || this.conversationHistory.length > 0) ? html`
+            ${(this.beforeSentenceAudio || this.followUpAudio) ? html`
               <button 
                 class="audio-replay-button" 
                 @click=${this.playLatestAssistantAudio}
