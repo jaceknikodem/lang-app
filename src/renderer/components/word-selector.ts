@@ -653,12 +653,6 @@ export class WordSelector extends LitElement {
     return html`
       <div class="word-selector-container">
         ${!this.wordsProcessed ? html`
-          <div class="header-section">
-            <p class="header-subtitle">
-              Choose the vocabulary words you want to focus on in this session.
-            </p>
-          </div>
-
           ${this.topic ? html`
             <div class="topic-info">
               <p class="topic-label">Topic</p>

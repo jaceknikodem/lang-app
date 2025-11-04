@@ -8,6 +8,7 @@ import { LLMClient, LLMError } from '../../shared/types/llm.js';
 import { DatabaseLayer } from '../../shared/types/database.js';
 import { LLMFactory, LLMFactoryConfig, LLMProvider } from './llm-factory.js';
 import { FrequencyWordManager } from './frequency-word-manager.js';
+import type { LemmatizationService } from '../lemmatization/index.js';
 
 const TATOEBA_API_URL = 'https://tatoeba.org/en/api_v0/search';
 const TATOEBA_TARGET_LANGUAGE = 'eng';
@@ -27,12 +28,14 @@ export interface ContentGeneratorConfig {
   retryDelay: number;
   llmProvider?: LLMProvider;
   geminiApiKey?: string;
+  lemmatizationService?: LemmatizationService;
 }
 
 export class ContentGenerator {
   private llmClient: LLMClient;
   private config: ContentGeneratorConfig;
   private frequencyWordManager: FrequencyWordManager;
+  private lemmatizationService?: LemmatizationService;
 
   constructor(llmClient?: LLMClient, config?: Partial<ContentGeneratorConfig>) {
     this.config = {
@@ -53,6 +56,7 @@ export class ContentGenerator {
     }
 
     this.frequencyWordManager = new FrequencyWordManager();
+    this.lemmatizationService = config?.lemmatizationService;
   }
 
   /**
@@ -173,6 +177,15 @@ export class ContentGenerator {
   ): Promise<GeneratedWord[]> {
     console.log(`Generating frequency-based vocabulary for ${language}, count: ${count}`);
 
+    // Get proficiency level for the language
+    let proficiencyLevel: string | undefined;
+    try {
+      const proficiencyKey = `language_proficiency_${language.toLowerCase()}`;
+      proficiencyLevel = await database.getSetting(proficiencyKey) || undefined;
+    } catch (error) {
+      console.warn('Failed to retrieve proficiency level:', error);
+    }
+
     // Check if there are more words to process
     const hasMore = await this.frequencyWordManager.hasMoreWords(language, database);
     if (!hasMore) {
@@ -220,7 +233,53 @@ export class ContentGenerator {
       throw new Error('Failed to generate translations for frequency-based words');
     }
 
-    return generatedWords;
+    // Step 1: Lemmatize the words
+    let lemmatizedWords: GeneratedWord[] = generatedWords;
+    if (this.lemmatizationService) {
+      try {
+        const wordsToLemmatize = generatedWords.map(w => w.word);
+        const lemmas = await this.lemmatizationService.lemmatizeWords(
+          wordsToLemmatize,
+          language.toLowerCase()
+        );
+
+        // Update words with their lemmas (use lemma if available, otherwise keep original)
+        lemmatizedWords = generatedWords.map(word => {
+          const lemma = lemmas[word.word.toLowerCase()];
+          const finalWord = lemma || word.word;
+          
+          // Re-check frequency position for lemmatized word
+          const frequencyPosition = this.frequencyWordManager.getWordFrequencyPosition(finalWord, language.toLowerCase());
+          const frequencyTier = frequencyPosition ? this.frequencyWordManager.getFrequencyTier(frequencyPosition) : undefined;
+          
+          return {
+            ...word,
+            word: finalWord,
+            frequencyPosition: frequencyPosition || word.frequencyPosition, // Use new position if found, otherwise keep original
+            frequencyTier: frequencyTier || word.frequencyTier
+          };
+        });
+      } catch (error) {
+        console.warn('[ContentGenerator] Failed to lemmatize frequency-based words, using original words:', error);
+        // Continue with original words if lemmatization fails
+      }
+    }
+
+    // Step 2: Filter based on proficiency level
+    let filteredWords = lemmatizedWords;
+    if (proficiencyLevel) {
+      filteredWords = this.filterWordsByProficiencyLevel(
+        lemmatizedWords,
+        proficiencyLevel,
+        language.toLowerCase()
+      );
+    }
+
+    if (filteredWords.length === 0) {
+      throw new Error('No words remain after filtering. Please try again or adjust your proficiency level.');
+    }
+
+    return filteredWords;
   }
 
   /**
@@ -270,20 +329,99 @@ export class ContentGenerator {
       throw new Error('No valid words were generated. Please try again.');
     }
 
-    // Add frequency position information for words that exist in frequency lists
-    const wordsWithFrequencyInfo = validWords.map(word => {
+    // Step 1: Lemmatize the words
+    let lemmatizedWords: GeneratedWord[] = validWords;
+    if (this.lemmatizationService) {
+      try {
+        const wordsToLemmatize = validWords.map(w => w.word);
+        const lemmas = await this.lemmatizationService.lemmatizeWords(
+          wordsToLemmatize,
+          targetLanguage.toLowerCase()
+        );
+
+        // Update words with their lemmas (use lemma if available, otherwise keep original)
+        lemmatizedWords = validWords.map(word => {
+          const lemma = lemmas[word.word.toLowerCase()];
+          return {
+            ...word,
+            word: lemma || word.word // Use lemma if available, otherwise keep original
+          };
+        });
+      } catch (error) {
+        console.warn('[ContentGenerator] Failed to lemmatize words, using original words:', error);
+        // Continue with original words if lemmatization fails
+      }
+    }
+
+    // Step 2: Add frequency position information for lemmatized words
+    const wordsWithFrequencyInfo: GeneratedWord[] = lemmatizedWords.map(word => {
       const frequencyPosition = this.frequencyWordManager.getWordFrequencyPosition(word.word, targetLanguage.toLowerCase());
       const frequencyTier = frequencyPosition ? this.frequencyWordManager.getFrequencyTier(frequencyPosition) : undefined;
 
-      return {
+      const result: GeneratedWord = {
         ...word,
-        frequencyPosition,
-        frequencyTier
+        ...(frequencyPosition !== undefined && { frequencyPosition }),
+        ...(frequencyTier !== undefined && { frequencyTier })
       };
+      return result;
     });
 
+    // Step 3: Filter based on proficiency level
+    let filteredWords = wordsWithFrequencyInfo;
+    if (proficiencyLevel && database) {
+      filteredWords = this.filterWordsByProficiencyLevel(
+        wordsWithFrequencyInfo,
+        proficiencyLevel,
+        targetLanguage.toLowerCase()
+      );
+    }
+
+    if (filteredWords.length === 0) {
+      throw new Error('No words remain after filtering. Please try again or adjust your proficiency level.');
+    }
+
     // Shuffle the words to ensure variety in presentation order
-    return this.shuffleArray(wordsWithFrequencyInfo);
+    return this.shuffleArray(filteredWords);
+  }
+
+  /**
+   * Filter words based on proficiency level and frequency position
+   * A1: filter out words in top 200
+   * A2: filter out words in top 500
+   * B1: filter out words in top 1000
+   */
+  private filterWordsByProficiencyLevel(
+    words: GeneratedWord[],
+    proficiencyLevel: string,
+    language: string
+  ): GeneratedWord[] {
+    const level = proficiencyLevel.toLowerCase();
+    let maxFrequency: number;
+
+    switch (level) {
+      case 'a1':
+        maxFrequency = 200;
+        break;
+      case 'a2':
+        maxFrequency = 500;
+        break;
+      case 'b1':
+        maxFrequency = 1000;
+        break;
+      default:
+        // For other levels (newbie, b2, etc.), don't filter
+        return words;
+    }
+
+    return words.filter(word => {
+      // If word doesn't have frequency position, keep it (might be topic-specific)
+      if (!word.frequencyPosition) {
+        return true;
+      }
+
+      // Filter out words that are in the top N frequency words
+      return word.frequencyPosition > maxFrequency;
+    });
   }
 
   /**

@@ -129,10 +129,17 @@ async function initializeServices(): Promise<void> {
     // Inject database layer into LLM client for duplicate checking
     llmClient.setDatabaseLayer(databaseLayer);
     
+    // Initialize lemmatization service (needed for ContentGenerator)
+    lemmatizationService = new LemmatizationService({
+      serverUrl: process.env.LEMMATIZATION_SERVER_URL || 'http://127.0.0.1:8888'
+    });
+    console.log('Lemmatization service initialized successfully');
+    
     // Initialize content generator with LLM client and provider config
     contentGenerator = new ContentGenerator(llmClient, {
       llmProvider: forceLocalServices ? 'ollama' : initialProvider,
-      geminiApiKey: forceLocalServices ? '' : geminiApiKey
+      geminiApiKey: forceLocalServices ? '' : geminiApiKey,
+      lemmatizationService: lemmatizationService
     });
     
     // Initialize the content generator (including frequency word manager)
@@ -146,12 +153,6 @@ async function initializeServices(): Promise<void> {
     // Initialize SRS service
     srsService = new SRSService(databaseLayer);
     console.log('SRS service initialized successfully');
-
-    // Initialize lemmatization service first (before WordGenerationRunner)
-    lemmatizationService = new LemmatizationService({
-      serverUrl: process.env.LEMMATIZATION_SERVER_URL || 'http://127.0.0.1:8888'
-    });
-    console.log('Lemmatization service initialized successfully');
 
     wordGenerationRunner = new WordGenerationRunner({
       database: databaseLayer,
