@@ -898,6 +898,47 @@ export class AudioService {
   }
 
   /**
+   * Get voice mappings for ElevenLabs (only works if ElevenLabs is active)
+   */
+  async getVoiceMappings(): Promise<Record<string, string[]>> {
+    const generatorName = this.audioGenerator.constructor.name;
+    
+    if (generatorName === 'ElevenLabsAudioGenerator') {
+      return await (this.audioGenerator as ElevenLabsAudioGenerator).getVoiceMappings();
+    }
+    
+    throw new Error('Voice mappings are only available when ElevenLabs TTS is active');
+  }
+
+  /**
+   * Save voice mappings for ElevenLabs (only works if ElevenLabs is active)
+   */
+  async saveVoiceMappings(mappings: Record<string, string[]>): Promise<void> {
+    const generatorName = this.audioGenerator.constructor.name;
+    
+    if (generatorName === 'ElevenLabsAudioGenerator') {
+      await (this.audioGenerator as ElevenLabsAudioGenerator).saveVoiceMappings(mappings);
+      return;
+    }
+    
+    throw new Error('Voice mappings can only be saved when ElevenLabs TTS is active');
+  }
+
+  /**
+   * Reset voice mappings to defaults (only works if ElevenLabs is active)
+   */
+  async resetVoiceMappingsToDefaults(): Promise<void> {
+    const generatorName = this.audioGenerator.constructor.name;
+    
+    if (generatorName === 'ElevenLabsAudioGenerator') {
+      await (this.audioGenerator as ElevenLabsAudioGenerator).resetVoiceMappingsToDefaults();
+      return;
+    }
+    
+    throw new Error('Voice mappings can only be reset when ElevenLabs TTS is active');
+  }
+
+  /**
    * Convert absolute audio path to relative path (relative to userData/audio)
    * Returns the path relative to the audio directory, e.g., "spanish/word_7/sentence_1.aiff"
    * Does NOT include "audio/" prefix - paths are stored without it

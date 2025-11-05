@@ -5,6 +5,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
+import './voice-bubble.js';
 
 // Type is already declared in preload.ts, no need to redeclare
 
@@ -37,8 +38,9 @@ export class SettingsPanel extends LitElement {
 
       .settings-row {
         display: flex;
-        justify-content: space-between;
+        justify-content: flex-start;
         align-items: center;
+        gap: var(--spacing-lg);
         margin-bottom: var(--spacing-md);
       }
 
@@ -47,8 +49,7 @@ export class SettingsPanel extends LitElement {
       }
 
       .settings-description {
-        flex: 1;
-        margin-right: var(--spacing-md);
+        min-width: 120px;
       }
 
       .settings-description p {
@@ -320,6 +321,58 @@ export class SettingsPanel extends LitElement {
         border: 1px solid #f5c6cb;
       }
 
+      .voice-ids-container {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+        width: 350px;
+      }
+
+      .voice-ids-input-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-xs);
+        align-items: center;
+        padding: var(--spacing-sm);
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: white;
+        min-height: 38px;
+      }
+
+      .voice-ids-input-container:focus-within {
+        border-color: #007acc;
+        box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+      }
+
+      .voice-ids-input {
+        flex: 1;
+        min-width: 150px;
+        border: none;
+        outline: none;
+        font-size: 0.9rem;
+        font-family: monospace;
+        padding: var(--spacing-xs) 0;
+      }
+
+      .voice-ids-input::placeholder {
+        color: #999;
+      }
+
+      .voice-ids-bubbles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-xs);
+        align-items: center;
+      }
+
+      .voice-ids-hint {
+        font-size: 11px;
+        color: #666;
+        margin-top: var(--spacing-xs);
+        font-style: italic;
+      }
+
     `
   ];
 
@@ -392,6 +445,15 @@ export class SettingsPanel extends LitElement {
   @state()
   private llmError = '';
 
+  @state()
+  private voiceMappings: Record<string, string[]> = {};
+
+  @state()
+  private isLoadingVoiceMappings = false;
+
+  @state()
+  private voiceMappingStatus = '';
+
 
 
 
@@ -423,6 +485,11 @@ export class SettingsPanel extends LitElement {
 
       // Load ElevenLabs settings
       await this.loadElevenLabsSettings();
+
+      // Load voice mappings if ElevenLabs is enabled
+      if (this.isElevenLabsEnabled) {
+        await this.loadVoiceMappings();
+      }
     } catch (error) {
       console.error('Failed to load settings:', error);
     }
@@ -515,6 +582,151 @@ export class SettingsPanel extends LitElement {
       this.elevenLabsModel = 'eleven_flash_v2_5';
       this.isElevenLabsEnabled = false;
     }
+  }
+
+  private async loadVoiceMappings() {
+    if (!this.isElevenLabsEnabled) {
+      return;
+    }
+
+    this.isLoadingVoiceMappings = true;
+    this.voiceMappingStatus = '';
+
+    try {
+      this.voiceMappings = await window.electronAPI.audio.getVoiceMappings();
+      console.log('Voice mappings loaded:', this.voiceMappings);
+    } catch (error) {
+      console.error('Failed to load voice mappings:', error);
+      this.voiceMappingStatus = `Failed to load voice mappings: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      // Initialize with empty object if loading fails
+      this.voiceMappings = {};
+    } finally {
+      this.isLoadingVoiceMappings = false;
+    }
+  }
+
+  private async saveVoiceMappings() {
+    if (!this.isElevenLabsEnabled) {
+      return;
+    }
+
+    this.voiceMappingStatus = '';
+
+    try {
+      await window.electronAPI.audio.saveVoiceMappings(this.voiceMappings);
+      this.voiceMappingStatus = 'Voice mappings saved successfully';
+      console.log('Voice mappings saved:', this.voiceMappings);
+    } catch (error) {
+      console.error('Failed to save voice mappings:', error);
+      this.voiceMappingStatus = `Failed to save voice mappings: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    }
+  }
+
+  private async resetVoiceMappingsToDefaults() {
+    if (!this.isElevenLabsEnabled) {
+      return;
+    }
+
+    this.voiceMappingStatus = '';
+
+    try {
+      await window.electronAPI.audio.resetVoiceMappingsToDefaults();
+      await this.loadVoiceMappings(); // Reload to get defaults
+      this.voiceMappingStatus = 'Voice mappings reset to defaults';
+      console.log('Voice mappings reset to defaults');
+    } catch (error) {
+      console.error('Failed to reset voice mappings:', error);
+      this.voiceMappingStatus = `Failed to reset voice mappings: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    }
+  }
+
+  private updateVoiceMapping(language: string, value: string) {
+    // Parse comma-separated voice IDs
+    const voiceIds = value
+      .split(',')
+      .map(id => id.trim())
+      .filter(id => id.length > 0);
+
+    if (voiceIds.length > 0) {
+      this.voiceMappings[language] = voiceIds;
+    } else {
+      // Remove language if empty
+      delete this.voiceMappings[language];
+    }
+
+    // Trigger save after a short delay (debounce)
+    clearTimeout((this as any).voiceMappingSaveTimeout);
+    (this as any).voiceMappingSaveTimeout = setTimeout(() => {
+      this.saveVoiceMappings();
+    }, 1000);
+  }
+
+  private getVoiceMappingValue(language: string): string {
+    return this.voiceMappings[language]?.join(', ') || '';
+  }
+
+  private getVoiceIdsForLanguage(language: string): string[] {
+    return this.voiceMappings[language] || [];
+  }
+
+  private handleAddVoiceId(language: string, event: Event) {
+    const input = event.target as HTMLInputElement;
+    const value = input.value.trim();
+
+    if (value) {
+      // Check if voice ID already exists
+      const currentIds = this.getVoiceIdsForLanguage(language);
+      if (!currentIds.includes(value)) {
+        this.voiceMappings[language] = [...currentIds, value];
+        this.saveVoiceMappings();
+      }
+      input.value = '';
+    }
+  }
+
+  private handleRemoveVoiceId(language: string, voiceId: string) {
+    const currentIds = this.getVoiceIdsForLanguage(language);
+    this.voiceMappings[language] = currentIds.filter(id => id !== voiceId);
+    
+    // Remove language entry if no voice IDs left
+    if (this.voiceMappings[language].length === 0) {
+      delete this.voiceMappings[language];
+    }
+    
+    this.saveVoiceMappings();
+  }
+
+  private handleVoiceIdKeyDown(language: string, event: KeyboardEvent) {
+    const input = event.target as HTMLInputElement;
+    
+    // Add voice ID on Enter or comma
+    if (event.key === 'Enter' || event.key === ',') {
+      event.preventDefault();
+      this.handleAddVoiceId(language, event);
+    }
+    
+    // Remove last voice ID on Backspace if input is empty
+    if (event.key === 'Backspace' && input.value === '') {
+      const currentIds = this.getVoiceIdsForLanguage(language);
+      if (currentIds.length > 0) {
+        this.handleRemoveVoiceId(language, currentIds[currentIds.length - 1]);
+      }
+    }
+  }
+
+  private getSupportedLanguages(): string[] {
+    return ['portuguese', 'italian', 'polish', 'spanish', 'indonesian'];
+  }
+
+  private getLanguageDisplayName(language: string): string {
+    const names: Record<string, string> = {
+      'portuguese': 'Portuguese',
+      'italian': 'Italian',
+      'polish': 'Polish',
+      'spanish': 'Spanish',
+      'indonesian': 'Indonesian'
+    };
+    return names[language] || language;
   }
 
 
@@ -713,6 +925,11 @@ export class SettingsPanel extends LitElement {
       // Switch TTS based on current settings
       await this.switchTTSBasedOnSettings();
 
+      // Load voice mappings if ElevenLabs is now enabled
+      if (this.isElevenLabsEnabled) {
+        await this.loadVoiceMappings();
+      }
+
       console.log('ElevenLabs API key updated:', { enabled: this.isElevenLabsEnabled });
     } catch (error) {
       console.error('Failed to save ElevenLabs API key:', error);
@@ -733,6 +950,11 @@ export class SettingsPanel extends LitElement {
 
       // Switch TTS based on current settings
       await this.switchTTSBasedOnSettings();
+
+      // Load voice mappings if ElevenLabs is now enabled
+      if (this.isElevenLabsEnabled) {
+        await this.loadVoiceMappings();
+      }
 
       console.log('TTS model updated:', model);
     } catch (error) {
@@ -1019,6 +1241,69 @@ export class SettingsPanel extends LitElement {
                 placeholder="Enter ElevenLabs API key..."
               />
             </div>
+
+            ${this.isElevenLabsEnabled ? html`
+              <div class="advanced-settings">
+                <h4 style="margin-top: 0; margin-bottom: var(--spacing-md); font-size: 14px; font-weight: 600;">Voice IDs (Advanced)</h4>
+                <p style="margin: 0 0 var(--spacing-md) 0; font-size: 12px; color: var(--text-secondary);">
+                  Customize voice IDs for each language. Enter comma-separated voice IDs from your ElevenLabs account. 
+                  Multiple voices per language will be randomly selected for variety.
+                </p>
+
+                ${this.isLoadingVoiceMappings ? html`
+                  <div class="status-message status-info">
+                    Loading voice mappings...
+                  </div>
+                ` : html`
+                  ${this.getSupportedLanguages().map(language => html`
+                    <div class="settings-row">
+                      <div class="settings-description">
+                        ${this.getLanguageDisplayName(language)}
+                      </div>
+                      <div class="voice-ids-container">
+                        <div class="voice-ids-input-container">
+                          <div class="voice-ids-bubbles">
+                            ${this.getVoiceIdsForLanguage(language).map(voiceId => html`
+                              <voice-bubble
+                                .voiceId=${voiceId}
+                                .removable=${true}
+                                @remove=${() => this.handleRemoveVoiceId(language, voiceId)}
+                              ></voice-bubble>
+                            `)}
+                          </div>
+                          <input
+                            type="text"
+                            class="voice-ids-input"
+                            placeholder="Add voice ID..."
+                            @keydown=${(e: KeyboardEvent) => this.handleVoiceIdKeyDown(language, e)}
+                            @blur=${(e: Event) => this.handleAddVoiceId(language, e)}
+                          />
+                        </div>
+                        <div class="voice-ids-hint">
+                          ${this.getVoiceIdsForLanguage(language).length === 0 
+                            ? 'No voice IDs set. Default will be used.' 
+                            : `${this.getVoiceIdsForLanguage(language).length} voice ID${this.getVoiceIdsForLanguage(language).length === 1 ? '' : 's'} configured.`}
+                        </div>
+                      </div>
+                    </div>
+                  `)}
+
+                  <div style="margin-top: var(--spacing-md); display: flex; gap: var(--spacing-md); align-items: center;">
+                    <button 
+                      class="action-button"
+                      @click=${this.resetVoiceMappingsToDefaults}
+                    >
+                      Reset to Defaults
+                    </button>
+                    ${this.voiceMappingStatus ? html`
+                      <div class="status-message ${this.voiceMappingStatus.includes('Failed') ? 'status-error' : 'status-success'}" style="margin: 0;">
+                        ${this.voiceMappingStatus}
+                      </div>
+                    ` : ''}
+                  </div>
+                `}
+              </div>
+            ` : ''}
           ` : ''}
           
           <div class="model-info">

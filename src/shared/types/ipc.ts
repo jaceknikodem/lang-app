@@ -171,6 +171,9 @@ export interface IPCBridge {
     isSpeechRecognitionReady: () => Promise<boolean>;
     switchToElevenLabs: (apiKey: string) => Promise<void>;
     switchToSystemTTS: () => Promise<void>;
+    getVoiceMappings: () => Promise<Record<string, string[]>>;
+    saveVoiceMappings: (mappings: Record<string, string[]>) => Promise<void>;
+    resetVoiceMappingsToDefaults: () => Promise<void>;
   };
 
   // Quiz operations
@@ -306,7 +309,10 @@ export const IPC_CHANNELS = {
     COMPARE_TRANSCRIPTION: 'audio:compareTranscription',
     IS_SPEECH_RECOGNITION_READY: 'audio:isSpeechRecognitionReady',
     SWITCH_TO_ELEVENLABS: 'audio:switchToElevenLabs',
-    SWITCH_TO_SYSTEM_TTS: 'audio:switchToSystemTTS'
+    SWITCH_TO_SYSTEM_TTS: 'audio:switchToSystemTTS',
+    GET_VOICE_MAPPINGS: 'audio:getVoiceMappings',
+    SAVE_VOICE_MAPPINGS: 'audio:saveVoiceMappings',
+    RESET_VOICE_MAPPINGS_TO_DEFAULTS: 'audio:resetVoiceMappingsToDefaults'
   },
   QUIZ: {
     GET_WEAKEST_WORDS: 'quiz:getWeakestWords',

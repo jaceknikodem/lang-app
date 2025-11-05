@@ -915,6 +915,53 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       throw new Error(`Failed to switch to system TTS: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
+
+  // Voice mapping handlers
+  ipcMain.handle(IPC_CHANNELS.AUDIO.GET_VOICE_MAPPINGS, async (event) => {
+    try {
+      return await audioService.getVoiceMappings();
+    } catch (error) {
+      console.error('Error getting voice mappings:', error);
+      throw new Error(`Failed to get voice mappings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.SAVE_VOICE_MAPPINGS, async (event, mappings) => {
+    try {
+      // Validate mappings is an object
+      if (!mappings || typeof mappings !== 'object' || Array.isArray(mappings)) {
+        throw new Error('Voice mappings must be an object');
+      }
+      
+      // Validate each language entry is an array of strings
+      const validatedMappings: Record<string, string[]> = {};
+      for (const [lang, voices] of Object.entries(mappings)) {
+        if (!Array.isArray(voices)) {
+          throw new Error(`Voice IDs for language "${lang}" must be an array`);
+        }
+        validatedMappings[lang] = voices.map(v => {
+          if (typeof v !== 'string' || v.trim().length === 0) {
+            throw new Error(`Invalid voice ID in language "${lang}": must be a non-empty string`);
+          }
+          return v.trim();
+        });
+      }
+      
+      await audioService.saveVoiceMappings(validatedMappings);
+    } catch (error) {
+      console.error('Error saving voice mappings:', error);
+      throw new Error(`Failed to save voice mappings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO.RESET_VOICE_MAPPINGS_TO_DEFAULTS, async (event) => {
+    try {
+      await audioService.resetVoiceMappingsToDefaults();
+    } catch (error) {
+      console.error('Error resetting voice mappings:', error);
+      throw new Error(`Failed to reset voice mappings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
 }
 
 /**

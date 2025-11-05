@@ -19,6 +19,8 @@ export class ElevenLabsAudioGenerator implements AudioGenerator {
   private currentAudioProcess?: any; // Track current audio process
   private currentPlayPromise?: { resolve: () => void; reject: (error: any) => void }; // Store promise callbacks for playback completion
   private lastUsedVoiceId?: string; // Track the last voiceID used for generation
+  private voiceMap: Record<string, string[]> = {}; // Voice IDs mapped by language
+  private voiceMapLoaded = false; // Track if voice mappings have been loaded
 
   constructor(config?: Partial<AudioConfig>, database?: DatabaseLayer) {
     this.config = {
@@ -34,6 +36,17 @@ export class ElevenLabsAudioGenerator implements AudioGenerator {
 
     // Ensure audio directory exists
     this.ensureAudioDirectory();
+
+    // Load voice mappings from database (non-blocking, will use defaults if not loaded yet)
+    if (database) {
+      this.loadVoiceMappings().catch(error => {
+        console.warn('Failed to load voice mappings during construction, using defaults:', error);
+      });
+    } else {
+      // No database, use defaults immediately
+      this.voiceMap = { ...ElevenLabsAudioGenerator.DEFAULT_VOICE_MAP };
+      this.voiceMapLoaded = true;
+    }
   }
 
   /**
@@ -76,7 +89,7 @@ export class ElevenLabsAudioGenerator implements AudioGenerator {
       }
 
       // Get voice ID for the language
-      const voiceId = this.getVoiceForLanguage(targetLanguage);
+      const voiceId = await this.getVoiceForLanguage(targetLanguage);
       
       // Store the voiceID that was used for this generation
       this.lastUsedVoiceId = voiceId;
@@ -276,10 +289,10 @@ export class ElevenLabsAudioGenerator implements AudioGenerator {
   }
 
   /**
-   * Voice IDs mapped by language
+   * Default voice IDs mapped by language
    * Multiple voices per language for variety
    */
-  private static readonly VOICE_MAP: Record<string, string[]> = {
+  private static readonly DEFAULT_VOICE_MAP: Record<string, string[]> = {
     'portuguese': ['GDzHdQOi6jjf8zaXhCYD', '9pDzHy2OpOgeXM8SeL0t'],
     'pt': ['GDzHdQOi6jjf8zaXhCYD', '9pDzHy2OpOgeXM8SeL0t'],
     'italian': ['oCS6WHyqobqW2UapCSHl', 'CiwzbDpaN3pQXjTgx3ML'],
@@ -298,12 +311,143 @@ export class ElevenLabsAudioGenerator implements AudioGenerator {
   private static readonly DEFAULT_VOICE = 'pNInz6obpgDQGcFmaJgB';
 
   /**
+   * Load voice mappings from database
+   */
+  private async loadVoiceMappings(): Promise<void> {
+    if (!this.database) {
+      this.voiceMap = { ...ElevenLabsAudioGenerator.DEFAULT_VOICE_MAP };
+      this.voiceMapLoaded = true;
+      return;
+    }
+
+    try {
+      const stored = await this.database.getSetting('elevenlabs_voice_ids');
+      if (stored && stored.trim() && stored !== '{}') {
+        const parsed = JSON.parse(stored);
+        // Merge with defaults for any missing languages
+        this.voiceMap = {
+          ...ElevenLabsAudioGenerator.DEFAULT_VOICE_MAP,
+          ...parsed
+        };
+        // Ensure all language codes are also included (e.g., 'pt' and 'portuguese')
+        for (const [lang, voices] of Object.entries(this.voiceMap)) {
+          if (lang.length > 2) {
+            // Full language name, also add 2-letter code
+            const code = this.getLanguageCode(lang);
+            if (code && !this.voiceMap[code]) {
+              this.voiceMap[code] = voices as string[];
+            }
+          }
+        }
+      } else {
+        // No stored settings or empty, use defaults
+        this.voiceMap = { ...ElevenLabsAudioGenerator.DEFAULT_VOICE_MAP };
+      }
+      this.voiceMapLoaded = true;
+    } catch (error) {
+      console.warn('Failed to load voice mappings from database, using defaults:', error);
+      this.voiceMap = { ...ElevenLabsAudioGenerator.DEFAULT_VOICE_MAP };
+      this.voiceMapLoaded = true;
+    }
+  }
+
+  /**
+   * Get language code from full language name (e.g., 'portuguese' -> 'pt')
+   */
+  private getLanguageCode(language: string): string | null {
+    const langMap: Record<string, string> = {
+      'portuguese': 'pt',
+      'italian': 'it',
+      'polish': 'pl',
+      'spanish': 'es',
+      'indonesian': 'id',
+    };
+    return langMap[language.toLowerCase()] || null;
+  }
+
+  /**
+   * Get voice mappings (for settings UI)
+   */
+  async getVoiceMappings(): Promise<Record<string, string[]>> {
+    if (!this.voiceMapLoaded) {
+      await this.loadVoiceMappings();
+    }
+    return { ...this.voiceMap };
+  }
+
+  /**
+   * Save voice mappings to database
+   */
+  async saveVoiceMappings(mappings: Record<string, string[]>): Promise<void> {
+    if (!this.database) {
+      throw new Error('Database not available for saving voice mappings');
+    }
+
+    try {
+      // Clean up the mappings - remove language code duplicates (keep full names)
+      const cleaned: Record<string, string[]> = {};
+      for (const [lang, voices] of Object.entries(mappings)) {
+        // Only store full language names, not codes
+        if (lang.length > 2 || !this.getLanguageCodeFromCode(lang)) {
+          cleaned[lang] = voices;
+        }
+      }
+
+      const json = JSON.stringify(cleaned);
+      await this.database.setSetting('elevenlabs_voice_ids', json);
+      
+      // Reload to update the internal map
+      await this.loadVoiceMappings();
+    } catch (error) {
+      throw new Error(`Failed to save voice mappings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get full language name from code (e.g., 'pt' -> 'portuguese')
+   */
+  private getLanguageCodeFromCode(code: string): string | null {
+    const codeMap: Record<string, string> = {
+      'pt': 'portuguese',
+      'it': 'italian',
+      'pl': 'polish',
+      'es': 'spanish',
+      'id': 'indonesian',
+    };
+    return codeMap[code.toLowerCase()] || null;
+  }
+
+  /**
+   * Reset voice mappings to defaults
+   */
+  async resetVoiceMappingsToDefaults(): Promise<void> {
+    if (!this.database) {
+      throw new Error('Database not available for resetting voice mappings');
+    }
+
+    try {
+      // Delete the setting to use defaults
+      await this.database.setSetting('elevenlabs_voice_ids', '');
+      
+      // Reload to update the internal map with defaults
+      await this.loadVoiceMappings();
+    } catch (error) {
+      throw new Error(`Failed to reset voice mappings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Get appropriate voice ID for language
    * Randomly selects from multiple voices per language for variety
    */
-  private getVoiceForLanguage(language: string): string {
+  private async getVoiceForLanguage(language: string): Promise<string> {
+    // Ensure voice mappings are loaded
+    if (!this.voiceMapLoaded) {
+      await this.loadVoiceMappings();
+    }
+
     const lang = language.toLowerCase();
-    const voices = ElevenLabsAudioGenerator.VOICE_MAP[lang];
+    const voices = this.voiceMap[lang];
     
     if (voices && voices.length > 0) {
       return voices[Math.floor(Math.random() * voices.length)];
