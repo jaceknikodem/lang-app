@@ -32,7 +32,83 @@ else
     echo -e "${GREEN}✓ Whisper (whisper-cpp) installed successfully${NC}"
 fi
 
-# 2. Check if models exist
+# 2. Check if Ollama is installed
+echo -e "\n${YELLOW}Checking for Ollama...${NC}"
+if command_exists ollama; then
+    echo -e "${GREEN}✓ Ollama is already installed${NC}"
+else
+    echo -e "${YELLOW}Ollama not found. Installing via Homebrew...${NC}"
+    if ! command_exists brew; then
+        echo -e "${RED}✗ Homebrew is not installed. Please install Homebrew first: https://brew.sh${NC}"
+        exit 1
+    fi
+    brew install ollama
+    echo -e "${GREEN}✓ Ollama installed successfully${NC}"
+fi
+
+# 2.5. Check if Ollama model is downloaded
+echo -e "\n${YELLOW}Checking for Ollama model (granite4:tiny-h)...${NC}"
+if command_exists ollama; then
+    # Check if model is already pulled (this may fail if service isn't running, which is okay)
+    MODEL_EXISTS=false
+    if ollama list 2>/dev/null | grep -q "granite4:tiny-h"; then
+        MODEL_EXISTS=true
+    fi
+    
+    if [ "$MODEL_EXISTS" = true ]; then
+        echo -e "${GREEN}✓ Ollama model (granite4:tiny-h) is already downloaded${NC}"
+    else
+        echo -e "${YELLOW}Ollama model not found. Downloading granite4:tiny-h...${NC}"
+        echo -e "${YELLOW}  Note: This may take a few minutes depending on your internet connection${NC}"
+        echo -e "${YELLOW}  Note: Ollama service will be started automatically if needed${NC}"
+        if ollama pull granite4:tiny-h; then
+            echo -e "${GREEN}✓ Ollama model (granite4:tiny-h) downloaded successfully${NC}"
+        else
+            echo -e "${YELLOW}⚠ Failed to download Ollama model. You can download it later with: ollama pull granite4:tiny-h${NC}"
+            echo -e "${YELLOW}   Make sure Ollama service is running: ollama serve${NC}"
+            echo -e "${YELLOW}   Continuing with setup...${NC}"
+        fi
+    fi
+else
+    echo -e "${YELLOW}⚠ Ollama not available, skipping model download${NC}"
+fi
+
+# 2.6. Start Ollama server
+echo -e "\n${YELLOW}Starting Ollama server...${NC}"
+OLLAMA_PORT=11434
+OLLAMA_URL="http://127.0.0.1:${OLLAMA_PORT}"
+
+# Check if port is already in use
+if command_exists lsof && lsof -ti:${OLLAMA_PORT} > /dev/null 2>&1; then
+    echo -e "${YELLOW}⚠ Port ${OLLAMA_PORT} is already in use. Assuming Ollama is running.${NC}"
+    OLLAMA_RUNNING=true
+elif command_exists ollama; then
+    echo -e "${YELLOW}Starting Ollama server on port ${OLLAMA_PORT}...${NC}"
+    nohup ollama serve > /tmp/ollama-service.log 2>&1 &
+    OLLAMA_PID=$!
+    OLLAMA_RUNNING=false
+    
+    # Wait for service to be ready (max 30 seconds)
+    echo -e "${YELLOW}Waiting for Ollama to start...${NC}"
+    for i in {1..30}; do
+        if curl -s -f "${OLLAMA_URL}/api/tags" > /dev/null 2>&1; then
+            OLLAMA_RUNNING=true
+            echo -e "${GREEN}✓ Ollama server started (PID: $OLLAMA_PID)${NC}"
+            break
+        fi
+        sleep 1
+    done
+    
+    if [ "$OLLAMA_RUNNING" = false ]; then
+        echo -e "${YELLOW}⚠ Failed to start Ollama server or it's taking longer than expected${NC}"
+        echo -e "${YELLOW}   Check logs at: /tmp/ollama-service.log${NC}"
+        echo -e "${YELLOW}   You can start it manually later with: ollama serve${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠ Ollama not available, skipping server start${NC}"
+fi
+
+# 3. Check if models exist
 echo -e "\n${YELLOW}Checking for Whisper models...${NC}"
 # Models are stored in Electron userData directory
 # Determine platform-specific userData path
@@ -87,7 +163,7 @@ else
     fi
 fi
 
-# 3. Check if uv is installed
+# 4. Check if uv is installed
 echo -e "\n${YELLOW}Checking for uv...${NC}"
 if command_exists uv; then
     echo -e "${GREEN}✓ uv is already installed${NC}"
@@ -113,7 +189,7 @@ else
     fi
 fi
 
-# 4. Run uv sync
+# 5. Run uv sync
 echo -e "\n${YELLOW}Running uv sync...${NC}"
 LEMMATIZATION_DIR="$SCRIPT_DIR/src/main/lemmatization"
 
@@ -135,7 +211,7 @@ else
     exit 1
 fi
 
-# 5. Start lemmatization service and download all models
+# 6. Start lemmatization service and download all models
 echo -e "\n${YELLOW}Starting lemmatization service...${NC}"
 STANZA_PORT=8888
 STANZA_URL="http://127.0.0.1:${STANZA_PORT}"
@@ -169,7 +245,7 @@ else
     fi
 fi
 
-# 6. Download all Stanza models by loading them
+# 7. Download all Stanza models by loading them
 echo -e "\n${YELLOW}Downloading Stanza models...${NC}"
 LANGUAGES=("es:Spanish" "it:Italian" "pt:Portuguese" "pl:Polish" "id:Indonesian")
 
@@ -207,6 +283,12 @@ if [ -n "$STANZA_PID" ]; then
     echo -e "\n${YELLOW}Lemmatization service is running (PID: $STANZA_PID)${NC}"
     echo -e "${YELLOW}   Logs available at: /tmp/stanza-service.log${NC}"
     echo -e "${YELLOW}   To stop the service: kill $STANZA_PID${NC}"
+fi
+
+if [ -n "$OLLAMA_PID" ]; then
+    echo -e "\n${YELLOW}Ollama server is running (PID: $OLLAMA_PID)${NC}"
+    echo -e "${YELLOW}   Logs available at: /tmp/ollama-service.log${NC}"
+    echo -e "${YELLOW}   To stop the service: kill $OLLAMA_PID${NC}"
 fi
 
 echo -e "\n${GREEN}✅ Bootstrap setup completed successfully!${NC}"

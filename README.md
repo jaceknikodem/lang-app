@@ -41,94 +41,23 @@ All data is stored in a local SQLite database and never transmitted anywhere.
 
 ## Dependencies
 
-### System Dependencies
-```bash
-# Install Ollama for local LLM inference
-brew install ollama
+Most dependencies are automatically installed by `./bootstrap.sh`. The bootstrap script handles:
+- **Ollama**: Installed via Homebrew (default LLM provider)
+- **Whisper (whisper-cpp)**: Installed via Homebrew
+- **uv package manager**: Installed automatically
+- **Python dependencies**: Set up in the lemmatization directory
+- **Lemmatization service**: Downloads models automatically
 
-# Install Whisper.cpp for speech recognition
-brew install whisper-cpp
-```
 
-### Python Dependencies (Lemmatization)
-Requires Python 3.10 and `uv` package manager:
-```bash
-# Install uv
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Setup lemmatization service
-cd src/main/lemmatization
-uv python install 3.10
-uv sync
-```
-
-### Models
-
-**Ollama Models** (for local inference):
-```bash
-# Fast word generation
-ollama pull granite4:tiny-h
-
-# Quality sentence generation
-ollama pull llama3.2:3b
-```
-
-**Whisper Model** (for speech recognition):
-Models are stored in the Electron userData directory:
-- **macOS**: `~/Library/Application Support/KotobaAI/models/`
-- **Linux**: `~/.config/KotobaAI/models/`
-- **Windows**: `%APPDATA%/KotobaAI/models/`
-
-The app automatically detects and uses any available Whisper model (any `ggml-*.bin` file) in the models directory. It prioritizes larger/better models if multiple are available:
-1. `ggml-large-v3-turbo-q8_0.bin` (best quality, recommended)
-2. `ggml-small.bin` (default, smallest/fastest)
-
-```bash
-# Download a model to the userData directory
-# On macOS:
-mkdir -p ~/Library/Application\ Support/KotobaAI/models
-cd ~/Library/Application\ Support/KotobaAI/models
-
-# Example: Download small model (fastest, smallest)
-curl -L -o ggml-small.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
-
-# Example: Download large turbo model (best quality)
-curl -L -o ggml-large-v3-turbo-q8_0.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q8_0.bin
-```
-
-Or run `./bootstrap.sh` to automatically download the default model (ggml-small.bin). You can download additional models later for better accuracy.
-
-**Stanza Models** (loaded automatically when needed):
-- Spanish, Italian, Portuguese, Polish, Indonesian
-
-### Services
-
-**Ollama** (default LLM):
-```bash
-ollama serve
-# Runs on http://localhost:11434
-```
-
-**Managed Services** (automatic service management):
-The app can automatically start and manage whisper-server and stanza-service as child processes. Enable this with:
+The app automatically starts and manages whisper-server and stanza-service as child processes during runtime. Enable this with:
 ```bash
 MANAGE_SERVICES=1 npm run dev
 ```
 
-When enabled:
-- Services are spawned on random ports if default ports (8080, 8888) are taken
-- Services are monitored and automatically restarted if they crash
-- Port conflicts are automatically detected and resolved
-- Services are cleaned up when the app exits
-
 ## Setup
 
 1. Install Node.js 18+
-2. Install dependencies: `npm install`
-3. Install system dependencies (Ollama, Whisper)
-4. Download required models
-5. Start services (Ollama, Whisper, Stanza)
-6. Run the app: `npm run dev`
+2. Run the bootstrap script to install system dependencies, download models, and set up services: `./bootstrap.sh`
 
 ## Development
 
@@ -136,14 +65,8 @@ When enabled:
 # Development mode
 npm run dev
 
-# Build
-npm run build
-
 # Run tests
 npm run test:all
-
-# Package for distribution
-npm run dist
 ```
 
 ## Project Structure
