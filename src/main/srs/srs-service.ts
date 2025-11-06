@@ -32,7 +32,7 @@ export class SRSService {
     correct: boolean;
     responseTime?: number;
     difficulty?: 'easy' | 'medium' | 'hard';
-  }>): Promise<void> {
+  }>, language: string, sessionId?: number): Promise<void> {
     if (results.length === 0) {
       return;
     }
@@ -44,7 +44,7 @@ export class SRSService {
         result.difficulty
       );
 
-      await this.processReviewWithEngine(result.wordId, reviewResult, this.engine, new Date());
+      await this.processReviewWithEngine(result.wordId, reviewResult, this.engine, new Date(), true, language, sessionId);
     }
   }
 
@@ -158,12 +158,17 @@ export class SRSService {
     wordId: number,
     reviewResult: SRSReviewResult,
     engine: SchedulerEngine,
-    now: Date
+    now: Date,
+    isQuiz: boolean = false,
+    language?: string,
+    sessionId?: number
   ): Promise<void> {
     const word = await this.database.getWordById(wordId);
     if (!word) {
       throw new Error(`Word with ID ${wordId} not found`);
     }
+
+    const previousStrength = word.strength;
 
     console.log(`[SRS Service] Processing review for word "${word.word}" (ID: ${wordId})`);
     console.log(`[SRS Service] Using engine: ${this.engine.name}`);
@@ -181,6 +186,22 @@ export class SRSService {
       update.nextDue,
       this.extractFsrsOptions(update)
     );
+
+    // Record SRS adjustment only in quiz mode
+    if (isQuiz && language) {
+      try {
+        const strengthDelta = update.strength - previousStrength;
+        await this.database.recordSRSAdjustment({
+          wordId,
+          sessionId,
+          recallRating: reviewResult.recall,
+          strengthDelta,
+          language
+        });
+      } catch (error) {
+        console.warn(`[SRS Service] Failed to record SRS adjustment:`, error);
+      }
+    }
 
     console.log(`[SRS Service] Successfully saved SRS update for word "${word.word}" (ID: ${wordId})\n`);
   }

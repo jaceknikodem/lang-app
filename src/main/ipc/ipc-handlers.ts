@@ -95,6 +95,9 @@ export function setupIPCHandlers(
   // Log handlers
   setupLogHandlers();
 
+  // Tracking handlers
+  setupTrackingHandlers(databaseLayer);
+
   // Scoring handlers (if scoringService is provided, will be added in main.ts)
   // setupScoringHandlers is called separately after scoring service initialization
 
@@ -1010,7 +1013,7 @@ function setupSRSHandlers(srsService: SRSService): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.SRS.PROCESS_QUIZ_RESULTS, async (event, results) => {
+  ipcMain.handle(IPC_CHANNELS.SRS.PROCESS_QUIZ_RESULTS, async (event, results, language, sessionId) => {
     try {
       const validatedResults = z.array(z.object({
         wordId: WordIdSchema,
@@ -1018,7 +1021,9 @@ function setupSRSHandlers(srsService: SRSService): void {
         responseTime: z.number().optional(),
         difficulty: z.enum(['easy', 'medium', 'hard']).optional()
       })).parse(results);
-      return await srsService.processQuizResults(validatedResults);
+      const validatedLanguage = z.string().min(1).parse(language);
+      const validatedSessionId = sessionId !== undefined ? z.number().int().positive().parse(sessionId) : undefined;
+      return await srsService.processQuizResults(validatedResults, validatedLanguage, validatedSessionId);
     } catch (error) {
       console.error('Error processing quiz results:', error);
       throw wrapError(error, `Failed to process quiz results`);
@@ -1814,8 +1819,53 @@ function setupFlowHandlers(
 }
 
 /**
- * Set up Log-related IPC handlers
+ * Set up tracking-related IPC handlers
  */
+function setupTrackingHandlers(databaseLayer: SQLiteDatabaseLayer): void {
+  ipcMain.handle(IPC_CHANNELS.TRACKING.CREATE_SESSION, async (event, mode, language) => {
+    try {
+      const validatedMode = z.enum(['learning', 'quiz', 'dialog', 'flow']).parse(mode);
+      const validatedLanguage = LanguageSchema.parse(language);
+      return await databaseLayer.createLearningSession({ mode: validatedMode, language: validatedLanguage });
+    } catch (error) {
+      console.error('Error creating learning session:', error);
+      throw wrapError(error, `Failed to create learning session`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TRACKING.UPDATE_SESSION, async (event, sessionId, data) => {
+    try {
+      const validatedSessionId = z.number().int().positive().parse(sessionId);
+      const validatedData = z.object({
+        wordCount: z.number().int().nonnegative().optional(),
+        sentenceCount: z.number().int().nonnegative().optional(),
+        audioPlayedCount: z.number().int().nonnegative().optional()
+      }).parse(data);
+      await databaseLayer.updateLearningSession(validatedSessionId, validatedData);
+    } catch (error) {
+      console.error('Error updating learning session:', error);
+      throw wrapError(error, `Failed to update learning session`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TRACKING.RECORD_AUDIO_PLAYBACK, async (event, data) => {
+    try {
+      const validatedData = z.object({
+        sessionId: z.number().int().positive().optional(),
+        sentenceId: z.number().int().positive().optional(),
+        audioPath: AudioPathSchema,
+        language: LanguageSchema,
+        mode: z.enum(['learning', 'quiz', 'dialog', 'flow']),
+        playbackSpeed: z.number().min(0.1).max(3.0).optional()
+      }).parse(data);
+      return await databaseLayer.recordAudioPlayback(validatedData);
+    } catch (error) {
+      console.error('Error recording audio playback:', error);
+      throw wrapError(error, `Failed to record audio playback`);
+    }
+  });
+}
+
 function setupLogHandlers(): void {
   const { getLogger } = require('../utils/logger.js');
   const logger = getLogger();

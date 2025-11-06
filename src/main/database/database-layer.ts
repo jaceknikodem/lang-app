@@ -272,6 +272,48 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // Ignore error - this is expected for existing databases with the column
     }
 
+    // SRS adjustments tracking (quiz mode only)
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS srs_adjustments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        word_id INTEGER NOT NULL REFERENCES words(id) ON DELETE CASCADE,
+        session_id INTEGER REFERENCES learning_sessions(id),
+        recall_rating INTEGER,  -- 0=failed, 1=hard, 2=good, 3=easy
+        strength_delta INTEGER,  -- change in strength
+        language TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Learning sessions tracking
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS learning_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mode TEXT NOT NULL,  -- 'learning', 'quiz', 'dialog', 'flow'
+        language TEXT NOT NULL,
+        started_at DATETIME NOT NULL,
+        ended_at DATETIME,
+        duration_seconds INTEGER,
+        word_count INTEGER DEFAULT 0,
+        sentence_count INTEGER DEFAULT 0,
+        audio_played_count INTEGER DEFAULT 0
+      )
+    `);
+
+    // Audio playback events tracking
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS audio_playback_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER REFERENCES learning_sessions(id),
+        sentence_id INTEGER REFERENCES sentences(id) ON DELETE SET NULL,
+        audio_path TEXT NOT NULL,
+        language TEXT NOT NULL,
+        mode TEXT NOT NULL,
+        playback_speed REAL DEFAULT 1.0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Create indexes for better query performance
     db.exec(`CREATE INDEX IF NOT EXISTS idx_words_strength ON words(strength)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_words_last_studied ON words(last_studied)`);
@@ -292,6 +334,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_dialogue_variants_created_at ON dialogue_variants(created_at)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_pronunciation_attempts_sentence_id ON pronunciation_attempts(sentence_id)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_pronunciation_attempts_created_at ON pronunciation_attempts(created_at)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_srs_adjustments_word_id ON srs_adjustments(word_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_srs_adjustments_session_id ON srs_adjustments(session_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_srs_adjustments_language ON srs_adjustments(language)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_learning_sessions_mode ON learning_sessions(mode)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_learning_sessions_started_at ON learning_sessions(started_at)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_audio_playback_events_sentence_id ON audio_playback_events(sentence_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_audio_playback_events_session_id ON audio_playback_events(session_id)`);
   }
 
   // Word management operations
@@ -3048,6 +3097,172 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       console.log(`Successfully reset progress for language: ${language}`);
     } catch (error) {
       throw wrapError(error, `Failed to reset language progress`);
+    }
+  }
+
+  // Tracking operations
+
+  /**
+   * Record SRS adjustment (quiz mode only)
+   */
+  async recordSRSAdjustment(data: {
+    wordId: number;
+    sessionId?: number;
+    recallRating?: number;
+    strengthDelta: number;
+    language: string;
+  }): Promise<number> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare(`
+        INSERT INTO srs_adjustments (word_id, session_id, recall_rating, strength_delta, language)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      
+      const result = stmt.run(
+        data.wordId,
+        data.sessionId || null,
+        data.recallRating ?? null,
+        data.strengthDelta,
+        data.language
+      );
+      
+      return result.lastInsertRowid as number;
+    } catch (error) {
+      throw wrapError(error, `Failed to record SRS adjustment`);
+    }
+  }
+
+  /**
+   * Create learning session
+   */
+  async createLearningSession(data: {
+    mode: 'learning' | 'quiz' | 'dialog' | 'flow';
+    language: string;
+  }): Promise<number> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare(`
+        INSERT INTO learning_sessions (mode, language, started_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+      `);
+      
+      const result = stmt.run(data.mode, data.language);
+      return result.lastInsertRowid as number;
+    } catch (error) {
+      throw wrapError(error, `Failed to create learning session`);
+    }
+  }
+
+  /**
+   * Update learning session on completion
+   */
+  async updateLearningSession(sessionId: number, data: {
+    wordCount?: number;
+    sentenceCount?: number;
+    audioPlayedCount?: number;
+  }): Promise<void> {
+    const db = this.getDb();
+    
+    try {
+      const session = await this.getLearningSession(sessionId);
+      if (!session) {
+        throw new Error(`Session ${sessionId} not found`);
+      }
+      
+      const startedAt = new Date(session.startedAt);
+      const endedAt = new Date();
+      const durationSeconds = Math.floor((endedAt.getTime() - startedAt.getTime()) / 1000);
+      
+      const stmt = db.prepare(`
+        UPDATE learning_sessions
+        SET ended_at = CURRENT_TIMESTAMP,
+            duration_seconds = ?,
+            word_count = COALESCE(?, word_count),
+            sentence_count = COALESCE(?, sentence_count),
+            audio_played_count = COALESCE(?, audio_played_count)
+        WHERE id = ?
+      `);
+      
+      stmt.run(
+        durationSeconds,
+        data.wordCount ?? null,
+        data.sentenceCount ?? null,
+        data.audioPlayedCount ?? null,
+        sessionId
+      );
+    } catch (error) {
+      throw wrapError(error, `Failed to update learning session`);
+    }
+  }
+
+  /**
+   * Get learning session by ID
+   */
+  async getLearningSession(sessionId: number): Promise<{
+    id: number;
+    mode: string;
+    language: string;
+    startedAt: Date;
+  } | null> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare(`
+        SELECT id, mode, language, started_at
+        FROM learning_sessions
+        WHERE id = ?
+      `);
+      
+      const row = stmt.get(sessionId) as any;
+      if (!row) {
+        return null;
+      }
+      
+      return {
+        id: row.id,
+        mode: row.mode,
+        language: row.language,
+        startedAt: new Date(row.started_at)
+      };
+    } catch (error) {
+      throw wrapError(error, `Failed to get learning session`);
+    }
+  }
+
+  /**
+   * Record audio playback event
+   */
+  async recordAudioPlayback(data: {
+    sessionId?: number;
+    sentenceId?: number;
+    audioPath: string;
+    language: string;
+    mode: 'learning' | 'quiz' | 'dialog' | 'flow';
+    playbackSpeed?: number;
+  }): Promise<number> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare(`
+        INSERT INTO audio_playback_events (session_id, sentence_id, audio_path, language, mode, playback_speed)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      
+      const result = stmt.run(
+        data.sessionId || null,
+        data.sentenceId || null,
+        data.audioPath,
+        data.language,
+        data.mode,
+        data.playbackSpeed ?? 1.0
+      );
+      
+      return result.lastInsertRowid as number;
+    } catch (error) {
+      throw wrapError(error, `Failed to record audio playback`);
     }
   }
 }

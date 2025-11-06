@@ -177,6 +177,42 @@ export interface DatabaseLayer {
 
   // Language progress reset
   resetLanguageProgress(language: string): Promise<void>;
+
+  // Tracking operations
+  recordSRSAdjustment(data: {
+    wordId: number;
+    sessionId?: number;
+    recallRating?: number;
+    strengthDelta: number;
+    language: string;
+  }): Promise<number>;
+  
+  createLearningSession(data: {
+    mode: 'learning' | 'quiz' | 'dialog' | 'flow';
+    language: string;
+  }): Promise<number>;
+  
+  updateLearningSession(sessionId: number, data: {
+    wordCount?: number;
+    sentenceCount?: number;
+    audioPlayedCount?: number;
+  }): Promise<void>;
+  
+  getLearningSession(sessionId: number): Promise<{
+    id: number;
+    mode: string;
+    language: string;
+    startedAt: Date;
+  } | null>;
+  
+  recordAudioPlayback(data: {
+    sessionId?: number;
+    sentenceId?: number;
+    audioPath: string;
+    language: string;
+    mode: 'learning' | 'quiz' | 'dialog' | 'flow';
+    playbackSpeed?: number;
+  }): Promise<number>;
 }
 
 export interface DatabaseConfig {

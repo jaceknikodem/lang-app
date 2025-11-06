@@ -375,6 +375,11 @@ export const IPC_CHANNELS = {
   SCORING: {
     GET_NEXT_MODE: 'scoring:getNextMode'
   },
+  TRACKING: {
+    CREATE_SESSION: 'tracking:createSession',
+    UPDATE_SESSION: 'tracking:updateSession',
+    RECORD_AUDIO_PLAYBACK: 'tracking:recordAudioPlayback'
+  },
   LOG: {
     LOG: 'log:log'
   }

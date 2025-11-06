@@ -71,7 +71,26 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
     try {
       // Try the models endpoint first (lightweight check)
       const modelsUrl = `${this.baseUrl}?key=${this.apiKey}`;
-      const pTimeout = (await import('p-timeout')).default;
+      
+      // Dynamic import for ES module compatibility (using Function to prevent TypeScript transformation)
+      // In test environment, use require to get Jest mocks
+      let pTimeout: any;
+      try {
+        if (typeof jest !== 'undefined') {
+          // In Jest test environment, use require to get mocked modules
+          pTimeout = require('p-timeout').default || require('p-timeout');
+        } else {
+          // In production, use dynamic import
+          const dynamicImport = new Function('specifier', 'return import(specifier)');
+          const pTimeoutModule = await dynamicImport('p-timeout');
+          pTimeout = pTimeoutModule.default || pTimeoutModule;
+        }
+      } catch (importError) {
+        logger.warn({ importError }, '[GeminiClient] Failed to import p-timeout, using fetch without timeout');
+        // Fallback: use fetch without timeout
+        const response = await fetch(modelsUrl, { method: 'GET' });
+        return response.ok;
+      }
       
       const response = await pTimeout(
         fetch(modelsUrl, { method: 'GET' }),
@@ -255,7 +274,22 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
           maxOutputTokens: 2048
         }
       };
-      const pTimeout = (await import('p-timeout')).default;
+      // Dynamic import for ES module compatibility (using Function to prevent TypeScript transformation)
+      // In test environment, use require to get Jest mocks
+      let pTimeout: any;
+      try {
+        if (typeof jest !== 'undefined') {
+          // In Jest test environment, use require to get mocked modules
+          pTimeout = require('p-timeout').default || require('p-timeout');
+        } else {
+          // In production, use dynamic import
+          const dynamicImport = new Function('specifier', 'return import(specifier)');
+          const pTimeoutModule = await dynamicImport('p-timeout');
+          pTimeout = pTimeoutModule.default || pTimeoutModule;
+        }
+      } catch (importError) {
+        throw new Error('Failed to import p-timeout module');
+      }
 
       const response = await pTimeout(
         fetch(`${this.baseUrl}/${selectedModel}:generateContent?key=${this.apiKey}`, {
@@ -309,21 +343,39 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         maxOutputTokens: 2048
       }
     };
-    const pRetry = (await import('p-retry')).default;
-    const pTimeout = (await import('p-timeout')).default;
+      // Dynamic imports for ES module compatibility (using Function to prevent TypeScript transformation)
+      // In test environment, use require to get Jest mocks
+      let pRetry: any;
+      let pTimeout: any;
+      try {
+        if (typeof jest !== 'undefined') {
+          // In Jest test environment, use require to get mocked modules
+          pRetry = require('p-retry').default || require('p-retry');
+          pTimeout = require('p-timeout').default || require('p-timeout');
+        } else {
+          // In production, use dynamic import
+          const dynamicImport = new Function('specifier', 'return import(specifier)');
+          const pRetryModule = await dynamicImport('p-retry');
+          pRetry = pRetryModule.default || pRetryModule;
+          const pTimeoutModule = await dynamicImport('p-timeout');
+          pTimeout = pTimeoutModule.default || pTimeoutModule;
+        }
+      } catch (importError) {
+        throw new Error('Failed to import required modules (p-retry, p-timeout)');
+      }
 
-    return await pRetry(
-      async () => {
-        const response = await pTimeout(
-          fetch(`${this.baseUrl}/${selectedModel}:generateContent?key=${this.apiKey}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-          }),
-          { milliseconds: this.config.timeout || 60000 }
-        );
+      return await pRetry(
+        async () => {
+          const response = await pTimeout(
+            fetch(`${this.baseUrl}/${selectedModel}:generateContent?key=${this.apiKey}`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(requestBody)
+            }),
+            { milliseconds: this.config.timeout || 60000 }
+          );
 
         if (!response.ok) {
           const errorText = await response.text();
@@ -361,7 +413,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
       },
       {
         retries: this.config.maxRetries!,
-        onFailedAttempt: async (error) => {
+        onFailedAttempt: async (error: Error & { attemptNumber?: number; status?: number; errorText?: string }) => {
           // Don't retry on certain errors
           if (error instanceof Error) {
             if (error.name === 'TimeoutError' || error.name === 'AbortError') {
@@ -372,8 +424,8 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
             }
 
             // Check if this is a 429 error and extract retry delay
-            if ((error as any).status === 429 && (error as any).errorText) {
-              const retryDelayMs = this.extractRetryDelay((error as any).errorText);
+            if (error.status === 429 && error.errorText) {
+              const retryDelayMs = this.extractRetryDelay(error.errorText);
               
               // If retryDelay is null (>= 2 minutes), give up immediately
               if (retryDelayMs === null) {
@@ -383,13 +435,15 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
               // Use the extracted retry delay from the API
               const seconds = Math.ceil(retryDelayMs / 1000);
               const logger = getLogger();
-              logger.info({ attemptNumber: error.attemptNumber, retryDelay: seconds }, `Attempt ${error.attemptNumber} failed with HTTP 429, retrying in ${seconds}s (as specified by API)...`);
+              const attemptNumber = error.attemptNumber ?? 0;
+              logger.info({ attemptNumber, retryDelay: seconds }, `Attempt ${attemptNumber} failed with HTTP 429, retrying in ${seconds}s (as specified by API)...`);
               await new Promise(resolve => setTimeout(resolve, retryDelayMs));
             } else {
               // Use exponential backoff for other errors (handled by minTimeout/maxTimeout/factor)
-              const backoffSeconds = Math.pow(2, error.attemptNumber - 1);
+              const attemptNumber = error.attemptNumber ?? 0;
+              const backoffSeconds = Math.pow(2, attemptNumber - 1);
               const logger = getLogger();
-              logger.info({ attemptNumber: error.attemptNumber, retryDelay: backoffSeconds }, `Attempt ${error.attemptNumber} failed, retrying in ${backoffSeconds}s...`);
+              logger.info({ attemptNumber, retryDelay: backoffSeconds }, `Attempt ${attemptNumber} failed, retrying in ${backoffSeconds}s...`);
             }
           }
         },
@@ -397,7 +451,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         maxTimeout: 120000, // 2 minutes maximum
         factor: 2 // Exponential backoff factor
       }
-    ).catch((error) => {
+    ).catch((error: unknown) => {
       // Handle final error after all retries exhausted
       if (error instanceof Error && error.name === 'TimeoutError') {
         throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);

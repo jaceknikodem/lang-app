@@ -22,10 +22,12 @@ let strengthBoostConfig: any = null;
 
 if (isNodeEnv) {
   try {
+    // Capture require from outer scope to use in Function constructor
     // Use Function constructor to prevent static analysis by bundlers
     // This ensures esbuild doesn't try to bundle the config module
-    const requireFunc = new Function('modulePath', 'return require(modulePath)');
-    const config = requireFunc('../config/index.js');
+    const nodeRequire = require;
+    const requireFunc = new Function('require', 'modulePath', 'return require(modulePath)');
+    const config = requireFunc(nodeRequire, '../config/index.js');
     appConfig = config.appConfig;
     llmConfig = config.llmConfig;
     audioConfig = config.audioConfig;
