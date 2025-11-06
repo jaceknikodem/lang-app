@@ -379,6 +379,140 @@ export async function insertTestWord(page: Page, language: string = 'spanish'): 
 }
 
 /**
+ * Get word strength from database
+ */
+export async function getWordStrength(page: Page, wordId: number): Promise<number | null> {
+  await page.waitForFunction(() => {
+    return typeof (window as any).electronAPI !== 'undefined' &&
+           typeof (window as any).electronAPI.database !== 'undefined';
+  }, { timeout: 10000 });
+
+  const result = await page.evaluate(async (id) => {
+    const electronAPI = (window as any).electronAPI;
+    try {
+      const word = await electronAPI.database.getWordById(id);
+      return word ? word.strength : null;
+    } catch (error) {
+      return null;
+    }
+  }, wordId);
+
+  return result;
+}
+
+/**
+ * Get word known/ignored status from database
+ */
+export async function getWordKnownStatus(page: Page, wordId: number): Promise<{ known: boolean; ignored: boolean } | null> {
+  await page.waitForFunction(() => {
+    return typeof (window as any).electronAPI !== 'undefined' &&
+           typeof (window as any).electronAPI.database !== 'undefined';
+  }, { timeout: 10000 });
+
+  const result = await page.evaluate(async (id) => {
+    const electronAPI = (window as any).electronAPI;
+    try {
+      const word = await electronAPI.database.getWordById(id);
+      return word ? { known: word.known || false, ignored: word.ignored || false } : null;
+    } catch (error) {
+      return null;
+    }
+  }, wordId);
+
+  return result;
+}
+
+/**
+ * Get current language from database
+ */
+export async function getCurrentLanguage(page: Page): Promise<string | null> {
+  await page.waitForFunction(() => {
+    return typeof (window as any).electronAPI !== 'undefined' &&
+           typeof (window as any).electronAPI.database !== 'undefined';
+  }, { timeout: 10000 });
+
+  const result = await page.evaluate(async () => {
+    const electronAPI = (window as any).electronAPI;
+    try {
+      return await electronAPI.database.getCurrentLanguage();
+    } catch (error) {
+      return null;
+    }
+  });
+
+  return result;
+}
+
+/**
+ * Change language programmatically
+ */
+export async function setLanguage(page: Page, language: string): Promise<void> {
+  await page.waitForFunction(() => {
+    return typeof (window as any).electronAPI !== 'undefined' &&
+           typeof (window as any).electronAPI.database !== 'undefined';
+  }, { timeout: 10000 });
+
+  const result = await page.evaluate(async (lang) => {
+    const electronAPI = (window as any).electronAPI;
+    try {
+      await electronAPI.database.setCurrentLanguage(lang);
+      return { success: true };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : String(error) 
+      };
+    }
+  }, language);
+
+  if (!result.success) {
+    throw new Error(`Failed to set language: ${result.error || 'Unknown error'}`);
+  }
+
+  // Wait for language change to propagate
+  await page.waitForTimeout(500);
+}
+
+/**
+ * Get current session state from sessionManager
+ */
+export async function getSessionState(page: Page): Promise<any> {
+  await page.waitForFunction(() => {
+    return typeof (window as any).electronAPI !== 'undefined';
+  }, { timeout: 10000 });
+
+  const result = await page.evaluate(() => {
+    // Access sessionManager through the window (it's a singleton)
+    // We need to check if it's available in the renderer context
+    try {
+      // Try to get session state from localStorage
+      const sessionData = localStorage.getItem('language-learning-session');
+      if (sessionData) {
+        return JSON.parse(sessionData);
+      }
+      return null;
+    } catch (error) {
+      return null;
+    }
+  });
+
+  return result;
+}
+
+/**
+ * Verify audio file exists in test data directory
+ */
+export function verifyAudioFileExists(testDataDir: string, audioPath: string): boolean {
+  // Audio path might be relative or absolute
+  // If relative, it should be in the test data directory
+  const fullPath = path.isAbsolute(audioPath) 
+    ? audioPath 
+    : path.join(testDataDir, audioPath);
+  
+  return fs.existsSync(fullPath);
+}
+
+/**
  * Mock LLM responses for testing
  */
 export const mockLLMResponses = {
