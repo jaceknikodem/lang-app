@@ -1383,17 +1383,11 @@ export class SentenceViewer extends LitElement {
     const existingTimeout = this.hoverTimeout.get(dictionaryKey);
     if (existingTimeout) {
       clearTimeout(existingTimeout);
+      this.hoverTimeout.delete(dictionaryKey);
     }
 
-    // Record hover start time
+    // Record hover start time (logging will happen on hover end)
     this.hoverStartTime.set(dictionaryKey, now);
-
-    // Set timeout to record hover after 1 second
-    const timeoutId = window.setTimeout(() => {
-      this.recordDictionaryHover(wordInfo, dictionaryKey);
-    }, 1000);
-
-    this.hoverTimeout.set(dictionaryKey, timeoutId);
   }
 
   private handleWordHoverEnd(wordInfo: WordInSentence) {
@@ -1402,14 +1396,14 @@ export class SentenceViewer extends LitElement {
     const dictionaryKey = wordInfo.dictionaryKey;
     const startTime = this.hoverStartTime.get(dictionaryKey);
 
-    // Clear timeout
+    // Clear any existing timeout (shouldn't be needed anymore, but keep for safety)
     const timeoutId = this.hoverTimeout.get(dictionaryKey);
     if (timeoutId) {
       clearTimeout(timeoutId);
       this.hoverTimeout.delete(dictionaryKey);
     }
 
-    // If hover lasted more than 1 second, record it
+    // Calculate actual hover duration and log if >= 1000ms
     if (startTime) {
       const duration = Date.now() - startTime;
       if (duration >= 1000) {
@@ -1419,19 +1413,8 @@ export class SentenceViewer extends LitElement {
     }
   }
 
-  private async recordDictionaryHover(wordInfo: WordInSentence, dictionaryKey: string, duration?: number) {
-    // Only record once per hover
-    if (!this.hoverStartTime.has(dictionaryKey) && !duration) {
-      return; // Already recorded or hover ended
-    }
-
-    const hoverDuration = duration || (Date.now() - (this.hoverStartTime.get(dictionaryKey) || Date.now()));
-
-    // Only record if duration >= 1000ms
-    if (hoverDuration < 1000) {
-      return;
-    }
-
+  private async recordDictionaryHover(wordInfo: WordInSentence, dictionaryKey: string, duration: number) {
+    // Duration is always provided from handleWordHoverEnd and already validated to be >= 1000ms
     // Check if dictionary lookup found entries
     const cachedEntries = this.dictionaryCache[dictionaryKey];
     const foundInDict = cachedEntries !== undefined && cachedEntries !== null && cachedEntries.length > 0;
@@ -1446,21 +1429,13 @@ export class SentenceViewer extends LitElement {
         language: this.targetWord?.language || 'spanish',
         sentenceId: this.sentence?.id,
         sessionId,
-        hoverDurationMs: hoverDuration,
+        hoverDurationMs: duration,
         dictionaryKey,
         foundInDict
       });
     } catch (error) {
       console.warn('Failed to record dictionary hover:', error);
       // Don't block the flow if tracking fails
-    }
-
-    // Clear tracking state
-    this.hoverStartTime.delete(dictionaryKey);
-    const timeoutId = this.hoverTimeout.get(dictionaryKey);
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      this.hoverTimeout.delete(dictionaryKey);
     }
   }
 
