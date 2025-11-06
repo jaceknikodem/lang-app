@@ -5,6 +5,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
+import { getErrorMessage } from '../../shared/utils/error.js';
 import './voice-bubble.js';
 import './status-message.js';
 import './confirmation-dialog.js';
@@ -600,7 +601,7 @@ export class SettingsPanel extends LitElement {
       console.log('Voice mappings loaded:', this.voiceMappings);
     } catch (error) {
       console.error('Failed to load voice mappings:', error);
-      this.voiceMappingStatus = `Failed to load voice mappings: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.voiceMappingStatus = `Failed to load voice mappings: ${getErrorMessage(error)}`;
       // Initialize with empty object if loading fails
       this.voiceMappings = {};
     } finally {
@@ -621,7 +622,7 @@ export class SettingsPanel extends LitElement {
       console.log('Voice mappings saved:', this.voiceMappings);
     } catch (error) {
       console.error('Failed to save voice mappings:', error);
-      this.voiceMappingStatus = `Failed to save voice mappings: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.voiceMappingStatus = `Failed to save voice mappings: ${getErrorMessage(error)}`;
     }
   }
 
@@ -639,7 +640,7 @@ export class SettingsPanel extends LitElement {
       console.log('Voice mappings reset to defaults');
     } catch (error) {
       console.error('Failed to reset voice mappings:', error);
-      this.voiceMappingStatus = `Failed to reset voice mappings: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.voiceMappingStatus = `Failed to reset voice mappings: ${getErrorMessage(error)}`;
     }
   }
 
@@ -744,7 +745,7 @@ export class SettingsPanel extends LitElement {
       this.backupStatus = `Backup created successfully at: ${backupPath}`;
     } catch (error) {
       console.error('Failed to create backup:', error);
-      this.backupStatus = `Failed to create backup: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.backupStatus = `Failed to create backup: ${getErrorMessage(error)}`;
     } finally {
       this.isCreatingBackup = false;
     }
@@ -793,7 +794,7 @@ export class SettingsPanel extends LitElement {
       this.resetProgressStatus = `Progress for ${this.capitalizeLanguage(language)} has been reset successfully.`;
     } catch (error) {
       console.error('Failed to reset progress:', error);
-      this.resetProgressStatus = `Failed to reset progress: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.resetProgressStatus = `Failed to reset progress: ${getErrorMessage(error)}`;
     } finally {
       this.isResettingProgress = false;
     }
@@ -817,7 +818,7 @@ export class SettingsPanel extends LitElement {
       }, 2000);
     } catch (error) {
       console.error('Failed to restart all:', error);
-      this.restartStatus = `Failed to clear all data: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.restartStatus = `Failed to clear all data: ${getErrorMessage(error)}`;
     } finally {
       this.isRestarting = false;
     }
@@ -1035,7 +1036,7 @@ export class SettingsPanel extends LitElement {
       // Revert the selection
       select.value = this.currentLLMProvider;
       // Show inline error instead of alert
-      this.llmError = `Failed to switch to ${selectedProvider}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.llmError = `Failed to switch to ${selectedProvider}: ${getErrorMessage(error)}`;
     } finally {
       this.isLoadingLLMModels = false;
     }

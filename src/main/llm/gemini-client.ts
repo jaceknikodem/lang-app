@@ -7,6 +7,7 @@ import { LLMClient, LLMConfig, LLMError } from '../../shared/types/llm.js';
 import { LLM_CONFIG } from '../../shared/constants/index.js';
 import { cleanLLMResponse } from './utils.js';
 import { BaseLLMClient } from './base-llm-client.js';
+import { ensureError } from '../../shared/utils/error.js';
 import { z } from 'zod';
 
 
@@ -253,7 +254,8 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
       if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
         throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
       }
-      throw super.createLLMError(error instanceof Error ? error : new Error(String(error)), 'Failed to generate response');
+      const err = ensureError(error);
+      throw super.createLLMError(err, `Failed to generate response: ${err.message}`);
     }
   }
 
@@ -362,7 +364,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
       if (error instanceof Error && error.name === 'TimeoutError') {
         throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
       }
-      throw super.createLLMError(error instanceof Error ? error : new Error(String(error)), 'Max retries exceeded', 'CONNECTION_ERROR', false);
+      throw super.createLLMError(ensureError(error), 'Max retries exceeded', 'CONNECTION_ERROR', false);
     });
   }
 }

@@ -8,6 +8,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { sharedStyles } from '../styles/shared.js';
 import { Word, Sentence, DictionaryEntry, PrecomputedToken } from '../../shared/types/core.js';
 import { splitSentenceIntoParts } from '../../shared/utils/sentence.js';
+import { getErrorMessage } from '../../shared/utils/error.js';
 import { useKeyboardBindings } from '../utils/keyboard-manager.js';
 import { tokenizeSentenceWithDictionary } from '../utils/sentence-tokenizer.js';
 import type { TokenizedWord as WordInSentence } from '../utils/sentence-tokenizer.js';
@@ -1642,7 +1643,7 @@ export class SentenceViewer extends LitElement {
       this.dispatchEvent(new CustomEvent('word-addition-error', {
         detail: {
           word: normalized,
-          message: error instanceof Error ? error.message : 'Unknown error while adding word.'
+          message: getErrorMessage(error, 'Unknown error while adding word.')
         },
         bubbles: true,
         composed: true
@@ -1855,7 +1856,7 @@ export class SentenceViewer extends LitElement {
       }, 100);
     } catch (error) {
       console.error('Failed to regenerate audio:', error);
-      const message = error instanceof Error ? error.message : String(error);
+      const message = getErrorMessage(error);
       window.alert(`Failed to recreate audio: ${message}`);
     } finally {
       this.isRegeneratingAudio = false;

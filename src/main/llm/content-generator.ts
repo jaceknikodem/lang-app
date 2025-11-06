@@ -9,6 +9,7 @@ import { DatabaseLayer } from '../../shared/types/database.js';
 import { LLMFactory, LLMFactoryConfig, LLMProvider } from './llm-factory.js';
 import { FrequencyWordManager } from './frequency-word-manager.js';
 import type { LemmatizationService } from '../lemmatization/index.js';
+import { getErrorMessage, wrapError, ensureError } from '../../shared/utils/error.js';
 
 const TATOEBA_API_URL = 'https://tatoeba.org/en/api_v0/search';
 const TATOEBA_TARGET_LANGUAGE = 'eng';
@@ -175,6 +176,10 @@ export class ContentGenerator {
       return await this.generateLLMTopicVocabulary(topicText, targetLanguage, wordCount, database);
 
     } catch (error) {
+      // If it's an LLMError, preserve it
+      if (error instanceof Error && 'code' in error) {
+        throw error;
+      }
       throw this.handleContentGenerationError(error, 'vocabulary generation');
     }
   }
@@ -331,86 +336,96 @@ export class ContentGenerator {
     }
 
     const pRetry = (await import('p-retry')).default;
-    const words = await pRetry(
-      () => this.llmClient.generateTopicWords(topicText, targetLanguage, wordCount, proficiencyLevel),
-      {
-        retries: this.config.retryAttempts,
-        onFailedAttempt: async (error) => {
-          // Check if error is retryable
-          if (error instanceof Error && 'retryable' in error && 'code' in error) {
-            const llmError = error as LLMError;
-            if (!llmError.retryable) {
-              throw error;
+    try {
+      const words = await pRetry(
+        () => this.llmClient.generateTopicWords(topicText, targetLanguage, wordCount, proficiencyLevel),
+        {
+          retries: this.config.retryAttempts,
+          onFailedAttempt: async (error) => {
+            // Check if error is retryable
+            if (error instanceof Error && 'retryable' in error && 'code' in error) {
+              const llmError = error as LLMError;
+              if (!llmError.retryable) {
+                throw error; // Re-throw to abort retries
+              }
             }
+            // Linear backoff: retryDelay * attemptNumber
+            const delayMs = this.config.retryDelay * error.attemptNumber;
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            console.warn(`Attempt ${error.attemptNumber} failed for generate vocabulary for topic: ${topicText || 'general'}: ${errorMsg}. Retrying in ${delayMs}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
           }
-          // Linear backoff: retryDelay * attemptNumber
-          const delayMs = this.config.retryDelay * error.attemptNumber;
-          console.warn(`Attempt ${error.attemptNumber} failed for generate vocabulary for topic: ${topicText || 'general'}: ${error}. Retrying in ${delayMs}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+      );
+
+      // Validate and filter results
+      const validWords = this.validateGeneratedWords(words);
+
+      if (validWords.length === 0) {
+        throw new Error('No valid words were generated. Please try again.');
+      }
+
+      // Step 1: Lemmatize the words
+      let lemmatizedWords: GeneratedWord[] = validWords;
+      if (this.lemmatizationService) {
+        try {
+          const wordsToLemmatize = validWords.map(w => w.word);
+          const lemmas = await this.lemmatizationService.lemmatizeWords(
+            wordsToLemmatize,
+            targetLanguage.toLowerCase()
+          );
+
+          // Update words with their lemmas (use lemma if available, otherwise keep original)
+          lemmatizedWords = validWords.map(word => {
+            const lemma = lemmas[word.word.toLowerCase()];
+            return {
+              ...word,
+              word: lemma || word.word // Use lemma if available, otherwise keep original
+            };
+          });
+        } catch (error) {
+          console.warn('[ContentGenerator] Failed to lemmatize words, using original words:', error);
+          // Continue with original words if lemmatization fails
         }
       }
-    );
 
-    // Validate and filter results
-    const validWords = this.validateGeneratedWords(words);
+      // Step 2: Add frequency position information for lemmatized words
+      const wordsWithFrequencyInfo: GeneratedWord[] = lemmatizedWords.map(word => {
+        const frequencyPosition = this.frequencyWordManager.getWordFrequencyPosition(word.word, targetLanguage.toLowerCase());
+        const frequencyTier = frequencyPosition ? this.frequencyWordManager.getFrequencyTier(frequencyPosition) : undefined;
 
-    if (validWords.length === 0) {
-      throw new Error('No valid words were generated. Please try again.');
-    }
+        const result: GeneratedWord = {
+          ...word,
+          ...(frequencyPosition !== undefined && { frequencyPosition }),
+          ...(frequencyTier !== undefined && { frequencyTier })
+        };
+        return result;
+      });
 
-    // Step 1: Lemmatize the words
-    let lemmatizedWords: GeneratedWord[] = validWords;
-    if (this.lemmatizationService) {
-      try {
-        const wordsToLemmatize = validWords.map(w => w.word);
-        const lemmas = await this.lemmatizationService.lemmatizeWords(
-          wordsToLemmatize,
+      // Step 3: Filter based on proficiency level
+      let filteredWords = wordsWithFrequencyInfo;
+      if (proficiencyLevel && database) {
+        filteredWords = this.filterWordsByProficiencyLevel(
+          wordsWithFrequencyInfo,
+          proficiencyLevel,
           targetLanguage.toLowerCase()
         );
-
-        // Update words with their lemmas (use lemma if available, otherwise keep original)
-        lemmatizedWords = validWords.map(word => {
-          const lemma = lemmas[word.word.toLowerCase()];
-          return {
-            ...word,
-            word: lemma || word.word // Use lemma if available, otherwise keep original
-          };
-        });
-      } catch (error) {
-        console.warn('[ContentGenerator] Failed to lemmatize words, using original words:', error);
-        // Continue with original words if lemmatization fails
       }
+
+      if (filteredWords.length === 0) {
+        throw new Error('No words remain after filtering. Please try again or adjust your proficiency level.');
+      }
+
+      // Shuffle the words to ensure variety in presentation order
+      return this.shuffleArray(filteredWords);
+    } catch (error) {
+      // If it's an LLMError, preserve it
+      if (error instanceof Error && 'code' in error) {
+        throw error;
+      }
+      // Otherwise, wrap it
+      throw this.handleContentGenerationError(error, 'vocabulary generation');
     }
-
-    // Step 2: Add frequency position information for lemmatized words
-    const wordsWithFrequencyInfo: GeneratedWord[] = lemmatizedWords.map(word => {
-      const frequencyPosition = this.frequencyWordManager.getWordFrequencyPosition(word.word, targetLanguage.toLowerCase());
-      const frequencyTier = frequencyPosition ? this.frequencyWordManager.getFrequencyTier(frequencyPosition) : undefined;
-
-      const result: GeneratedWord = {
-        ...word,
-        ...(frequencyPosition !== undefined && { frequencyPosition }),
-        ...(frequencyTier !== undefined && { frequencyTier })
-      };
-      return result;
-    });
-
-    // Step 3: Filter based on proficiency level
-    let filteredWords = wordsWithFrequencyInfo;
-    if (proficiencyLevel && database) {
-      filteredWords = this.filterWordsByProficiencyLevel(
-        wordsWithFrequencyInfo,
-        proficiencyLevel,
-        targetLanguage.toLowerCase()
-      );
-    }
-
-    if (filteredWords.length === 0) {
-      throw new Error('No words remain after filtering. Please try again or adjust your proficiency level.');
-    }
-
-    // Shuffle the words to ensure variety in presentation order
-    return this.shuffleArray(filteredWords);
   }
 
   /**
@@ -471,7 +486,7 @@ export class ContentGenerator {
       const response = await this.llmClient.generateResponse(prompt, wordModel);
       return response.trim();
     } catch (error) {
-      throw new Error(`Failed to translate word "${word}": ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to translate word "${word}": ${getErrorMessage(error)}`);
     }
   }
 
@@ -590,7 +605,7 @@ export class ContentGenerator {
           retries: this.config.retryAttempts,
           onFailedAttempt: async (error) => {
             // Check if error is retryable
-            if (error instanceof Error && 'retryable' in error && 'code' in error) {
+            if (ensureError(error) && 'retryable' in error && 'code' in error) {
               const llmError = error as LLMError;
               if (!llmError.retryable) {
                 throw error;
@@ -838,17 +853,19 @@ export class ContentGenerator {
    * Handle and format content generation errors
    */
   private handleContentGenerationError(error: unknown, operation: string): Error {
-    if (error instanceof Error) {
-      // If it's already an LLMError, preserve it
-      if ('code' in error) {
-        return error;
-      }
-
-      // Wrap other errors with context
-      return new Error(`${operation} failed: ${error.message}`);
+    // If it's already an LLMError, preserve it
+    if (error instanceof Error && 'code' in error) {
+      return error;
     }
-
-    return new Error(`${operation} failed: Unknown error occurred`);
+    
+    const err = ensureError(error);
+    // Wrap other errors with context
+    // For backward compatibility, include original message in the new message
+    // But if the original error was not an Error instance (e.g., string), treat as unknown
+    const errorMessage = (error instanceof Error && err.message && err.message !== '[object Object]')
+      ? err.message 
+      : 'Unknown error occurred';
+    return wrapError(error, `${operation} failed: ${errorMessage}`);
   }
 
   /**

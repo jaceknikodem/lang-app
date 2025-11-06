@@ -8,6 +8,7 @@ import { DatabaseLayer } from '../../shared/types/database';
 import { AudioRecorder, RecordingSession, RecordingOptions } from './audio-recorder';
 import { SpeechRecognitionService, TranscriptionOptions, TranscriptionResult } from './speech-recognition';
 import { sanitizeFilename } from '../../shared/utils/sanitizeFilename';
+import { getErrorMessage, createAudioError } from '../../shared/utils/error.js';
 
 /**
  * Audio service that coordinates audio generation and playback
@@ -169,9 +170,7 @@ export class AudioService {
         throw error;
       }
 
-      const audioError = new Error(`Audio generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`) as AudioError;
-      audioError.code = 'GENERATION_FAILED';
-      throw audioError;
+      throw createAudioError(`Audio generation failed: ${getErrorMessage(error)}`, 'GENERATION_FAILED', { cause: error });
     }
   }
 
@@ -204,10 +203,7 @@ export class AudioService {
         throw error;
       }
 
-      const audioError = new Error(`Audio playback failed: ${error instanceof Error ? error.message : 'Unknown error'}`) as AudioError;
-      audioError.code = 'PLAYBACK_FAILED';
-      audioError.audioPath = audioPath;
-      throw audioError;
+      throw createAudioError(`Audio playback failed: ${getErrorMessage(error)}`, 'PLAYBACK_FAILED', { audioPath, cause: error });
     }
   }
 
@@ -516,7 +512,7 @@ export class AudioService {
       return await this.audioGenerator.audioExists(absolutePath);
     } catch (error) {
       // If there's an error checking existence, assume file doesn't exist
-      console.warn(`Error checking audio file existence: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.warn(`Error checking audio file existence: ${getErrorMessage(error)}`);
       return false;
     }
   }
@@ -742,9 +738,7 @@ export class AudioService {
     try {
       return await this.audioRecorder.stopRecording();
     } catch (error) {
-      const audioError = new Error(`Failed to stop recording: ${error instanceof Error ? error.message : 'Unknown error'}`) as AudioError;
-      audioError.code = 'RECORDING_FAILED';
-      throw audioError;
+      throw createAudioError(`Failed to stop recording: ${getErrorMessage(error)}`, 'RECORDING_FAILED', { cause: error });
     }
   }
 
@@ -755,9 +749,7 @@ export class AudioService {
     try {
       await this.audioRecorder.cancelRecording();
     } catch (error) {
-      const audioError = new Error(`Failed to cancel recording: ${error instanceof Error ? error.message : 'Unknown error'}`) as AudioError;
-      audioError.code = 'RECORDING_FAILED';
-      throw audioError;
+      throw createAudioError(`Failed to cancel recording: ${getErrorMessage(error)}`, 'RECORDING_FAILED', { cause: error });
     }
   }
 
@@ -794,9 +786,7 @@ export class AudioService {
     try {
       await this.audioRecorder.deleteRecording(filePath);
     } catch (error) {
-      const audioError = new Error(`Failed to delete recording: ${error instanceof Error ? error.message : 'Unknown error'}`) as AudioError;
-      audioError.code = 'FILE_OPERATION_FAILED';
-      throw audioError;
+      throw createAudioError(`Failed to delete recording: ${getErrorMessage(error)}`, 'FILE_OPERATION_FAILED', { cause: error });
     }
   }
 
@@ -825,7 +815,7 @@ export class AudioService {
     } catch (error) {
       // Don't throw - just log. isSpeechRecognitionReady() will return false.
       // This allows components to gracefully handle unavailable servers.
-      console.warn('AudioService: Speech recognition not available:', error instanceof Error ? error.message : 'Unknown error');
+      console.warn('AudioService: Speech recognition not available:', getErrorMessage(error));
     }
   }
 
@@ -836,9 +826,7 @@ export class AudioService {
     try {
       return await this.speechRecognition.transcribeAudio(filePath, options);
     } catch (error) {
-      const audioError = new Error(`Failed to transcribe audio: ${error instanceof Error ? error.message : 'Unknown error'}`) as AudioError;
-      audioError.code = 'RECORDING_FAILED';
-      throw audioError;
+      throw createAudioError(`Failed to transcribe audio: ${getErrorMessage(error)}`, 'RECORDING_FAILED', { cause: error });
     }
   }
 

@@ -9,6 +9,7 @@ import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
 import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 import { loadCurrentLanguage, loadLemmatizationModel } from '../utils/language-manager.js';
+import { getErrorMessage } from '../../shared/utils/error.js';
 import { ALL_TOPIC_SUGGESTIONS } from '../../shared/constants/topics.js';
 
 @customElement('topic-selector')
@@ -353,7 +354,7 @@ export class TopicSelector extends LitElement {
 
     } catch (error) {
       console.error('Failed to generate words:', error);
-      this.error = error instanceof Error ? error.message : 'Failed to generate vocabulary words. Please check that Ollama is running and try again.';
+      this.error = getErrorMessage(error, 'Failed to generate vocabulary words. Please check that Ollama is running and try again.');
     } finally {
       this.isGenerating = false;
     }

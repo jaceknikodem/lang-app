@@ -4,6 +4,7 @@
 
 import { z } from 'zod';
 import { IpcMainInvokeEvent } from 'electron';
+import { getErrorMessage, wrapError } from '../../shared/utils/error.js';
 
 type HandlerFunction<TInput extends any[], TOutput> = (...args: TInput) => Promise<TOutput> | TOutput;
 
@@ -65,15 +66,14 @@ export function createIPCHandler<
       const errorMessage = errorContext || 'operation';
       console.error(`Error ${errorMessage}:`, error);
       
-      const errorDetail = error instanceof Error ? error.message : 'Unknown error';
-      
       // For Zod validation errors, provide more detail
       if (error instanceof z.ZodError) {
         const issues = error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ');
-        throw new Error(`Failed to ${errorMessage}: Validation failed - ${issues}`);
+        throw wrapError(error, `Failed to ${errorMessage}: Validation failed - ${issues}`);
       }
       
-      throw new Error(`Failed to ${errorMessage}: ${errorDetail}`);
+      const errorDetail = getErrorMessage(error);
+      throw wrapError(error, `Failed to ${errorMessage}: ${errorDetail}`);
     }
   };
 }

@@ -18,6 +18,7 @@ import { existsSync, mkdirSync } from 'fs';
 import { promises as fsPromises } from 'fs';
 import { dirname, join } from 'path';
 import { createIPCHandler } from './ipc-handler-helper.js';
+import { getErrorMessage, wrapError } from '../../shared/utils/error.js';
 
 // Validation schemas for input sanitization
 const CreateWordSchema = z.object({
@@ -379,7 +380,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       );
     } catch (error) {
       console.error('Error generating words:', error);
-      throw new Error(`Failed to generate words: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to generate words: ${getErrorMessage(error)}`);
     }
   });
 
@@ -393,7 +394,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return await contentGenerator.generateWordSentences(validatedWord, validatedLanguage, 3, databaseLayer, validatedTopic);
     } catch (error) {
       console.error('Error generating sentences:', error);
-      throw new Error(`Failed to generate sentences: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to generate sentences: ${getErrorMessage(error)}`);
     }
   });
 
@@ -421,7 +422,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       llmClient.setModel(validatedModel);
     } catch (error) {
       console.error('Error setting model:', error);
-      throw new Error(`Failed to set model: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to set model: ${getErrorMessage(error)}`);
     }
   });
 
@@ -430,7 +431,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return llmClient.getCurrentModel();
     } catch (error) {
       console.error('Error getting current model:', error);
-      throw new Error(`Failed to get current model: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get current model: ${getErrorMessage(error)}`);
     }
   });
 
@@ -440,7 +441,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       llmClient.setWordGenerationModel(validatedModel);
     } catch (error) {
       console.error('Error setting word generation model:', error);
-      throw new Error(`Failed to set word generation model: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to set word generation model: ${getErrorMessage(error)}`);
     }
   });
 
@@ -450,7 +451,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       llmClient.setSentenceGenerationModel(validatedModel);
     } catch (error) {
       console.error('Error setting sentence generation model:', error);
-      throw new Error(`Failed to set sentence generation model: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to set sentence generation model: ${getErrorMessage(error)}`);
     }
   });
 
@@ -459,7 +460,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return llmClient.getWordGenerationModel();
     } catch (error) {
       console.error('Error getting word generation model:', error);
-      throw new Error(`Failed to get word generation model: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get word generation model: ${getErrorMessage(error)}`);
     }
   });
 
@@ -468,7 +469,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return llmClient.getSentenceGenerationModel();
     } catch (error) {
       console.error('Error getting sentence generation model:', error);
-      throw new Error(`Failed to get sentence generation model: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get sentence generation model: ${getErrorMessage(error)}`);
     }
   });
 
@@ -482,7 +483,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return await contentGenerator.getFrequencyProgress(validatedLanguage, databaseLayer);
     } catch (error) {
       console.error('Error getting frequency progress:', error);
-      throw new Error(`Failed to get frequency progress: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get frequency progress: ${getErrorMessage(error)}`);
     }
   });
 
@@ -491,7 +492,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return contentGenerator.getAvailableFrequencyLanguages();
     } catch (error) {
       console.error('Error getting available frequency languages:', error);
-      throw new Error(`Failed to get available frequency languages: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get available frequency languages: ${getErrorMessage(error)}`);
     }
   });
 
@@ -501,7 +502,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return contentGenerator.getCurrentProvider();
     } catch (error) {
       console.error('Error getting current provider:', error);
-      throw new Error(`Failed to get current provider: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get current provider: ${getErrorMessage(error)}`);
     }
   });
 
@@ -534,7 +535,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       console.log(`Switched to ${validatedProvider} provider`);
     } catch (error) {
       console.error('Error switching provider:', error);
-      throw new Error(`Failed to switch provider: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to switch provider: ${getErrorMessage(error)}`);
     }
   });
 
@@ -556,7 +557,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       console.log('Gemini API key set successfully');
     } catch (error) {
       console.error('Error setting Gemini API key:', error);
-      throw new Error(`Failed to set Gemini API key: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to set Gemini API key: ${getErrorMessage(error)}`);
     }
   });
 
@@ -565,7 +566,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return LLMFactory.getAvailableProviders();
     } catch (error) {
       console.error('Error getting available providers:', error);
-      throw new Error(`Failed to get available providers: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get available providers: ${getErrorMessage(error)}`);
     }
   });
 
@@ -591,7 +592,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return [];
     } catch (error) {
       console.error('Error getting models for provider:', error);
-      throw new Error(`Failed to get models for provider: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get models for provider: ${getErrorMessage(error)}`);
     }
   });
 }
@@ -612,7 +613,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       return await audioService.generateAudio(validatedText, validatedLanguage, validatedWord, validatedWordId, validatedSentenceId, validatedVariantId);
     } catch (error) {
       console.error('Error generating audio:', error);
-      throw new Error(`Failed to generate audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to generate audio: ${getErrorMessage(error)}`);
     }
   });
 
@@ -653,7 +654,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       }
       // For non-AudioError errors, wrap and log
       console.error('Error playing audio:', error);
-      throw new Error(`Failed to play audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to play audio: ${getErrorMessage(error)}`);
     }
   });
 
@@ -662,7 +663,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       audioService.stopAudio();
     } catch (error) {
       console.error('Error stopping audio:', error);
-      throw new Error(`Failed to stop audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to stop audio: ${getErrorMessage(error)}`);
     }
   });
 
@@ -737,7 +738,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       return { audioPath };
     } catch (error) {
       console.error('Error regenerating audio:', error);
-      throw new Error(`Failed to regenerate audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to regenerate audio: ${getErrorMessage(error)}`);
     }
   });
 
@@ -755,7 +756,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       return await audioService.startRecording(validatedOptions);
     } catch (error) {
       console.error('Error starting recording:', error);
-      throw new Error(`Failed to start recording: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to start recording: ${getErrorMessage(error)}`);
     }
   });
 
@@ -764,7 +765,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       return await audioService.stopRecording();
     } catch (error) {
       console.error('Error stopping recording:', error);
-      throw new Error(`Failed to stop recording: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to stop recording: ${getErrorMessage(error)}`);
     }
   });
 
@@ -773,7 +774,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       await audioService.cancelRecording();
     } catch (error) {
       console.error('Error cancelling recording:', error);
-      throw new Error(`Failed to cancel recording: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to cancel recording: ${getErrorMessage(error)}`);
     }
   });
 
@@ -810,7 +811,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       await audioService.deleteRecording(validatedFilePath);
     } catch (error) {
       console.error('Error deleting recording:', error);
-      throw new Error(`Failed to delete recording: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to delete recording: ${getErrorMessage(error)}`);
     }
   });
 
@@ -870,7 +871,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       return await audioService.transcribeAudio(validatedFilePath, transcriptionOptions);
     } catch (error) {
       console.error('Error transcribing audio:', error);
-      throw new Error(`Failed to transcribe audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to transcribe audio: ${getErrorMessage(error)}`);
     }
   });
 
@@ -882,7 +883,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       return await audioService.compareTranscription(validatedTranscribed, validatedExpected, proficiencyLevel);
     } catch (error) {
       console.error('Error comparing transcription:', error);
-      throw new Error(`Failed to compare transcription: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to compare transcription: ${getErrorMessage(error)}`);
     }
   });
 
@@ -903,7 +904,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       await audioService.switchToElevenLabs(validatedApiKey);
     } catch (error) {
       console.error('Error switching to ElevenLabs:', error);
-      throw new Error(`Failed to switch to ElevenLabs: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to switch to ElevenLabs: ${getErrorMessage(error)}`);
     }
   });
 
@@ -912,7 +913,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       await audioService.switchToSystemTTS();
     } catch (error) {
       console.error('Error switching to system TTS:', error);
-      throw new Error(`Failed to switch to system TTS: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to switch to system TTS: ${getErrorMessage(error)}`);
     }
   });
 
@@ -922,7 +923,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       return await audioService.getVoiceMappings();
     } catch (error) {
       console.error('Error getting voice mappings:', error);
-      throw new Error(`Failed to get voice mappings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get voice mappings: ${getErrorMessage(error)}`);
     }
   });
 
@@ -950,7 +951,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       await audioService.saveVoiceMappings(validatedMappings);
     } catch (error) {
       console.error('Error saving voice mappings:', error);
-      throw new Error(`Failed to save voice mappings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to save voice mappings: ${getErrorMessage(error)}`);
     }
   });
 
@@ -959,7 +960,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       await audioService.resetVoiceMappingsToDefaults();
     } catch (error) {
       console.error('Error resetting voice mappings:', error);
-      throw new Error(`Failed to reset voice mappings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to reset voice mappings: ${getErrorMessage(error)}`);
     }
   });
 }
@@ -974,7 +975,7 @@ function setupQuizHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       return await databaseLayer.getWeakestWords(validatedLimit);
     } catch (error) {
       console.error('Error getting weakest words:', error);
-      throw new Error(`Failed to get weakest words: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get weakest words: ${getErrorMessage(error)}`);
     }
   });
 
@@ -984,7 +985,7 @@ function setupQuizHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       return await databaseLayer.getRandomSentenceForWord(validatedWordId);
     } catch (error) {
       console.error('Error getting random sentence for word:', error);
-      throw new Error(`Failed to get random sentence for word: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get random sentence for word: ${getErrorMessage(error)}`);
     }
   });
 }
@@ -1000,7 +1001,7 @@ function setupSRSHandlers(srsService: SRSService): void {
       return await srsService.processReview(validatedWordId, { recall: validatedRecall });
     } catch (error) {
       console.error('Error processing review:', error);
-      throw new Error(`Failed to process review: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to process review: ${getErrorMessage(error)}`);
     }
   });
 
@@ -1015,7 +1016,7 @@ function setupSRSHandlers(srsService: SRSService): void {
       return await srsService.processQuizResults(validatedResults);
     } catch (error) {
       console.error('Error processing quiz results:', error);
-      throw new Error(`Failed to process quiz results: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to process quiz results: ${getErrorMessage(error)}`);
     }
   });
 
@@ -1026,7 +1027,7 @@ function setupSRSHandlers(srsService: SRSService): void {
       return await srsService.getTodaysStudyWords(validatedMaxWords, validatedLanguage);
     } catch (error) {
       console.error('Error getting todays study words:', error);
-      throw new Error(`Failed to get todays study words: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get todays study words: ${getErrorMessage(error)}`);
     }
   });
 
@@ -1036,7 +1037,7 @@ function setupSRSHandlers(srsService: SRSService): void {
       return await srsService.getDashboardStats(validatedLanguage);
     } catch (error) {
       console.error('Error getting dashboard stats:', error);
-      throw new Error(`Failed to get dashboard stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get dashboard stats: ${getErrorMessage(error)}`);
     }
   });
 
@@ -1047,7 +1048,7 @@ function setupSRSHandlers(srsService: SRSService): void {
       return await srsService.markWordDifficulty(validatedWordId, validatedDifficulty);
     } catch (error) {
       console.error('Error marking word difficulty:', error);
-      throw new Error(`Failed to mark word difficulty: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to mark word difficulty: ${getErrorMessage(error)}`);
     }
   });
 
@@ -1057,7 +1058,7 @@ function setupSRSHandlers(srsService: SRSService): void {
       return await srsService.resetWordProgress(validatedWordId);
     } catch (error) {
       console.error('Error resetting word progress:', error);
-      throw new Error(`Failed to reset word progress: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to reset word progress: ${getErrorMessage(error)}`);
     }
   });
 
@@ -1067,7 +1068,7 @@ function setupSRSHandlers(srsService: SRSService): void {
       return await srsService.getOverdueWords(validatedLanguage);
     } catch (error) {
       console.error('Error getting overdue words:', error);
-      throw new Error(`Failed to get overdue words: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get overdue words: ${getErrorMessage(error)}`);
     }
   });
 
@@ -1077,7 +1078,7 @@ function setupSRSHandlers(srsService: SRSService): void {
       return await srsService.initializeExistingWords(validatedLanguage);
     } catch (error) {
       console.error('Error initializing existing words:', error);
-      throw new Error(`Failed to initialize existing words: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to initialize existing words: ${getErrorMessage(error)}`);
     }
   });
 }
@@ -1114,7 +1115,7 @@ function setupJobHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       );
     } catch (error) {
       console.error('Error enqueueing word generation:', error);
-      throw new Error(`Failed to enqueue word generation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to enqueue word generation: ${getErrorMessage(error)}`);
     }
   });
 
@@ -1124,7 +1125,7 @@ function setupJobHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       return await databaseLayer.getWordProcessingInfo(validatedWordId);
     } catch (error) {
       console.error('Error getting word processing status:', error);
-      throw new Error(`Failed to get word status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get word status: ${getErrorMessage(error)}`);
     }
   });
 
@@ -1134,7 +1135,7 @@ function setupJobHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       return await databaseLayer.getWordGenerationQueueSummary(validatedLanguage);
     } catch (error) {
       console.error('Error getting queue summary:', error);
-      throw new Error(`Failed to get queue summary: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get queue summary: ${getErrorMessage(error)}`);
     }
   });
 }
@@ -1153,7 +1154,7 @@ function setupLifecycleHandlers(
       return await lifecycleManager.createBackup();
     } catch (error) {
       console.error('Error creating backup:', error);
-      throw new Error(`Failed to create backup: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to create backup: ${getErrorMessage(error)}`);
     }
   });
 
@@ -1163,7 +1164,7 @@ function setupLifecycleHandlers(
       await lifecycleManager.restoreFromBackup(validatedBackupPath);
     } catch (error) {
       console.error('Error restoring from backup:', error);
-      throw new Error(`Failed to restore from backup: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to restore from backup: ${getErrorMessage(error)}`);
     }
   });
 
@@ -1182,7 +1183,7 @@ function setupLifecycleHandlers(
       return app.getVersion();
     } catch (error) {
       console.error('Error getting app version:', error);
-      throw new Error(`Failed to get app version: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get app version: ${getErrorMessage(error)}`);
     }
   });
 

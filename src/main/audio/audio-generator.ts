@@ -259,10 +259,11 @@ export class TTSAudioGenerator implements AudioGenerator {
   }
 
   /**
-   * Create standardized audio error
+   * Create standardized audio error with cause chaining support
    */
-  private createAudioError(code: AudioError['code'], message: string, audioPath?: string): AudioError {
-    const error = new Error(message) as AudioError;
+  private createAudioError(code: AudioError['code'], message: string, audioPath?: string, cause?: unknown): AudioError {
+    // @ts-expect-error - Error constructor with cause is supported in Node.js 16.9.0+ but TypeScript types may not include it
+    const error = new Error(message, { cause }) as AudioError;
     error.code = code;
     error.audioPath = audioPath;
     return error;

@@ -11,6 +11,7 @@ import { Word, Sentence, StudyStats, CreateWordRequest, DictionaryEntry, Dialogu
 import { DatabaseConnection } from './connection.js';
 import { splitSentenceIntoParts, serializeSentenceParts, parseSentenceParts, serializeTokenizedTokens, parseTokenizedTokens } from '../../shared/utils/sentence.js';
 import { backfillSentenceTokens } from './backfill-sentence-tokens.js';
+import { getErrorMessage, wrapError } from '../../shared/utils/error.js';
 
 export class SQLiteDatabaseLayer implements DatabaseLayer {
   private connection: DatabaseConnection;
@@ -57,7 +58,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       console.log('Database initialized successfully');
     } catch (error) {
-      throw new Error(`Failed to initialize database: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to initialize database: ${getErrorMessage(error)}`);
     }
   }
 
@@ -359,7 +360,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return wordId;
     } catch (error) {
-      throw new Error(`Failed to insert word: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to insert word: ${getErrorMessage(error)}`);
     }
   }
 
@@ -382,7 +383,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Word with ID ${wordId} not found`);
       }
     } catch (error) {
-      throw new Error(`Failed to update word strength: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to update word strength: ${getErrorMessage(error)}`);
     }
   }
 
@@ -405,7 +406,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Word with ID ${wordId} not found`);
       }
     } catch (error) {
-      throw new Error(`Failed to mark word as known: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to mark word as known: ${getErrorMessage(error)}`);
     }
   }
 
@@ -428,7 +429,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Word with ID ${wordId} not found`);
       }
     } catch (error) {
-      throw new Error(`Failed to mark word as ignored: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to mark word as ignored: ${getErrorMessage(error)}`);
     }
   }
 
@@ -468,7 +469,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // Combine due words with additional words
       return [...dueWords, ...additionalWords];
     } catch (error) {
-      throw new Error(`Failed to get words to study: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get words to study: ${getErrorMessage(error)}`);
     }
   }
 
@@ -498,7 +499,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return rows.map(this.mapRowToWord);
     } catch (error) {
-      throw new Error(`Failed to get words by strength: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get words by strength: ${getErrorMessage(error)}`);
     }
   }
 
@@ -535,7 +536,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return this.shuffleArray(words);
     } catch (error) {
-      throw new Error(`Failed to get words with sentences: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get words with sentences: ${getErrorMessage(error)}`);
     }
   }
 
@@ -570,7 +571,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const rows = stmt.all(currentLanguage) as any[];
       return rows.map(this.mapRowToWord);
     } catch (error) {
-      throw new Error(`Failed to get words with sentences ordered by strength: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get words with sentences ordered by strength: ${getErrorMessage(error)}`);
     }
   }
 
@@ -615,7 +616,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return words;
     } catch (error) {
-      throw new Error(`Failed to get all words: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get all words: ${getErrorMessage(error)}`);
     }
   }
 
@@ -631,7 +632,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return row ? this.mapRowToWord(row) : null;
     } catch (error) {
-      throw new Error(`Failed to get word by ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get word by ID: ${getErrorMessage(error)}`);
     }
   }
 
@@ -654,7 +655,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const rows = stmt.all(language, limit) as Array<{ word: string }>;
       return rows.map(row => row.word);
     } catch (error) {
-      throw new Error(`Failed to get known words for sentence generation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get known words for sentence generation: ${getErrorMessage(error)}`);
     }
   }
 
@@ -673,7 +674,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const rows = stmt.all(language, minWordStrength, maxWords) as Array<{ word: string }>;
       return rows.map(row => row.word);
     } catch (error) {
-      throw new Error(`Failed to get known words: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get known words: ${getErrorMessage(error)}`);
     }
   }
 
@@ -704,7 +705,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const rows = stmt.all(...params) as Array<{ word: string }>;
       return rows.map(row => row.word);
     } catch (error) {
-      throw new Error(`Failed to get existing words for duplicate checking: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get existing words for duplicate checking: ${getErrorMessage(error)}`);
     }
   }
 
@@ -725,7 +726,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return rows.map(row => this.mapRowToWord(row));
     } catch (error) {
-      throw new Error(`Failed to get words by IDs: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get words by IDs: ${getErrorMessage(error)}`);
     }
   }
 
@@ -949,7 +950,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return sentenceId;
     } catch (error) {
-      throw new Error(`Failed to insert sentence: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to insert sentence: ${getErrorMessage(error)}`);
     }
   }
 
@@ -985,7 +986,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return rows.map(this.mapRowToSentence);
     } catch (error) {
-      throw new Error(`Failed to get sentences by word: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get sentences by word: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1006,7 +1007,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return rows.map(row => this.mapRowToSentence(row));
     } catch (error) {
-      throw new Error(`Failed to get sentences by IDs: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get sentences by IDs: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1029,7 +1030,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Sentence with ID ${sentenceId} not found`);
       }
     } catch (error) {
-      throw new Error(`Failed to update sentence last shown: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to update sentence last shown: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1063,7 +1064,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         }
       }
     } catch (error) {
-      throw new Error(`Failed to update sentence audio path: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to update sentence audio path: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1083,7 +1084,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Sentence with ID ${sentenceId} not found`);
       }
     } catch (error) {
-      throw new Error(`Failed to update before sentence audio path: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to update before sentence audio path: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1147,7 +1148,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       console.log(`[updateSentenceTokens] Stored ${lemmas.size} lemmas for sentence ${sentenceId}`);
     } catch (error) {
-      throw new Error(`Failed to update sentence tokens: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to update sentence tokens: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1168,7 +1169,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Sentence with ID ${sentenceId} not found`);
       }
     } catch (error) {
-      throw new Error(`Failed to increment sentence play count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to increment sentence play count: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1194,7 +1195,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       `);
       insertAttempt.run(sentenceId, similarityScore, expectedText, transcribedText, audioPath || null);
     } catch (error) {
-      throw new Error(`Failed to record pronunciation attempt: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to record pronunciation attempt: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1230,7 +1231,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         createdAt: new Date(row.created_at)
       }));
     } catch (error) {
-      throw new Error(`Failed to get pronunciation history: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get pronunciation history: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1249,7 +1250,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const result = stmt.run(sentenceId, variantSentence, variantTranslation);
       return result.lastInsertRowid as number;
     } catch (error) {
-      throw new Error(`Failed to insert dialogue variant: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to insert dialogue variant: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1284,7 +1285,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         continuationAudio: row.continuation_audio || undefined
       }));
     } catch (error) {
-      throw new Error(`Failed to get dialogue variants: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get dialogue variants: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1303,7 +1304,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const result = stmt.get(sentenceId) as { count: number };
       return result.count;
     } catch (error) {
-      throw new Error(`Failed to get dialogue variant count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get dialogue variant count: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1335,7 +1336,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         continuationAudio: row.continuation_audio || undefined
       };
     } catch (error) {
-      throw new Error(`Failed to get dialogue variant: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get dialogue variant: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1359,7 +1360,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       stmt.run(continuationText, continuationTranslation, continuationAudio || null, variantId);
     } catch (error) {
-      throw new Error(`Failed to update dialogue variant continuation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to update dialogue variant continuation: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1375,7 +1376,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return rows.map(row => this.mapRowToSentence(row));
     } catch (error) {
-      throw new Error(`Failed to get all sentences: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get all sentences: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1391,7 +1392,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return row ? this.mapRowToSentence(row) : null;
     } catch (error) {
-      throw new Error(`Failed to get sentence by ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get sentence by ID: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1428,7 +1429,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         updateSentenceCount.run(linkedWord.word_id);
       }
     } catch (error) {
-      throw new Error(`Failed to delete sentence: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to delete sentence: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1453,7 +1454,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Word with ID ${wordId} not found`);
       }
     } catch (error) {
-      throw new Error(`Failed to update last studied: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to update last studied: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1485,7 +1486,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         lastStudyDate: stats.lastStudyDate ? new Date(stats.lastStudyDate) : undefined
       };
     } catch (error) {
-      throw new Error(`Failed to get study stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get study stats: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1503,7 +1504,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       stmt.run(wordsStudied);
     } catch (error) {
-      throw new Error(`Failed to record study session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to record study session: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1529,7 +1530,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         whenStudied: new Date(row.when_studied)
       }));
     } catch (error) {
-      throw new Error(`Failed to get recent study sessions: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get recent study sessions: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1576,7 +1577,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return [...dueWords, ...additionalWords];
     } catch (error) {
-      throw new Error(`Failed to get weakest words: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get weakest words: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1613,7 +1614,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return row ? this.mapRowToSentence(row) : null;
     } catch (error) {
-      throw new Error(`Failed to get random sentence for word: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get random sentence for word: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1709,7 +1710,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return result;
     } catch (error) {
-      throw new Error(`Failed to get flow sentences: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get flow sentences: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1747,7 +1748,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return this.mapRowToSentence(row);
     } catch (error) {
-      throw new Error(`Failed to get random dialog sentence: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get random dialog sentence: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1784,7 +1785,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return rows.map(row => this.mapRowToSentence(row));
     } catch (error) {
-      throw new Error(`Failed to get random dialog sentences: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get random dialog sentences: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1802,7 +1803,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return row ? row.value : null;
     } catch (error) {
-      throw new Error(`Failed to get setting: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get setting: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1820,7 +1821,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       stmt.run(key, value);
     } catch (error) {
-      throw new Error(`Failed to set setting: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to set setting: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1856,7 +1857,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return rows.map(row => row.language);
     } catch (error) {
-      throw new Error(`Failed to get available languages: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get available languages: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1917,7 +1918,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         };
       });
     } catch (error) {
-      throw new Error(`Failed to get language stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get language stats: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1951,7 +1952,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         lang: row.lang
       }));
     } catch (error) {
-      throw new Error(`Failed to lookup dictionary entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to lookup dictionary entry: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1966,7 +1967,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       `);
       stmt.run(status, wordId);
     } catch (error) {
-      throw new Error(`Failed to update word processing status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to update word processing status: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1985,7 +1986,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ? { processingStatus: row.processing_status ?? 'ready', sentenceCount: row.sentence_count ?? 0 }
         : null;
     } catch (error) {
-      throw new Error(`Failed to get word processing info: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get word processing info: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2064,7 +2065,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       return summary;
     } catch (error) {
-      throw new Error(`Failed to get queue summary: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get queue summary: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2092,7 +2093,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       await this.updateWordProcessingStatus(wordId, 'queued');
     } catch (error) {
-      throw new Error(`Failed to enqueue word generation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to enqueue word generation: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2109,7 +2110,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       return row ? this.mapRowToWordGenerationJob(row) : null;
     } catch (error) {
-      throw new Error(`Failed to get next word generation job: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get next word generation job: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2127,7 +2128,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       `);
       stmt.run(jobId);
     } catch (error) {
-      throw new Error(`Failed to mark job processing: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to mark job processing: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2146,7 +2147,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       `);
       stmt.run(nextAttempt, lastError || null, jobId);
     } catch (error) {
-      throw new Error(`Failed to reschedule job: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to reschedule job: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2163,7 +2164,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       `);
       stmt.run(jobId);
     } catch (error) {
-      throw new Error(`Failed to complete job: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to complete job: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2181,7 +2182,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       `);
       stmt.run(errorMessage, jobId);
     } catch (error) {
-      throw new Error(`Failed to mark job failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to mark job failed: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2255,7 +2256,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Word with ID ${wordId} not found`);
       }
     } catch (error) {
-      throw new Error(`Failed to update word SRS: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to update word SRS: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2286,7 +2287,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return rows.map(this.mapRowToWord);
     } catch (error) {
-      throw new Error(`Failed to get words due for review: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get words due for review: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2309,7 +2310,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const result = stmt.get(currentLanguage, now) as { count: number };
       return result.count;
     } catch (error) {
-      throw new Error(`Failed to get words due count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get words due count: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2351,7 +2352,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return limit ? sortedWords.slice(0, limit) : sortedWords;
     } catch (error) {
-      throw new Error(`Failed to get words due with priority: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get words due with priority: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2393,7 +2394,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         averageEaseFactor: result.averageEaseFactor || 2.5
       };
     } catch (error) {
-      throw new Error(`Failed to get SRS stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get SRS stats: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2502,7 +2503,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     try {
       rawContents = await fsPromises.readFile(filePath, 'utf-8');
     } catch (error) {
-      throw new Error(`Unable to read dictionary file ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Unable to read dictionary file ${filePath}: ${getErrorMessage(error)}`);
     }
 
     const lines = rawContents.split('\n');
@@ -2765,7 +2766,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const result = stmt.get(currentLanguage) as { count: number };
       return result.count;
     } catch (error) {
-      throw new Error(`Failed to get new word count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get new word count: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2789,7 +2790,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const result = stmt.get(currentLanguage) as { count: number };
       return result.count;
     } catch (error) {
-      throw new Error(`Failed to get weak word count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get weak word count: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2841,7 +2842,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return knownWords / totalWords;
     } catch (error) {
-      throw new Error(`Failed to get dialogue readiness ratio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get dialogue readiness ratio: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2873,7 +2874,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // Convert from 0-1 scale to 0-10 scale
       return result.avg_score * 10;
     } catch (error) {
-      throw new Error(`Failed to get average pronunciation score: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get average pronunciation score: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2898,7 +2899,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const result = stmt.get(currentLanguage) as { count: number };
       return result.count;
     } catch (error) {
-      throw new Error(`Failed to get available sentences count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get available sentences count: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2964,7 +2965,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return diffHours;
     } catch (error) {
-      throw new Error(`Failed to get time since last active practice: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to get time since last active practice: ${getErrorMessage(error)}`);
     }
   }
 
@@ -3046,7 +3047,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       console.log(`Successfully reset progress for language: ${language}`);
     } catch (error) {
-      throw new Error(`Failed to reset language progress: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw wrapError(error, `Failed to reset language progress: ${getErrorMessage(error)}`);
     }
   }
 }

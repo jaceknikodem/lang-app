@@ -17,6 +17,7 @@ import type { RecordingResult } from './audio-recorder.js';
 import type { RecordingOptions, RecordingSession } from '../../shared/types/audio.js';
 import { checkProficiencyLevel } from '../utils/app-initializer.js';
 import { getSimilarityThresholds, getSimilarityClass, type ProficiencyLevel } from '../../shared/utils/similarity-threshold.js';
+import { getErrorMessage } from '../../shared/utils/error.js';
 
 @customElement('quiz-mode')
 export class QuizMode extends LitElement {
@@ -2175,7 +2176,7 @@ export class QuizMode extends LitElement {
     } catch (error) {
       console.error('Error starting recording:', error);
       this.isRecording = false;
-      this.error = `Failed to start recording: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.error = `Failed to start recording: ${getErrorMessage(error)}`;
     }
   }
 
@@ -2209,7 +2210,7 @@ export class QuizMode extends LitElement {
       this.isRecording = false;
       this.clearRecordingTimer();
       this.clearRecordingStatusCheck();
-      this.error = `Failed to stop recording: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.error = `Failed to stop recording: ${getErrorMessage(error)}`;
     }
   }
 
@@ -2369,7 +2370,7 @@ export class QuizMode extends LitElement {
       this.speechRecognitionReady = false;
 
       // Show user-friendly message
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = getErrorMessage(error);
       console.warn('Speech recognition not available:', errorMessage);
     }
   }

@@ -5,6 +5,7 @@
 import { GeneratedWord, GeneratedSentence } from '../../shared/types/core.js';
 import { LLMConfig, LLMError } from '../../shared/types/llm.js';
 import { LLM_CONFIG } from '../../shared/constants/index.js';
+import { ensureError } from '../../shared/utils/error.js';
 import {
   WordGenerationResponseSchema,
   SentenceGenerationResponseSchema,
@@ -115,7 +116,8 @@ export abstract class BaseLLMClient {
       if (error instanceof z.ZodError) {
         throw this.createLLMError(error, 'Response validation failed', 'INVALID_RESPONSE', false);
       }
-      throw this.createLLMError(error instanceof Error ? error : new Error(String(error)), 'Failed to generate words');
+      const err = ensureError(error);
+      throw this.createLLMError(err, `Failed to generate words: ${err.message}`);
     }
   }
 
@@ -577,10 +579,11 @@ Preferred JSON format:
   }
 
   /**
-   * Create LLM error with proper typing
+   * Create LLM error with proper typing and cause chaining
    */
   protected createLLMError(originalError: Error, message: string, code: LLMError['code'] = 'MODEL_ERROR', retryable: boolean = true): LLMError {
-    const error = new Error(`${message}: ${originalError.message}`) as LLMError;
+    // @ts-expect-error - Error constructor with cause is supported in Node.js 16.9.0+ but TypeScript types may not include it
+    const error = new Error(message, { cause: originalError }) as LLMError;
     error.code = code;
     error.retryable = retryable;
     return error;

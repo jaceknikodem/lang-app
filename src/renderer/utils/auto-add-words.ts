@@ -8,6 +8,7 @@
 
 import { ALL_TOPIC_SUGGESTIONS } from '../../shared/constants/topics.js';
 import { GeneratedWord } from '../../shared/types/core.js';
+import { getErrorMessage } from '../../shared/utils/error.js';
 import { processSelectedWords, setupWordProcessingSession, ProcessWordsOptions } from './word-processor.js';
 
 export interface AutoAddWordsResult {
@@ -166,7 +167,7 @@ export async function autoAddNewWords(language?: string): Promise<AutoAddWordsRe
       success: false,
       topic: '',
       wordsAdded: 0,
-      error: error instanceof Error ? error.message : 'Failed to auto-add words. Please try again.'
+      error: getErrorMessage(error, 'Failed to auto-add words. Please try again.')
     };
   }
 }

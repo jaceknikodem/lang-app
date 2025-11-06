@@ -6,6 +6,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { Word, Sentence } from '../../shared/types/core.js';
+import { getErrorMessage } from '../../shared/utils/error.js';
 import { keyboardManager, CommonKeys } from '../utils/keyboard-manager.js';
 
 interface FlowSentence {
@@ -158,7 +159,7 @@ export class FlowMode extends LitElement {
           }
         } catch (err) {
           console.error('Error stitching audio:', err);
-          this.error = `Failed to stitch audio: ${err instanceof Error ? err.message : 'Unknown error'}`;
+          this.error = `Failed to stitch audio: ${getErrorMessage(err)}`;
         } finally {
           this.isStitching = false;
         }
@@ -173,7 +174,7 @@ export class FlowMode extends LitElement {
       }
     } catch (err) {
       console.error('Error loading flow sentences:', err);
-      this.error = `Failed to load flow sentences: ${err instanceof Error ? err.message : 'Unknown error'}`;
+      this.error = `Failed to load flow sentences: ${getErrorMessage(err)}`;
     } finally {
       this.isLoading = false;
     }
@@ -335,7 +336,7 @@ export class FlowMode extends LitElement {
       this.playbackTimer = null; // Reset timer trigger flag
     } catch (err) {
       console.error('Error playing audio:', err);
-      this.error = `Failed to play audio: ${err instanceof Error ? err.message : 'Unknown error'}`;
+      this.error = `Failed to play audio: ${getErrorMessage(err)}`;
       this.stopAudio();
     }
   }

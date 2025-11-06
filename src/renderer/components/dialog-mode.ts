@@ -12,6 +12,7 @@ import { router } from '../utils/router.js';
 import type { RecordingOptions, RecordingSession } from '../../shared/types/audio.js';
 import { checkProficiencyLevel } from '../utils/app-initializer.js';
 import { getSimilarityThresholds, getSimilarityClass, type ProficiencyLevel } from '../../shared/utils/similarity-threshold.js';
+import { getErrorMessage } from '../../shared/utils/error.js';
 
 // DialogueVariant is now imported from shared/types/core.js
 
@@ -445,7 +446,7 @@ export class DialogMode extends LitElement {
       }
     } catch (error) {
       console.error('Failed to load dialog session:', error);
-      this.error = error instanceof Error ? error.message : 'Failed to load dialog session';
+      this.error = getErrorMessage(error, 'Failed to load dialog session');
       this.isLoading = false;
     }
   }
@@ -721,7 +722,7 @@ export class DialogMode extends LitElement {
     } catch (error) {
       console.error('Error starting recording:', error);
       this.isRecording = false;
-      this.error = `Failed to start recording: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.error = `Failed to start recording: ${getErrorMessage(error)}`;
     }
   }
 
@@ -764,7 +765,7 @@ export class DialogMode extends LitElement {
       // Hide transcribing box on error too
       this.isTranscribing = false;
       this.streamingTranscriptionText = null;
-      this.error = `Failed to stop recording: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.error = `Failed to stop recording: ${getErrorMessage(error)}`;
     }
   }
 

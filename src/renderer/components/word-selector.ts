@@ -9,6 +9,7 @@ import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
 import { useKeyboardBindings, CommonKeys } from '../utils/keyboard-manager.js';
 import { processSelectedWords, processKnownWords, setupWordProcessingSession } from '../utils/word-processor.js';
+import { getErrorMessage } from '../../shared/utils/error.js';
 import { GeneratedWord, Word } from '../../shared/types/core.js';
 
 interface SelectableWord extends GeneratedWord {
@@ -651,7 +652,7 @@ export class WordSelector extends LitElement {
       // If words are queued, don't auto-navigate - user will click button
     } catch (error) {
       console.error('Failed to process selected words:', error);
-      this.error = error instanceof Error ? error.message : 'Failed to process selected words. Please try again.';
+      this.error = getErrorMessage(error, 'Failed to process selected words. Please try again.');
     } finally {
       this.isProcessing = false;
     }

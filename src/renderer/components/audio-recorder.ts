@@ -5,6 +5,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
+import { getErrorMessage } from '../../shared/utils/error.js';
 import type { RecordingSession, RecordingOptions } from '../../shared/types/audio.js';
 
 export interface RecordingResult {
@@ -319,7 +320,7 @@ export class AudioRecorder extends LitElement {
 
     } catch (error) {
       console.error('Error starting recording:', error);
-      this.error = `Failed to start recording: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.error = `Failed to start recording: ${getErrorMessage(error)}`;
     }
   }
 
@@ -351,7 +352,7 @@ export class AudioRecorder extends LitElement {
 
     } catch (error) {
       console.error('Error stopping recording:', error);
-      this.error = `Failed to stop recording: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.error = `Failed to stop recording: ${getErrorMessage(error)}`;
       this.isRecording = false;
       this.clearTimer();
       this.clearStatusCheck();
@@ -376,7 +377,7 @@ export class AudioRecorder extends LitElement {
 
     } catch (error) {
       console.error('Error cancelling recording:', error);
-      this.error = `Failed to cancel recording: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.error = `Failed to cancel recording: ${getErrorMessage(error)}`;
     }
   }
 
@@ -389,7 +390,7 @@ export class AudioRecorder extends LitElement {
       this.isPlaying = false;
     } catch (error) {
       console.error('Error playing recording:', error);
-      this.error = `Failed to play recording: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.error = `Failed to play recording: ${getErrorMessage(error)}`;
       this.isPlaying = false;
     }
   }
@@ -408,7 +409,7 @@ export class AudioRecorder extends LitElement {
 
     } catch (error) {
       console.error('Error deleting recording:', error);
-      this.error = `Failed to delete recording: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.error = `Failed to delete recording: ${getErrorMessage(error)}`;
     }
   }
 
