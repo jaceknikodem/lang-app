@@ -3,9 +3,11 @@
  */
 
 import { GeminiClient } from '../../src/main/llm/gemini-client.js';
+import axios from 'axios';
 
-// Mock fetch for testing
-global.fetch = jest.fn();
+// Mock axios for testing
+jest.mock('axios');
+const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('GeminiClient', () => {
   let client: GeminiClient;
@@ -39,16 +41,18 @@ describe('GeminiClient', () => {
 
   describe('isAvailable', () => {
     it('should return true when API is accessible', async () => {
-      (fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true
+      (mockedAxios.get as jest.Mock).mockResolvedValueOnce({
+        status: 200,
+        data: {}
       });
 
       const result = await client.isAvailable();
       expect(result).toBe(true);
-      expect(fetch).toHaveBeenCalledWith(
+      expect(mockedAxios.get).toHaveBeenCalledWith(
         expect.stringContaining('generativelanguage.googleapis.com'),
         expect.objectContaining({
-          method: 'GET'
+          timeout: 5000,
+          validateStatus: expect.any(Function)
         })
       );
     });
@@ -57,11 +61,11 @@ describe('GeminiClient', () => {
       const emptyClient = new GeminiClient('');
       const result = await emptyClient.isAvailable();
       expect(result).toBe(false);
-      expect(fetch).not.toHaveBeenCalled();
+      expect(mockedAxios.get).not.toHaveBeenCalled();
     });
 
     it('should return false when API is not accessible', async () => {
-      (fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+      (mockedAxios.get as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
 
       const result = await client.isAvailable();
       expect(result).toBe(false);
@@ -107,29 +111,38 @@ describe('GeminiClient', () => {
   describe('generateResponse', () => {
     it('should generate response successfully', async () => {
       const mockResponse = {
-        candidates: [{
-          content: {
-            parts: [{
-              text: 'Test response'
-            }]
-          },
-          finishReason: 'STOP'
-        }]
+        data: {
+          candidates: [{
+            content: {
+              parts: [{
+                text: 'Test response'
+              }]
+            },
+            finishReason: 'STOP'
+          }]
+        }
       };
 
-      (fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse)
-      });
+      (mockedAxios.post as jest.Mock).mockResolvedValueOnce(mockResponse);
 
       const result = await client.generateResponse('Test prompt');
       expect(result).toBe('Test response');
-      expect(fetch).toHaveBeenCalledWith(
+      expect(mockedAxios.post).toHaveBeenCalledWith(
         expect.stringContaining('generateContent'),
         expect.objectContaining({
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: expect.stringContaining('Test prompt')
+          contents: expect.arrayContaining([
+            expect.objectContaining({
+              parts: expect.arrayContaining([
+                expect.objectContaining({
+                  text: 'Test prompt'
+                })
+              ])
+            })
+          ])
+        }),
+        expect.objectContaining({
+          timeout: expect.any(Number),
+          headers: { 'Content-Type': 'application/json' }
         })
       );
     });
@@ -140,12 +153,14 @@ describe('GeminiClient', () => {
     });
 
     it('should handle API errors', async () => {
-      (fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
+      const axiosError = new Error('Request failed') as any;
+      axiosError.isAxiosError = true;
+      axiosError.response = {
         status: 400,
         statusText: 'Bad Request',
-        text: () => Promise.resolve('Invalid API key')
-      });
+        data: 'Invalid API key'
+      };
+      (mockedAxios.post as jest.Mock).mockRejectedValueOnce(axiosError);
 
       await expect(client.generateResponse('Test prompt')).rejects.toThrow('Failed to generate response');
     });
@@ -153,11 +168,24 @@ describe('GeminiClient', () => {
     it('should handle timeout', async () => {
       const timeoutClient = new GeminiClient(mockApiKey, { timeout: 100 });
 
-      const abortError = new Error('Aborted');
-      abortError.name = 'AbortError';
-      (fetch as jest.Mock).mockRejectedValueOnce(abortError);
+      const timeoutError = new Error('timeout of 100ms exceeded') as any;
+      timeoutError.isAxiosError = true;
+      timeoutError.code = 'ECONNABORTED';
+      timeoutError.message = 'timeout of 100ms exceeded';
+      (mockedAxios.post as jest.Mock).mockRejectedValueOnce(timeoutError);
+      
+      // Mock axios.isAxiosError to return true for this error
+      const isAxiosErrorSpy = jest.spyOn(axios, 'isAxiosError').mockImplementation((error) => {
+        if (error === timeoutError) {
+          return true;
+        }
+        return false;
+      });
 
       await expect(timeoutClient.generateResponse('Test prompt')).rejects.toThrow('Request timeout');
+      
+      // Restore original
+      isAxiosErrorSpy.mockRestore();
     });
   });
 

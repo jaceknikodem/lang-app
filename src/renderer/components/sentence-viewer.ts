@@ -1125,28 +1125,38 @@ export class SentenceViewer extends LitElement {
         this.dictionaryLookupInFlight.add(dictionaryKey);
         
         // Try original word lookup first
-        const pTimeout = (await import('p-timeout')).default;
-        const entries = await pTimeout(
+        const entries = await Promise.race([
           window.electronAPI.database.lookupDictionary(
             word,
             languageOverride ?? this.targetWord?.language
           ),
-          { milliseconds: 10000 } // 10 second timeout
-        );
+          new Promise<never>((_, reject) => {
+            setTimeout(() => {
+              const error = new Error('Timeout');
+              error.name = 'TimeoutError';
+              reject(error);
+            }, 10000); // 10 second timeout
+          })
+        ]);
         
         let normalizedEntries = Array.isArray(entries) && entries.length > 0 ? entries : null;
         
         // If original lookup failed and we have a lemma, try lemma lookup
         if (!normalizedEntries && lemma && lemma.toLowerCase().trim() !== word.toLowerCase().trim()) {
           try {
-            const pTimeout = (await import('p-timeout')).default;
-            const lemmaEntries = await pTimeout(
+            const lemmaEntries = await Promise.race([
               window.electronAPI.database.lookupDictionary(
                 lemma,
                 languageOverride ?? this.targetWord?.language
               ),
-              { milliseconds: 10000 } // 10 second timeout
-            );
+              new Promise<never>((_, reject) => {
+                setTimeout(() => {
+                  const error = new Error('Timeout');
+                  error.name = 'TimeoutError';
+                  reject(error);
+                }, 10000); // 10 second timeout
+              })
+            ]);
             
             normalizedEntries = Array.isArray(lemmaEntries) && lemmaEntries.length > 0 ? lemmaEntries : null;
             

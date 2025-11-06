@@ -2,71 +2,8 @@
  * Jest test setup file
  */
 
-// Mock promise utility packages (ES modules)
-jest.mock('p-retry', () => {
-  return {
-    __esModule: true,
-    default: jest.fn((fn, options) => {
-      const retries = options?.retries || 3;
-      let attempt = 0;
-      
-      const attemptFn = async (): Promise<any> => {
-        attempt++;
-        try {
-          return await fn();
-        } catch (error) {
-          // If we've exceeded retries, throw the error
-          if (attempt > retries) {
-            throw error;
-          }
-          
-          // Call onFailedAttempt if provided
-          if (options?.onFailedAttempt) {
-            const errorObj = error instanceof Error ? error : new Error(String(error));
-            try {
-              await options.onFailedAttempt({
-                ...errorObj,
-                attemptNumber: attempt,
-                retriesLeft: retries - attempt
-              } as any);
-              // If onFailedAttempt didn't throw, retry
-              return attemptFn();
-            } catch (e) {
-              // If onFailedAttempt throws, abort retries immediately
-              // This happens when error is not retryable
-              // Re-throw the error to stop retrying - don't retry
-              // The throw will propagate up and stop the retry loop
-              throw e;
-            }
-          } else {
-            // No onFailedAttempt, retry normally
-            return attemptFn();
-          }
-        }
-      };
-      
-      return attemptFn();
-    })
-  };
-});
-
-jest.mock('p-timeout', () => {
-  return {
-    __esModule: true,
-    default: jest.fn(async (promise, options) => {
-      const timeout = options?.milliseconds || 60000;
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-          const error = new Error('Timeout');
-          error.name = 'TimeoutError';
-          reject(error);
-        }, timeout);
-      });
-      
-      return Promise.race([promise, timeoutPromise]);
-    })
-  };
-});
+// Mock axios for testing - tests can override this with jest.mock('axios')
+// This provides a default mock that can be customized in individual test files
 
 jest.mock('p-limit', () => {
   return {

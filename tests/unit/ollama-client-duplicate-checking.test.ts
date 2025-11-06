@@ -4,6 +4,11 @@
 
 import { OllamaClient } from '../../dist/main/main/llm/ollama-client.js';
 import { GeneratedWord } from '../../dist/main/shared/types/core.js';
+import axios from 'axios';
+
+// Mock axios for testing
+jest.mock('axios');
+const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 // Mock database layer interface
 interface MockDatabaseLayer {
@@ -14,7 +19,6 @@ interface MockDatabaseLayer {
 describe('OllamaClient Duplicate Checking', () => {
   let ollamaClient: OllamaClient;
   let mockDatabaseLayer: MockDatabaseLayer;
-  let mockFetch: jest.MockedFunction<typeof fetch>;
   let loggerSpy: any;
 
   beforeEach(() => {
@@ -36,10 +40,6 @@ describe('OllamaClient Duplicate Checking', () => {
         error: jest.fn()
       };
     }
-    
-    // Mock fetch globally
-    mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
-    global.fetch = mockFetch;
 
     // Create client
     ollamaClient = new OllamaClient({
@@ -154,18 +154,15 @@ describe('OllamaClient Duplicate Checking', () => {
   describe('generateTopicWords with duplicate filtering', () => {
     beforeEach(() => {
       // Mock successful Ollama response
-      const mockResponse = {
-        ok: true,
-        json: () => Promise.resolve({
+      (mockedAxios.post as jest.Mock).mockResolvedValue({
+        data: {
           response: JSON.stringify([
             { word: 'comida', translation: 'food' },
             { word: 'hola', translation: 'hello' }, // This should be filtered as duplicate
             { word: 'delicioso', translation: 'delicious' }
           ])
-        })
-      } as Response;
-      
-      mockFetch.mockResolvedValue(mockResponse);
+        }
+      });
     });
 
     it('should filter out duplicate words from generated results', async () => {
@@ -210,18 +207,15 @@ describe('OllamaClient Duplicate Checking', () => {
 
     it('should throw error when insufficient new words are generated', async () => {
       // Mock response where most words are duplicates
-      const mockResponse = {
-        ok: true,
-        json: () => Promise.resolve({
+      (mockedAxios.post as jest.Mock).mockResolvedValue({
+        data: {
           response: JSON.stringify([
             { word: 'hola', translation: 'hello' },
             { word: 'casa', translation: 'house' },
             { word: 'perro', translation: 'dog' }
           ])
-        })
-      } as Response;
-      
-      mockFetch.mockResolvedValue(mockResponse);
+        }
+      });
 
       const mockWords = ['hola', 'casa', 'perro'];
 
@@ -246,18 +240,15 @@ describe('OllamaClient Duplicate Checking', () => {
 
   describe('duplicate filtering edge cases', () => {
     beforeEach(() => {
-      const mockResponse = {
-        ok: true,
-        json: () => Promise.resolve({
+      (mockedAxios.post as jest.Mock).mockResolvedValue({
+        data: {
           response: JSON.stringify([
             { word: 'test1', translation: 'test1' },
             { word: 'test2', translation: 'test2' },
             { word: 'test3', translation: 'test3' }
           ])
-        })
-      } as Response;
-      
-      mockFetch.mockResolvedValue(mockResponse);
+        }
+      });
     });
 
     it('should handle empty existing words list', async () => {

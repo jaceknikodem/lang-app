@@ -10,6 +10,7 @@ import { BaseLLMClient } from './base-llm-client.js';
 import { ensureError } from '../../shared/utils/error.js';
 import { getLogger } from '../utils/logger.js';
 import { z } from 'zod';
+import axios from 'axios';
 
 
 interface GeminiRequest {
@@ -72,43 +73,30 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
       // Try the models endpoint first (lightweight check)
       const modelsUrl = `${this.baseUrl}?key=${this.apiKey}`;
       
-      // Dynamic import for ES module compatibility (using Function to prevent TypeScript transformation)
-      // In test environment, use require to get Jest mocks
-      let pTimeout: any;
-      try {
-        if (typeof jest !== 'undefined') {
-          // In Jest test environment, use require to get mocked modules
-          pTimeout = require('p-timeout').default || require('p-timeout');
-        } else {
-          // In production, use dynamic import
-          const dynamicImport = new Function('specifier', 'return import(specifier)');
-          const pTimeoutModule = await dynamicImport('p-timeout');
-          pTimeout = pTimeoutModule.default || pTimeoutModule;
-        }
-      } catch (importError) {
-        logger.warn({ importError }, '[GeminiClient] Failed to import p-timeout, using fetch without timeout');
-        // Fallback: use fetch without timeout
-        const response = await fetch(modelsUrl, { method: 'GET' });
-        return response.ok;
-      }
+      const response = await axios.get(modelsUrl, {
+        timeout: 5000,
+        validateStatus: () => true // Don't throw on any status
+      });
       
-      const response = await pTimeout(
-        fetch(modelsUrl, { method: 'GET' }),
-        { milliseconds: 5000 }
-      );
-      
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Unable to read error response');
-        let errorMessage = errorText.substring(0, 200);
-        
-        // Try to parse JSON error response
+      if (response.status !== 200) {
+        let errorMessage = '';
         try {
-          const errorJson = JSON.parse(errorText);
-          if (errorJson?.error?.message) {
-            errorMessage = errorJson.error.message;
+          if (typeof response.data === 'string') {
+            errorMessage = response.data.substring(0, 200);
+            // Try to parse JSON error response
+            try {
+              const errorJson = JSON.parse(response.data);
+              if (errorJson?.error?.message) {
+                errorMessage = errorJson.error.message;
+              }
+            } catch {
+              // Not JSON, use the text as-is
+            }
+          } else if (response.data?.error?.message) {
+            errorMessage = response.data.error.message;
           }
         } catch {
-          // Not JSON, use the text as-is
+          errorMessage = 'Unable to read error response';
         }
         
         logger.warn({ status: response.status, statusText: response.statusText, errorMessage }, '[GeminiClient] Availability check failed');
@@ -127,7 +115,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
       logger.warn({ error, errorMessage }, '[GeminiClient] Availability check error');
       
       // If it's a timeout, log that specifically
-      if (error instanceof Error && (error.name === 'TimeoutError' || error.message.includes('timeout'))) {
+      if (axios.isAxiosError(error) && (error.code === 'ECONNABORTED' || error.message.includes('timeout'))) {
         logger.warn('[GeminiClient] Request timed out. This might indicate network issues or the API is slow to respond.');
       }
       
@@ -274,40 +262,19 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
           maxOutputTokens: 2048
         }
       };
-      // Dynamic import for ES module compatibility (using Function to prevent TypeScript transformation)
-      // In test environment, use require to get Jest mocks
-      let pTimeout: any;
-      try {
-        if (typeof jest !== 'undefined') {
-          // In Jest test environment, use require to get mocked modules
-          pTimeout = require('p-timeout').default || require('p-timeout');
-        } else {
-          // In production, use dynamic import
-          const dynamicImport = new Function('specifier', 'return import(specifier)');
-          const pTimeoutModule = await dynamicImport('p-timeout');
-          pTimeout = pTimeoutModule.default || pTimeoutModule;
-        }
-      } catch (importError) {
-        throw new Error('Failed to import p-timeout module');
-      }
 
-      const response = await pTimeout(
-        fetch(`${this.baseUrl}/${selectedModel}:generateContent?key=${this.apiKey}`, {
-          method: 'POST',
+      const response = await axios.post<GeminiResponse>(
+        `${this.baseUrl}/${selectedModel}:generateContent?key=${this.apiKey}`,
+        requestBody,
+        {
+          timeout: this.config.timeout || 60000,
           headers: {
             'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(requestBody)
-        }),
-        { milliseconds: this.config.timeout || 60000 }
+          }
+        }
       );
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
-      }
-
-      const data: GeminiResponse = await response.json();
+      const data = response.data;
 
       if (!data.candidates || data.candidates.length === 0) {
         throw new Error('No response candidates from Gemini');
@@ -320,7 +287,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
 
       return candidate.content.parts[0].text.trim();
     } catch (error) {
-      if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+      if (axios.isAxiosError(error) && (error.code === 'ECONNABORTED' || error.message.includes('timeout'))) {
         throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
       }
       const err = ensureError(error);
@@ -343,42 +310,30 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         maxOutputTokens: 2048
       }
     };
-      // Dynamic imports for ES module compatibility (using Function to prevent TypeScript transformation)
-      // In test environment, use require to get Jest mocks
-      let pRetry: any;
-      let pTimeout: any;
+
+    const maxRetries = this.config.maxRetries!;
+    const minTimeout = 1000; // 1 second minimum
+    const maxTimeout = 120000; // 2 minutes maximum
+    const factor = 2; // Exponential backoff factor
+
+    let lastError: unknown;
+    
+    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
       try {
-        if (typeof jest !== 'undefined') {
-          // In Jest test environment, use require to get mocked modules
-          pRetry = require('p-retry').default || require('p-retry');
-          pTimeout = require('p-timeout').default || require('p-timeout');
-        } else {
-          // In production, use dynamic import
-          const dynamicImport = new Function('specifier', 'return import(specifier)');
-          const pRetryModule = await dynamicImport('p-retry');
-          pRetry = pRetryModule.default || pRetryModule;
-          const pTimeoutModule = await dynamicImport('p-timeout');
-          pTimeout = pTimeoutModule.default || pTimeoutModule;
-        }
-      } catch (importError) {
-        throw new Error('Failed to import required modules (p-retry, p-timeout)');
-      }
+        const response = await axios.post<GeminiResponse>(
+          `${this.baseUrl}/${selectedModel}:generateContent?key=${this.apiKey}`,
+          requestBody,
+          {
+            timeout: this.config.timeout || 60000,
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            validateStatus: () => true // Don't throw on any status
+          }
+        );
 
-      return await pRetry(
-        async () => {
-          const response = await pTimeout(
-            fetch(`${this.baseUrl}/${selectedModel}:generateContent?key=${this.apiKey}`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(requestBody)
-            }),
-            { milliseconds: this.config.timeout || 60000 }
-          );
-
-        if (!response.ok) {
-          const errorText = await response.text();
+        if (response.status !== 200) {
+          const errorText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
           const error = new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
           // Attach response status and errorText to error for retry logic
           (error as any).status = response.status;
@@ -386,7 +341,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
           throw error;
         }
 
-        const data: GeminiResponse = await response.json();
+        const data = response.data;
 
         if (!data.candidates || data.candidates.length === 0) {
           throw new Error('No response candidates from Gemini');
@@ -410,53 +365,67 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         }
 
         return parsed;
-      },
-      {
-        retries: this.config.maxRetries!,
-        onFailedAttempt: async (error: Error & { attemptNumber?: number; status?: number; errorText?: string }) => {
-          // Don't retry on certain errors
-          if (error instanceof Error) {
-            if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+      } catch (error: unknown) {
+        lastError = error;
+        
+        // Don't retry on certain errors
+        if (error instanceof Error) {
+          // Timeout errors - don't retry
+          if (axios.isAxiosError(error) && (error.code === 'ECONNABORTED' || error.message.includes('timeout'))) {
+            throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
+          }
+          
+          // JSON parsing errors - don't retry (unless it's "Insufficient" which might be retryable)
+          if (error.message.includes('JSON') && !error.message.includes('Insufficient')) {
+            throw super.createLLMError(error, 'Invalid response format', 'INVALID_RESPONSE', false);
+          }
+
+          // If we've exhausted retries, throw the error
+          if (attempt > maxRetries) {
+            if (axios.isAxiosError(error) && (error.code === 'ECONNABORTED' || error.message.includes('timeout'))) {
               throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
             }
-            if (error.message.includes('JSON') && !error.message.includes('Insufficient')) {
-              throw super.createLLMError(error, 'Invalid response format', 'INVALID_RESPONSE', false);
-            }
-
-            // Check if this is a 429 error and extract retry delay
-            if (error.status === 429 && error.errorText) {
-              const retryDelayMs = this.extractRetryDelay(error.errorText);
-              
-              // If retryDelay is null (>= 2 minutes), give up immediately
-              if (retryDelayMs === null) {
-                throw super.createLLMError(error, 'Rate limit exceeded - retry delay too long', 'CONNECTION_ERROR', false);
-              }
-
-              // Use the extracted retry delay from the API
-              const seconds = Math.ceil(retryDelayMs / 1000);
-              const logger = getLogger();
-              const attemptNumber = error.attemptNumber ?? 0;
-              logger.info({ attemptNumber, retryDelay: seconds }, `Attempt ${attemptNumber} failed with HTTP 429, retrying in ${seconds}s (as specified by API)...`);
-              await new Promise(resolve => setTimeout(resolve, retryDelayMs));
-            } else {
-              // Use exponential backoff for other errors (handled by minTimeout/maxTimeout/factor)
-              const attemptNumber = error.attemptNumber ?? 0;
-              const backoffSeconds = Math.pow(2, attemptNumber - 1);
-              const logger = getLogger();
-              logger.info({ attemptNumber, retryDelay: backoffSeconds }, `Attempt ${attemptNumber} failed, retrying in ${backoffSeconds}s...`);
-            }
+            throw super.createLLMError(ensureError(error), 'Max retries exceeded', 'CONNECTION_ERROR', false);
           }
-        },
-        minTimeout: 1000, // 1 second minimum
-        maxTimeout: 120000, // 2 minutes maximum
-        factor: 2 // Exponential backoff factor
+
+          // Check if this is a 429 error and extract retry delay
+          const errorWithStatus = error as Error & { status?: number; errorText?: string };
+          if (errorWithStatus.status === 429 && errorWithStatus.errorText) {
+            const retryDelayMs = this.extractRetryDelay(errorWithStatus.errorText);
+            
+            // If retryDelay is null (>= 2 minutes), give up immediately
+            if (retryDelayMs === null) {
+              throw super.createLLMError(error, 'Rate limit exceeded - retry delay too long', 'CONNECTION_ERROR', false);
+            }
+
+            // Use the extracted retry delay from the API
+            const seconds = Math.ceil(retryDelayMs / 1000);
+            const logger = getLogger();
+            logger.info({ attemptNumber: attempt, retryDelay: seconds }, `Attempt ${attempt} failed with HTTP 429, retrying in ${seconds}s (as specified by API)...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+          } else {
+            // Use exponential backoff for other errors
+            const backoffSeconds = Math.min(Math.max(Math.pow(factor, attempt - 1), minTimeout / 1000), maxTimeout / 1000);
+            const logger = getLogger();
+            logger.info({ attemptNumber: attempt, retryDelay: backoffSeconds }, `Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`);
+            await new Promise(resolve => setTimeout(resolve, backoffSeconds * 1000));
+          }
+        } else {
+          // If we've exhausted retries, throw the error
+          if (attempt > maxRetries) {
+            throw super.createLLMError(ensureError(error), 'Max retries exceeded', 'CONNECTION_ERROR', false);
+          }
+          
+          // Use exponential backoff for unknown errors
+          const backoffSeconds = Math.min(Math.max(Math.pow(factor, attempt - 1), minTimeout / 1000), maxTimeout / 1000);
+          const logger = getLogger();
+          logger.info({ attemptNumber: attempt, retryDelay: backoffSeconds }, `Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`);
+          await new Promise(resolve => setTimeout(resolve, backoffSeconds * 1000));
+        }
       }
-    ).catch((error: unknown) => {
-      // Handle final error after all retries exhausted
-      if (error instanceof Error && error.name === 'TimeoutError') {
-        throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
-      }
-      throw super.createLLMError(ensureError(error), 'Max retries exceeded', 'CONNECTION_ERROR', false);
-    });
+    }
+
+    // Should never reach here, but TypeScript needs it
+    throw super.createLLMError(ensureError(lastError), 'Max retries exceeded', 'CONNECTION_ERROR', false);
   }
 }

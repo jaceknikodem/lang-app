@@ -3,12 +3,20 @@
  */
 
 import { OllamaClient } from '../../dist/main/main/llm/ollama-client.js';
+import axios from 'axios';
+
+// Mock axios for testing
+jest.mock('axios');
+const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('Duplicate Checking Simple Integration', () => {
   let ollamaClient: OllamaClient;
   let loggerSpy: any;
 
   beforeEach(() => {
+    // Reset mocks
+    jest.clearAllMocks();
+    
     // Spy on the logger
     try {
       const { getLogger } = require('../../dist/main/main/utils/logger');
@@ -44,17 +52,14 @@ describe('Duplicate Checking Simple Integration', () => {
     });
 
     it('should work without database layer (graceful fallback)', async () => {
-      // Mock fetch to simulate Ollama response
-      const mockFetch = jest.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({
+      // Mock axios to simulate Ollama response
+      (mockedAxios.post as jest.Mock).mockResolvedValue({
+        data: {
           response: JSON.stringify([
             { word: 'test', translation: 'test' }
           ])
-        })
-      } as Response);
-
-      global.fetch = mockFetch;
+        }
+      });
 
       // Should work without database layer
       loggerSpy.warn.mockClear();
@@ -76,18 +81,15 @@ describe('Duplicate Checking Simple Integration', () => {
 
       ollamaClient.setDatabaseLayer(mockDatabase);
 
-      // Mock fetch to simulate Ollama response with duplicate
-      const mockFetch = jest.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({
+      // Mock axios to simulate Ollama response with duplicate
+      (mockedAxios.post as jest.Mock).mockResolvedValue({
+        data: {
           response: JSON.stringify([
             { word: 'existing', translation: 'existing' }, // Should be filtered
             { word: 'new', translation: 'new' }
           ])
-        })
-      } as Response);
-
-      global.fetch = mockFetch;
+        }
+      });
 
       const result = await ollamaClient.generateTopicWords('test', 'Spanish', 2);
       
@@ -105,17 +107,14 @@ describe('Duplicate Checking Simple Integration', () => {
 
       ollamaClient.setDatabaseLayer(mockDatabase);
 
-      // Mock fetch
-      const mockFetch = jest.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({
+      // Mock axios
+      (mockedAxios.post as jest.Mock).mockResolvedValue({
+        data: {
           response: JSON.stringify([
             { word: 'test', translation: 'test' }
           ])
-        })
-      } as Response);
-
-      global.fetch = mockFetch;
+        }
+      });
 
       loggerSpy.error.mockClear();
       
@@ -143,23 +142,19 @@ describe('Duplicate Checking Simple Integration', () => {
 
       ollamaClient.setDatabaseLayer(mockDatabase);
 
-      // Mock fetch to capture the prompt
+      // Mock axios to capture the prompt
       let capturedPrompt = '';
-      const mockFetch = jest.fn().mockImplementation((url, options) => {
-        const body = JSON.parse(options.body);
-        capturedPrompt = body.prompt;
+      (mockedAxios.post as jest.Mock).mockImplementation((url, data) => {
+        capturedPrompt = (data as any).prompt;
         
         return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({
+          data: {
             response: JSON.stringify([
               { word: 'new', translation: 'new' }
             ])
-          })
-        } as Response);
+          }
+        });
       });
-
-      global.fetch = mockFetch;
 
       await ollamaClient.generateTopicWords('test', 'Spanish', 1);
       
@@ -187,21 +182,17 @@ describe('Duplicate Checking Simple Integration', () => {
       ollamaClient.setDatabaseLayer(mockDatabase);
 
       let capturedPrompt = '';
-      const mockFetch = jest.fn().mockImplementation((url, options) => {
-        const body = JSON.parse(options.body);
-        capturedPrompt = body.prompt;
+      (mockedAxios.post as jest.Mock).mockImplementation((url, data) => {
+        capturedPrompt = (data as any).prompt;
         
         return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({
+          data: {
             response: JSON.stringify([
               { word: 'new', translation: 'new' }
             ])
-          })
-        } as Response);
+          }
+        });
       });
-
-      global.fetch = mockFetch;
 
       await ollamaClient.generateTopicWords('test', 'Spanish', 1);
       

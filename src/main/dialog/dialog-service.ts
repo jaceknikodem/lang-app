@@ -291,9 +291,9 @@ export class DialogService {
     }));
 
     // Step 4: Process each sentence with controlled concurrency for LLM-dependent operations
-    // Limit to 3 concurrent LLM requests to avoid flooding the service
+    // Limit to 1 concurrent LLM request to avoid flooding the service
     const pLimit = (await import('p-limit')).default;
-    const limit = pLimit(3);
+    const limit = pLimit(1);
     const sessions: DialogSession[] = [];
 
     await Promise.all(sentences.map(sentence =>

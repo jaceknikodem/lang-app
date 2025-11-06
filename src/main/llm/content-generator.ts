@@ -343,29 +343,9 @@ export class ContentGenerator {
       }
     }
 
-    const pRetry = (await import('p-retry')).default;
     try {
-      const words = await pRetry(
-        () => this.llmClient.generateTopicWords(topicText, targetLanguage, wordCount, proficiencyLevel),
-        {
-          retries: this.config.retryAttempts,
-          onFailedAttempt: async (error) => {
-            // Check if error is retryable
-            if (error instanceof Error && 'retryable' in error && 'code' in error) {
-              const llmError = error as LLMError;
-              if (!llmError.retryable) {
-                throw error; // Re-throw to abort retries
-              }
-            }
-            // Linear backoff: retryDelay * attemptNumber
-            const delayMs = this.config.retryDelay * error.attemptNumber;
-            const errorMsg = error instanceof Error ? error.message : String(error);
-            const logger = getLogger();
-            logger.warn({ attemptNumber: error.attemptNumber, topic: topicText || 'general', error: errorMsg, retryDelay: delayMs }, `Attempt ${error.attemptNumber} failed for generate vocabulary for topic: ${topicText || 'general'}: ${errorMsg}. Retrying in ${delayMs}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delayMs));
-          }
-        }
-      );
+      // Retries are now handled at the HTTP level in the LLM clients
+      const words = await this.llmClient.generateTopicWords(topicText, targetLanguage, wordCount, proficiencyLevel);
 
       // Validate and filter results
       const validWords = this.validateGeneratedWords(words);
@@ -610,27 +590,8 @@ export class ContentGenerator {
       }
 
       // Generate only the needed number of sentences
-      const pRetry = (await import('p-retry')).default;
-      const sentences = await pRetry(
-        () => this.llmClient.generateSentences(word.trim(), targetLanguage, needed, topic, proficiencyLevel),
-        {
-          retries: this.config.retryAttempts,
-          onFailedAttempt: async (error) => {
-            // Check if error is retryable
-            if (ensureError(error) && 'retryable' in error && 'code' in error) {
-              const llmError = error as LLMError;
-              if (!llmError.retryable) {
-                throw error;
-              }
-            }
-            // Linear backoff: retryDelay * attemptNumber
-            const delayMs = this.config.retryDelay * error.attemptNumber;
-            const logger = getLogger();
-            logger.warn({ attemptNumber: error.attemptNumber, word, error, retryDelay: delayMs }, `Attempt ${error.attemptNumber} failed for generate sentences for word: ${word}: ${error}. Retrying in ${delayMs}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delayMs));
-          }
-        }
-      );
+      // Retries are now handled at the HTTP level in the LLM clients
+      const sentences = await this.llmClient.generateSentences(word.trim(), targetLanguage, needed, topic, proficiencyLevel);
 
       // Validate and filter LLM results
       const generatedSentences = this.validateGeneratedSentences(sentences, word);

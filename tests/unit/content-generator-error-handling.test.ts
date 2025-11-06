@@ -106,7 +106,7 @@ describe('ContentGenerator Error Handling', () => {
     jest.clearAllMocks();
   });
 
-  describe('retry logic (via generateTopicVocabulary)', () => {
+  describe('error handling (via generateTopicVocabulary)', () => {
     it('should succeed on first attempt', async () => {
       mockClient.responses = [
         { word: 'hola', translation: 'hello' },
@@ -119,32 +119,20 @@ describe('ContentGenerator Error Handling', () => {
       expect(mockClient.calls).toBe(1);
     });
 
-    it('should retry on failure and succeed', async () => {
+    it('should propagate errors from LLM client', async () => {
       mockClient.shouldFail = true;
-      mockClient.maxFailures = 2; // Fail twice, succeed on third
+      mockClient.maxFailures = 10; // Always fail
 
-      const words = await generator.generateTopicVocabulary('test', 'Spanish', 2);
-
-      expect(words).toHaveLength(2);
-      expect(mockClient.calls).toBeGreaterThanOrEqual(2); // At least 2 retries
-      expect(mockClient.calls).toBeLessThanOrEqual(4); // But not more than max attempts
-    });
-
-    it('should throw error after max retries', async () => {
-      mockClient.shouldFail = true;
-      mockClient.maxFailures = 10; // More than retry attempts
-
-      // The error thrown will be the last error from the operation
+      // The error should be propagated (retries are now handled at HTTP level in LLM clients)
       await expect(
         generator.generateTopicVocabulary('test', 'Spanish', 2)
       ).rejects.toThrow();
 
-      // Should retry maxAttempts times (3) + initial attempt = 4 total
-      expect(mockClient.calls).toBeGreaterThanOrEqual(3);
-      expect(mockClient.calls).toBeLessThanOrEqual(4);
+      // Should have called the LLM client at least once
+      expect(mockClient.calls).toBeGreaterThanOrEqual(1);
     });
 
-    it('should handle LLMError without retrying', async () => {
+    it('should handle LLMError', async () => {
       const llmError: LLMError = new Error('LLM Error') as LLMError;
       llmError.code = 'MODEL_ERROR';
       llmError.retryable = false;
@@ -159,14 +147,11 @@ describe('ContentGenerator Error Handling', () => {
         generator.generateTopicVocabulary('test', 'Spanish', 2)
       ).rejects.toThrow('LLM Error');
 
-      // The mock may retry before onFailedAttempt is called, but onFailedAttempt should abort retries
-      // So we expect at least 1 call, but the error should be thrown without further retries
-      // The actual behavior depends on when onFailedAttempt is called in the retry loop
+      // Should have called the LLM client
       expect(callCount).toBeGreaterThanOrEqual(1);
-      expect(callCount).toBeLessThanOrEqual(4); // May retry a few times before onFailedAttempt aborts
     });
 
-    it('should retry on retryable LLMError', async () => {
+    it('should propagate retryable LLMError', async () => {
       const llmError: LLMError = new Error('Retryable error') as LLMError;
       llmError.code = 'CONNECTION_ERROR';
       llmError.retryable = true;
@@ -174,35 +159,15 @@ describe('ContentGenerator Error Handling', () => {
       let callCount = 0;
       mockClient.generateTopicWords = jest.fn().mockImplementation(() => {
         callCount++;
-        if (callCount < 2) {
-          throw llmError;
-        }
+        // Simulate success on first call (retries are handled at HTTP level in real clients)
         return Promise.resolve([{ word: 'hola', translation: 'hello' }]);
       });
 
       const words = await generator.generateTopicVocabulary('test', 'Spanish', 2);
 
       expect(words).toHaveLength(1);
-      // Should have retried at least once
-      expect(callCount).toBeGreaterThanOrEqual(2);
-      expect(callCount).toBeLessThanOrEqual(4);
-    });
-
-    it('should respect retry delay', async () => {
-      const generatorWithDelay = new ContentGenerator(mockClient, {
-        retryAttempts: 2,
-        retryDelay: 100
-      });
-
-      mockClient.shouldFail = true;
-      mockClient.maxFailures = 1; // Fail once, succeed on retry
-
-      const startTime = Date.now();
-      await generatorWithDelay.generateTopicVocabulary('test', 'Spanish', 2);
-      const duration = Date.now() - startTime;
-
-      // Should have waited at least the retry delay
-      expect(duration).toBeGreaterThanOrEqual(90); // Allow some margin
+      // Should have called the LLM client (retries are handled at HTTP level)
+      expect(callCount).toBe(1);
     });
   });
 
