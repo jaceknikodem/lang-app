@@ -234,6 +234,9 @@ export interface DatabaseLayer {
     dictionaryKey?: string;
     foundInDict: boolean;
   }): Promise<number>;
+
+  // Process frequently looked-up words from dictionary hovers
+  processFrequentlyLookedUpWords(language: string, minHoverCount?: number, lookbackDays?: number): Promise<number>;
 }
 
 export interface DatabaseConfig {

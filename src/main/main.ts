@@ -82,6 +82,23 @@ async function initializeServices(): Promise<void> {
       }
     });
 
+    // Process frequently looked-up words from dictionary hovers (async, non-blocking)
+    setImmediate(async () => {
+      const logger = getLogger();
+      try {
+        const currentLanguage = await databaseLayer!.getCurrentLanguage();
+        logger.info('Processing frequently looked-up words from dictionary hovers...');
+        const wordsAdded = await databaseLayer!.processFrequentlyLookedUpWords(currentLanguage);
+        if (wordsAdded > 0) {
+          logger.info(`Added ${wordsAdded} words from dictionary hovers`);
+        } else {
+          logger.info('No new words to add from dictionary hovers');
+        }
+      } catch (error) {
+        logger.warn({ error }, 'Failed to process dictionary hovers (non-critical)');
+      }
+    });
+
     // Determine initial LLM provider from persisted settings
     let initialProvider: LLMProvider = 'ollama';
     if (!forceLocalServices) {

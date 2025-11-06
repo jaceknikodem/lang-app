@@ -3446,4 +3446,158 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to record dictionary hover event`);
     }
   }
+
+  /**
+   * Process frequently looked-up words from dictionary_hover_events
+   * Finds words that are frequently hovered but not yet in the words table,
+   * then inserts them and enqueues for sentence generation
+   * 
+   * @param language - Language to process
+   * @param minHoverCount - Minimum number of hover events to consider (default: 3)
+   * @param lookbackDays - How many days back to look (default: 30)
+   * @returns Number of words added
+   */
+  async processFrequentlyLookedUpWords(
+    language: string,
+    minHoverCount: number = 3,
+    lookbackDays: number = 30
+  ): Promise<number> {
+    const db = this.getDb();
+    
+    try {
+      const currentLanguage = language;
+      
+      // Calculate the lookback date
+      const lookbackDate = new Date();
+      lookbackDate.setDate(lookbackDate.getDate() - lookbackDays);
+      const lookbackDateStr = lookbackDate.toISOString();
+      
+      // Find frequently looked-up words from dictionary_hover_events
+      // Group by word and language, count occurrences, filter by min count and lookback period
+      const frequentlyLookedUpStmt = db.prepare(`
+        SELECT 
+          word,
+          language,
+          COUNT(*) as hover_count,
+          MAX(created_at) as last_hover
+        FROM dictionary_hover_events
+        WHERE language = ?
+          AND created_at >= ?
+          AND found_in_dict = 1
+        GROUP BY word, language
+        HAVING COUNT(*) >= ?
+        ORDER BY hover_count DESC, last_hover DESC
+      `);
+      
+      const frequentlyLookedUp = frequentlyLookedUpStmt.all(
+        currentLanguage,
+        lookbackDateStr,
+        minHoverCount
+      ) as Array<{
+        word: string;
+        language: string;
+        hover_count: number;
+        last_hover: string;
+      }>;
+      
+      if (frequentlyLookedUp.length === 0) {
+        console.log(`[processFrequentlyLookedUpWords] No frequently looked-up words found for ${currentLanguage}`);
+        return 0;
+      }
+      
+      console.log(`[processFrequentlyLookedUpWords] Found ${frequentlyLookedUp.length} frequently looked-up words for ${currentLanguage}`);
+      
+      // Check which words already exist in the words table
+      const checkWordExistsStmt = db.prepare(`
+        SELECT id FROM words 
+        WHERE LOWER(word) = LOWER(?) AND language = ?
+      `);
+      
+      // Get dictionary lookup for translation
+      const getDictTranslationStmt = db.prepare(`
+        SELECT glosses 
+        FROM dict 
+        WHERE LOWER(word) = LOWER(?) AND lang = ?
+        LIMIT 1
+      `);
+      
+      let wordsAdded = 0;
+      const wordsToAdd: Array<{ word: string; language: string; translation: string }> = [];
+      
+      for (const item of frequentlyLookedUp) {
+        // Check if word already exists
+        const existingWord = checkWordExistsStmt.get(item.word, item.language) as { id: number } | undefined;
+        
+        if (existingWord) {
+          // Word already exists, skip
+          continue;
+        }
+        
+        // Try to get translation from dictionary
+        const dictEntry = getDictTranslationStmt.get(item.word, item.language) as { glosses: string } | undefined;
+        
+        let translation: string;
+        if (dictEntry && dictEntry.glosses) {
+          try {
+            const glosses = JSON.parse(dictEntry.glosses);
+            if (Array.isArray(glosses) && glosses.length > 0) {
+              translation = glosses[0]; // Use first gloss as translation
+            } else {
+              translation = item.word; // Fallback to word itself
+            }
+          } catch {
+            // If parsing fails, try to extract from string
+            const glossesStr = dictEntry.glosses.trim();
+            if (glossesStr) {
+              translation = glossesStr.split(/[;,]/)[0].trim() || item.word;
+            } else {
+              translation = item.word;
+            }
+          }
+        } else {
+          // No dictionary entry found, use word as placeholder
+          translation = item.word;
+        }
+        
+        wordsToAdd.push({
+          word: item.word,
+          language: item.language,
+          translation
+        });
+      }
+      
+      if (wordsToAdd.length === 0) {
+        console.log(`[processFrequentlyLookedUpWords] All frequently looked-up words already exist`);
+        return 0;
+      }
+      
+      console.log(`[processFrequentlyLookedUpWords] Adding ${wordsToAdd.length} new words from dictionary hovers`);
+      
+      // Insert words and enqueue for generation
+      for (const wordData of wordsToAdd) {
+        try {
+          // Insert word
+          const wordId = await this.insertWord({
+            word: wordData.word,
+            language: wordData.language,
+            translation: wordData.translation
+          });
+          
+          // Enqueue for sentence generation
+          await this.enqueueWordGeneration(wordId, wordData.language, undefined, 3);
+          
+          wordsAdded++;
+          console.log(`[processFrequentlyLookedUpWords] Added word: ${wordData.word} (ID: ${wordId})`);
+        } catch (error) {
+          console.warn(`[processFrequentlyLookedUpWords] Failed to add word "${wordData.word}":`, error);
+          // Continue with next word
+        }
+      }
+      
+      console.log(`[processFrequentlyLookedUpWords] Successfully added ${wordsAdded} words from dictionary hovers`);
+      return wordsAdded;
+    } catch (error) {
+      throw wrapError(error, `Failed to process frequently looked-up words`);
+    }
+  }
 }
