@@ -833,10 +833,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Check which of the provided words already exist in the database
    * Returns a Set of lowercase words that exist (learning, known, or ignored)
+   * Also filters out words that were neglected 3+ times in the last 7 days
    * This is more efficient than fetching all words and doing in-memory comparison
    * @param language - The language to check words for
    * @param words - Array of words to check (will be normalized to lowercase)
-   * @param topic - Optional topic parameter to filter words by topic
+   * @param topic - Optional topic parameter to filter words by topic (only applies to words table, not neglected_words)
    */
   async checkWordsExist(language: string, words: string[], topic?: string): Promise<Set<string>> {
     const db = this.getDb();
@@ -852,23 +853,45 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // Create placeholders for IN clause
       const placeholders = normalizedWords.map(() => '?').join(',');
       
-      let query = `
+      // Query 1: Check words table (existing words - learning, known, or ignored)
+      let wordsQuery = `
         SELECT LOWER(word) as word 
         FROM words 
         WHERE language = ? AND LOWER(word) IN (${placeholders})
       `;
       
-      const params: any[] = [language, ...normalizedWords];
+      const wordsParams: any[] = [language, ...normalizedWords];
       
       if (topic) {
-        query += ` AND topic = ?`;
-        params.push(topic);
+        wordsQuery += ` AND topic = ?`;
+        wordsParams.push(topic);
       }
       
-      const stmt = db.prepare(query);
-      const rows = stmt.all(...params) as Array<{ word: string }>;
+      const wordsStmt = db.prepare(wordsQuery);
+      const wordsRows = wordsStmt.all(...wordsParams) as Array<{ word: string }>;
+      const existingWordsSet = new Set(wordsRows.map(row => row.word));
       
-      return new Set(rows.map(row => row.word));
+      // Query 2: Check neglected_words table (words neglected 3+ times in last 7 days)
+      // Filter by language only (no topic filtering - if neglected in any topic, filter it out)
+      const neglectedQuery = `
+        SELECT LOWER(word) as word
+        FROM neglected_words
+        WHERE language = ? 
+          AND LOWER(word) IN (${placeholders})
+          AND ignored_at >= DATE('now', '-7 days')
+        GROUP BY LOWER(word)
+        HAVING COUNT(*) >= 3
+      `;
+      
+      const neglectedParams: any[] = [language, ...normalizedWords];
+      const neglectedStmt = db.prepare(neglectedQuery);
+      const neglectedRows = neglectedStmt.all(...neglectedParams) as Array<{ word: string }>;
+      const neglectedWordsSet = new Set(neglectedRows.map(row => row.word));
+      
+      // Combine both sets
+      const combinedSet = new Set([...existingWordsSet, ...neglectedWordsSet]);
+      
+      return combinedSet;
     } catch (error) {
       throw wrapError(error, `Failed to check words existence`);
     }
