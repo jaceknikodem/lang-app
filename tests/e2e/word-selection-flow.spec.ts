@@ -58,21 +58,43 @@ test.describe('Word Selection Flow', () => {
     await expect(quizButton).toBeVisible();
     await expect(quizButton).toBeEnabled();
     
-    // Click quiz tab when no words exist
+    // Click quiz tab (may have words or not)
     await quizButton.click();
     
     // Should navigate to quiz mode
     await page.waitForSelector('quiz-mode', { timeout: 30000 });
     
-    // Should show appropriate message for no words
+    // Should show quiz interface
     const quizContent = page.locator('quiz-mode');
     await expect(quizContent).toBeVisible();
     
-    // The quiz should either show setup screen or error about no words
-    const hasSetupScreen = await page.locator('quiz-mode .setup-container').isVisible();
-    const hasErrorMessage = await page.locator('quiz-mode .error-message').isVisible();
+    // Wait for quiz to finish loading (either error message or quiz question)
+    // The quiz-mode will show a loading state first, then either:
+    // 1. An error message if no words/sentences available
+    // 2. A quiz question if words with sentences are available
+    // Wait for loading to finish (either error or question appears)
+    try {
+      // Try waiting for error message first
+      await page.waitForSelector('quiz-mode .error-message', { timeout: 10000 });
+    } catch {
+      // If no error message, wait for quiz question
+      try {
+        await page.waitForSelector('quiz-mode .question-container', { timeout: 20000 });
+      } catch {
+        // If neither appears, check what's actually visible
+        const hasLoading = await page.locator('quiz-mode .loading-container').isVisible();
+        if (hasLoading) {
+          // Still loading, wait a bit more
+          await page.waitForTimeout(5000);
+        }
+      }
+    }
     
-    expect(hasSetupScreen || hasErrorMessage).toBe(true);
+    // Verify either error message or quiz question is visible
+    const hasErrorMessage = await page.locator('quiz-mode .error-message').isVisible();
+    const hasQuizQuestion = await page.locator('quiz-mode .question-container').isVisible();
+    
+    expect(hasErrorMessage || hasQuizQuestion).toBe(true);
   });
 
 });
