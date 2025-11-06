@@ -39,7 +39,8 @@ describe('BaseLLMClient Duplicate Filtering', () => {
   beforeEach(() => {
     client = new TestLLMClient({ model: 'test-model' });
     mockDatabase = {
-      getExistingWordsForDuplicateChecking: jest.fn().mockResolvedValue([])
+      getExistingWordsForDuplicateChecking: jest.fn().mockResolvedValue([]),
+      checkWordsExist: jest.fn().mockResolvedValue(new Set())
     };
     client.setDatabaseLayer(mockDatabase);
     jest.clearAllMocks();
@@ -76,6 +77,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
 
       client.setMockResponse(mockWords);
       mockDatabase.getExistingWordsForDuplicateChecking.mockResolvedValue(['hola', 'casa']);
+      mockDatabase.checkWordsExist.mockResolvedValue(new Set(['hola', 'casa']));
 
       const result = await client.testGenerateTopicWords('test', 'Spanish', 3);
 
@@ -96,6 +98,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
       client.setMockResponse(mockWords);
       // Database has uppercase version
       mockDatabase.getExistingWordsForDuplicateChecking.mockResolvedValue(['HOLA', 'CASA']);
+      mockDatabase.checkWordsExist.mockResolvedValue(new Set(['hola', 'casa']));
 
       const result = await client.testGenerateTopicWords('test', 'Spanish', 3);
 
@@ -115,6 +118,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
 
       client.setMockResponse(mockWords);
       mockDatabase.getExistingWordsForDuplicateChecking.mockResolvedValue(['casa']);
+      mockDatabase.checkWordsExist.mockResolvedValue(new Set(['casa']));
 
       const result = await client.testGenerateTopicWords('test', 'Spanish', 4);
 
@@ -158,6 +162,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
       client.setMockResponse(mockWords);
       // All generated words exist in database
       mockDatabase.getExistingWordsForDuplicateChecking.mockResolvedValue(['hola', 'casa']);
+      mockDatabase.checkWordsExist.mockResolvedValue(new Set(['hola', 'casa']));
 
       await expect(client.testGenerateTopicWords('test', 'Spanish', 3))
         .rejects.toThrow('Insufficient new words generated');
@@ -171,6 +176,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
 
       client.setMockResponse(mockWords);
       mockDatabase.getExistingWordsForDuplicateChecking.mockResolvedValue(['hola']);
+      mockDatabase.checkWordsExist.mockResolvedValue(new Set(['hola']));
 
       // Request 10 words, but only get 1 new word
       // With default MIN_WORD_COUNT_THRESHOLD, should fail
@@ -187,6 +193,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
 
       client.setMockResponse(mockWords);
       mockDatabase.getExistingWordsForDuplicateChecking.mockResolvedValue(['hola']);
+      mockDatabase.checkWordsExist.mockResolvedValue(new Set(['hola']));
 
       // Request 3 words, get 2 new words (should pass threshold)
       const result = await client.testGenerateTopicWords('test', 'Spanish', 3);
@@ -202,6 +209,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
 
       client.setMockResponse(mockWords);
       mockDatabase.getExistingWordsForDuplicateChecking.mockRejectedValue(new Error('Database error'));
+      mockDatabase.checkWordsExist.mockRejectedValue(new Error('Database error'));
 
       // Should still work, just treat as empty existing words
       const result = await client.testGenerateTopicWords('test', 'Spanish', 2);
@@ -270,6 +278,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
       client.setMockResponse(mockWords);
       // Database has words for Spanish
       mockDatabase.getExistingWordsForDuplicateChecking.mockResolvedValue(['hola']);
+      mockDatabase.checkWordsExist.mockResolvedValue(new Set(['hola']));
 
       const result = await client.testGenerateTopicWords('test', 'Spanish', 2);
 
@@ -359,6 +368,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
       ];
       client.setMockResponse(mockWords);
       mockDatabase.getExistingWordsForDuplicateChecking.mockRejectedValue(new Error('Database connection failed'));
+      mockDatabase.checkWordsExist.mockRejectedValue(new Error('Database connection failed'));
 
       // Should handle gracefully and treat as empty existing words
       const result = await client.testGenerateTopicWords('test', 'Spanish', 2);

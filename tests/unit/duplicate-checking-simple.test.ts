@@ -76,7 +76,8 @@ describe('Duplicate Checking Simple Integration', () => {
         getAllWords: jest.fn().mockResolvedValue([
           { word: 'existing', language: 'Spanish', translation: 'existing' }
         ]),
-        getExistingWordsForDuplicateChecking: jest.fn().mockResolvedValue(['existing'])
+        getExistingWordsForDuplicateChecking: jest.fn().mockResolvedValue(['existing']),
+        checkWordsExist: jest.fn().mockResolvedValue(new Set(['existing']))
       };
 
       ollamaClient.setDatabaseLayer(mockDatabase);
@@ -97,12 +98,14 @@ describe('Duplicate Checking Simple Integration', () => {
       expect(result).toHaveLength(1);
       expect(result[0].word).toBe('new');
       expect(mockDatabase.getExistingWordsForDuplicateChecking).toHaveBeenCalledWith('Spanish', 'test', 50);
+      expect(mockDatabase.checkWordsExist).toHaveBeenCalledWith('Spanish', ['existing', 'new'], 'test');
     });
 
     it('should handle database errors gracefully', async () => {
       const mockDatabase = {
         getAllWords: jest.fn().mockRejectedValue(new Error('Database error')),
-        getExistingWordsForDuplicateChecking: jest.fn().mockRejectedValue(new Error('Database error'))
+        getExistingWordsForDuplicateChecking: jest.fn().mockRejectedValue(new Error('Database error')),
+        checkWordsExist: jest.fn().mockRejectedValue(new Error('Database error'))
       };
 
       ollamaClient.setDatabaseLayer(mockDatabase);
@@ -137,7 +140,8 @@ describe('Duplicate Checking Simple Integration', () => {
           { word: 'exclude1', language: 'Spanish', translation: 'test' },
           { word: 'exclude2', language: 'Spanish', translation: 'test' }
         ]),
-        getExistingWordsForDuplicateChecking: jest.fn().mockResolvedValue(['exclude1', 'exclude2'])
+        getExistingWordsForDuplicateChecking: jest.fn().mockResolvedValue(['exclude1', 'exclude2']),
+        checkWordsExist: jest.fn().mockResolvedValue(new Set())
       };
 
       ollamaClient.setDatabaseLayer(mockDatabase);
@@ -176,7 +180,8 @@ describe('Duplicate Checking Simple Integration', () => {
             return Promise.resolve(existingWords.slice(0, limit));
           }
           return Promise.resolve(existingWords);
-        })
+        }),
+        checkWordsExist: jest.fn().mockResolvedValue(new Set())
       };
 
       ollamaClient.setDatabaseLayer(mockDatabase);

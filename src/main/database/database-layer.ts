@@ -831,6 +831,50 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
+   * Check which of the provided words already exist in the database
+   * Returns a Set of lowercase words that exist (learning, known, or ignored)
+   * This is more efficient than fetching all words and doing in-memory comparison
+   * @param language - The language to check words for
+   * @param words - Array of words to check (will be normalized to lowercase)
+   * @param topic - Optional topic parameter to filter words by topic
+   */
+  async checkWordsExist(language: string, words: string[], topic?: string): Promise<Set<string>> {
+    const db = this.getDb();
+    
+    if (words.length === 0) {
+      return new Set();
+    }
+    
+    try {
+      // Normalize words to lowercase for comparison
+      const normalizedWords = words.map(w => w.toLowerCase());
+      
+      // Create placeholders for IN clause
+      const placeholders = normalizedWords.map(() => '?').join(',');
+      
+      let query = `
+        SELECT LOWER(word) as word 
+        FROM words 
+        WHERE language = ? AND LOWER(word) IN (${placeholders})
+      `;
+      
+      const params: any[] = [language, ...normalizedWords];
+      
+      if (topic) {
+        query += ` AND topic = ?`;
+        params.push(topic);
+      }
+      
+      const stmt = db.prepare(query);
+      const rows = stmt.all(...params) as Array<{ word: string }>;
+      
+      return new Set(rows.map(row => row.word));
+    } catch (error) {
+      throw wrapError(error, `Failed to check words existence`);
+    }
+  }
+
+  /**
    * Get multiple words by IDs (batch query)
    */
   async getWordsByIds(wordIds: number[]): Promise<Word[]> {

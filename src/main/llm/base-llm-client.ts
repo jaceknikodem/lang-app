@@ -75,14 +75,9 @@ export abstract class BaseLLMClient {
    * Generate topic words - shared implementation
    */
   async generateTopicWords(topic: string, language: string, count: number, proficiencyLevel?: string): Promise<GeneratedWord[]> {
-    // Get existing words to check for duplicates (includes learning, known, and ignored words)
+    // Get a small sample of existing words for the prompt (to help LLM avoid obvious duplicates)
+    // We only need a sample, not all words - this is just for prompt context
     const existingWords = await this.getExistingWords(language, topic, LLM_CONFIG.MAX_EXISTING_WORDS_IN_PROMPT);
-    const existingWordsSet = new Set(existingWords.map(w => w.toLowerCase()));
-
-    // Explicitly get ignored words to ensure they are filtered out
-    const ignoredWords = await this.getIgnoredWords(language, topic);
-    const ignoredWordsSet = new Set(ignoredWords.map(w => w.toLowerCase()));
-
     const prompt = this.createTopicWordsPrompt(topic, language, count, existingWords, proficiencyLevel);
 
     try {
@@ -104,15 +99,19 @@ export abstract class BaseLLMClient {
         arr.findIndex(w => w.word.toLowerCase() === word.word.toLowerCase()) === index
       );
 
+      // Efficiently check which generated words already exist in database using batch lookup
+      // This is much more efficient than fetching all words and doing in-memory comparison
+      const generatedWordStrings = uniqueWords.map(w => w.word);
+      const existingWordsSet = await this.checkWordsExist(language, generatedWordStrings, topic);
+
       // Filter out words that already exist in database (learning, known, or ignored)
-      // Also explicitly filter out ignored words to ensure they are excluded
       const newWords = uniqueWords.filter(word => {
         const wordLower = word.word.toLowerCase();
-        return !existingWordsSet.has(wordLower) && !ignoredWordsSet.has(wordLower);
+        return !existingWordsSet.has(wordLower);
       });
 
       const logger = getLogger();
-      logger.info({ uniqueWords: uniqueWords.length, newWords: newWords.length, duplicates: uniqueWords.length - newWords.length, ignoredCount: ignoredWords.length }, `Generated ${uniqueWords.length} unique words, ${newWords.length} are new (${uniqueWords.length - newWords.length} duplicates filtered, ${ignoredWords.length} ignored words excluded)`);
+      logger.info({ uniqueWords: uniqueWords.length, newWords: newWords.length, duplicates: uniqueWords.length - newWords.length, checkedCount: generatedWordStrings.length }, `Generated ${uniqueWords.length} unique words, ${newWords.length} are new (${uniqueWords.length - newWords.length} duplicates filtered via efficient batch lookup)`);
 
       // If we got significantly fewer new words than requested, throw an error to trigger retry.
       const minWords = Math.max(1, Math.floor(count * LLM_CONFIG.MIN_WORD_COUNT_THRESHOLD));
@@ -253,21 +252,22 @@ export abstract class BaseLLMClient {
   }
 
   /**
-   * Get ignored words from database to filter out during word generation
+   * Check which of the provided words already exist in the database (efficient batch lookup)
+   * This is more efficient than fetching all words and doing in-memory comparison
    */
-  protected async getIgnoredWords(language: string, topic?: string): Promise<string[]> {
+  protected async checkWordsExist(language: string, words: string[], topic?: string): Promise<Set<string>> {
     if (!this.databaseLayer) {
       const logger = getLogger();
-      logger.warn('Database layer not set, cannot get ignored words');
-      return [];
+      logger.warn('Database layer not set, cannot check words existence');
+      return new Set();
     }
 
     try {
-      return await this.databaseLayer.getIgnoredWords(language, topic);
+      return await this.databaseLayer.checkWordsExist(language, words, topic);
     } catch (error) {
       const logger = getLogger();
-      logger.error({ error }, 'Failed to get ignored words for filtering');
-      return [];
+      logger.error({ error }, 'Failed to check words existence');
+      return new Set();
     }
   }
 

@@ -46,6 +46,7 @@ export interface DatabaseLayer {
   getKnownWords(language: string, minWordStrength: number, maxWords: number): Promise<string[]>;
   getExistingWordsForDuplicateChecking(language: string, topic?: string, limit?: number): Promise<string[]>;
   getIgnoredWords(language: string, topic?: string): Promise<string[]>;
+  checkWordsExist(language: string, words: string[], topic?: string): Promise<Set<string>>;
   
   // SRS-specific operations
   updateWordSRS(
