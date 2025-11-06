@@ -1924,7 +1924,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           COUNT(*) as totalWords,
           COUNT(CASE WHEN last_studied IS NOT NULL THEN 1 END) as studiedWords
         FROM words
-        WHERE ignored = FALSE
+        WHERE ignored = FALSE AND sentence_count > 0
         GROUP BY language
         ORDER BY language ASC
       `);
