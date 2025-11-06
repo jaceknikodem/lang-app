@@ -127,7 +127,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         audio_generation_model TEXT,
         audio_generation_voice_id TEXT,
         sentence_tokens TEXT,
-        play_count INTEGER DEFAULT 0
+        play_count INTEGER DEFAULT 0,
+        ignored BOOLEAN DEFAULT FALSE
       )
     `);
 
@@ -168,6 +169,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     // Migration: Add before_sentence_audio_path column to sentences table if it doesn't exist
     try {
       db.exec(`ALTER TABLE sentences ADD COLUMN before_sentence_audio_path TEXT`);
+    } catch (error) {
+      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
+      // Ignore error - this is expected for existing databases with the column
+    }
+
+    // Migration: Add ignored column to sentences table if it doesn't exist
+    try {
+      db.exec(`ALTER TABLE sentences ADD COLUMN ignored BOOLEAN DEFAULT FALSE`);
     } catch (error) {
       // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
       // Ignore error - this is expected for existing databases with the column
@@ -1059,11 +1068,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         return [];
       }
       
-      // Fetch sentences by IDs
+      // Fetch sentences by IDs (excluding ignored sentences)
       const placeholders = sentenceIds.map(() => '?').join(',');
       const stmt = db.prepare(`
         SELECT * FROM sentences 
         WHERE id IN (${placeholders})
+          AND (ignored IS NULL OR ignored = FALSE)
         ORDER BY RANDOM()
       `);
       
@@ -1087,7 +1097,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       }
 
       const placeholders = sentenceIds.map(() => '?').join(',');
-      const stmt = db.prepare(`SELECT * FROM sentences WHERE id IN (${placeholders})`);
+      const stmt = db.prepare(`SELECT * FROM sentences WHERE id IN (${placeholders}) AND (ignored IS NULL OR ignored = FALSE)`);
       const rows = stmt.all(...sentenceIds) as any[];
       
       return rows.map(row => this.mapRowToSentence(row));
@@ -1482,39 +1492,21 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
-   * Delete a sentence by ID
+   * Mark a sentence as ignored instead of deleting it
    */
   async deleteSentence(sentenceId: number): Promise<void> {
     const db = this.getDb();
     
     try {
-      // Get all words linked to this sentence via junction table (before deletion)
-      const linkedWords = db.prepare('SELECT word_id FROM sentence_words WHERE sentence_id = ?').all(sentenceId) as Array<{ word_id: number }>;
-      
-      // Delete the sentence (junction table entries will be cascade deleted)
-      const stmt = db.prepare('DELETE FROM sentences WHERE id = ?');
+      // Mark the sentence as ignored instead of deleting it
+      const stmt = db.prepare('UPDATE sentences SET ignored = TRUE WHERE id = ?');
       const result = stmt.run(sentenceId);
       
       if (result.changes === 0) {
         throw new Error(`Sentence with ID ${sentenceId} not found`);
       }
-
-      // Update sentenceCount for all words that were linked to this sentence
-      const updateSentenceCount = db.prepare(`
-        UPDATE words 
-        SET sentence_count = CASE 
-          WHEN sentence_count > 0 THEN sentence_count - 1 
-          ELSE 0 
-        END
-        WHERE id = ?
-      `);
-
-      // Decrement sentence count for all words in junction table
-      for (const linkedWord of linkedWords) {
-        updateSentenceCount.run(linkedWord.word_id);
-      }
     } catch (error) {
-      throw wrapError(error, `Failed to delete sentence`);
+      throw wrapError(error, `Failed to mark sentence as ignored`);
     }
   }
 
@@ -1686,11 +1678,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       const sentenceIds = sentenceIdsResult.map(row => row.sentence_id);
       
-      // Then fetch a random sentence by IDs using the junction table
+      // Then fetch a random sentence by IDs using the junction table (excluding ignored sentences)
       const placeholders = sentenceIds.map(() => '?').join(',');
       const stmt = db.prepare(`
         SELECT * FROM sentences 
         WHERE id IN (${placeholders})
+          AND (ignored IS NULL OR ignored = FALSE)
         ORDER BY RANDOM()
         LIMIT 1
       `);
@@ -1718,13 +1711,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     try {
       const currentLanguage = language || await this.getCurrentLanguage();
       
-      // Get all sentences for the language that have audio
+      // Get all sentences for the language that have audio (excluding ignored sentences)
       const stmt = db.prepare(`
         SELECT * 
         FROM sentences
         WHERE language = ?
           AND audio_path IS NOT NULL
           AND TRIM(audio_path) != ''
+          AND (ignored IS NULL OR ignored = FALSE)
         ORDER BY id ASC
       `);
       
@@ -2787,7 +2781,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       audioGenerationService: row.audio_generation_service || undefined,
       audioGenerationModel: row.audio_generation_model || undefined,
       audioGenerationVoiceId: row.audio_generation_voice_id || undefined,
-      beforeSentenceAudioPath: row.before_sentence_audio_path || undefined
+      beforeSentenceAudioPath: row.before_sentence_audio_path || undefined,
+      ignored: row.ignored === 1 || row.ignored === true
     };
   }
 

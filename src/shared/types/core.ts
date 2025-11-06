@@ -55,6 +55,7 @@ export interface Sentence {
   audioGenerationVoiceId?: string;
   tokenizedTokens?: PrecomputedToken[];
   beforeSentenceAudioPath?: string;
+  ignored?: boolean;
 }
 
 /**
