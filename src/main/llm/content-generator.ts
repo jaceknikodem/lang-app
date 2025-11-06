@@ -10,6 +10,7 @@ import { LLMFactory, LLMFactoryConfig, LLMProvider } from './llm-factory.js';
 import { FrequencyWordManager } from './frequency-word-manager.js';
 import type { LemmatizationService } from '../lemmatization/index.js';
 import { getErrorMessage, wrapError, ensureError } from '../../shared/utils/error.js';
+import { getLogger } from '../utils/logger.js';
 
 const TATOEBA_API_URL = 'https://tatoeba.org/en/api_v0/search';
 const TATOEBA_TARGET_LANGUAGE = 'eng';
@@ -81,7 +82,8 @@ export class ContentGenerator {
       };
     }
 
-    console.log('Creating LLM client:', {
+    const logger = getLogger();
+    logger.info({
       provider: this.config.llmProvider,
       hasApiKey: !!(this.config.geminiApiKey && this.config.geminiApiKey.trim())
     });
@@ -93,7 +95,8 @@ export class ContentGenerator {
    * Switch LLM provider and recreate client
    */
   switchProvider(provider: LLMProvider, geminiApiKey?: string): void {
-    console.log('Switching provider:', {
+    const logger = getLogger();
+    logger.info({
       from: this.config.llmProvider,
       to: provider,
       providedApiKey: !!geminiApiKey,
@@ -162,7 +165,8 @@ export class ContentGenerator {
           const proficiencyKey = `language_proficiency_${targetLanguage.toLowerCase()}`;
           proficiencyLevel = await database.getSetting(proficiencyKey) || undefined;
         } catch (error) {
-          console.warn('Failed to retrieve proficiency level:', error);
+          const logger = getLogger();
+          logger.warn({ error }, 'Failed to retrieve proficiency level');
         }
       }
 
@@ -192,7 +196,8 @@ export class ContentGenerator {
     count: number,
     database: DatabaseLayer
   ): Promise<GeneratedWord[]> {
-    console.log(`Generating frequency-based vocabulary for ${language}, count: ${count}`);
+    const logger = getLogger();
+    logger.info({ language, count }, 'Generating frequency-based vocabulary');
 
     // Get proficiency level for the language
     let proficiencyLevel: string | undefined;
@@ -217,7 +222,7 @@ export class ContentGenerator {
       throw new Error(`No new words available from frequency list for ${language}`);
     }
 
-    console.log(`Selected ${nextWordEntries.length} words from frequency list:`, nextWordEntries.map(e => e.word));
+    logger.info({ wordCount: nextWordEntries.length, words: nextWordEntries.map(e => e.word) }, `Selected ${nextWordEntries.length} words from frequency list`);
 
     // Process word entries - use existing translations or generate them
     const generatedWords: GeneratedWord[] = [];
@@ -242,7 +247,8 @@ export class ContentGenerator {
           frequencyTier
         });
       } catch (error) {
-        console.warn(`Failed to get translation for word "${wordEntry.word}":`, error);
+        const logger = getLogger();
+        logger.warn({ error, word: wordEntry.word }, `Failed to get translation for word "${wordEntry.word}"`);
         // Continue with other words even if one fails
       }
     }
@@ -278,7 +284,8 @@ export class ContentGenerator {
           };
         });
       } catch (error) {
-        console.warn('[ContentGenerator] Failed to lemmatize frequency-based words, using original words:', error);
+        const logger = getLogger();
+        logger.warn({ error }, '[ContentGenerator] Failed to lemmatize frequency-based words, using original words');
         // Continue with original words if lemmatization fails
       }
     }
@@ -322,7 +329,8 @@ export class ContentGenerator {
       }
     }
 
-    console.log(`Generating LLM vocabulary: topic="${topicText}", language="${targetLanguage}", count=${wordCount}`);
+    const logger = getLogger();
+    logger.info({ topic: topicText, language: targetLanguage, count: wordCount }, 'Generating LLM vocabulary');
 
     // Get proficiency level for the language
     let proficiencyLevel: string | undefined;
@@ -352,7 +360,8 @@ export class ContentGenerator {
             // Linear backoff: retryDelay * attemptNumber
             const delayMs = this.config.retryDelay * error.attemptNumber;
             const errorMsg = error instanceof Error ? error.message : String(error);
-            console.warn(`Attempt ${error.attemptNumber} failed for generate vocabulary for topic: ${topicText || 'general'}: ${errorMsg}. Retrying in ${delayMs}ms...`);
+            const logger = getLogger();
+            logger.warn({ attemptNumber: error.attemptNumber, topic: topicText || 'general', error: errorMsg, retryDelay: delayMs }, `Attempt ${error.attemptNumber} failed for generate vocabulary for topic: ${topicText || 'general'}: ${errorMsg}. Retrying in ${delayMs}ms...`);
             await new Promise(resolve => setTimeout(resolve, delayMs));
           }
         }
@@ -548,7 +557,8 @@ export class ContentGenerator {
                     contextAfterTranslation: context.contextAfterTranslation
                   };
                 } catch (error) {
-                  console.warn('[ContentGenerator] Failed to generate context for Tatoeba sentence:', error);
+                  const logger = getLogger();
+                  logger.warn({ error }, '[ContentGenerator] Failed to generate context for Tatoeba sentence');
                   // Return sentence without context on error
                   return sentence;
                 }
@@ -558,7 +568,8 @@ export class ContentGenerator {
           }
         }
       } catch (supplementError) {
-        console.warn('Failed to fetch Tatoeba examples:', supplementError);
+        const logger = getLogger();
+        logger.warn({ error: supplementError }, 'Failed to fetch Tatoeba examples');
       }
 
       // Calculate how many more sentences are needed
@@ -593,7 +604,8 @@ export class ContentGenerator {
           const proficiencyKey = `language_proficiency_${targetLanguage.toLowerCase()}`;
           proficiencyLevel = await database.getSetting(proficiencyKey) || undefined;
         } catch (error) {
-          console.warn('Failed to retrieve proficiency level:', error);
+          const logger = getLogger();
+          logger.warn({ error }, 'Failed to retrieve proficiency level');
         }
       }
 
@@ -613,7 +625,8 @@ export class ContentGenerator {
             }
             // Linear backoff: retryDelay * attemptNumber
             const delayMs = this.config.retryDelay * error.attemptNumber;
-            console.warn(`Attempt ${error.attemptNumber} failed for generate sentences for word: ${word}: ${error}. Retrying in ${delayMs}ms...`);
+            const logger = getLogger();
+            logger.warn({ attemptNumber: error.attemptNumber, word, error, retryDelay: delayMs }, `Attempt ${error.attemptNumber} failed for generate sentences for word: ${word}: ${error}. Retrying in ${delayMs}ms...`);
             await new Promise(resolve => setTimeout(resolve, delayMs));
           }
         }
@@ -675,22 +688,23 @@ export class ContentGenerator {
       return [];
     }
 
+    const logger = getLogger();
     return words.filter(word => {
       // Check required fields
       if (!word.word || !word.translation) {
-        console.warn('Skipping invalid word entry:', word);
+        logger.warn({ word }, 'Skipping invalid word entry');
         return false;
       }
 
       // Check word length (reasonable bounds)
       if (word.word.trim().length === 0 || word.word.length > 50) {
-        console.warn('Skipping word with invalid length:', word.word);
+        logger.warn({ word: word.word }, 'Skipping word with invalid length');
         return false;
       }
 
       // Check translation length
       if (word.translation.trim().length === 0 || word.translation.length > 100) {
-        console.warn('Skipping word with invalid translation length:', word.translation);
+        logger.warn({ translation: word.translation }, 'Skipping word with invalid translation length');
         return false;
       }
 
@@ -708,22 +722,23 @@ export class ContentGenerator {
       return [];
     }
 
+    const logger = getLogger();
     return sentences.filter(sentence => {
       // Check required fields
       if (!sentence.sentence || !sentence.translation) {
-        console.warn('Skipping invalid sentence entry:', sentence);
+        logger.warn({ sentence }, 'Skipping invalid sentence entry');
         return false;
       }
 
       // Check sentence length (reasonable bounds)
       if (sentence.sentence.trim().length === 0 || sentence.sentence.length > 200) {
-        console.warn('Skipping sentence with invalid length:', sentence.sentence);
+        logger.warn({ sentence: sentence.sentence }, 'Skipping sentence with invalid length');
         return false;
       }
 
       // Check translation length
       if (sentence.translation.trim().length === 0 || sentence.translation.length > 300) {
-        console.warn('Skipping sentence with invalid translation length:', sentence.translation);
+        logger.warn({ translation: sentence.translation }, 'Skipping sentence with invalid translation length');
         return false;
       }
 

@@ -6,6 +6,7 @@ import { GeneratedWord, GeneratedSentence } from '../../shared/types/core.js';
 import { LLMConfig, LLMError } from '../../shared/types/llm.js';
 import { LLM_CONFIG } from '../../shared/constants/index.js';
 import { ensureError } from '../../shared/utils/error.js';
+import { getLogger } from '../utils/logger.js';
 import {
   WordGenerationResponseSchema,
   SentenceGenerationResponseSchema,
@@ -87,7 +88,8 @@ export abstract class BaseLLMClient {
       const parseResult = WordGenerationResponseSchema.safeParse(response);
 
       if (!parseResult.success) {
-        console.error('Validation failed:', parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '));
+        const logger = getLogger();
+        logger.error({ issues: parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) }, 'Validation failed');
         throw new Error(`Invalid response format: ${parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')}`);
       }
 
@@ -103,7 +105,8 @@ export abstract class BaseLLMClient {
         !existingWordsSet.has(word.word.toLowerCase())
       );
 
-      console.log(`Generated ${uniqueWords.length} unique words, ${newWords.length} are new (${uniqueWords.length - newWords.length} duplicates filtered)`);
+      const logger = getLogger();
+      logger.info({ uniqueWords: uniqueWords.length, newWords: newWords.length, duplicates: uniqueWords.length - newWords.length }, `Generated ${uniqueWords.length} unique words, ${newWords.length} are new (${uniqueWords.length - newWords.length} duplicates filtered)`);
 
       // If we got significantly fewer new words than requested, throw an error to trigger retry.
       const minWords = Math.max(1, Math.floor(count * LLM_CONFIG.MIN_WORD_COUNT_THRESHOLD));
@@ -143,7 +146,8 @@ export abstract class BaseLLMClient {
       const parseResult = SentenceGenerationResponseSchema.safeParse(response);
 
       if (!parseResult.success) {
-        console.error('Sentence validation failed:', parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '));
+        const logger = getLogger();
+        logger.error({ issues: parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) }, 'Sentence validation failed');
         throw new Error(`Invalid response format: ${parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')}`);
       }
 
@@ -177,7 +181,8 @@ export abstract class BaseLLMClient {
       const parseResult = ContextSentenceResponseSchema.safeParse(response);
 
       if (!parseResult.success) {
-        console.warn('Context sentence validation failed:', parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '));
+        const logger = getLogger();
+        logger.warn({ issues: parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) }, 'Context sentence validation failed');
         return {};
       }
 
@@ -192,11 +197,13 @@ export abstract class BaseLLMClient {
       };
     } catch (error) {
       if (error instanceof z.ZodError) {
-        console.warn('Context sentence generation validation failed, returning empty context:', error);
+        const logger = getLogger();
+        logger.warn({ error }, 'Context sentence generation validation failed, returning empty context');
         return {};
       }
       // On any error, return empty context instead of throwing
-      console.warn('Context sentence generation failed, returning empty context:', error);
+      const logger = getLogger();
+      logger.warn({ error }, 'Context sentence generation failed, returning empty context');
       return {};
     }
   }
@@ -206,14 +213,16 @@ export abstract class BaseLLMClient {
    */
   protected async getExistingWords(language: string, topic?: string, limit?: number): Promise<string[]> {
     if (!this.databaseLayer) {
-      console.warn('Database layer not set, cannot check for duplicates');
+      const logger = getLogger();
+      logger.warn('Database layer not set, cannot check for duplicates');
       return [];
     }
 
     try {
       return await this.databaseLayer.getExistingWordsForDuplicateChecking(language, topic, limit);
     } catch (error) {
-      console.error('Failed to get existing words for duplicate checking:', error);
+      const logger = getLogger();
+      logger.error({ error }, 'Failed to get existing words for duplicate checking');
       return [];
     }
   }
@@ -223,14 +232,16 @@ export abstract class BaseLLMClient {
    */
   protected async getKnownWords(language: string): Promise<string[]> {
     if (!this.databaseLayer) {
-      console.warn('Database layer not set, cannot get known words');
+      const logger = getLogger();
+      logger.warn('Database layer not set, cannot get known words');
       return [];
     }
 
     try {
       return await this.databaseLayer.getKnownWordsForSentenceGeneration(language, 50);
     } catch (error) {
-      console.error('Failed to get known words for sentence generation:', error);
+      const logger = getLogger();
+      logger.error({ error }, 'Failed to get known words for sentence generation');
       return [];
     }
   }
@@ -446,7 +457,8 @@ Rules:
       const parseResult = DialogueVariantResponseSchema.safeParse(response);
 
       if (!parseResult.success) {
-        console.error('Dialogue variant validation failed:', parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '));
+        const logger = getLogger();
+        logger.error({ issues: parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) }, 'Dialogue variant validation failed');
         throw new Error(`Invalid response format: ${parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')}`);
       }
 
@@ -533,7 +545,8 @@ ${knownWords.length > 0 ? '7. Prefer using words from the provided list when pos
       const parseResult = FollowUpResponseSchema.safeParse(response);
 
       if (!parseResult.success) {
-        console.warn('Follow-up validation failed:', parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '));
+        const logger = getLogger();
+        logger.warn({ issues: parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) }, 'Follow-up validation failed');
         // Return empty object on validation failure instead of throwing
         return { text: '', translation: '' };
       }
@@ -542,11 +555,13 @@ ${knownWords.length > 0 ? '7. Prefer using words from the provided list when pos
       return parseResult.data;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        console.warn('Follow-up generation validation failed, returning empty result:', error);
+        const logger = getLogger();
+        logger.warn({ error }, 'Follow-up generation validation failed, returning empty result');
         return { text: '', translation: '' };
       }
       // On any error, return empty result instead of throwing
-      console.warn('Follow-up generation failed, returning empty result:', error);
+      const logger = getLogger();
+      logger.warn({ error }, 'Follow-up generation failed, returning empty result');
       return { text: '', translation: '' };
     }
   }

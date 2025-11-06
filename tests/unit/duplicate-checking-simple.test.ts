@@ -6,8 +6,24 @@ import { OllamaClient } from '../../dist/main/main/llm/ollama-client.js';
 
 describe('Duplicate Checking Simple Integration', () => {
   let ollamaClient: OllamaClient;
+  let loggerSpy: any;
 
   beforeEach(() => {
+    // Spy on the logger
+    try {
+      const { getLogger } = require('../../dist/main/main/utils/logger');
+      const logger = getLogger();
+      loggerSpy = {
+        warn: jest.spyOn(logger, 'warn').mockImplementation(() => {}),
+        error: jest.spyOn(logger, 'error').mockImplementation(() => {})
+      };
+    } catch (e) {
+      loggerSpy = {
+        warn: jest.fn(),
+        error: jest.fn()
+      };
+    }
+
     ollamaClient = new OllamaClient({
       baseUrl: 'http://localhost:11434',
       model: 'test-model',
@@ -41,15 +57,13 @@ describe('Duplicate Checking Simple Integration', () => {
       global.fetch = mockFetch;
 
       // Should work without database layer
-      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      loggerSpy.warn.mockClear();
       
       const result = await ollamaClient.generateTopicWords('test', 'Spanish', 1);
       
       expect(result).toHaveLength(1);
       expect(result[0].word).toBe('test');
-      expect(consoleSpy).toHaveBeenCalledWith('Database layer not set, cannot check for duplicates');
-      
-      consoleSpy.mockRestore();
+      expect(loggerSpy.warn).toHaveBeenCalledWith('Database layer not set, cannot check for duplicates');
     });
 
     it('should use database layer when available', async () => {
@@ -103,19 +117,17 @@ describe('Duplicate Checking Simple Integration', () => {
 
       global.fetch = mockFetch;
 
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      loggerSpy.error.mockClear();
       
       // Should still work despite database error
       const result = await ollamaClient.generateTopicWords('test', 'Spanish', 1);
       
       expect(result).toHaveLength(1);
       expect(result[0].word).toBe('test');
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'Failed to get existing words for duplicate checking:',
-        expect.any(Error)
+      expect(loggerSpy.error).toHaveBeenCalledWith(
+        { error: expect.any(Error) },
+        'Failed to get existing words for duplicate checking'
       );
-      
-      consoleSpy.mockRestore();
     });
   });
 

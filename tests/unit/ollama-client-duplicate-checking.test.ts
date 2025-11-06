@@ -15,10 +15,27 @@ describe('OllamaClient Duplicate Checking', () => {
   let ollamaClient: OllamaClient;
   let mockDatabaseLayer: MockDatabaseLayer;
   let mockFetch: jest.MockedFunction<typeof fetch>;
+  let loggerSpy: any;
 
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
+    
+    // Spy on the logger - get the actual logger and spy on its methods
+    try {
+      const { getLogger } = require('../../dist/main/main/utils/logger');
+      const logger = getLogger();
+      loggerSpy = {
+        warn: jest.spyOn(logger, 'warn').mockImplementation(() => {}),
+        error: jest.spyOn(logger, 'error').mockImplementation(() => {})
+      };
+    } catch (e) {
+      // If logger not available, create a no-op spy
+      loggerSpy = {
+        warn: jest.fn(),
+        error: jest.fn()
+      };
+    }
     
     // Mock fetch globally
     mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
@@ -50,15 +67,13 @@ describe('OllamaClient Duplicate Checking', () => {
   describe('getExistingWords', () => {
     it('should return empty array when no database layer is set', async () => {
       // Don't set database layer
-      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      loggerSpy.warn.mockClear();
       
       // Access private method through any cast for testing
       const existingWords = await (ollamaClient as any).getExistingWords('Spanish');
       
       expect(existingWords).toEqual([]);
-      expect(consoleSpy).toHaveBeenCalledWith('Database layer not set, cannot check for duplicates');
-      
-      consoleSpy.mockRestore();
+      expect(loggerSpy.warn).toHaveBeenCalledWith('Database layer not set, cannot check for duplicates');
     });
 
     it('should return words for the specified language', async () => {
@@ -77,14 +92,15 @@ describe('OllamaClient Duplicate Checking', () => {
       mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest.fn().mockRejectedValue(new Error('Database error'));
       ollamaClient.setDatabaseLayer(mockDatabaseLayer);
 
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      loggerSpy.error.mockClear();
       
       const existingWords = await (ollamaClient as any).getExistingWords('Spanish');
       
       expect(existingWords).toEqual([]);
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to get existing words for duplicate checking:', expect.any(Error));
-      
-      consoleSpy.mockRestore();
+      expect(loggerSpy.error).toHaveBeenCalledWith(
+        { error: expect.any(Error) },
+        'Failed to get existing words for duplicate checking'
+      );
     });
   });
 
@@ -218,15 +234,13 @@ describe('OllamaClient Duplicate Checking', () => {
 
     it('should work without database layer (fallback behavior)', async () => {
       // Don't set database layer
-      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      loggerSpy.warn.mockClear();
 
       const result = await ollamaClient.generateTopicWords('food', 'Spanish', 3);
 
       // Should return all generated words since no duplicate checking
       expect(result).toHaveLength(3);
-      expect(consoleSpy).toHaveBeenCalledWith('Database layer not set, cannot check for duplicates');
-      
-      consoleSpy.mockRestore();
+      expect(loggerSpy.warn).toHaveBeenCalledWith('Database layer not set, cannot check for duplicates');
     });
   });
 

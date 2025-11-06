@@ -5,6 +5,7 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { DatabaseLayer } from '../../shared/types/database.js';
+import { getLogger } from '../utils/logger.js';
 
 export interface FrequencyWordManagerConfig {
     wordsDirectory: string;
@@ -36,7 +37,8 @@ export class FrequencyWordManager {
     async initialize(): Promise<void> {
         // Lazy initialization - don't load word lists until they're actually needed
         // This significantly speeds up application startup
-        console.log('Frequency word manager initialized (lazy loading enabled)');
+        const logger = getLogger();
+        logger.info('Frequency word manager initialized (lazy loading enabled)');
     }
 
     /**
@@ -59,7 +61,8 @@ export class FrequencyWordManager {
                 }
             }
         } catch (error) {
-            console.warn('Error scanning for language files:', error);
+            const logger = getLogger();
+            logger.warn({ error }, 'Error scanning for language files');
         }
 
         return languages;
@@ -101,7 +104,8 @@ export class FrequencyWordManager {
             }
 
             const withTranslations = wordEntries.filter(entry => entry.translation !== null).length;
-            console.log(`Loaded ${wordEntries.length} words for ${language} (${withTranslations} with translations)`);
+            const logger = getLogger();
+            logger.info({ language, totalWords: wordEntries.length, withTranslations }, `Loaded ${wordEntries.length} words for ${language} (${withTranslations} with translations)`);
         } catch (error) {
             throw new Error(`Failed to load word list for ${language}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
@@ -159,7 +163,8 @@ export class FrequencyWordManager {
         const startPosition = Math.max(currentPosition, minPositionForProficiency);
         
         if (minPositionForProficiency > 0 && startPosition === minPositionForProficiency) {
-            console.log(`Starting at position ${startPosition} for proficiency level ${proficiencyLevel} (skipping top ${minPositionForProficiency} words)`);
+            const logger = getLogger();
+            logger.info({ startPosition, proficiencyLevel, minPositionForProficiency }, `Starting at position ${startPosition} for proficiency level ${proficiencyLevel} (skipping top ${minPositionForProficiency} words)`);
         }
 
         const nextWords: WordEntry[] = [];
@@ -214,9 +219,11 @@ export class FrequencyWordManager {
             const currentPosition = this.wordPositions.get(language) || 0;
             this.wordPositions.set(language, Math.max(currentPosition, maxPosition));
 
-            console.log(`Updated position for ${language}: ${this.wordPositions.get(language)}/${wordList.length}`);
+            const logger = getLogger();
+            logger.info({ language, position: this.wordPositions.get(language), totalWords: wordList.length }, `Updated position for ${language}: ${this.wordPositions.get(language)}/${wordList.length}`);
         } catch (error) {
-            console.warn(`Failed to update position from database for ${language}:`, error);
+            const logger = getLogger();
+            logger.warn({ error, language }, `Failed to update position from database for ${language}`);
         }
     }
 

@@ -17,6 +17,7 @@ import { LemmatizationService } from './lemmatization/index.js';
 import { ScoringService } from './scoring/index.js';
 import { setupScoringHandlers } from './ipc/ipc-handlers.js';
 import { ServiceManager } from './services/index.js';
+import { initializeLogger, getLogger } from './utils/logger.js';
 
 let mainWindow: BrowserWindow;
 let databaseLayer: SQLiteDatabaseLayer | undefined;
@@ -34,13 +35,14 @@ let serviceManager: ServiceManager | undefined;
 const forceLocalServices = process.env.E2E_FORCE_LOCAL_SERVICES === '1';
 
 async function initializeServices(): Promise<void> {
+  const logger = getLogger();
   try {
     // Initialize database layer first
     databaseLayer = createDatabase();
 
     // Initialize database
     await databaseLayer.initialize();
-    console.log('Database initialized successfully');
+    logger.info('Database initialized successfully');
 
     // Initialize lifecycle manager with database reference
     lifecycleManager = new LifecycleManager({
@@ -52,11 +54,12 @@ async function initializeServices(): Promise<void> {
     // Defer lifecycle startup procedures to background - don't block app startup
     // These checks (backup recovery, cleanup) can run after the UI is shown
     setImmediate(async () => {
+      const logger = getLogger();
       try {
         await lifecycleManager!.handleStartup();
-        console.log('Lifecycle manager initialized successfully');
+        logger.info('Lifecycle manager initialized successfully');
       } catch (error) {
-        console.warn('Lifecycle manager initialization failed (non-critical):', error);
+        logger.warn({ error }, 'Lifecycle manager initialization failed (non-critical)');
       }
     });
 
@@ -69,11 +72,12 @@ async function initializeServices(): Promise<void> {
 
     // Initialize update manager in background (non-blocking)
     setImmediate(async () => {
+      const logger = getLogger();
       try {
         await updateManager!.initialize();
         await updateManager!.checkUpdateReminders();
       } catch (error) {
-        console.warn('Update manager initialization failed (non-critical):', error);
+        logger.warn({ error }, 'Update manager initialization failed (non-critical)');
       }
     });
 
@@ -86,13 +90,13 @@ async function initializeServices(): Promise<void> {
           initialProvider = storedProvider as LLMProvider;
         }
       } catch (e) {
-        console.warn('Could not read llm_provider setting, defaulting to ollama');
+        logger.warn('Could not read llm_provider setting, defaulting to ollama');
       }
     } else {
       try {
         await databaseLayer.setSetting('llm_provider', 'ollama');
       } catch (e) {
-        console.warn('Failed to persist forced ollama provider for tests:', e);
+        logger.warn({ error: e }, 'Failed to persist forced ollama provider for tests');
       }
     }
 
@@ -103,7 +107,7 @@ async function initializeServices(): Promise<void> {
         const storedKey = await databaseLayer.getSetting('gemini_api_key');
         geminiApiKey = storedKey || '';
       } catch (e) {
-        console.warn('Could not read gemini_api_key setting');
+        logger.warn('Could not read gemini_api_key setting');
       }
     }
 
@@ -133,7 +137,7 @@ async function initializeServices(): Promise<void> {
     lemmatizationService = new LemmatizationService({
       serverUrl: process.env.LEMMATIZATION_SERVER_URL || 'http://127.0.0.1:8888'
     });
-    console.log('Lemmatization service initialized successfully');
+    logger.info('Lemmatization service initialized successfully');
     
     // Initialize content generator with LLM client and provider config
     contentGenerator = new ContentGenerator(llmClient, {
@@ -152,7 +156,7 @@ async function initializeServices(): Promise<void> {
 
     // Initialize SRS service
     srsService = new SRSService(databaseLayer);
-    console.log('SRS service initialized successfully');
+    logger.info('SRS service initialized successfully');
 
     wordGenerationRunner = new WordGenerationRunner({
       database: databaseLayer,
@@ -170,9 +174,9 @@ async function initializeServices(): Promise<void> {
     // Initialize scoring service
     scoringService = new ScoringService(databaseLayer);
 
-    console.log('All services initialized successfully');
+    logger.info('All services initialized successfully');
   } catch (error) {
-    console.error('Failed to initialize services:', error);
+    logger.error({ error }, 'Failed to initialize services');
     throw error;
   }
 }
@@ -207,7 +211,8 @@ async function setupSecurity(): Promise<void> {
     }
 
     // Block all other external requests
-    console.warn('Blocked external request:', details.url);
+    const logger = getLogger();
+    logger.warn({ url: details.url }, 'Blocked external request');
     callback({ cancel: true });
   });
 
@@ -216,29 +221,31 @@ async function setupSecurity(): Promise<void> {
     try {
       const microphoneAccess = systemPreferences.getMediaAccessStatus('microphone');
       
+      const logger = getLogger();
       if (microphoneAccess === 'not-determined') {
-        console.log('Requesting microphone access...');
+        logger.info('Requesting microphone access...');
         const granted = await systemPreferences.askForMediaAccess('microphone');
         if (granted) {
-          console.log('Microphone access granted');
+          logger.info('Microphone access granted');
         } else {
-          console.warn('Microphone access denied');
+          logger.warn('Microphone access denied');
         }
       } else if (microphoneAccess === 'granted') {
-        console.log('Microphone access already granted');
+        logger.info('Microphone access already granted');
       } else {
-        console.warn('Microphone access denied');
+        logger.warn('Microphone access denied');
       }
     } catch (error) {
-      console.warn('Could not request microphone permissions:', error);
+      const logger = getLogger();
+      logger.warn({ error }, 'Could not request microphone permissions');
     }
   }
 }
 
 function createWindow(): void {
+  const logger = getLogger();
   const preloadPath = path.join(__dirname, '../preload/preload.js');
-  console.log('Preload script path:', preloadPath);
-  console.log('Preload script exists:', require('fs').existsSync(preloadPath));
+  logger.debug({ preloadPath, exists: require('fs').existsSync(preloadPath) }, 'Preload script path');
   
   // Create the browser window with enhanced security
   mainWindow = new BrowserWindow({
@@ -290,6 +297,10 @@ if (process.platform === 'darwin') {
 // This method will be called when Electron has finished initialization
 app.whenReady().then(async () => {
   try {
+    // Initialize logger first - must be done before any other services that might log
+    await initializeLogger();
+    const logger = getLogger();
+    
     // Set up security policies
     await setupSecurity();
 
@@ -312,11 +323,11 @@ app.whenReady().then(async () => {
 
     // Set up scoring handlers (called separately since scoring service is optional during IPC setup)
     if (scoringService) {
-      console.log('Setting up scoring handlers...');
+      logger.info('Setting up scoring handlers...');
       setupScoringHandlers(scoringService);
-      console.log('Scoring handlers setup complete');
+      logger.info('Scoring handlers setup complete');
     } else {
-      console.warn('Warning: scoringService is undefined, scoring handlers not registered');
+      logger.warn('Warning: scoringService is undefined, scoring handlers not registered');
     }
 
     wordGenerationRunner?.start();
@@ -332,7 +343,7 @@ app.whenReady().then(async () => {
       originalSwitchProvider(provider, geminiApiKey);
       llmClient = contentGenerator!.getCurrentClient();
     };
-    console.log('IPC handlers initialized successfully');
+    logger.info('IPC handlers initialized successfully');
 
     app.on('activate', async () => {
       // On macOS it's common to re-create a window in the app when the
@@ -342,7 +353,8 @@ app.whenReady().then(async () => {
       }
     });
   } catch (error) {
-    console.error('Failed to initialize application:', error);
+    const logger = getLogger();
+    logger.error({ error }, 'Failed to initialize application');
     app.quit();
   }
 });
@@ -381,7 +393,8 @@ app.on('before-quit', async (event) => {
             await audioService.stopRecording();
           }
         } catch (error) {
-          console.warn('Error stopping recording during before-quit:', error);
+          const logger = getLogger();
+          logger.warn({ error }, 'Error stopping recording during before-quit');
         }
       }
 
@@ -403,7 +416,8 @@ app.on('before-quit', async (event) => {
 
       app.quit();
     } catch (error) {
-      console.error('Error during cleanup:', error);
+      const logger = getLogger();
+      logger.error({ error }, 'Error during cleanup');
       app.quit();
     }
   }
@@ -413,17 +427,19 @@ app.on('before-quit', async (event) => {
 app.on('web-contents-created', (event, contents) => {
   contents.setWindowOpenHandler(({ url }) => {
     // Prevent opening new windows
-    console.warn('Blocked attempt to open new window:', url);
+    const logger = getLogger();
+    logger.warn({ url }, 'Blocked attempt to open new window');
     return { action: 'deny' };
   });
 
   // Prevent navigation to external URLs
   contents.on('will-navigate', (event, navigationUrl) => {
     const parsedUrl = new URL(navigationUrl);
+    const logger = getLogger();
 
     // Only allow navigation within the app
     if (parsedUrl.origin !== 'file://') {
-      console.warn('Blocked navigation to external URL:', navigationUrl);
+      logger.warn({ navigationUrl }, 'Blocked navigation to external URL');
       event.preventDefault();
     }
   });

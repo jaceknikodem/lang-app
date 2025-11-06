@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import { IpcMainInvokeEvent } from 'electron';
 import { getErrorMessage, wrapError } from '../../shared/utils/error.js';
+import { getLogger } from '../utils/logger.js';
 
 type HandlerFunction<TInput extends any[], TOutput> = (...args: TInput) => Promise<TOutput> | TOutput;
 
@@ -64,7 +65,8 @@ export function createIPCHandler<
       return await handler(...(validatedArgs as TInput));
     } catch (error) {
       const errorMessage = errorContext || 'operation';
-      console.error(`Error ${errorMessage}:`, error);
+      const logger = getLogger();
+      logger.error({ error }, `Error ${errorMessage}`);
       
       // For Zod validation errors, provide more detail
       if (error instanceof z.ZodError) {

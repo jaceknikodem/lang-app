@@ -2,6 +2,10 @@
  * Shared helpers for working with sentences.
  */
 
+// Note: This is a shared utility that may be used in both main and renderer processes
+// We use console.warn here as a fallback since logger may not be available in all contexts
+// In test environments, this is acceptable
+
 const SPLIT_REGEX = /(\s+|[.,!?;:])/;
 
 /**

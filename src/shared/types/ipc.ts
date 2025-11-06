@@ -231,6 +231,11 @@ export interface IPCBridge {
       rankedModes: Array<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'>;
     }>;
   };
+
+  // Logging operations
+  log: {
+    log: (level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal', message: string, data?: any) => Promise<void>;
+  };
 }
 
 // IPC channel names
@@ -369,5 +374,8 @@ export const IPC_CHANNELS = {
   },
   SCORING: {
     GET_NEXT_MODE: 'scoring:getNextMode'
+  },
+  LOG: {
+    LOG: 'log:log'
   }
 } as const;

@@ -92,10 +92,15 @@ export function setupIPCHandlers(
   // Flow handlers
   setupFlowHandlers(databaseLayer, audioService);
 
+  // Log handlers
+  setupLogHandlers();
+
   // Scoring handlers (if scoringService is provided, will be added in main.ts)
   // setupScoringHandlers is called separately after scoring service initialization
 
-  console.log('IPC handlers registered successfully');
+  const { getLogger } = require('../utils/logger.js');
+  const logger = getLogger();
+  logger.info('IPC handlers registered successfully');
 }
 
 /**
@@ -1809,6 +1814,34 @@ function setupFlowHandlers(
 }
 
 /**
+ * Set up Log-related IPC handlers
+ */
+function setupLogHandlers(): void {
+  const { getLogger } = require('../utils/logger.js');
+  const logger = getLogger();
+
+  ipcMain.handle(IPC_CHANNELS.LOG.LOG, async (event, level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal', message: string, data?: any) => {
+    try {
+      // Validate level
+      const validLevels = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
+      if (!validLevels.includes(level)) {
+        throw new Error(`Invalid log level: ${level}`);
+      }
+
+      // Log with appropriate level
+      if (data) {
+        logger[level]({ ...data, process: 'renderer' }, message);
+      } else {
+        logger[level]({ process: 'renderer' }, message);
+      }
+    } catch (error) {
+      // Fallback to console if logger is not available
+      console.error('Error logging from renderer:', error);
+    }
+  });
+}
+
+/**
  * Set up Scoring-related IPC handlers
  */
 export function setupScoringHandlers(scoringService: import('../scoring/scoring-service.js').ScoringService): void {
@@ -1835,10 +1868,14 @@ export function setupScoringHandlers(scoringService: import('../scoring/scoring-
       
       return result;
     } catch (error) {
-      console.error('Error getting next mode:', error);
+      const { getLogger } = require('../utils/logger.js');
+      const logger = getLogger();
+      logger.error({ error }, 'Error getting next mode');
       throw new Error(`Failed to get next mode: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
   
-  console.log(`Scoring IPC handler registered: ${IPC_CHANNELS.SCORING.GET_NEXT_MODE}`);
+  const { getLogger } = require('../utils/logger.js');
+  const logger = getLogger();
+  logger.info({ channel: IPC_CHANNELS.SCORING.GET_NEXT_MODE }, 'Scoring IPC handler registered');
 }

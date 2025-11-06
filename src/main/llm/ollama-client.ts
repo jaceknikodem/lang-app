@@ -7,6 +7,7 @@ import { LLM_CONFIG } from '../../shared/constants/index.js';
 import { cleanLLMResponse } from './utils.js';
 import { BaseLLMClient } from './base-llm-client.js';
 import { ensureError } from '../../shared/utils/error.js';
+import { getLogger } from '../utils/logger.js';
 import { z } from 'zod';
 
 interface OllamaRequest {
@@ -70,7 +71,8 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
 
       return data.models.map((model: any) => model.name || '').filter(Boolean);
     } catch (error) {
-      console.error('Error fetching available models:', error);
+      const logger = getLogger();
+      logger.error({ error }, 'Error fetching available models');
       return [];
     }
   }
@@ -176,7 +178,8 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
 
           // Use exponential backoff for other errors (handled by minTimeout/maxTimeout/factor)
           const backoffSeconds = Math.pow(2, error.attemptNumber - 1);
-          console.log(`Attempt ${error.attemptNumber} failed, retrying in ${backoffSeconds}s...`);
+          const logger = getLogger();
+          logger.info({ attemptNumber: error.attemptNumber, retryDelay: backoffSeconds }, `Attempt ${error.attemptNumber} failed, retrying in ${backoffSeconds}s...`);
         },
         minTimeout: 1000, // 1 second minimum
         maxTimeout: 120000, // 2 minutes maximum

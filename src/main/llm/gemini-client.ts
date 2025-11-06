@@ -8,6 +8,7 @@ import { LLM_CONFIG } from '../../shared/constants/index.js';
 import { cleanLLMResponse } from './utils.js';
 import { BaseLLMClient } from './base-llm-client.js';
 import { ensureError } from '../../shared/utils/error.js';
+import { getLogger } from '../utils/logger.js';
 import { z } from 'zod';
 
 
@@ -61,8 +62,9 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
   }
 
   async isAvailable(): Promise<boolean> {
+    const logger = getLogger();
     if (!this.apiKey || this.apiKey.trim() === '') {
-      console.warn('[GeminiClient] API key is empty or not set');
+      logger.warn('[GeminiClient] API key is empty or not set');
       return false;
     }
     
@@ -90,12 +92,11 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
           // Not JSON, use the text as-is
         }
         
-        console.warn(`[GeminiClient] Availability check failed: HTTP ${response.status} ${response.statusText}`);
-        console.warn(`[GeminiClient] Error details:`, errorMessage);
+        logger.warn({ status: response.status, statusText: response.statusText, errorMessage }, '[GeminiClient] Availability check failed');
         
         // If it's a 403 or 400, it might be a regional/billing issue
         if (response.status === 403 || response.status === 400) {
-          console.warn(`[GeminiClient] This might be a regional restriction or billing issue. Check your Google Cloud Console settings.`);
+          logger.warn('[GeminiClient] This might be a regional restriction or billing issue. Check your Google Cloud Console settings.');
         }
         
         return false;
@@ -104,11 +105,11 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
       return true;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.warn(`[GeminiClient] Availability check error:`, errorMessage);
+      logger.warn({ error, errorMessage }, '[GeminiClient] Availability check error');
       
       // If it's a timeout, log that specifically
       if (error instanceof Error && (error.name === 'TimeoutError' || error.message.includes('timeout'))) {
-        console.warn(`[GeminiClient] Request timed out. This might indicate network issues or the API is slow to respond.`);
+        logger.warn('[GeminiClient] Request timed out. This might indicate network issues or the API is slow to respond.');
       }
       
       return false;
@@ -130,9 +131,9 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
    * Helper method to log validation errors with a specific prefix
    */
   private logValidationError(error: unknown, prefix: string): void {
+    const logger = getLogger();
     if (error instanceof Error && error.message.includes('Invalid response format')) {
-      console.error(`=== ${prefix} ===`);
-      console.error('Error:', error.message);
+      logger.error({ error, prefix }, 'Validation error');
     }
   }
 
@@ -351,7 +352,8 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         try {
           parsed = JSON.parse(cleanResponse);
         } catch (parseError) {
-          console.error('JSON parsing failed for response:', cleanResponse);
+          const logger = getLogger();
+          logger.error({ parseError, cleanResponse }, 'JSON parsing failed for response');
           throw new Error(`Invalid JSON response: ${cleanResponse}...`);
         }
 
@@ -380,12 +382,14 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
 
               // Use the extracted retry delay from the API
               const seconds = Math.ceil(retryDelayMs / 1000);
-              console.log(`Attempt ${error.attemptNumber} failed with HTTP 429, retrying in ${seconds}s (as specified by API)...`);
+              const logger = getLogger();
+              logger.info({ attemptNumber: error.attemptNumber, retryDelay: seconds }, `Attempt ${error.attemptNumber} failed with HTTP 429, retrying in ${seconds}s (as specified by API)...`);
               await new Promise(resolve => setTimeout(resolve, retryDelayMs));
             } else {
               // Use exponential backoff for other errors (handled by minTimeout/maxTimeout/factor)
               const backoffSeconds = Math.pow(2, error.attemptNumber - 1);
-              console.log(`Attempt ${error.attemptNumber} failed, retrying in ${backoffSeconds}s...`);
+              const logger = getLogger();
+              logger.info({ attemptNumber: error.attemptNumber, retryDelay: backoffSeconds }, `Attempt ${error.attemptNumber} failed, retrying in ${backoffSeconds}s...`);
             }
           }
         },

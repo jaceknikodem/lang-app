@@ -6,6 +6,7 @@ import Database from 'better-sqlite3';
 import { DatabaseConfig } from '../../shared/types/database.js';
 import path from 'path';
 import fs from 'fs';
+import { getLogger } from '../utils/logger.js';
 
 export class DatabaseConnection {
   private db: Database.Database | null = null;
@@ -31,9 +32,15 @@ export class DatabaseConnection {
       }
 
       // Create database connection
+      const logger = getLogger();
       this.db = new Database(this.config.databasePath, {
         timeout: this.config.timeout || 5000,
-        verbose: process.env.NODE_ENV === 'development' ? console.log : undefined
+        verbose: process.env.NODE_ENV === 'development' 
+          ? (message?: unknown, ...additionalArgs: unknown[]) => {
+              const sql = typeof message === 'string' ? message : String(message);
+              logger.debug({ sql, additionalArgs }, 'SQL query');
+            }
+          : undefined
       });
 
       // Configure database settings

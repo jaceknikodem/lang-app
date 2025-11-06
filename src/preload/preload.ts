@@ -5,7 +5,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from '../shared/types/ipc.js';
 
-console.log('Preload script loaded!');
+// Preload script loaded - logger will be initialized in main process
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -331,6 +331,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     scoring: {
       getNextMode: (options: { currentMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null; language: string | null; initialTakeover: boolean }) =>
         ipcRenderer.invoke(IPC_CHANNELS.SCORING.GET_NEXT_MODE, options)
+    },
+
+    // Logging operations
+    log: {
+      log: (level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal', message: string, data?: any) =>
+        ipcRenderer.invoke(IPC_CHANNELS.LOG.LOG, level, message, data)
     }
   });
 
