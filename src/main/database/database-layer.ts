@@ -5,6 +5,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import { promises as fsPromises } from 'fs';
+import { addDays, subHours, addMilliseconds, differenceInDays, endOfDay } from 'date-fns';
 import { DatabaseLayer, DatabaseConfig, JobWordInfo, WordGenerationJob, WordGenerationJobStatus, WordProcessingStatus } from '../../shared/types/database.js';
 import { Word, Sentence, StudyStats, CreateWordRequest, DictionaryEntry, DialogueVariant } from '../../shared/types/core.js';
 import { DatabaseConnection } from './connection.js';
@@ -303,8 +304,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     
     try {
       // Initialize SRS values for new word
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrow = addDays(new Date(), 1);
       
       const stmt = db.prepare(`
         INSERT INTO words (
@@ -1557,8 +1557,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const now = new Date();
       const nowIso = now.toISOString();
       // Exclude words reviewed/studied within the last 24 hours
-      const minHoursSinceReview = 24;
-      const cutoffTime = new Date(now.getTime() - minHoursSinceReview * 60 * 60 * 1000);
+      const cutoffTime = subHours(now, 24);
       const cutoffTimeIso = cutoffTime.toISOString();
       
       const stmt = db.prepare(`
@@ -2134,7 +2133,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
   async rescheduleWordGenerationJob(jobId: number, delayMs: number, lastError?: string): Promise<void> {
     const db = this.getDb();
-    const nextAttempt = new Date(Date.now() + delayMs).toISOString();
+    const nextAttempt = addMilliseconds(new Date(), delayMs).toISOString();
 
     try {
       const stmt = db.prepare(`
@@ -2337,9 +2336,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       // Sort by SRS priority (overdue first, then by strength)
       const sortedWords = words.sort((a, b) => {
-        const nowTime = new Date().getTime();
-        const aDaysOverdue = Math.max(0, Math.floor((nowTime - a.nextDue.getTime()) / (1000 * 60 * 60 * 24)));
-        const bDaysOverdue = Math.max(0, Math.floor((nowTime - b.nextDue.getTime()) / (1000 * 60 * 60 * 24)));
+        const now = new Date();
+        const aDaysOverdue = Math.max(0, differenceInDays(now, a.nextDue));
+        const bDaysOverdue = Math.max(0, differenceInDays(now, b.nextDue));
         
         // First sort by overdue status
         if (aDaysOverdue !== bDaysOverdue) {
@@ -2371,9 +2370,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     try {
       const currentLanguage = language || await this.getCurrentLanguage();
       const now = new Date().toISOString();
-      const today = new Date();
-      today.setHours(23, 59, 59, 999); // End of today
-      const todayStr = today.toISOString();
+      const todayStr = endOfDay(new Date()).toISOString();
       
       const stmt = db.prepare(`
         SELECT 
@@ -2984,8 +2981,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     
     try {
       // Calculate tomorrow's date for next_due
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrow = addDays(new Date(), 1);
       const tomorrowIso = tomorrow.toISOString();
 
       // Delete words that were marked as known or ignored for this language

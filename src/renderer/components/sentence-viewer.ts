@@ -4,6 +4,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
+import { formatDistanceToNow } from 'date-fns';
 import { sharedStyles } from '../styles/shared.js';
 import { Word, Sentence, DictionaryEntry, PrecomputedToken } from '../../shared/types/core.js';
 import { splitSentenceIntoParts } from '../../shared/utils/sentence.js';
@@ -1073,23 +1074,7 @@ export class SentenceViewer extends LitElement {
     if (!date) {
       return 'never';
     }
-    const now = Date.now();
-    const diffMs = now - date.getTime();
-    const sec = Math.floor(diffMs / 1000);
-    if (sec < 10) return 'just now';
-    if (sec < 60) return `${sec} second${sec === 1 ? '' : 's'} ago`;
-    const min = Math.floor(sec / 60);
-    if (min < 60) return `${min} minute${min === 1 ? '' : 's'} ago`;
-    const hr = Math.floor(min / 60);
-    if (hr < 24) return `${hr} hour${hr === 1 ? '' : 's'} ago`;
-    const day = Math.floor(hr / 24);
-    if (day < 7) return `${day} day${day === 1 ? '' : 's'} ago`;
-    const week = Math.floor(day / 7);
-    if (week < 5) return `${week} week${week === 1 ? '' : 's'} ago`;
-    const month = Math.floor(day / 30);
-    if (month < 12) return `${month} month${month === 1 ? '' : 's'} ago`;
-    const year = Math.floor(day / 365);
-    return `${year} year${year === 1 ? '' : 's'} ago`;
+    return formatDistanceToNow(date, { addSuffix: true });
   }
 
   // Allows async tokenization pipelines to push pre-processed words into the view.

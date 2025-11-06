@@ -6,6 +6,7 @@
 import { app, dialog } from 'electron';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { subDays } from 'date-fns';
 import { SQLiteDatabaseLayer } from '../database/database-layer.js';
 
 export interface LifecycleConfig {
@@ -248,8 +249,7 @@ export class LifecycleManager {
   private async cleanupOldBackups(): Promise<void> {
     try {
       const backupDir = path.join(this.config.userDataPath, 'backups');
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - this.config.backupRetentionDays);
+      const cutoffDate = subDays(new Date(), this.config.backupRetentionDays);
       
       try {
         const backups = await fs.readdir(backupDir);

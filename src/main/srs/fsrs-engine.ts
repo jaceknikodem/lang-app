@@ -1,8 +1,7 @@
 import { Word } from '../../shared/types/core.js';
 import { SchedulerEngine, SchedulerEngineUpdate } from './engine.js';
 import { SRSReviewResult } from './srs-algorithm.js';
-
-const MS_IN_DAY = 1000 * 60 * 60 * 24;
+import { differenceInDays, addDays } from 'date-fns';
 const DEFAULT_DIFFICULTY = 5;
 const DEFAULT_STABILITY = 1;
 const MAX_DIFFICULTY = 10;
@@ -34,15 +33,14 @@ function diffInDays(start: Date | undefined, end: Date): number {
   if (!start) {
     return 0;
   }
-  return Math.max(0, (end.getTime() - start.getTime()) / MS_IN_DAY);
+  return Math.max(0, differenceInDays(end, start));
 }
 
 export class FsrsEngine implements SchedulerEngine {
   readonly name = 'fsrs' as const;
 
   initialize(now: Date): SchedulerEngineUpdate {
-    const nextDue = new Date(now);
-    nextDue.setDate(now.getDate() + 1);
+    const nextDue = addDays(now, 1);
 
     return {
       nextDue,
@@ -98,8 +96,7 @@ export class FsrsEngine implements SchedulerEngine {
 
     const intervalWithFuzz = this.applyIntervalFuzz(scheduledIntervalDays, recall);
 
-    const nextDue = new Date(now);
-    nextDue.setDate(now.getDate() + intervalWithFuzz);
+    const nextDue = addDays(now, intervalWithFuzz);
 
     const previousStrength = word.strength ?? 20;
     const strengthDelta = STRENGTH_DELTA[recall];
@@ -138,7 +135,7 @@ export class FsrsEngine implements SchedulerEngine {
   private computePriorityScore(word: Word, now: Date): number {
     const stability = Math.max(word.fsrsStability ?? DEFAULT_STABILITY, 0.1);
     const difficulty = word.fsrsDifficulty ?? DEFAULT_DIFFICULTY;
-    const overdueDays = (now.getTime() - word.nextDue.getTime()) / MS_IN_DAY;
+    const overdueDays = differenceInDays(now, word.nextDue);
     const elapsedSinceReview = diffInDays(word.lastReview ?? word.lastStudied, now);
     const retrievability = Math.exp(-elapsedSinceReview / stability);
     const dueBonus = overdueDays > 0 ? overdueDays + 1 : 0;
