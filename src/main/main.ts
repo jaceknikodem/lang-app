@@ -15,8 +15,8 @@ import { serviceConfig, testingConfig, env, appConfig } from '../shared/config/i
 import { WordGenerationRunner } from './jobs/word-generation-runner.js';
 import { IPC_CHANNELS } from '../shared/types/ipc.js';
 import { LemmatizationService } from './lemmatization/index.js';
-import { ScoringService } from './scoring/index.js';
-import { setupScoringHandlers } from './ipc/ipc-handlers.js';
+import { ScoringService, ProficiencyService } from './scoring/index.js';
+import { setupScoringHandlers, setupProficiencyHandlers } from './ipc/ipc-handlers.js';
 import { ServiceManager } from './services/index.js';
 import { initializeLogger, getLogger } from './utils/logger.js';
 
@@ -31,6 +31,7 @@ let updateManager: UpdateManager | undefined;
 let wordGenerationRunner: WordGenerationRunner | undefined;
 let lemmatizationService: LemmatizationService | undefined;
 let scoringService: ScoringService | undefined;
+let proficiencyService: ProficiencyService | undefined;
 let serviceManager: ServiceManager | undefined;
 
 const forceLocalServices = testingConfig.e2eForceLocalServices;
@@ -191,6 +192,9 @@ async function initializeServices(): Promise<void> {
 
     // Initialize scoring service
     scoringService = new ScoringService(databaseLayer);
+    
+    // Initialize proficiency service
+    proficiencyService = new ProficiencyService(databaseLayer);
 
     logger.info('All services initialized successfully');
   } catch (error) {
@@ -347,6 +351,15 @@ app.whenReady().then(async () => {
       logger.info('Scoring handlers setup complete');
     } else {
       logger.warn('Warning: scoringService is undefined, scoring handlers not registered');
+    }
+    
+    // Set up proficiency handlers
+    if (proficiencyService) {
+      logger.info('Setting up proficiency handlers...');
+      setupProficiencyHandlers(proficiencyService);
+      logger.info('Proficiency handlers setup complete');
+    } else {
+      logger.warn('Warning: proficiencyService is undefined, proficiency handlers not registered');
     }
 
     wordGenerationRunner?.start();

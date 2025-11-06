@@ -52,6 +52,9 @@ export class AppRoot extends LitElement {
 
   @state()
   private languageStats: Array<{language: string, totalWords: number, studiedWords: number, averagePronunciationScore: number | null, pronunciationAttemptCount: number}> = [];
+  
+  @state()
+  private proficiencyScores: Map<string, number> = new Map();
 
 
   private routerUnsubscribe?: () => void;
@@ -187,6 +190,15 @@ export class AppRoot extends LitElement {
 
       .stat-box.pronunciation .stat-value {
         color: rgba(156, 39, 176, 0.7);
+      }
+
+      .stat-box.proficiency-score {
+        background: rgba(0, 150, 136, 0.1);
+        border-color: rgba(0, 150, 136, 0.3);
+      }
+
+      .stat-box.proficiency-score .stat-value {
+        color: rgba(0, 150, 136, 0.8);
       }
 
       .stat-box.proficiency {
@@ -770,6 +782,18 @@ export class AppRoot extends LitElement {
   private async loadLanguageStats() {
     try {
       this.languageStats = await window.electronAPI.database.getLanguageStats();
+      
+      // Load proficiency scores for all languages
+      const proficiencyMap = new Map<string, number>();
+      for (const langStat of this.languageStats) {
+        try {
+          const proficiency = await window.electronAPI.scoring.getLanguageProficiency(langStat.language);
+          proficiencyMap.set(langStat.language, proficiency);
+        } catch (error) {
+          console.warn(`Failed to get proficiency for ${langStat.language}:`, error);
+        }
+      }
+      this.proficiencyScores = proficiencyMap;
     } catch (error) {
       console.error('Failed to load language stats:', error);
       this.languageStats = [];
@@ -1138,7 +1162,8 @@ export class AppRoot extends LitElement {
                     const currentLangStats = this.languageStats.find(s => s.language === this.languageState.currentLanguage);
                     const pronunciationScore = currentLangStats?.averagePronunciationScore;
                     const pronunciationAttemptCount = currentLangStats?.pronunciationAttemptCount || 0;
-                    const hasStats = this.sessionDataState.wordCategoryStats || (pronunciationScore !== null && pronunciationScore !== undefined);
+                    const proficiencyScore = this.proficiencyScores.get(this.languageState.currentLanguage);
+                    const hasStats = this.sessionDataState.wordCategoryStats || (pronunciationScore !== null && pronunciationScore !== undefined) || (proficiencyScore !== undefined && proficiencyScore !== null);
                     const proficiencyLevelDisplay = this.languageState.currentProficiencyLevel 
                       ? (this.languageState.currentProficiencyLevel === 'newbie' ? 'New' : this.languageState.currentProficiencyLevel.toUpperCase()).substring(0, 3)
                       : null;
@@ -1169,6 +1194,12 @@ export class AppRoot extends LitElement {
                           <div class="stat-box pronunciation">
                             <span class="stat-value">${pronunciationScore.toFixed(1)}/10</span>
                             <div class="tooltip">Average pronunciation score (0-10 scale) based on ${pronunciationAttemptCount} attempt${pronunciationAttemptCount !== 1 ? 's' : ''}</div>
+                          </div>
+                        ` : ''}
+                        ${proficiencyScore !== undefined && proficiencyScore !== null ? html`
+                          <div class="stat-box proficiency-score">
+                            <span class="stat-value">${proficiencyScore.toFixed(0)}/100</span>
+                            <div class="tooltip">Overall proficiency score (0-100) based on pronunciation, audio speed, engagement, word position, and strength</div>
                           </div>
                         ` : ''}
                         ${proficiencyLevelDisplay ? html`

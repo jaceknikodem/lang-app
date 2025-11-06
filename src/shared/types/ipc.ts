@@ -373,7 +373,8 @@ export const IPC_CHANNELS = {
     GET_FILE_STATS: 'flow:getFileStats'
   },
   SCORING: {
-    GET_NEXT_MODE: 'scoring:getNextMode'
+    GET_NEXT_MODE: 'scoring:getNextMode',
+    GET_LANGUAGE_PROFICIENCY: 'scoring:getLanguageProficiency'
   },
   TRACKING: {
     CREATE_SESSION: 'tracking:createSession',

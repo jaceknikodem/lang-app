@@ -1992,3 +1992,37 @@ export function setupScoringHandlers(scoringService: import('../scoring/scoring-
   const logger = getLogger();
   logger.info({ channel: IPC_CHANNELS.SCORING.GET_NEXT_MODE }, 'Scoring IPC handler registered');
 }
+
+/**
+ * Set up Proficiency-related IPC handlers
+ */
+export function setupProficiencyHandlers(proficiencyService: import('../scoring/proficiency-service.js').ProficiencyService): void {
+  ipcMain.handle(IPC_CHANNELS.SCORING.GET_LANGUAGE_PROFICIENCY, async (event, language: string | null, timeWindowDays?: number) => {
+    try {
+      if (language !== null) {
+        const LanguageSchema = z.string().min(1).max(50);
+        LanguageSchema.parse(language);
+      }
+      
+      if (timeWindowDays !== undefined) {
+        z.number().int().min(1).max(365).parse(timeWindowDays);
+      }
+      
+      const proficiency = await proficiencyService.calculateLanguageProficiency(
+        language || '',
+        timeWindowDays
+      );
+      
+      return proficiency;
+    } catch (error) {
+      const { getLogger } = require('../utils/logger.js');
+      const logger = getLogger();
+      logger.error({ error }, 'Error calculating language proficiency');
+      throw new Error(`Failed to calculate language proficiency: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+  
+  const { getLogger } = require('../utils/logger.js');
+  const logger = getLogger();
+  logger.info({ channel: IPC_CHANNELS.SCORING.GET_LANGUAGE_PROFICIENCY }, 'Proficiency IPC handler registered');
+}

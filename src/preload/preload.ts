@@ -330,7 +330,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Scoring operations
     scoring: {
       getNextMode: (options: { currentMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null; language: string | null; initialTakeover: boolean }) =>
-        ipcRenderer.invoke(IPC_CHANNELS.SCORING.GET_NEXT_MODE, options)
+        ipcRenderer.invoke(IPC_CHANNELS.SCORING.GET_NEXT_MODE, options),
+      getLanguageProficiency: (language: string | null, timeWindowDays?: number) =>
+        ipcRenderer.invoke(IPC_CHANNELS.SCORING.GET_LANGUAGE_PROFICIENCY, language, timeWindowDays)
     },
 
     // Logging operations
@@ -580,6 +582,7 @@ declare global {
           nextMode: 'learning' | 'quiz' | 'dialog' | 'flow' | null;
           rankedModes: Array<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'>;
         }>;
+        getLanguageProficiency: (language: string | null, timeWindowDays?: number) => Promise<number>;
       };
       tracking: {
         createSession: (mode: 'learning' | 'quiz' | 'dialog' | 'flow', language: string) => Promise<number>;
