@@ -9,6 +9,7 @@ import pino from 'pino';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Logger } from '../../shared/utils/logger.js';
+import { env } from '../../shared/config/index.js';
 
 let loggerInstance: Logger | null = null;
 
@@ -23,7 +24,7 @@ export async function initializeLogger(): Promise<Logger> {
 
   // In test environments, use a simple console logger
   // Check for test environment by looking for jest or if electron is not available
-  const isTestEnv = process.env.NODE_ENV === 'test' || 
+  const isTestEnv = env === 'test' || 
                     process.env.JEST_WORKER_ID !== undefined ||
                     typeof process.env.npm_lifecycle_event === 'string' && process.env.npm_lifecycle_event.includes('test');
   
@@ -72,7 +73,7 @@ export async function initializeLogger(): Promise<Logger> {
   ];
 
   // Add console transport with pretty formatting in development
-  if (process.env.NODE_ENV !== 'production' || process.env.DEBUG === '1') {
+  if (env !== 'production' || process.env.DEBUG === '1') {
     targets.push({
       target: 'pino-pretty',
       options: {
@@ -118,7 +119,7 @@ export async function initializeLogger(): Promise<Logger> {
 export function getLogger(): Logger {
   if (!loggerInstance) {
     // In test environments, auto-initialize a simple logger
-    const isTestEnv = process.env.NODE_ENV === 'test' || 
+    const isTestEnv = env === 'test' || 
                       process.env.JEST_WORKER_ID !== undefined ||
                       (typeof process.env.npm_lifecycle_event === 'string' && process.env.npm_lifecycle_event.includes('test'));
     

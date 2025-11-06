@@ -10,6 +10,7 @@ import { app } from 'electron';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { getSimilarityThresholds, type ProficiencyLevel } from '../../shared/utils/similarity-threshold.js';
+import { serviceConfig } from '../../shared/config/index.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -43,7 +44,7 @@ export interface SpeechRecognitionError extends Error {
 }
 
 export class SpeechRecognitionService {
-  private whisperServerUrl: string = 'http://127.0.0.1:8080';
+  private whisperServerUrl: string = serviceConfig.whisper.serverUrl;
 
   // Map app language names to Whisper language codes
   private readonly LANGUAGE_CODE_MAP: Record<string, string> = {
@@ -61,7 +62,8 @@ export class SpeechRecognitionService {
   };
 
   constructor() {
-    // Server URL can be overridden via environment variable
+    // Server URL is loaded from config.toml or can be overridden via environment variable
+    // Check environment variable as override (for backward compatibility)
     if (process.env.WHISPER_SERVER_URL) {
       this.whisperServerUrl = process.env.WHISPER_SERVER_URL;
     }

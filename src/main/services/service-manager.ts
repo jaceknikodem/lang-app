@@ -7,6 +7,7 @@ import * as net from 'net';
 import * as path from 'path';
 import * as fs from 'fs';
 import { app } from 'electron';
+import { serviceConfig } from '../../shared/config/index.js';
 
 export interface ManagedService {
   name: string;
@@ -35,7 +36,7 @@ export class ServiceManager {
   private isShuttingDown: boolean = false;
 
   constructor(config: ServiceManagerConfig = {}) {
-    this.enabled = config.enabled ?? process.env.MANAGE_SERVICES === '1';
+    this.enabled = config.enabled ?? serviceConfig.manageServices;
     
     // Resolve model path - try multiple locations
     if (config.whisperModelPath) {
@@ -54,9 +55,9 @@ export class ServiceManager {
       this.whisperModelPath = this.findWhisperModel(modelsDir);
     }
     
-    this.whisperPort = config.whisperPort || 8080;
-    this.lemmatizationPort = config.lemmatizationPort || 8888;
-    this.maxRestarts = config.maxRestarts || 10;
+    this.whisperPort = config.whisperPort || serviceConfig.whisper.port;
+    this.lemmatizationPort = config.lemmatizationPort || serviceConfig.lemmatization.port;
+    this.maxRestarts = config.maxRestarts || serviceConfig.maxRestarts;
   }
 
   /**

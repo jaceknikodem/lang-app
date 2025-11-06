@@ -11,6 +11,7 @@ import { AudioService } from './audio/audio-service.js';
 import { SRSService } from './srs/srs-service.js';
 import { LifecycleManager, UpdateManager } from './lifecycle/index.js';
 import { LLM_CONFIG } from '../shared/constants/index.js';
+import { serviceConfig, testingConfig, env, appConfig } from '../shared/config/index.js';
 import { WordGenerationRunner } from './jobs/word-generation-runner.js';
 import { IPC_CHANNELS } from '../shared/types/ipc.js';
 import { LemmatizationService } from './lemmatization/index.js';
@@ -32,7 +33,7 @@ let lemmatizationService: LemmatizationService | undefined;
 let scoringService: ScoringService | undefined;
 let serviceManager: ServiceManager | undefined;
 
-const forceLocalServices = process.env.E2E_FORCE_LOCAL_SERVICES === '1';
+const forceLocalServices = testingConfig.e2eForceLocalServices;
 
 async function initializeServices(): Promise<void> {
   const logger = getLogger();
@@ -135,7 +136,7 @@ async function initializeServices(): Promise<void> {
     
     // Initialize lemmatization service (needed for ContentGenerator)
     lemmatizationService = new LemmatizationService({
-      serverUrl: process.env.LEMMATIZATION_SERVER_URL || 'http://127.0.0.1:8888'
+      serverUrl: serviceConfig.lemmatization.serverUrl
     });
     logger.info('Lemmatization service initialized successfully');
     
@@ -262,19 +263,20 @@ function createWindow(): void {
       experimentalFeatures: false
     },
     // titleBarStyle: 'hiddenInset', // Commented out to allow window dragging
-    show: process.env.NODE_ENV !== 'test', // Don't show window in test mode
+    show: env !== 'test', // Don't show window in test mode
     icon: path.join(__dirname, '../../build/icon.png') // Add app icon if available
   });
 
   // Load the app
   mainWindow.loadFile(path.join(__dirname, '../../renderer/index.html'));
-  if (process.env.NODE_ENV === 'development') {
+  // Open DevTools if configured to do so
+  if (appConfig.openDevtools) {
     mainWindow.webContents.openDevTools();
   }
 
   // Show window when ready to prevent visual flash (unless in test mode)
   mainWindow.once('ready-to-show', () => {
-    if (process.env.NODE_ENV !== 'test') {
+    if (env !== 'test') {
       mainWindow.show();
     }
   });
@@ -305,9 +307,9 @@ app.whenReady().then(async () => {
     await setupSecurity();
 
     // Start managed services (whisper-server and stanza-service) if enabled
-    // This is controlled by MANAGE_SERVICES=1 environment variable
+    // This is controlled by config.toml or MANAGE_SERVICES environment variable
     serviceManager = new ServiceManager({
-      enabled: process.env.MANAGE_SERVICES === '1'
+      enabled: serviceConfig.manageServices
     });
     await serviceManager.start();
 
@@ -446,6 +448,6 @@ app.on('web-contents-created', (event, contents) => {
 });
 
 // Security: Disable web security warnings in development
-if (process.env.NODE_ENV === 'development') {
+if (env === 'development') {
   process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true';
 }

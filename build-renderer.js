@@ -21,7 +21,19 @@ async function buildRenderer() {
       target: 'es2020',
       platform: 'browser',
       sourcemap: true,
-      external: [], // Bundle everything
+      external: [
+        // Node.js-only modules that shouldn't be bundled for renderer
+        'convict',
+        '@iarna/toml',
+        'dotenv',
+        'fs',
+        'path',
+        'stream',
+        'util',
+        // Config module is Node.js only
+        '../config/index.js',
+        '../../shared/config/index.js'
+      ],
       loader: {
         '.ts': 'ts',
         '.js': 'js'

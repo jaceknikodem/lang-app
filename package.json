@@ -38,6 +38,7 @@
   "devDependencies": {
     "@playwright/test": "^1.40.0",
     "@types/better-sqlite3": "^7.6.13",
+    "@types/convict": "^6.1.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^20.0.0",
     "concurrently": "^8.2.0",
@@ -52,8 +53,11 @@
     "wait-on": "^7.2.0"
   },
   "dependencies": {
+    "@iarna/toml": "^2.2.5",
     "better-sqlite3": "^12.4.1",
+    "convict": "^6.2.4",
     "date-fns": "^3.0.0",
+    "dotenv": "^17.2.3",
     "lit": "^3.0.0",
     "make-error-cause": "^1.0.0",
     "node-record-lpcm16": "^1.0.1",
@@ -88,6 +92,7 @@
       "dist/**/*",
       "audio/**/*",
       "data/**/*",
+      "config.toml",
       "!src/**/*",
       "!tests/**/*",
       "!*.md",

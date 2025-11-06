@@ -9,6 +9,7 @@ import { AudioRecorder, RecordingSession, RecordingOptions } from './audio-recor
 import { SpeechRecognitionService, TranscriptionOptions, TranscriptionResult } from './speech-recognition';
 import { sanitizeFilename } from '../../shared/utils/sanitizeFilename';
 import { getErrorMessage, createAudioError } from '../../shared/utils/error.js';
+import { testingConfig } from '../../shared/config/index.js';
 
 /**
  * Audio service that coordinates audio generation and playback
@@ -1026,7 +1027,7 @@ export class AudioService {
    * Determine if the system TTS should be forced (used for automated environments)
    */
   private shouldForceSystemTTS(): boolean {
-    return process.env.E2E_FORCE_LOCAL_SERVICES === '1';
+    return testingConfig.e2eForceLocalServices;
   }
 
   /**

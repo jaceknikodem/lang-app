@@ -1,0 +1,98 @@
+# Configuration file for Local Language Learning App
+# This file contains default configuration values
+# Values can be overridden via environment variables (see convict schema in src/shared/config/index.ts)
+
+[services]
+# Whether to manage external services (whisper, lemmatization)
+manage_services = false
+# Maximum service restart attempts
+max_restarts = 10
+
+[services.whisper]
+# Whisper server port
+port = 8080
+# Whisper server URL
+server_url = "http://127.0.0.1:8080"
+
+[services.lemmatization]
+# Lemmatization server port
+port = 8888
+# Lemmatization server URL
+server_url = "http://127.0.0.1:8888"
+
+[llm]
+# Ollama base URL
+base_url = "http://localhost:11434"
+# Default LLM model
+default_model = "granite4:tiny-h"
+# Model for word generation
+word_generation_model = "granite4:tiny-h"
+# Model for sentence generation
+sentence_generation_model = "granite4:tiny-h"
+# LLM request timeout in milliseconds
+timeout = 80000
+# Maximum retry attempts for LLM requests
+max_retries = 3
+# Minimum word count threshold ratio (0-1)
+min_word_count_threshold = 0.4
+# Minimum sentence count threshold ratio (0-1)
+min_sentence_count_threshold = 0.7
+# Maximum existing words to include in prompt
+max_existing_words_in_prompt = 50
+
+[llm.gemini]
+# Default Gemini model
+default_model = "gemini-2.5-flash"
+# Gemini model for word generation
+word_model = "gemini-2.5-flash-lite"
+# Gemini model for sentence generation
+sentence_model = "gemini-2.5-flash"
+# Gemini request timeout in milliseconds
+timeout = 30000
+
+[app]
+# SQLite database filename
+database_name = "language_learning.db"
+# Audio files directory
+audio_directory = "audio"
+# Default learning language
+default_language = "spanish"
+# Default number of words to generate
+default_word_count = 5
+# Default number of sentences to generate
+default_sentence_count = 3
+# Maximum word strength value
+max_word_strength = 100
+# Minimum word strength value
+min_word_strength = 0
+# Maximum words in quiz mode
+quiz_word_limit = 10
+# Automatically open DevTools on startup (development only)
+open_devtools = false
+
+[audio]
+# Audio file extension
+file_extension = ".aiff"
+# Text-to-speech command
+tts_command = "say"
+# Default TTS speech rate
+default_rate = 160
+
+[strength_boost]
+# Strength boost when a sentence is played
+sentence_played = 1
+
+[strength_boost.pronunciation_boosts]
+# Minimum similarity score (0-1) to qualify for any boost
+min_similarity = 0.85
+# Boost amount for good pronunciation (85-89%)
+good = 2
+# Boost amount for very good pronunciation (90-94%)
+very_good = 3
+# Boost amount for excellent pronunciation (95%+)
+excellent = 4
+
+[testing]
+# Force local services in E2E tests
+e2e_force_local_services = false
+
