@@ -75,9 +75,13 @@ export abstract class BaseLLMClient {
    * Generate topic words - shared implementation
    */
   async generateTopicWords(topic: string, language: string, count: number, proficiencyLevel?: string): Promise<GeneratedWord[]> {
-    // Get existing words to check for duplicates
+    // Get existing words to check for duplicates (includes learning, known, and ignored words)
     const existingWords = await this.getExistingWords(language, topic, LLM_CONFIG.MAX_EXISTING_WORDS_IN_PROMPT);
     const existingWordsSet = new Set(existingWords.map(w => w.toLowerCase()));
+
+    // Explicitly get ignored words to ensure they are filtered out
+    const ignoredWords = await this.getIgnoredWords(language, topic);
+    const ignoredWordsSet = new Set(ignoredWords.map(w => w.toLowerCase()));
 
     const prompt = this.createTopicWordsPrompt(topic, language, count, existingWords, proficiencyLevel);
 
@@ -101,12 +105,14 @@ export abstract class BaseLLMClient {
       );
 
       // Filter out words that already exist in database (learning, known, or ignored)
-      const newWords = uniqueWords.filter(word =>
-        !existingWordsSet.has(word.word.toLowerCase())
-      );
+      // Also explicitly filter out ignored words to ensure they are excluded
+      const newWords = uniqueWords.filter(word => {
+        const wordLower = word.word.toLowerCase();
+        return !existingWordsSet.has(wordLower) && !ignoredWordsSet.has(wordLower);
+      });
 
       const logger = getLogger();
-      logger.info({ uniqueWords: uniqueWords.length, newWords: newWords.length, duplicates: uniqueWords.length - newWords.length }, `Generated ${uniqueWords.length} unique words, ${newWords.length} are new (${uniqueWords.length - newWords.length} duplicates filtered)`);
+      logger.info({ uniqueWords: uniqueWords.length, newWords: newWords.length, duplicates: uniqueWords.length - newWords.length, ignoredCount: ignoredWords.length }, `Generated ${uniqueWords.length} unique words, ${newWords.length} are new (${uniqueWords.length - newWords.length} duplicates filtered, ${ignoredWords.length} ignored words excluded)`);
 
       // If we got significantly fewer new words than requested, throw an error to trigger retry.
       const minWords = Math.max(1, Math.floor(count * LLM_CONFIG.MIN_WORD_COUNT_THRESHOLD));
@@ -242,6 +248,25 @@ export abstract class BaseLLMClient {
     } catch (error) {
       const logger = getLogger();
       logger.error({ error }, 'Failed to get known words for sentence generation');
+      return [];
+    }
+  }
+
+  /**
+   * Get ignored words from database to filter out during word generation
+   */
+  protected async getIgnoredWords(language: string, topic?: string): Promise<string[]> {
+    if (!this.databaseLayer) {
+      const logger = getLogger();
+      logger.warn('Database layer not set, cannot get ignored words');
+      return [];
+    }
+
+    try {
+      return await this.databaseLayer.getIgnoredWords(language, topic);
+    } catch (error) {
+      const logger = getLogger();
+      logger.error({ error }, 'Failed to get ignored words for filtering');
       return [];
     }
   }

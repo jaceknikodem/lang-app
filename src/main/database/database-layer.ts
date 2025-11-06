@@ -783,6 +783,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     
     try {
       // Get words (learning, known, and ignored) for the language, optionally filtered by topic and limited
+      // This includes ignored words to ensure they are filtered out during generation
       let query = `SELECT word FROM words WHERE language = ?`;
       const params: any[] = [language];
       
@@ -800,6 +801,32 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       return rows.map(row => row.word);
     } catch (error) {
       throw wrapError(error, `Failed to get existing words for duplicate checking`);
+    }
+  }
+
+  /**
+   * Get ignored words for a language (for explicit filtering during word generation)
+   * Returns word strings only
+   * @param language - The language to get ignored words for
+   * @param topic - Optional topic parameter to filter words by topic
+   */
+  async getIgnoredWords(language: string, topic?: string): Promise<string[]> {
+    const db = this.getDb();
+    
+    try {
+      let query = `SELECT word FROM words WHERE language = ? AND ignored = TRUE`;
+      const params: any[] = [language];
+      
+      if (topic) {
+        query += ` AND topic = ?`;
+        params.push(topic);
+      }
+      
+      const stmt = db.prepare(query);
+      const rows = stmt.all(...params) as Array<{ word: string }>;
+      return rows.map(row => row.word);
+    } catch (error) {
+      throw wrapError(error, `Failed to get ignored words`);
     }
   }
 
