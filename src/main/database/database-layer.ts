@@ -58,7 +58,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       console.log('Database initialized successfully');
     } catch (error) {
-      throw wrapError(error, `Failed to initialize database: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to initialize database`);
     }
   }
 
@@ -360,7 +360,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return wordId;
     } catch (error) {
-      throw wrapError(error, `Failed to insert word: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to insert word`);
     }
   }
 
@@ -383,7 +383,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Word with ID ${wordId} not found`);
       }
     } catch (error) {
-      throw wrapError(error, `Failed to update word strength: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to update word strength`);
     }
   }
 
@@ -406,7 +406,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Word with ID ${wordId} not found`);
       }
     } catch (error) {
-      throw wrapError(error, `Failed to mark word as known: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to mark word as known`);
     }
   }
 
@@ -429,7 +429,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Word with ID ${wordId} not found`);
       }
     } catch (error) {
-      throw wrapError(error, `Failed to mark word as ignored: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to mark word as ignored`);
     }
   }
 
@@ -469,7 +469,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // Combine due words with additional words
       return [...dueWords, ...additionalWords];
     } catch (error) {
-      throw wrapError(error, `Failed to get words to study: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get words to study`);
     }
   }
 
@@ -499,7 +499,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return rows.map(this.mapRowToWord);
     } catch (error) {
-      throw wrapError(error, `Failed to get words by strength: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get words by strength`);
     }
   }
 
@@ -536,7 +536,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return this.shuffleArray(words);
     } catch (error) {
-      throw wrapError(error, `Failed to get words with sentences: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get words with sentences`);
     }
   }
 
@@ -571,7 +571,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const rows = stmt.all(currentLanguage) as any[];
       return rows.map(this.mapRowToWord);
     } catch (error) {
-      throw wrapError(error, `Failed to get words with sentences ordered by strength: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get words with sentences ordered by strength`);
     }
   }
 
@@ -616,7 +616,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return words;
     } catch (error) {
-      throw wrapError(error, `Failed to get all words: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get all words`);
     }
   }
 
@@ -632,7 +632,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return row ? this.mapRowToWord(row) : null;
     } catch (error) {
-      throw wrapError(error, `Failed to get word by ID: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get word by ID`);
     }
   }
 
@@ -655,7 +655,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const rows = stmt.all(language, limit) as Array<{ word: string }>;
       return rows.map(row => row.word);
     } catch (error) {
-      throw wrapError(error, `Failed to get known words for sentence generation: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get known words for sentence generation`);
     }
   }
 
@@ -674,7 +674,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const rows = stmt.all(language, minWordStrength, maxWords) as Array<{ word: string }>;
       return rows.map(row => row.word);
     } catch (error) {
-      throw wrapError(error, `Failed to get known words: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get known words`);
     }
   }
 
@@ -705,7 +705,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const rows = stmt.all(...params) as Array<{ word: string }>;
       return rows.map(row => row.word);
     } catch (error) {
-      throw wrapError(error, `Failed to get existing words for duplicate checking: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get existing words for duplicate checking`);
     }
   }
 
@@ -726,7 +726,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return rows.map(row => this.mapRowToWord(row));
     } catch (error) {
-      throw wrapError(error, `Failed to get words by IDs: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get words by IDs`);
     }
   }
 
@@ -950,7 +950,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return sentenceId;
     } catch (error) {
-      throw wrapError(error, `Failed to insert sentence: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to insert sentence`);
     }
   }
 
@@ -986,7 +986,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return rows.map(this.mapRowToSentence);
     } catch (error) {
-      throw wrapError(error, `Failed to get sentences by word: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get sentences by word`);
     }
   }
 
@@ -1007,7 +1007,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return rows.map(row => this.mapRowToSentence(row));
     } catch (error) {
-      throw wrapError(error, `Failed to get sentences by IDs: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get sentences by IDs`);
     }
   }
 
@@ -1030,7 +1030,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Sentence with ID ${sentenceId} not found`);
       }
     } catch (error) {
-      throw wrapError(error, `Failed to update sentence last shown: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to update sentence last shown`);
     }
   }
 
@@ -1064,7 +1064,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         }
       }
     } catch (error) {
-      throw wrapError(error, `Failed to update sentence audio path: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to update sentence audio path`);
     }
   }
 
@@ -1084,7 +1084,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Sentence with ID ${sentenceId} not found`);
       }
     } catch (error) {
-      throw wrapError(error, `Failed to update before sentence audio path: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to update before sentence audio path`);
     }
   }
 
@@ -1148,7 +1148,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       console.log(`[updateSentenceTokens] Stored ${lemmas.size} lemmas for sentence ${sentenceId}`);
     } catch (error) {
-      throw wrapError(error, `Failed to update sentence tokens: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to update sentence tokens`);
     }
   }
 
@@ -1169,7 +1169,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Sentence with ID ${sentenceId} not found`);
       }
     } catch (error) {
-      throw wrapError(error, `Failed to increment sentence play count: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to increment sentence play count`);
     }
   }
 
@@ -1195,7 +1195,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       `);
       insertAttempt.run(sentenceId, similarityScore, expectedText, transcribedText, audioPath || null);
     } catch (error) {
-      throw wrapError(error, `Failed to record pronunciation attempt: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to record pronunciation attempt`);
     }
   }
 
@@ -1231,7 +1231,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         createdAt: new Date(row.created_at)
       }));
     } catch (error) {
-      throw wrapError(error, `Failed to get pronunciation history: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get pronunciation history`);
     }
   }
 
@@ -1250,7 +1250,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const result = stmt.run(sentenceId, variantSentence, variantTranslation);
       return result.lastInsertRowid as number;
     } catch (error) {
-      throw wrapError(error, `Failed to insert dialogue variant: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to insert dialogue variant`);
     }
   }
 
@@ -1285,7 +1285,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         continuationAudio: row.continuation_audio || undefined
       }));
     } catch (error) {
-      throw wrapError(error, `Failed to get dialogue variants: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get dialogue variants`);
     }
   }
 
@@ -1304,7 +1304,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const result = stmt.get(sentenceId) as { count: number };
       return result.count;
     } catch (error) {
-      throw wrapError(error, `Failed to get dialogue variant count: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get dialogue variant count`);
     }
   }
 
@@ -1336,7 +1336,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         continuationAudio: row.continuation_audio || undefined
       };
     } catch (error) {
-      throw wrapError(error, `Failed to get dialogue variant: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get dialogue variant`);
     }
   }
 
@@ -1360,7 +1360,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       stmt.run(continuationText, continuationTranslation, continuationAudio || null, variantId);
     } catch (error) {
-      throw wrapError(error, `Failed to update dialogue variant continuation: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to update dialogue variant continuation`);
     }
   }
 
@@ -1376,7 +1376,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return rows.map(row => this.mapRowToSentence(row));
     } catch (error) {
-      throw wrapError(error, `Failed to get all sentences: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get all sentences`);
     }
   }
 
@@ -1392,7 +1392,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return row ? this.mapRowToSentence(row) : null;
     } catch (error) {
-      throw wrapError(error, `Failed to get sentence by ID: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get sentence by ID`);
     }
   }
 
@@ -1429,7 +1429,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         updateSentenceCount.run(linkedWord.word_id);
       }
     } catch (error) {
-      throw wrapError(error, `Failed to delete sentence: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to delete sentence`);
     }
   }
 
@@ -1454,7 +1454,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Word with ID ${wordId} not found`);
       }
     } catch (error) {
-      throw wrapError(error, `Failed to update last studied: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to update last studied`);
     }
   }
 
@@ -1486,7 +1486,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         lastStudyDate: stats.lastStudyDate ? new Date(stats.lastStudyDate) : undefined
       };
     } catch (error) {
-      throw wrapError(error, `Failed to get study stats: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get study stats`);
     }
   }
 
@@ -1504,7 +1504,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       stmt.run(wordsStudied);
     } catch (error) {
-      throw wrapError(error, `Failed to record study session: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to record study session`);
     }
   }
 
@@ -1530,7 +1530,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         whenStudied: new Date(row.when_studied)
       }));
     } catch (error) {
-      throw wrapError(error, `Failed to get recent study sessions: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get recent study sessions`);
     }
   }
 
@@ -1577,7 +1577,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return [...dueWords, ...additionalWords];
     } catch (error) {
-      throw wrapError(error, `Failed to get weakest words: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get weakest words`);
     }
   }
 
@@ -1614,7 +1614,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return row ? this.mapRowToSentence(row) : null;
     } catch (error) {
-      throw wrapError(error, `Failed to get random sentence for word: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get random sentence for word`);
     }
   }
 
@@ -1710,7 +1710,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return result;
     } catch (error) {
-      throw wrapError(error, `Failed to get flow sentences: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get flow sentences`);
     }
   }
 
@@ -1748,7 +1748,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return this.mapRowToSentence(row);
     } catch (error) {
-      throw wrapError(error, `Failed to get random dialog sentence: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get random dialog sentence`);
     }
   }
 
@@ -1785,7 +1785,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return rows.map(row => this.mapRowToSentence(row));
     } catch (error) {
-      throw wrapError(error, `Failed to get random dialog sentences: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get random dialog sentences`);
     }
   }
 
@@ -1803,7 +1803,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return row ? row.value : null;
     } catch (error) {
-      throw wrapError(error, `Failed to get setting: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get setting`);
     }
   }
 
@@ -1821,7 +1821,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       stmt.run(key, value);
     } catch (error) {
-      throw wrapError(error, `Failed to set setting: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to set setting`);
     }
   }
 
@@ -1857,7 +1857,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return rows.map(row => row.language);
     } catch (error) {
-      throw wrapError(error, `Failed to get available languages: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get available languages`);
     }
   }
 
@@ -1918,7 +1918,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         };
       });
     } catch (error) {
-      throw wrapError(error, `Failed to get language stats: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get language stats`);
     }
   }
 
@@ -1952,7 +1952,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         lang: row.lang
       }));
     } catch (error) {
-      throw wrapError(error, `Failed to lookup dictionary entry: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to lookup dictionary entry`);
     }
   }
 
@@ -1967,7 +1967,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       `);
       stmt.run(status, wordId);
     } catch (error) {
-      throw wrapError(error, `Failed to update word processing status: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to update word processing status`);
     }
   }
 
@@ -1986,7 +1986,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ? { processingStatus: row.processing_status ?? 'ready', sentenceCount: row.sentence_count ?? 0 }
         : null;
     } catch (error) {
-      throw wrapError(error, `Failed to get word processing info: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get word processing info`);
     }
   }
 
@@ -2065,7 +2065,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       return summary;
     } catch (error) {
-      throw wrapError(error, `Failed to get queue summary: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get queue summary`);
     }
   }
 
@@ -2093,7 +2093,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       await this.updateWordProcessingStatus(wordId, 'queued');
     } catch (error) {
-      throw wrapError(error, `Failed to enqueue word generation: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to enqueue word generation`);
     }
   }
 
@@ -2110,7 +2110,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       return row ? this.mapRowToWordGenerationJob(row) : null;
     } catch (error) {
-      throw wrapError(error, `Failed to get next word generation job: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get next word generation job`);
     }
   }
 
@@ -2128,7 +2128,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       `);
       stmt.run(jobId);
     } catch (error) {
-      throw wrapError(error, `Failed to mark job processing: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to mark job processing`);
     }
   }
 
@@ -2147,7 +2147,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       `);
       stmt.run(nextAttempt, lastError || null, jobId);
     } catch (error) {
-      throw wrapError(error, `Failed to reschedule job: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to reschedule job`);
     }
   }
 
@@ -2164,7 +2164,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       `);
       stmt.run(jobId);
     } catch (error) {
-      throw wrapError(error, `Failed to complete job: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to complete job`);
     }
   }
 
@@ -2182,7 +2182,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       `);
       stmt.run(errorMessage, jobId);
     } catch (error) {
-      throw wrapError(error, `Failed to mark job failed: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to mark job failed`);
     }
   }
 
@@ -2256,7 +2256,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Word with ID ${wordId} not found`);
       }
     } catch (error) {
-      throw wrapError(error, `Failed to update word SRS: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to update word SRS`);
     }
   }
 
@@ -2287,7 +2287,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return rows.map(this.mapRowToWord);
     } catch (error) {
-      throw wrapError(error, `Failed to get words due for review: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get words due for review`);
     }
   }
 
@@ -2310,7 +2310,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const result = stmt.get(currentLanguage, now) as { count: number };
       return result.count;
     } catch (error) {
-      throw wrapError(error, `Failed to get words due count: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get words due count`);
     }
   }
 
@@ -2352,7 +2352,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return limit ? sortedWords.slice(0, limit) : sortedWords;
     } catch (error) {
-      throw wrapError(error, `Failed to get words due with priority: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get words due with priority`);
     }
   }
 
@@ -2394,7 +2394,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         averageEaseFactor: result.averageEaseFactor || 2.5
       };
     } catch (error) {
-      throw wrapError(error, `Failed to get SRS stats: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get SRS stats`);
     }
   }
 
@@ -2503,7 +2503,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     try {
       rawContents = await fsPromises.readFile(filePath, 'utf-8');
     } catch (error) {
-      throw wrapError(error, `Unable to read dictionary file ${filePath}: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Unable to read dictionary file ${filePath}`);
     }
 
     const lines = rawContents.split('\n');
@@ -2766,7 +2766,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const result = stmt.get(currentLanguage) as { count: number };
       return result.count;
     } catch (error) {
-      throw wrapError(error, `Failed to get new word count: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get new word count`);
     }
   }
 
@@ -2790,7 +2790,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const result = stmt.get(currentLanguage) as { count: number };
       return result.count;
     } catch (error) {
-      throw wrapError(error, `Failed to get weak word count: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get weak word count`);
     }
   }
 
@@ -2842,7 +2842,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return knownWords / totalWords;
     } catch (error) {
-      throw wrapError(error, `Failed to get dialogue readiness ratio: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get dialogue readiness ratio`);
     }
   }
 
@@ -2874,7 +2874,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // Convert from 0-1 scale to 0-10 scale
       return result.avg_score * 10;
     } catch (error) {
-      throw wrapError(error, `Failed to get average pronunciation score: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get average pronunciation score`);
     }
   }
 
@@ -2899,7 +2899,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const result = stmt.get(currentLanguage) as { count: number };
       return result.count;
     } catch (error) {
-      throw wrapError(error, `Failed to get available sentences count: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get available sentences count`);
     }
   }
 
@@ -2965,7 +2965,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       
       return diffHours;
     } catch (error) {
-      throw wrapError(error, `Failed to get time since last active practice: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get time since last active practice`);
     }
   }
 
@@ -3047,7 +3047,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       console.log(`Successfully reset progress for language: ${language}`);
     } catch (error) {
-      throw wrapError(error, `Failed to reset language progress: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to reset language progress`);
     }
   }
 }

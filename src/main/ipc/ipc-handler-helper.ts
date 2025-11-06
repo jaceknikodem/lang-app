@@ -72,8 +72,8 @@ export function createIPCHandler<
         throw wrapError(error, `Failed to ${errorMessage}: Validation failed - ${issues}`);
       }
       
-      const errorDetail = getErrorMessage(error);
-      throw wrapError(error, `Failed to ${errorMessage}: ${errorDetail}`);
+      // The original error is preserved in error.cause, so we don't need to duplicate the message
+      throw wrapError(error, `Failed to ${errorMessage}`);
     }
   };
 }

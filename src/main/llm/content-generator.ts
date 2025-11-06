@@ -486,7 +486,7 @@ export class ContentGenerator {
       const response = await this.llmClient.generateResponse(prompt, wordModel);
       return response.trim();
     } catch (error) {
-      throw wrapError(error, `Failed to translate word "${word}": ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to translate word "${word}"`);
     }
   }
 
@@ -858,14 +858,9 @@ export class ContentGenerator {
       return error;
     }
     
-    const err = ensureError(error);
     // Wrap other errors with context
-    // For backward compatibility, include original message in the new message
-    // But if the original error was not an Error instance (e.g., string), treat as unknown
-    const errorMessage = (error instanceof Error && err.message && err.message !== '[object Object]')
-      ? err.message 
-      : 'Unknown error occurred';
-    return wrapError(error, `${operation} failed: ${errorMessage}`);
+    // The original error is preserved in error.cause, so we don't need to duplicate the message
+    return wrapError(error, `${operation} failed`);
   }
 
   /**

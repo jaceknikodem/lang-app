@@ -116,8 +116,15 @@ export abstract class BaseLLMClient {
       if (error instanceof z.ZodError) {
         throw this.createLLMError(error, 'Response validation failed', 'INVALID_RESPONSE', false);
       }
+      
+      // Preserve the original error if it's already a meaningful Error with a specific message
+      // (e.g., "Insufficient new words generated")
+      if (error instanceof Error && error.message.includes('Insufficient new words generated')) {
+        throw this.createLLMError(error, error.message, 'MODEL_ERROR', false);
+      }
+      
       const err = ensureError(error);
-      throw this.createLLMError(err, `Failed to generate words: ${err.message}`);
+      throw this.createLLMError(err, `Failed to generate words`);
     }
   }
 

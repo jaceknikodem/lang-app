@@ -170,7 +170,7 @@ export class AudioService {
         throw error;
       }
 
-      throw createAudioError(`Audio generation failed: ${getErrorMessage(error)}`, 'GENERATION_FAILED', { cause: error });
+      throw createAudioError(`Audio generation failed`, 'GENERATION_FAILED', { cause: error });
     }
   }
 
@@ -203,7 +203,7 @@ export class AudioService {
         throw error;
       }
 
-      throw createAudioError(`Audio playback failed: ${getErrorMessage(error)}`, 'PLAYBACK_FAILED', { audioPath, cause: error });
+      throw createAudioError(`Audio playback failed`, 'PLAYBACK_FAILED', { audioPath, cause: error });
     }
   }
 
@@ -715,19 +715,12 @@ export class AudioService {
     try {
       return await this.audioRecorder.startRecording(options);
     } catch (error) {
-      let errorMessage = 'Failed to start recording';
-
-      if (error instanceof Error) {
-        if (error.message.includes('sox')) {
-          errorMessage = 'Audio recording requires sox. Please install it with: brew install sox';
-        } else {
-          errorMessage = `Failed to start recording: ${error.message}`;
-        }
+      const errorMsg = getErrorMessage(error);
+      if (errorMsg.includes('sox')) {
+        throw createAudioError('Audio recording requires sox. Please install it with: brew install sox', 'RECORDING_FAILED', { cause: error });
+      } else {
+        throw createAudioError(`Failed to start recording`, 'RECORDING_FAILED', { cause: error });
       }
-
-      const audioError = new Error(errorMessage) as AudioError;
-      audioError.code = 'RECORDING_FAILED';
-      throw audioError;
     }
   }
 
@@ -738,7 +731,7 @@ export class AudioService {
     try {
       return await this.audioRecorder.stopRecording();
     } catch (error) {
-      throw createAudioError(`Failed to stop recording: ${getErrorMessage(error)}`, 'RECORDING_FAILED', { cause: error });
+      throw createAudioError(`Failed to stop recording`, 'RECORDING_FAILED', { cause: error });
     }
   }
 
@@ -749,7 +742,7 @@ export class AudioService {
     try {
       await this.audioRecorder.cancelRecording();
     } catch (error) {
-      throw createAudioError(`Failed to cancel recording: ${getErrorMessage(error)}`, 'RECORDING_FAILED', { cause: error });
+      throw createAudioError(`Failed to cancel recording`, 'RECORDING_FAILED', { cause: error });
     }
   }
 
@@ -786,7 +779,7 @@ export class AudioService {
     try {
       await this.audioRecorder.deleteRecording(filePath);
     } catch (error) {
-      throw createAudioError(`Failed to delete recording: ${getErrorMessage(error)}`, 'FILE_OPERATION_FAILED', { cause: error });
+      throw createAudioError(`Failed to delete recording`, 'FILE_OPERATION_FAILED', { cause: error });
     }
   }
 
@@ -826,7 +819,7 @@ export class AudioService {
     try {
       return await this.speechRecognition.transcribeAudio(filePath, options);
     } catch (error) {
-      throw createAudioError(`Failed to transcribe audio: ${getErrorMessage(error)}`, 'RECORDING_FAILED', { cause: error });
+      throw createAudioError(`Failed to transcribe audio`, 'RECORDING_FAILED', { cause: error });
     }
   }
 

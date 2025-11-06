@@ -62,21 +62,55 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
 
   async isAvailable(): Promise<boolean> {
     if (!this.apiKey || this.apiKey.trim() === '') {
+      console.warn('[GeminiClient] API key is empty or not set');
       return false;
     }
     
     try {
-      // Use a simpler endpoint to test API availability
-      const url = `${this.baseUrl}?key=${this.apiKey}`;
+      // Try the models endpoint first (lightweight check)
+      const modelsUrl = `${this.baseUrl}?key=${this.apiKey}`;
       const pTimeout = (await import('p-timeout')).default;
       
       const response = await pTimeout(
-        fetch(url, { method: 'GET' }),
-        { milliseconds: 3000 }
+        fetch(modelsUrl, { method: 'GET' }),
+        { milliseconds: 5000 }
       );
       
-      return response.ok;
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unable to read error response');
+        let errorMessage = errorText.substring(0, 200);
+        
+        // Try to parse JSON error response
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson?.error?.message) {
+            errorMessage = errorJson.error.message;
+          }
+        } catch {
+          // Not JSON, use the text as-is
+        }
+        
+        console.warn(`[GeminiClient] Availability check failed: HTTP ${response.status} ${response.statusText}`);
+        console.warn(`[GeminiClient] Error details:`, errorMessage);
+        
+        // If it's a 403 or 400, it might be a regional/billing issue
+        if (response.status === 403 || response.status === 400) {
+          console.warn(`[GeminiClient] This might be a regional restriction or billing issue. Check your Google Cloud Console settings.`);
+        }
+        
+        return false;
+      }
+      
+      return true;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.warn(`[GeminiClient] Availability check error:`, errorMessage);
+      
+      // If it's a timeout, log that specifically
+      if (error instanceof Error && (error.name === 'TimeoutError' || error.message.includes('timeout'))) {
+        console.warn(`[GeminiClient] Request timed out. This might indicate network issues or the API is slow to respond.`);
+      }
+      
       return false;
     }
   }
@@ -255,7 +289,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
       }
       const err = ensureError(error);
-      throw super.createLLMError(err, `Failed to generate response: ${err.message}`);
+      throw super.createLLMError(err, `Failed to generate response`);
     }
   }
 

@@ -17,7 +17,7 @@ describe('Audio Service', () => {
 
   describe('generateAudio', () => {
     it('should validate input parameters', async () => {
-      await expect(audioService.generateAudio('', 'english')).rejects.toThrow('Text must be a non-empty string');
+      await expect(audioService.generateAudio('', 'english')).rejects.toThrow('Audio generation failed');
     });
 
     it('should allow missing language and use defaults', async () => {

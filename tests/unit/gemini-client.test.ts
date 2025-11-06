@@ -147,7 +147,7 @@ describe('GeminiClient', () => {
         text: () => Promise.resolve('Invalid API key')
       });
 
-      await expect(client.generateResponse('Test prompt')).rejects.toThrow('Failed to generate response: HTTP 400: Bad Request - Invalid API key');
+      await expect(client.generateResponse('Test prompt')).rejects.toThrow('Failed to generate response');
     });
 
     it('should handle timeout', async () => {

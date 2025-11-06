@@ -380,7 +380,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       );
     } catch (error) {
       console.error('Error generating words:', error);
-      throw wrapError(error, `Failed to generate words: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to generate words`);
     }
   });
 
@@ -394,7 +394,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return await contentGenerator.generateWordSentences(validatedWord, validatedLanguage, 3, databaseLayer, validatedTopic);
     } catch (error) {
       console.error('Error generating sentences:', error);
-      throw wrapError(error, `Failed to generate sentences: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to generate sentences`);
     }
   });
 
@@ -422,7 +422,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       llmClient.setModel(validatedModel);
     } catch (error) {
       console.error('Error setting model:', error);
-      throw wrapError(error, `Failed to set model: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to set model`);
     }
   });
 
@@ -431,7 +431,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return llmClient.getCurrentModel();
     } catch (error) {
       console.error('Error getting current model:', error);
-      throw wrapError(error, `Failed to get current model: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get current model`);
     }
   });
 
@@ -441,7 +441,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       llmClient.setWordGenerationModel(validatedModel);
     } catch (error) {
       console.error('Error setting word generation model:', error);
-      throw wrapError(error, `Failed to set word generation model: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to set word generation model`);
     }
   });
 
@@ -451,7 +451,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       llmClient.setSentenceGenerationModel(validatedModel);
     } catch (error) {
       console.error('Error setting sentence generation model:', error);
-      throw wrapError(error, `Failed to set sentence generation model: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to set sentence generation model`);
     }
   });
 
@@ -460,7 +460,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return llmClient.getWordGenerationModel();
     } catch (error) {
       console.error('Error getting word generation model:', error);
-      throw wrapError(error, `Failed to get word generation model: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get word generation model`);
     }
   });
 
@@ -469,7 +469,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return llmClient.getSentenceGenerationModel();
     } catch (error) {
       console.error('Error getting sentence generation model:', error);
-      throw wrapError(error, `Failed to get sentence generation model: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get sentence generation model`);
     }
   });
 
@@ -483,7 +483,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return await contentGenerator.getFrequencyProgress(validatedLanguage, databaseLayer);
     } catch (error) {
       console.error('Error getting frequency progress:', error);
-      throw wrapError(error, `Failed to get frequency progress: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get frequency progress`);
     }
   });
 
@@ -492,7 +492,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return contentGenerator.getAvailableFrequencyLanguages();
     } catch (error) {
       console.error('Error getting available frequency languages:', error);
-      throw wrapError(error, `Failed to get available frequency languages: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get available frequency languages`);
     }
   });
 
@@ -502,7 +502,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return contentGenerator.getCurrentProvider();
     } catch (error) {
       console.error('Error getting current provider:', error);
-      throw wrapError(error, `Failed to get current provider: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get current provider`);
     }
   });
 
@@ -535,7 +535,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       console.log(`Switched to ${validatedProvider} provider`);
     } catch (error) {
       console.error('Error switching provider:', error);
-      throw wrapError(error, `Failed to switch provider: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to switch provider`);
     }
   });
 
@@ -557,7 +557,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       console.log('Gemini API key set successfully');
     } catch (error) {
       console.error('Error setting Gemini API key:', error);
-      throw wrapError(error, `Failed to set Gemini API key: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to set Gemini API key`);
     }
   });
 
@@ -566,7 +566,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return LLMFactory.getAvailableProviders();
     } catch (error) {
       console.error('Error getting available providers:', error);
-      throw wrapError(error, `Failed to get available providers: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get available providers`);
     }
   });
 
@@ -592,7 +592,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       return [];
     } catch (error) {
       console.error('Error getting models for provider:', error);
-      throw wrapError(error, `Failed to get models for provider: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get models for provider`);
     }
   });
 }
@@ -613,7 +613,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       return await audioService.generateAudio(validatedText, validatedLanguage, validatedWord, validatedWordId, validatedSentenceId, validatedVariantId);
     } catch (error) {
       console.error('Error generating audio:', error);
-      throw wrapError(error, `Failed to generate audio: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to generate audio`);
     }
   });
 
@@ -654,7 +654,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       }
       // For non-AudioError errors, wrap and log
       console.error('Error playing audio:', error);
-      throw wrapError(error, `Failed to play audio: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to play audio`);
     }
   });
 
@@ -663,7 +663,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       audioService.stopAudio();
     } catch (error) {
       console.error('Error stopping audio:', error);
-      throw wrapError(error, `Failed to stop audio: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to stop audio`);
     }
   });
 
@@ -738,7 +738,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       return { audioPath };
     } catch (error) {
       console.error('Error regenerating audio:', error);
-      throw wrapError(error, `Failed to regenerate audio: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to regenerate audio`);
     }
   });
 
@@ -756,7 +756,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       return await audioService.startRecording(validatedOptions);
     } catch (error) {
       console.error('Error starting recording:', error);
-      throw wrapError(error, `Failed to start recording: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to start recording`);
     }
   });
 
@@ -765,7 +765,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       return await audioService.stopRecording();
     } catch (error) {
       console.error('Error stopping recording:', error);
-      throw wrapError(error, `Failed to stop recording: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to stop recording`);
     }
   });
 
@@ -774,7 +774,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       await audioService.cancelRecording();
     } catch (error) {
       console.error('Error cancelling recording:', error);
-      throw wrapError(error, `Failed to cancel recording: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to cancel recording`);
     }
   });
 
@@ -811,7 +811,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       await audioService.deleteRecording(validatedFilePath);
     } catch (error) {
       console.error('Error deleting recording:', error);
-      throw wrapError(error, `Failed to delete recording: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to delete recording`);
     }
   });
 
@@ -871,7 +871,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       return await audioService.transcribeAudio(validatedFilePath, transcriptionOptions);
     } catch (error) {
       console.error('Error transcribing audio:', error);
-      throw wrapError(error, `Failed to transcribe audio: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to transcribe audio`);
     }
   });
 
@@ -883,7 +883,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       return await audioService.compareTranscription(validatedTranscribed, validatedExpected, proficiencyLevel);
     } catch (error) {
       console.error('Error comparing transcription:', error);
-      throw wrapError(error, `Failed to compare transcription: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to compare transcription`);
     }
   });
 
@@ -904,7 +904,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       await audioService.switchToElevenLabs(validatedApiKey);
     } catch (error) {
       console.error('Error switching to ElevenLabs:', error);
-      throw wrapError(error, `Failed to switch to ElevenLabs: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to switch to ElevenLabs`);
     }
   });
 
@@ -913,7 +913,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       await audioService.switchToSystemTTS();
     } catch (error) {
       console.error('Error switching to system TTS:', error);
-      throw wrapError(error, `Failed to switch to system TTS: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to switch to system TTS`);
     }
   });
 
@@ -923,7 +923,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       return await audioService.getVoiceMappings();
     } catch (error) {
       console.error('Error getting voice mappings:', error);
-      throw wrapError(error, `Failed to get voice mappings: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get voice mappings`);
     }
   });
 
@@ -951,7 +951,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       await audioService.saveVoiceMappings(validatedMappings);
     } catch (error) {
       console.error('Error saving voice mappings:', error);
-      throw wrapError(error, `Failed to save voice mappings: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to save voice mappings`);
     }
   });
 
@@ -960,7 +960,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       await audioService.resetVoiceMappingsToDefaults();
     } catch (error) {
       console.error('Error resetting voice mappings:', error);
-      throw wrapError(error, `Failed to reset voice mappings: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to reset voice mappings`);
     }
   });
 }
@@ -975,7 +975,7 @@ function setupQuizHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       return await databaseLayer.getWeakestWords(validatedLimit);
     } catch (error) {
       console.error('Error getting weakest words:', error);
-      throw wrapError(error, `Failed to get weakest words: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get weakest words`);
     }
   });
 
@@ -985,7 +985,7 @@ function setupQuizHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       return await databaseLayer.getRandomSentenceForWord(validatedWordId);
     } catch (error) {
       console.error('Error getting random sentence for word:', error);
-      throw wrapError(error, `Failed to get random sentence for word: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get random sentence for word`);
     }
   });
 }
@@ -1001,7 +1001,7 @@ function setupSRSHandlers(srsService: SRSService): void {
       return await srsService.processReview(validatedWordId, { recall: validatedRecall });
     } catch (error) {
       console.error('Error processing review:', error);
-      throw wrapError(error, `Failed to process review: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to process review`);
     }
   });
 
@@ -1016,7 +1016,7 @@ function setupSRSHandlers(srsService: SRSService): void {
       return await srsService.processQuizResults(validatedResults);
     } catch (error) {
       console.error('Error processing quiz results:', error);
-      throw wrapError(error, `Failed to process quiz results: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to process quiz results`);
     }
   });
 
@@ -1027,7 +1027,7 @@ function setupSRSHandlers(srsService: SRSService): void {
       return await srsService.getTodaysStudyWords(validatedMaxWords, validatedLanguage);
     } catch (error) {
       console.error('Error getting todays study words:', error);
-      throw wrapError(error, `Failed to get todays study words: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get todays study words`);
     }
   });
 
@@ -1037,7 +1037,7 @@ function setupSRSHandlers(srsService: SRSService): void {
       return await srsService.getDashboardStats(validatedLanguage);
     } catch (error) {
       console.error('Error getting dashboard stats:', error);
-      throw wrapError(error, `Failed to get dashboard stats: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get dashboard stats`);
     }
   });
 
@@ -1048,7 +1048,7 @@ function setupSRSHandlers(srsService: SRSService): void {
       return await srsService.markWordDifficulty(validatedWordId, validatedDifficulty);
     } catch (error) {
       console.error('Error marking word difficulty:', error);
-      throw wrapError(error, `Failed to mark word difficulty: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to mark word difficulty`);
     }
   });
 
@@ -1058,7 +1058,7 @@ function setupSRSHandlers(srsService: SRSService): void {
       return await srsService.resetWordProgress(validatedWordId);
     } catch (error) {
       console.error('Error resetting word progress:', error);
-      throw wrapError(error, `Failed to reset word progress: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to reset word progress`);
     }
   });
 
@@ -1068,7 +1068,7 @@ function setupSRSHandlers(srsService: SRSService): void {
       return await srsService.getOverdueWords(validatedLanguage);
     } catch (error) {
       console.error('Error getting overdue words:', error);
-      throw wrapError(error, `Failed to get overdue words: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get overdue words`);
     }
   });
 
@@ -1078,7 +1078,7 @@ function setupSRSHandlers(srsService: SRSService): void {
       return await srsService.initializeExistingWords(validatedLanguage);
     } catch (error) {
       console.error('Error initializing existing words:', error);
-      throw wrapError(error, `Failed to initialize existing words: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to initialize existing words`);
     }
   });
 }
@@ -1115,7 +1115,7 @@ function setupJobHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       );
     } catch (error) {
       console.error('Error enqueueing word generation:', error);
-      throw wrapError(error, `Failed to enqueue word generation: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to enqueue word generation`);
     }
   });
 
@@ -1125,7 +1125,7 @@ function setupJobHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       return await databaseLayer.getWordProcessingInfo(validatedWordId);
     } catch (error) {
       console.error('Error getting word processing status:', error);
-      throw wrapError(error, `Failed to get word status: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get word status`);
     }
   });
 
@@ -1135,7 +1135,7 @@ function setupJobHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       return await databaseLayer.getWordGenerationQueueSummary(validatedLanguage);
     } catch (error) {
       console.error('Error getting queue summary:', error);
-      throw wrapError(error, `Failed to get queue summary: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get queue summary`);
     }
   });
 }
@@ -1154,7 +1154,7 @@ function setupLifecycleHandlers(
       return await lifecycleManager.createBackup();
     } catch (error) {
       console.error('Error creating backup:', error);
-      throw wrapError(error, `Failed to create backup: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to create backup`);
     }
   });
 
@@ -1164,7 +1164,7 @@ function setupLifecycleHandlers(
       await lifecycleManager.restoreFromBackup(validatedBackupPath);
     } catch (error) {
       console.error('Error restoring from backup:', error);
-      throw wrapError(error, `Failed to restore from backup: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to restore from backup`);
     }
   });
 
@@ -1183,7 +1183,7 @@ function setupLifecycleHandlers(
       return app.getVersion();
     } catch (error) {
       console.error('Error getting app version:', error);
-      throw wrapError(error, `Failed to get app version: ${getErrorMessage(error)}`);
+      throw wrapError(error, `Failed to get app version`);
     }
   });
 

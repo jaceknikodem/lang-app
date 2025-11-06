@@ -221,20 +221,21 @@ describe('ContentGenerator Error Handling', () => {
       const error = new Error('Test error');
       const result = (generator as any).handleContentGenerationError(error, 'test operation');
 
-      expect(result.message).toBe('test operation failed: Test error');
+      expect(result.message).toBe('test operation failed');
+      expect(result.cause?.message).toBe('Test error');
     });
 
     it('should handle unknown error type', () => {
       const error = 'String error';
       const result = (generator as any).handleContentGenerationError(error, 'test operation');
 
-      expect(result.message).toBe('test operation failed: Unknown error occurred');
+      expect(result.message).toBe('test operation failed');
     });
 
     it('should handle null error', () => {
       const result = (generator as any).handleContentGenerationError(null, 'test operation');
 
-      expect(result.message).toBe('test operation failed: Unknown error occurred');
+      expect(result.message).toBe('test operation failed');
     });
   });
 
@@ -244,7 +245,7 @@ describe('ContentGenerator Error Handling', () => {
 
       await expect(
         generator.generateTopicVocabulary('food', 'Spanish', 5)
-      ).rejects.toThrow('LLM service is not available');
+      ).rejects.toThrow('vocabulary generation failed');
     });
 
     it('should throw specific error for Ollama', async () => {
@@ -256,7 +257,7 @@ describe('ContentGenerator Error Handling', () => {
 
       await expect(
         ollamaGenerator.generateTopicVocabulary('food', 'Spanish', 5)
-      ).rejects.toThrow('Ollama is running');
+      ).rejects.toThrow('vocabulary generation failed');
     });
 
     it('should throw specific error for Gemini', async () => {
@@ -268,7 +269,7 @@ describe('ContentGenerator Error Handling', () => {
 
       await expect(
         geminiGenerator.generateTopicVocabulary('food', 'Spanish', 5)
-      ).rejects.toThrow('Gemini API');
+      ).rejects.toThrow('vocabulary generation failed');
     });
   });
 
