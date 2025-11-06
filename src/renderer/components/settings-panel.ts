@@ -6,6 +6,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
+import { sessionManager } from '../utils/session-manager.js';
 import './voice-bubble.js';
 import './status-message.js';
 import './confirmation-dialog.js';
@@ -405,6 +406,12 @@ export class SettingsPanel extends LitElement {
   private isResettingProgress = false;
 
   @state()
+  private showClearSessionConfirmation = false;
+
+  @state()
+  private clearSessionStatus = '';
+
+  @state()
   private availableLLMModels: string[] = [];
 
   @state()
@@ -781,6 +788,35 @@ export class SettingsPanel extends LitElement {
 
   private hideResetProgressConfirmation() {
     this.showResetProgressConfirmation = false;
+  }
+
+  private showClearSessionConfirmationDialog() {
+    this.showClearSessionConfirmation = true;
+  }
+
+  private hideClearSessionConfirmation() {
+    this.showClearSessionConfirmation = false;
+  }
+
+  private handleClearSessionConfirm() {
+    this.confirmClearSession();
+  }
+
+  private handleClearSessionCancel() {
+    this.hideClearSessionConfirmation();
+  }
+
+  private async confirmClearSession() {
+    this.showClearSessionConfirmation = false;
+    this.clearSessionStatus = '';
+
+    try {
+      sessionManager.clearSession();
+      this.clearSessionStatus = 'All session data has been cleared successfully.';
+    } catch (error) {
+      console.error('Failed to clear session:', error);
+      this.clearSessionStatus = `Failed to clear session: ${getErrorMessage(error)}`;
+    }
   }
 
   private async confirmResetProgress() {
@@ -1366,6 +1402,24 @@ export class SettingsPanel extends LitElement {
                 Restore Backup
               </app-button>
             </div>
+            <div class="backup-action">
+              <div class="settings-description">
+                <strong>Clear Session Data</strong>
+                <p>Clear all cached session data (learning progress, quiz sessions, etc.)</p>
+              </div>
+              <app-button
+                variant="primary"
+                @click=${this.showClearSessionConfirmationDialog}
+              >
+                Clear Session
+              </app-button>
+              ${this.clearSessionStatus ? html`
+                <status-message 
+                  type=${this.clearSessionStatus.includes('Failed') ? 'error' : 'success'} 
+                  message=${this.clearSessionStatus}
+                ></status-message>
+              ` : ''}
+            </div>
           </div>
         </div>
 
@@ -1454,6 +1508,26 @@ export class SettingsPanel extends LitElement {
           `}
           @confirm=${this.handleResetProgressConfirm}
           @cancel=${this.handleResetProgressCancel}
+        ></confirmation-dialog>
+
+        <confirmation-dialog
+          .open=${this.showClearSessionConfirmation}
+          title="⚠️ Confirm Clear Session"
+          variant="warning"
+          confirmText="Yes, Clear Session"
+          cancelText="Cancel"
+          .message=${html`
+            <p>This will clear all cached session data:</p>
+            <ul>
+              <li>Learning session progress</li>
+              <li>Quiz session data</li>
+              <li>Dialog session data</li>
+              <li>Current mode state</li>
+            </ul>
+            <p><strong>Note:</strong> This will not delete your words, sentences, or progress from the database. Only cached session state will be cleared.</p>
+          `}
+          @confirm=${this.handleClearSessionConfirm}
+          @cancel=${this.handleClearSessionCancel}
         ></confirmation-dialog>
       </div>
     `;
