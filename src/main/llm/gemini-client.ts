@@ -67,11 +67,12 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
     try {
       // Use a simpler endpoint to test API availability
       const url = `${this.baseUrl}?key=${this.apiKey}`;
+      const pTimeout = (await import('p-timeout')).default;
       
-      const response = await fetch(url, {
-        method: 'GET',
-        signal: AbortSignal.timeout(3000)
-      });
+      const response = await pTimeout(
+        fetch(url, { method: 'GET' }),
+        { milliseconds: 3000 }
+      );
       
       return response.ok;
     } catch (error) {
@@ -218,20 +219,18 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
           maxOutputTokens: 2048
         }
       };
+      const pTimeout = (await import('p-timeout')).default;
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
-
-      const response = await fetch(`${this.baseUrl}/${selectedModel}:generateContent?key=${this.apiKey}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
+      const response = await pTimeout(
+        fetch(`${this.baseUrl}/${selectedModel}:generateContent?key=${this.apiKey}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+        }),
+        { milliseconds: this.config.timeout || 60000 }
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -251,7 +250,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
 
       return candidate.content.parts[0].text.trim();
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
+      if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
         throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
       }
       throw super.createLLMError(error instanceof Error ? error : new Error(String(error)), 'Failed to generate response');
@@ -273,24 +272,21 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         maxOutputTokens: 2048
       }
     };
+    const pRetry = (await import('p-retry')).default;
+    const pTimeout = (await import('p-timeout')).default;
 
-    let lastError: Error | null = null;
-
-    for (let attempt = 1; attempt <= this.config.maxRetries!; attempt++) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
-
-        const response = await fetch(`${this.baseUrl}/${selectedModel}:generateContent?key=${this.apiKey}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
+    return await pRetry(
+      async () => {
+        const response = await pTimeout(
+          fetch(`${this.baseUrl}/${selectedModel}:generateContent?key=${this.apiKey}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+          }),
+          { milliseconds: this.config.timeout || 60000 }
+        );
 
         if (!response.ok) {
           const errorText = await response.text();
@@ -314,7 +310,6 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
 
         const cleanResponse = cleanLLMResponse(candidate.content.parts[0].text);
 
-
         // Parse JSON
         let parsed: any;
         try {
@@ -325,48 +320,49 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         }
 
         return parsed;
+      },
+      {
+        retries: this.config.maxRetries!,
+        onFailedAttempt: async (error) => {
+          // Don't retry on certain errors
+          if (error instanceof Error) {
+            if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+              throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
+            }
+            if (error.message.includes('JSON') && !error.message.includes('Insufficient')) {
+              throw super.createLLMError(error, 'Invalid response format', 'INVALID_RESPONSE', false);
+            }
 
-      } catch (error) {
-        lastError = error as Error;
+            // Check if this is a 429 error and extract retry delay
+            if ((error as any).status === 429 && (error as any).errorText) {
+              const retryDelayMs = this.extractRetryDelay((error as any).errorText);
+              
+              // If retryDelay is null (>= 2 minutes), give up immediately
+              if (retryDelayMs === null) {
+                throw super.createLLMError(error, 'Rate limit exceeded - retry delay too long', 'CONNECTION_ERROR', false);
+              }
 
-        // Don't retry on certain errors
-        if (error instanceof Error) {
-          if (error.name === 'AbortError') {
-            throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
+              // Use the extracted retry delay from the API
+              const seconds = Math.ceil(retryDelayMs / 1000);
+              console.log(`Attempt ${error.attemptNumber} failed with HTTP 429, retrying in ${seconds}s (as specified by API)...`);
+              await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+            } else {
+              // Use exponential backoff for other errors (handled by minTimeout/maxTimeout/factor)
+              const backoffSeconds = Math.pow(2, error.attemptNumber - 1);
+              console.log(`Attempt ${error.attemptNumber} failed, retrying in ${backoffSeconds}s...`);
+            }
           }
-          if (error.message.includes('JSON') && !error.message.includes('Insufficient')) {
-            throw super.createLLMError(error, 'Invalid response format', 'INVALID_RESPONSE', false);
-          }
-        }
-
-        // Check if this is a 429 error and extract retry delay
-        let retryDelayMs: number | null = null;
-        if (error instanceof Error && (error as any).status === 429 && (error as any).errorText) {
-          retryDelayMs = this.extractRetryDelay((error as any).errorText);
-          
-          // If retryDelay is null (>= 2 minutes), give up immediately
-          if (retryDelayMs === null) {
-            throw super.createLLMError(error, 'Rate limit exceeded - retry delay too long', 'CONNECTION_ERROR', false);
-          }
-        }
-
-        // Wait before retry
-        if (attempt < this.config.maxRetries!) {
-          if (retryDelayMs !== null) {
-            // Use the extracted retry delay from the API
-            const seconds = Math.ceil(retryDelayMs / 1000);
-            console.log(`Attempt ${attempt} failed with HTTP 429, retrying in ${seconds}s (as specified by API)...`);
-            await super.delay(retryDelayMs);
-          } else {
-            // Use exponential backoff for other errors
-            const backoffSeconds = Math.pow(2, attempt - 1);
-            console.log(`Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`);
-            await super.delay(backoffSeconds * 1000);
-          }
-        }
+        },
+        minTimeout: 1000, // 1 second minimum
+        maxTimeout: 120000, // 2 minutes maximum
+        factor: 2 // Exponential backoff factor
       }
-    }
-
-    throw super.createLLMError(lastError!, 'Max retries exceeded', 'CONNECTION_ERROR', false);
+    ).catch((error) => {
+      // Handle final error after all retries exhausted
+      if (error instanceof Error && error.name === 'TimeoutError') {
+        throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
+      }
+      throw super.createLLMError(error instanceof Error ? error : new Error(String(error)), 'Max retries exceeded', 'CONNECTION_ERROR', false);
+    });
   }
 }

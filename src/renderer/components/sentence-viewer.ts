@@ -1123,32 +1123,29 @@ export class SentenceViewer extends LitElement {
       try {
         this.dictionaryLookupInFlight.add(dictionaryKey);
         
-        // Add timeout to prevent hanging lookups
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Dictionary lookup timeout')), 10000); // 10 second timeout
-        });
-        
         // Try original word lookup first
-        const entries = await Promise.race([
+        const pTimeout = (await import('p-timeout')).default;
+        const entries = await pTimeout(
           window.electronAPI.database.lookupDictionary(
             word,
             languageOverride ?? this.targetWord?.language
           ),
-          timeoutPromise
-        ]);
+          { milliseconds: 10000 } // 10 second timeout
+        );
         
         let normalizedEntries = Array.isArray(entries) && entries.length > 0 ? entries : null;
         
         // If original lookup failed and we have a lemma, try lemma lookup
         if (!normalizedEntries && lemma && lemma.toLowerCase().trim() !== word.toLowerCase().trim()) {
           try {
-            const lemmaEntries = await Promise.race([
+            const pTimeout = (await import('p-timeout')).default;
+            const lemmaEntries = await pTimeout(
               window.electronAPI.database.lookupDictionary(
                 lemma,
                 languageOverride ?? this.targetWord?.language
               ),
-              timeoutPromise
-            ]);
+              { milliseconds: 10000 } // 10 second timeout
+            );
             
             normalizedEntries = Array.isArray(lemmaEntries) && lemmaEntries.length > 0 ? lemmaEntries : null;
             

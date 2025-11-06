@@ -34,10 +34,13 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
 
   async isAvailable(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.config.baseUrl}/api/tags`, {
-        method: 'GET',
-        signal: AbortSignal.timeout(5000)
-      });
+      const pTimeout = (await import('p-timeout')).default;
+      const response = await pTimeout(
+        fetch(`${this.config.baseUrl}/api/tags`, {
+          method: 'GET'
+        }),
+        { milliseconds: 5000 }
+      );
       return response.ok;
     } catch (error) {
       return false;
@@ -46,10 +49,13 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
 
   async getAvailableModels(): Promise<string[]> {
     try {
-      const response = await fetch(`${this.config.baseUrl}/api/tags`, {
-        method: 'GET',
-        signal: AbortSignal.timeout(5000)
-      });
+      const pTimeout = (await import('p-timeout')).default;
+      const response = await pTimeout(
+        fetch(`${this.config.baseUrl}/api/tags`, {
+          method: 'GET'
+        }),
+        { milliseconds: 5000 }
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -75,20 +81,18 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
         prompt,
         stream: false
       };
+      const pTimeout = (await import('p-timeout')).default;
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
-
-      const response = await fetch(`${this.config.baseUrl}/api/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
+      const response = await pTimeout(
+        fetch(`${this.config.baseUrl}/api/generate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+        }),
+        { milliseconds: this.config.timeout || 60000 }
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -102,7 +106,7 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
 
       return data.response.trim();
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
+      if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
         throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
       }
       throw super.createLLMError(error instanceof Error ? error : new Error(String(error)), 'Failed to generate response');
@@ -117,24 +121,21 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
       stream: false
       // Removed format: 'json' as it forces single objects instead of arrays
     };
+    const pRetry = (await import('p-retry')).default;
+    const pTimeout = (await import('p-timeout')).default;
 
-    let lastError: Error | null = null;
-
-    for (let attempt = 1; attempt <= this.config.maxRetries!; attempt++) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
-
-        const response = await fetch(`${this.config.baseUrl}/api/generate`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
+    return await pRetry(
+      async () => {
+        const response = await pTimeout(
+          fetch(`${this.config.baseUrl}/api/generate`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+          }),
+          { milliseconds: this.config.timeout || 60000 }
+        );
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -158,27 +159,34 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
         }
 
         return parsed;
-
-      } catch (error) {
-        lastError = error as Error;
-
-        // Don't retry on certain errors
-        if (error instanceof Error) {
-          if (error.name === 'AbortError') {
-            throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
+      },
+      {
+        retries: this.config.maxRetries!,
+        onFailedAttempt: (error) => {
+          // Don't retry on certain errors
+          if (error instanceof Error) {
+            if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+              throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
+            }
+            if (error.message.includes('JSON') && !error.message.includes('Insufficient')) {
+              throw super.createLLMError(error, 'Invalid response format', 'INVALID_RESPONSE', false);
+            }
           }
-          if (error.message.includes('JSON') && !error.message.includes('Insufficient')) {
-            throw super.createLLMError(error, 'Invalid response format', 'INVALID_RESPONSE', false);
-          }
-        }
 
-        // Wait before retry (exponential backoff)
-        if (attempt < this.config.maxRetries!) {
-          await super.delay(Math.pow(2, attempt - 1) * 1000);
-        }
+          // Use exponential backoff for other errors (handled by minTimeout/maxTimeout/factor)
+          const backoffSeconds = Math.pow(2, error.attemptNumber - 1);
+          console.log(`Attempt ${error.attemptNumber} failed, retrying in ${backoffSeconds}s...`);
+        },
+        minTimeout: 1000, // 1 second minimum
+        maxTimeout: 120000, // 2 minutes maximum
+        factor: 2 // Exponential backoff factor
       }
-    }
-
-    throw super.createLLMError(lastError!, 'Max retries exceeded', 'CONNECTION_ERROR', false);
+    ).catch((error) => {
+      // Handle final error after all retries exhausted
+      if (error instanceof Error && error.name === 'TimeoutError') {
+        throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
+      }
+      throw super.createLLMError(error instanceof Error ? error : new Error(String(error)), 'Max retries exceeded', 'CONNECTION_ERROR', false);
+    });
   }
 }

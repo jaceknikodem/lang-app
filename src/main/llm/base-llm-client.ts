@@ -586,11 +586,5 @@ Preferred JSON format:
     return error;
   }
 
-  /**
-   * Delay helper for retry logic
-   */
-  protected delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
 }
 

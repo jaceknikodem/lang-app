@@ -48,8 +48,7 @@ describe('GeminiClient', () => {
       expect(fetch).toHaveBeenCalledWith(
         expect.stringContaining('generativelanguage.googleapis.com'),
         expect.objectContaining({
-          method: 'GET',
-          signal: expect.any(AbortSignal)
+          method: 'GET'
         })
       );
     });

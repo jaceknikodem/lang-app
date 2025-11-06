@@ -330,9 +330,25 @@ export class ContentGenerator {
       }
     }
 
-    const words = await this.executeWithRetry(
+    const pRetry = (await import('p-retry')).default;
+    const words = await pRetry(
       () => this.llmClient.generateTopicWords(topicText, targetLanguage, wordCount, proficiencyLevel),
-      `generate vocabulary for topic: ${topicText || 'general'}`
+      {
+        retries: this.config.retryAttempts,
+        onFailedAttempt: async (error) => {
+          // Check if error is retryable
+          if (error instanceof Error && 'retryable' in error && 'code' in error) {
+            const llmError = error as LLMError;
+            if (!llmError.retryable) {
+              throw error;
+            }
+          }
+          // Linear backoff: retryDelay * attemptNumber
+          const delayMs = this.config.retryDelay * error.attemptNumber;
+          console.warn(`Attempt ${error.attemptNumber} failed for generate vocabulary for topic: ${topicText || 'general'}: ${error}. Retrying in ${delayMs}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+      }
     );
 
     // Validate and filter results
@@ -567,9 +583,25 @@ export class ContentGenerator {
       }
 
       // Generate only the needed number of sentences
-      const sentences = await this.executeWithRetry(
+      const pRetry = (await import('p-retry')).default;
+      const sentences = await pRetry(
         () => this.llmClient.generateSentences(word.trim(), targetLanguage, needed, topic, proficiencyLevel),
-        `generate sentences for word: ${word}`
+        {
+          retries: this.config.retryAttempts,
+          onFailedAttempt: async (error) => {
+            // Check if error is retryable
+            if (error instanceof Error && 'retryable' in error && 'code' in error) {
+              const llmError = error as LLMError;
+              if (!llmError.retryable) {
+                throw error;
+              }
+            }
+            // Linear backoff: retryDelay * attemptNumber
+            const delayMs = this.config.retryDelay * error.attemptNumber;
+            console.warn(`Attempt ${error.attemptNumber} failed for generate sentences for word: ${word}: ${error}. Retrying in ${delayMs}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+          }
+        }
       );
 
       // Validate and filter LLM results
@@ -619,43 +651,6 @@ export class ContentGenerator {
     return this.frequencyWordManager.getAvailableLanguages();
   }
 
-  /**
-   * Execute a function with retry logic and error handling
-   */
-  private async executeWithRetry<T>(
-    operation: () => Promise<T>,
-    operationName: string
-  ): Promise<T> {
-    let lastError: Error | null = null;
-
-    for (let attempt = 1; attempt <= this.config.retryAttempts + 1; attempt++) {
-      try {
-        return await operation();
-      } catch (error) {
-        lastError = error as Error;
-
-        // Check if error is retryable
-        if (error instanceof Error && 'retryable' in error) {
-          const llmError = error as LLMError;
-          if (!llmError.retryable) {
-            throw error;
-          }
-        }
-
-        // Don't retry on the last attempt
-        if (attempt > this.config.retryAttempts) {
-          break;
-        }
-
-        console.warn(`Attempt ${attempt} failed for ${operationName}: ${error}. Retrying...`);
-
-        // Wait before retry
-        await this.delay(this.config.retryDelay * attempt);
-      }
-    }
-
-    throw lastError || new Error(`Failed to ${operationName} after ${this.config.retryAttempts + 1} attempts`);
-  }
 
   /**
    * Validate generated words and filter out invalid entries
@@ -868,10 +863,4 @@ export class ContentGenerator {
     return shuffled;
   }
 
-  /**
-   * Utility method for delays
-   */
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
 }

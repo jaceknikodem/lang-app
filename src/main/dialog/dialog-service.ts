@@ -257,9 +257,9 @@ export class DialogService {
   }
 
   /**
-   * Pre-generate multiple dialog sessions (batch DB queries, sequential LLM calls)
-   * Batches database queries for efficiency but processes LLM-dependent operations sequentially
-   * to avoid flooding the LLM service
+   * Pre-generate multiple dialog sessions (batch DB queries, controlled concurrent LLM calls)
+   * Batches database queries for efficiency and uses controlled concurrency for LLM requests
+   * to avoid flooding the LLM service while allowing parallel processing
    */
   async pregenerateSessions(count: number, language: string): Promise<DialogSession[]> {
     if (count <= 0) {
@@ -290,44 +290,48 @@ export class DialogService {
       allExistingVariantsMap.set(sentenceId, variants);
     }));
 
-    // Step 4: Process each sentence sequentially for LLM-dependent operations
-    // This avoids flooding the LLM service with concurrent requests
+    // Step 4: Process each sentence with controlled concurrency for LLM-dependent operations
+    // Limit to 3 concurrent LLM requests to avoid flooding the service
+    const pLimit = (await import('p-limit')).default;
+    const limit = pLimit(3);
     const sessions: DialogSession[] = [];
 
-    for (const sentence of sentences) {
-      try {
-        // Generate variants sequentially (LLM call)
-        const existingVariants = allExistingVariantsMap.get(sentence.id) || [];
-        const variants = await this.generateDialogueVariants(sentence, existingVariants, knownWords, language);
+    await Promise.all(sentences.map(sentence =>
+      limit(async () => {
+        try {
+          // Generate variants (LLM call)
+          const existingVariants = allExistingVariantsMap.get(sentence.id) || [];
+          const variants = await this.generateDialogueVariants(sentence, existingVariants, knownWords, language);
 
-        // Create pseudo-variant for original sentence
-        const originalVariant = {
-          id: -sentence.id,
-          sentenceId: sentence.id,
-          variantSentence: sentence.sentence,
-          variantTranslation: sentence.translation,
-          createdAt: new Date()
-        };
+          // Create pseudo-variant for original sentence
+          const originalVariant = {
+            id: -sentence.id,
+            sentenceId: sentence.id,
+            variantSentence: sentence.sentence,
+            variantTranslation: sentence.translation,
+            createdAt: new Date()
+          };
 
-        // Combine response options
-        const responseOptions: DialogueVariant[] = shuffleAndTake(
-          [originalVariant, ...variants],
-          3  // original + up to 2 variants = 3 total
-        );
+          // Combine response options
+          const responseOptions: DialogueVariant[] = shuffleAndTake(
+            [originalVariant, ...variants],
+            3  // original + up to 2 variants = 3 total
+          );
 
-        sessions.push({
-          sentenceId: sentence.id,
-          sentence: sentence.sentence,
-          translation: sentence.translation,
-          contextBefore: sentence.contextBefore,
-          contextBeforeTranslation: sentence.contextBeforeTranslation,
-          beforeSentenceAudio: undefined, // Will be set by IPC handler
-          responseOptions: responseOptions.map(toDialogResponseOption)
-        });
-      } catch (error) {
-        // Continue with other sentences even if one fails
-      }
-    }
+          sessions.push({
+            sentenceId: sentence.id,
+            sentence: sentence.sentence,
+            translation: sentence.translation,
+            contextBefore: sentence.contextBefore,
+            contextBeforeTranslation: sentence.contextBeforeTranslation,
+            beforeSentenceAudio: undefined, // Will be set by IPC handler
+            responseOptions: responseOptions.map(toDialogResponseOption)
+          });
+        } catch (error) {
+          // Continue with other sentences even if one fails
+        }
+      })
+    ));
 
     return sessions;
   }
