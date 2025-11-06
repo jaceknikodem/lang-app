@@ -6,6 +6,9 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import './voice-bubble.js';
+import './status-message.js';
+import './confirmation-dialog.js';
+import './app-button.js';
 
 // Type is already declared in preload.ts, no need to redeclare
 
@@ -755,6 +758,22 @@ export class SettingsPanel extends LitElement {
     this.showConfirmation = false;
   }
 
+  private handleRestartConfirm() {
+    this.confirmRestartAll();
+  }
+
+  private handleRestartCancel() {
+    this.hideRestartConfirmation();
+  }
+
+  private handleResetProgressConfirm() {
+    this.confirmResetProgress();
+  }
+
+  private handleResetProgressCancel() {
+    this.hideResetProgressConfirmation();
+  }
+
   private showResetProgressConfirmationDialog() {
     this.showResetProgressConfirmation = true;
   }
@@ -1103,9 +1122,7 @@ export class SettingsPanel extends LitElement {
           <h3>Language Model (LLM)</h3>
           
           ${this.isLoadingProviders ? html`
-            <div class="status-message status-info">
-              Loading available providers...
-            </div>
+            <status-message type="info" message="Loading available providers..."></status-message>
           ` : html`
             <div class="dropdown-row">
               <div class="dropdown-description">
@@ -1148,9 +1165,7 @@ export class SettingsPanel extends LitElement {
           `}
           
           ${this.isLoadingLLMModels ? html`
-            <div class="status-message status-info">
-              Loading available models...
-            </div>
+            <status-message type="info" message="Loading available models..."></status-message>
           ` : this.availableLLMModels.length > 0 ? html`
             <div class="dropdown-row">
               <div class="dropdown-description">
@@ -1201,9 +1216,7 @@ export class SettingsPanel extends LitElement {
               Sentence generation: ${this.currentSentenceGenerationModel || 'None selected'} ${this.getLLMModelDescription(this.currentSentenceGenerationModel)}
             </div>
           ` : html`
-            <div class="status-message status-error">
-              No LLM models available. Please ensure Ollama is running and has models installed.
-            </div>
+            <status-message type="error" message="No LLM models available. Please ensure Ollama is running and has models installed."></status-message>
           `}
         </div>
 
@@ -1251,9 +1264,7 @@ export class SettingsPanel extends LitElement {
                 </p>
 
                 ${this.isLoadingVoiceMappings ? html`
-                  <div class="status-message status-info">
-                    Loading voice mappings...
-                  </div>
+                  <status-message type="info" message="Loading voice mappings..."></status-message>
                 ` : html`
                   ${this.getSupportedLanguages().map(language => html`
                     <div class="settings-row">
@@ -1289,16 +1300,18 @@ export class SettingsPanel extends LitElement {
                   `)}
 
                   <div style="margin-top: var(--spacing-md); display: flex; gap: var(--spacing-md); align-items: center;">
-                    <button 
-                      class="action-button"
+                    <app-button
+                      variant="primary"
                       @click=${this.resetVoiceMappingsToDefaults}
                     >
                       Reset to Defaults
-                    </button>
+                    </app-button>
                     ${this.voiceMappingStatus ? html`
-                      <div class="status-message ${this.voiceMappingStatus.includes('Failed') ? 'status-error' : 'status-success'}" style="margin: 0;">
-                        ${this.voiceMappingStatus}
-                      </div>
+                      <status-message 
+                        type=${this.voiceMappingStatus.includes('Failed') ? 'error' : 'success'} 
+                        message=${this.voiceMappingStatus}
+                        style="margin: 0;"
+                      ></status-message>
                     ` : ''}
                   </div>
                 `}
@@ -1325,17 +1338,19 @@ export class SettingsPanel extends LitElement {
                 <strong>Create Backup</strong>
                 <p>Create a backup of your learning data and audio files</p>
               </div>
-              <button 
-                class="action-button" 
-                @click=${this.createBackup}
+              <app-button
+                variant="primary"
                 ?disabled=${this.isCreatingBackup}
+                ?loading=${this.isCreatingBackup}
+                @click=${this.createBackup}
               >
                 ${this.isCreatingBackup ? 'Creating...' : 'Create Backup'}
-              </button>
+              </app-button>
               ${this.backupStatus && !this.backupStatus.includes('Restore') ? html`
-                <div class="status-message ${this.backupStatus.includes('Failed') ? 'status-error' : 'status-success'}">
-                  ${this.backupStatus}
-                </div>
+                <status-message 
+                  type=${this.backupStatus.includes('Failed') ? 'error' : 'success'} 
+                  message=${this.backupStatus}
+                ></status-message>
               ` : ''}
             </div>
             <div class="backup-action">
@@ -1343,12 +1358,12 @@ export class SettingsPanel extends LitElement {
                 <strong>Restore Backup</strong>
                 <p>Open the backup directory to browse and restore from your backups</p>
               </div>
-              <button 
-                class="action-button" 
+              <app-button
+                variant="primary"
                 @click=${this.openBackupDirectory}
               >
                 Restore Backup
-              </button>
+              </app-button>
             </div>
           </div>
         </div>
@@ -1360,101 +1375,85 @@ export class SettingsPanel extends LitElement {
               <strong>Restart All</strong>
               <p>Permanently delete all words, sentences, progress, and audio files. Backups will be preserved. This cannot be undone!</p>
             </div>
-            <button 
-              class="action-button danger" 
-              @click=${this.showRestartConfirmation}
+            <app-button
+              variant="danger"
               ?disabled=${this.isRestarting}
+              ?loading=${this.isRestarting}
+              @click=${this.showRestartConfirmation}
             >
               ${this.isRestarting ? 'Clearing...' : 'Restart All'}
-            </button>
+            </app-button>
           </div>
           ${this.restartStatus ? html`
-            <div class="status-message ${this.restartStatus.includes('Failed') ? 'status-error' : 'status-success'}">
-              ${this.restartStatus}
-            </div>
+            <status-message 
+              type=${this.restartStatus.includes('Failed') ? 'error' : 'success'} 
+              message=${this.restartStatus}
+            ></status-message>
           ` : ''}
           <div class="settings-row">
             <div class="settings-description">
               <strong>Reset Progress</strong>
               <p>Reset all learning progress for ${this.capitalizeLanguage(this.currentLanguage || 'the active language')}: pronunciation history, FSRS values, sentence counts, and last seen timestamps. Words marked as known/ignored will be deleted entirely. This cannot be undone!</p>
             </div>
-            <button 
-              class="action-button danger" 
-              @click=${this.showResetProgressConfirmationDialog}
+            <app-button
+              variant="danger"
               ?disabled=${this.isResettingProgress}
+              ?loading=${this.isResettingProgress}
+              @click=${this.showResetProgressConfirmationDialog}
             >
               ${this.isResettingProgress ? 'Resetting...' : 'Reset Progress'}
-            </button>
+            </app-button>
           </div>
           ${this.resetProgressStatus ? html`
-            <div class="status-message ${this.resetProgressStatus.includes('Failed') ? 'status-error' : 'status-success'}">
-              ${this.resetProgressStatus}
-            </div>
+            <status-message 
+              type=${this.resetProgressStatus.includes('Failed') ? 'error' : 'success'} 
+              message=${this.resetProgressStatus}
+            ></status-message>
           ` : ''}
         </div>
 
-        ${this.showConfirmation ? html`
-          <div class="confirmation-dialog">
-            <div class="confirmation-content">
-              <h3>⚠️ Confirm Restart All</h3>
-              <p>This will permanently delete:</p>
-              <ul style="text-align: left; margin: 1rem 0;">
-                <li>All words and translations</li>
-                <li>All sentences and examples</li>
-                <li>All progress and statistics</li>
-                <li>All audio files</li>
-              </ul>
-              <p style="color: #28a745; font-size: 0.9rem;"><strong>Note:</strong> Backup files will be preserved.</p>
-              <p><strong>This action cannot be undone!</strong></p>
-              <div class="confirmation-actions">
-                <button 
-                  class="action-button danger" 
-                  @click=${this.confirmRestartAll}
-                >
-                  Yes, Delete Everything
-                </button>
-                <button 
-                  class="action-button" 
-                  @click=${this.hideRestartConfirmation}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        ` : ''}
+        <confirmation-dialog
+          .open=${this.showConfirmation}
+          title="⚠️ Confirm Restart All"
+          variant="danger"
+          confirmText="Yes, Delete Everything"
+          cancelText="Cancel"
+          .message=${html`
+            <p>This will permanently delete:</p>
+            <ul>
+              <li>All words and translations</li>
+              <li>All sentences and examples</li>
+              <li>All progress and statistics</li>
+              <li>All audio files</li>
+            </ul>
+            <p style="color: #28a745; font-size: 0.9rem;"><strong>Note:</strong> Backup files will be preserved.</p>
+            <p><strong>This action cannot be undone!</strong></p>
+          `}
+          @confirm=${this.handleRestartConfirm}
+          @cancel=${this.handleRestartCancel}
+        ></confirmation-dialog>
 
-        ${this.showResetProgressConfirmation ? html`
-          <div class="confirmation-dialog">
-            <div class="confirmation-content">
-              <h3>⚠️ Confirm Reset Progress</h3>
-              <p>This will reset all learning progress for <strong>${this.capitalizeLanguage(this.currentLanguage || 'the active language')}</strong>:</p>
-              <ul style="text-align: left; margin: 1rem 0;">
-                <li>All historical pronunciation attempts</li>
-                <li>All sentence counts</li>
-                <li>All FSRS values (difficulty, stability, lapses)</li>
-                <li>All words marked as known/ignored (deleted entirely)</li>
-                <li>All last seen timestamps</li>
-                <li>All sentence play counts</li>
-              </ul>
-              <p><strong>This action cannot be undone!</strong></p>
-              <div class="confirmation-actions">
-                <button 
-                  class="action-button danger" 
-                  @click=${this.confirmResetProgress}
-                >
-                  Yes, Reset Progress
-                </button>
-                <button 
-                  class="action-button" 
-                  @click=${this.hideResetProgressConfirmation}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        ` : ''}
+        <confirmation-dialog
+          .open=${this.showResetProgressConfirmation}
+          title="⚠️ Confirm Reset Progress"
+          variant="danger"
+          confirmText="Yes, Reset Progress"
+          cancelText="Cancel"
+          .message=${html`
+            <p>This will reset all learning progress for <strong>${this.capitalizeLanguage(this.currentLanguage || 'the active language')}</strong>:</p>
+            <ul>
+              <li>All historical pronunciation attempts</li>
+              <li>All sentence counts</li>
+              <li>All FSRS values (difficulty, stability, lapses)</li>
+              <li>All words marked as known/ignored (deleted entirely)</li>
+              <li>All last seen timestamps</li>
+              <li>All sentence play counts</li>
+            </ul>
+            <p><strong>This action cannot be undone!</strong></p>
+          `}
+          @confirm=${this.handleResetProgressConfirm}
+          @cancel=${this.handleResetProgressCancel}
+        ></confirmation-dialog>
       </div>
     `;
   }

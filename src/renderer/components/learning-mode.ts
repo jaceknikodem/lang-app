@@ -13,6 +13,7 @@ import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } fro
 import { loadCurrentLanguage, loadLemmatizationModel } from '../utils/language-manager.js';
 import './sentence-viewer.js';
 import './session-complete.js';
+import './progress-bar.js';
 import type { SessionSummary } from './session-complete.js';
 
 interface WordWithSentences extends Word {
@@ -2585,9 +2586,10 @@ export class LearningMode extends LitElement {
               </div>
             </div>
           </div>
-          <div class="progress-bar">
-            <div class="progress-fill" style="width: ${progressPercent}%"></div>
-          </div>
+          <progress-bar 
+            .value=${progressPercent} 
+            height="4px"
+          ></progress-bar>
         </div>
 
         <sentence-viewer

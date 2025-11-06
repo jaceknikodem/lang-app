@@ -11,6 +11,7 @@ import { router } from '../utils/router.js';
 import { sessionManager, type QuizSessionState } from '../utils/session-manager.js';
 import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 import './session-complete.js';
+import './progress-bar.js';
 import type { SessionSummary } from './session-complete.js';
 import type { RecordingResult } from './audio-recorder.js';
 import type { RecordingOptions, RecordingSession } from '../../shared/types/audio.js';
@@ -2582,9 +2583,11 @@ export class QuizMode extends LitElement {
         <div class="quiz-header">
           <div class="quiz-progress">
             <span>${this.quizSession.currentQuestionIndex + 1} / ${this.quizSession.totalQuestions}</span>
-            <div class="progress-bar">
-              <div class="progress-fill" style="width: ${progress}%"></div>
-            </div>
+            <progress-bar 
+              .value=${progress} 
+              height="4px"
+              style="width: 150px;"
+            ></progress-bar>
             <div class="audio-only-toggle" style="margin-bottom: 0;">
               <span class="audio-only-label" style="font-size: 12px;">Audio Only</span>
               <div 
