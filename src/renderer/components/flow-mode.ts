@@ -54,9 +54,22 @@ export class FlowMode extends LitElement {
   private dataArray: Uint8Array | null = null;
   private animationFrameId: number | null = null;
   private canvasElement: HTMLCanvasElement | null = null;
+  private currentSessionId: number | undefined;
 
   connectedCallback() {
     super.connectedCallback();
+    
+    // Create flow session for tracking
+    window.electronAPI.database.getCurrentLanguage().then(async language => {
+      try {
+        this.currentSessionId = await window.electronAPI.tracking.createSession('flow', language);
+      } catch (error) {
+        console.warn('Failed to create flow session:', error);
+      }
+    }).catch(err => {
+      console.warn('Failed to get current language for flow session:', err);
+    });
+    
     this.loadFlowSentences();
 
     // Set up direct keyboard listener for flow mode (handles space key when overlay is visible)

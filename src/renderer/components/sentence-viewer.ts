@@ -76,6 +76,10 @@ export class SentenceViewer extends LitElement {
 
   private keyboardUnsubscribe?: () => void;
 
+  // Hover tracking for dictionary lookups
+  private hoverStartTime = new Map<string, number>(); // Keyed by dictionaryKey
+  private hoverTimeout = new Map<string, number>(); // Timeout IDs for hover duration tracking
+
   private truncate(text: string, max: number): string {
     if (!text) return '';
     const chars = Array.from(text);
@@ -1368,6 +1372,98 @@ export class SentenceViewer extends LitElement {
     }
   }
 
+  private handleWordHoverStart(wordInfo: WordInSentence) {
+    // Only track if word has dictionary entries or dictionary key
+    if (!wordInfo.dictionaryKey) return;
+
+    const dictionaryKey = wordInfo.dictionaryKey;
+    const now = Date.now();
+
+    // Clear any existing timeout for this word
+    const existingTimeout = this.hoverTimeout.get(dictionaryKey);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    // Record hover start time
+    this.hoverStartTime.set(dictionaryKey, now);
+
+    // Set timeout to record hover after 1 second
+    const timeoutId = window.setTimeout(() => {
+      this.recordDictionaryHover(wordInfo, dictionaryKey);
+    }, 1000);
+
+    this.hoverTimeout.set(dictionaryKey, timeoutId);
+  }
+
+  private handleWordHoverEnd(wordInfo: WordInSentence) {
+    if (!wordInfo.dictionaryKey) return;
+
+    const dictionaryKey = wordInfo.dictionaryKey;
+    const startTime = this.hoverStartTime.get(dictionaryKey);
+
+    // Clear timeout
+    const timeoutId = this.hoverTimeout.get(dictionaryKey);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      this.hoverTimeout.delete(dictionaryKey);
+    }
+
+    // If hover lasted more than 1 second, record it
+    if (startTime) {
+      const duration = Date.now() - startTime;
+      if (duration >= 1000) {
+        this.recordDictionaryHover(wordInfo, dictionaryKey, duration);
+      }
+      this.hoverStartTime.delete(dictionaryKey);
+    }
+  }
+
+  private async recordDictionaryHover(wordInfo: WordInSentence, dictionaryKey: string, duration?: number) {
+    // Only record once per hover
+    if (!this.hoverStartTime.has(dictionaryKey) && !duration) {
+      return; // Already recorded or hover ended
+    }
+
+    const hoverDuration = duration || (Date.now() - (this.hoverStartTime.get(dictionaryKey) || Date.now()));
+
+    // Only record if duration >= 1000ms
+    if (hoverDuration < 1000) {
+      return;
+    }
+
+    // Check if dictionary lookup found entries
+    const cachedEntries = this.dictionaryCache[dictionaryKey];
+    const foundInDict = cachedEntries !== undefined && cachedEntries !== null && cachedEntries.length > 0;
+
+    try {
+      // Get current session ID if available (optional)
+      let sessionId: number | undefined;
+      // Note: session tracking would need to be implemented separately if needed
+
+      await window.electronAPI.tracking.recordDictionaryHover({
+        word: wordInfo.dictionaryForm || wordInfo.text.trim(),
+        language: this.targetWord?.language || 'spanish',
+        sentenceId: this.sentence?.id,
+        sessionId,
+        hoverDurationMs: hoverDuration,
+        dictionaryKey,
+        foundInDict
+      });
+    } catch (error) {
+      console.warn('Failed to record dictionary hover:', error);
+      // Don't block the flow if tracking fails
+    }
+
+    // Clear tracking state
+    this.hoverStartTime.delete(dictionaryKey);
+    const timeoutId = this.hoverTimeout.get(dictionaryKey);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      this.hoverTimeout.delete(dictionaryKey);
+    }
+  }
+
   private getPopupStyle(): string {
     if (!this.wordPopup) return '';
     
@@ -1995,8 +2091,15 @@ export class SentenceViewer extends LitElement {
               return html`
                 <span
                   class="word-in-sentence ${this.getWordClass(wordInfo)}"
-                  @click=${(e: MouseEvent) => this.handleWordClick(wordInfo, e)}
-                  @mouseenter=${(e: MouseEvent) => this.handleTooltipPosition(e)}
+                  @click=${(e: MouseEvent) => {
+                    this.handleWordHoverEnd(wordInfo); // Clear hover tracking on click
+                    this.handleWordClick(wordInfo, e);
+                  }}
+                  @mouseenter=${(e: MouseEvent) => {
+                    this.handleTooltipPosition(e);
+                    this.handleWordHoverStart(wordInfo);
+                  }}
+                  @mouseleave=${() => this.handleWordHoverEnd(wordInfo)}
                   aria-label=${tooltipText || nothing}
                 >
                   ${wordInfo.text}

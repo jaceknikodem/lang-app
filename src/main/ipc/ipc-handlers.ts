@@ -117,17 +117,26 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.UPDATE_WORD_STRENGTH,
-    createIPCHandler([WordIdSchema, StrengthSchema], (wordId, strength) => databaseLayer.updateWordStrength(wordId, strength), 'update word strength')
+    createIPCHandler([WordIdSchema, StrengthSchema], async (wordId, strength) => {
+      await databaseLayer.updateWordStrength(wordId, strength);
+      console.log(`[Tracking] Word progress: wordId=${wordId}, strength=${strength}`);
+    }, 'update word strength')
   );
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.MARK_WORD_KNOWN,
-    createIPCHandler([WordIdSchema, BooleanSchema], (wordId, known) => databaseLayer.markWordKnown(wordId, known), 'mark word known')
+    createIPCHandler([WordIdSchema, BooleanSchema], async (wordId, known) => {
+      await databaseLayer.markWordKnown(wordId, known);
+      console.log(`[Tracking] Word progress: wordId=${wordId}, known=${known}`);
+    }, 'mark word known')
   );
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.MARK_WORD_IGNORED,
-    createIPCHandler([WordIdSchema, BooleanSchema], (wordId, ignored) => databaseLayer.markWordIgnored(wordId, ignored), 'mark word ignored')
+    createIPCHandler([WordIdSchema, BooleanSchema], async (wordId, ignored) => {
+      await databaseLayer.markWordIgnored(wordId, ignored);
+      console.log(`[Tracking] Word progress: wordId=${wordId}, ignored=${ignored}`);
+    }, 'mark word ignored')
   );
 
   ipcMain.handle(
@@ -243,7 +252,10 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.UPDATE_LAST_STUDIED,
-    createIPCHandler(WordIdSchema, (wordId) => databaseLayer.updateLastStudied(wordId), 'update last studied')
+    createIPCHandler(WordIdSchema, async (wordId) => {
+      await databaseLayer.updateLastStudied(wordId);
+      console.log(`[Tracking] Word progress: wordId=${wordId}, lastStudied=now`);
+    }, 'update last studied')
   );
 
   ipcMain.handle(
@@ -1826,7 +1838,9 @@ function setupTrackingHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     try {
       const validatedMode = z.enum(['learning', 'quiz', 'dialog', 'flow']).parse(mode);
       const validatedLanguage = LanguageSchema.parse(language);
-      return await databaseLayer.createLearningSession({ mode: validatedMode, language: validatedLanguage });
+      const sessionId = await databaseLayer.createLearningSession({ mode: validatedMode, language: validatedLanguage });
+      console.log(`[Tracking] Learning session created: id=${sessionId}, mode=${validatedMode}, language=${validatedLanguage}`);
+      return sessionId;
     } catch (error) {
       console.error('Error creating learning session:', error);
       throw wrapError(error, `Failed to create learning session`);
@@ -1842,6 +1856,12 @@ function setupTrackingHandlers(databaseLayer: SQLiteDatabaseLayer): void {
         audioPlayedCount: z.number().int().nonnegative().optional()
       }).parse(data);
       await databaseLayer.updateLearningSession(validatedSessionId, validatedData);
+      const counts = [
+        validatedData.wordCount !== undefined ? `words=${validatedData.wordCount}` : null,
+        validatedData.sentenceCount !== undefined ? `sentences=${validatedData.sentenceCount}` : null,
+        validatedData.audioPlayedCount !== undefined ? `audio=${validatedData.audioPlayedCount}` : null
+      ].filter(Boolean).join(', ');
+      console.log(`[Tracking] Learning session updated: id=${validatedSessionId}${counts ? ', ' + counts : ''}`);
     } catch (error) {
       console.error('Error updating learning session:', error);
       throw wrapError(error, `Failed to update learning session`);
@@ -1858,10 +1878,53 @@ function setupTrackingHandlers(databaseLayer: SQLiteDatabaseLayer): void {
         mode: z.enum(['learning', 'quiz', 'dialog', 'flow']),
         playbackSpeed: z.number().min(0.1).max(3.0).optional()
       }).parse(data);
-      return await databaseLayer.recordAudioPlayback(validatedData);
+      const id = await databaseLayer.recordAudioPlayback(validatedData);
+      console.log(`[Tracking] Audio playback: mode=${validatedData.mode}, language=${validatedData.language}, speed=${validatedData.playbackSpeed?.toFixed(1) || '1.0'}x, sentenceId=${validatedData.sentenceId || 'none'}, sessionId=${validatedData.sessionId || 'none'}`);
+      return id;
     } catch (error) {
       console.error('Error recording audio playback:', error);
       throw wrapError(error, `Failed to record audio playback`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TRACKING.RECORD_NEGLECTED_WORDS, async (event, data) => {
+    try {
+      const validatedData = z.array(z.object({
+        word: z.string().min(1),
+        language: LanguageSchema,
+        topic: z.string().optional(),
+        translation: z.string().optional(),
+        sessionId: z.number().int().positive().optional(),
+        frequencyPosition: z.number().int().nonnegative().optional()
+      })).parse(data);
+      const count = await databaseLayer.recordNeglectedWords(validatedData);
+      if (count > 0) {
+        console.log(`[Tracking] Neglected words (batch): count=${count}, language=${validatedData[0]?.language || 'unknown'}, topic=${validatedData[0]?.topic || 'none'}`);
+      }
+      return count;
+    } catch (error) {
+      console.error('Error recording neglected words:', error);
+      throw wrapError(error, `Failed to record neglected words`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TRACKING.RECORD_DICTIONARY_HOVER, async (event, data) => {
+    try {
+      const validatedData = z.object({
+        word: z.string().min(1),
+        language: LanguageSchema,
+        sentenceId: z.number().int().positive().optional(),
+        sessionId: z.number().int().positive().optional(),
+        hoverDurationMs: z.number().int().positive().min(1000), // Must be >= 1000ms
+        dictionaryKey: z.string().optional(),
+        foundInDict: z.boolean()
+      }).parse(data);
+      const id = await databaseLayer.recordDictionaryHover(validatedData);
+      console.log(`[Tracking] Dictionary hover: word="${validatedData.word}", language=${validatedData.language}, duration=${validatedData.hoverDurationMs}ms, foundInDict=${validatedData.foundInDict}, sentenceId=${validatedData.sentenceId || 'none'}, sessionId=${validatedData.sessionId || 'none'}`);
+      return id;
+    } catch (error) {
+      console.error('Error recording dictionary hover:', error);
+      throw wrapError(error, `Failed to record dictionary hover`);
     }
   });
 }

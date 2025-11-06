@@ -337,6 +337,42 @@ contextBridge.exposeInMainWorld('electronAPI', {
     log: {
       log: (level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal', message: string, data?: any) =>
         ipcRenderer.invoke(IPC_CHANNELS.LOG.LOG, level, message, data)
+    },
+
+    // Tracking operations
+    tracking: {
+      createSession: (mode: 'learning' | 'quiz' | 'dialog' | 'flow', language: string) =>
+        ipcRenderer.invoke(IPC_CHANNELS.TRACKING.CREATE_SESSION, mode, language),
+      updateSession: (sessionId: number, data: { wordCount?: number; sentenceCount?: number; audioPlayedCount?: number }) =>
+        ipcRenderer.invoke(IPC_CHANNELS.TRACKING.UPDATE_SESSION, sessionId, data),
+      recordAudioPlayback: (data: {
+        sessionId?: number;
+        sentenceId?: number;
+        audioPath: string;
+        language: string;
+        mode: 'learning' | 'quiz' | 'dialog' | 'flow';
+        playbackSpeed?: number;
+      }) =>
+        ipcRenderer.invoke(IPC_CHANNELS.TRACKING.RECORD_AUDIO_PLAYBACK, data),
+      recordNeglectedWords: (data: Array<{
+        word: string;
+        language: string;
+        topic?: string;
+        translation?: string;
+        sessionId?: number;
+        frequencyPosition?: number;
+      }>) =>
+        ipcRenderer.invoke(IPC_CHANNELS.TRACKING.RECORD_NEGLECTED_WORDS, data),
+      recordDictionaryHover: (data: {
+        word: string;
+        language: string;
+        sentenceId?: number;
+        sessionId?: number;
+        hoverDurationMs: number;
+        dictionaryKey?: string;
+        foundInDict: boolean;
+      }) =>
+        ipcRenderer.invoke(IPC_CHANNELS.TRACKING.RECORD_DICTIONARY_HOVER, data)
     }
   });
 
@@ -544,6 +580,35 @@ declare global {
           nextMode: 'learning' | 'quiz' | 'dialog' | 'flow' | null;
           rankedModes: Array<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'>;
         }>;
+      };
+      tracking: {
+        createSession: (mode: 'learning' | 'quiz' | 'dialog' | 'flow', language: string) => Promise<number>;
+        updateSession: (sessionId: number, data: { wordCount?: number; sentenceCount?: number; audioPlayedCount?: number }) => Promise<void>;
+        recordAudioPlayback: (data: {
+          sessionId?: number;
+          sentenceId?: number;
+          audioPath: string;
+          language: string;
+          mode: 'learning' | 'quiz' | 'dialog' | 'flow';
+          playbackSpeed?: number;
+        }) => Promise<number>;
+        recordNeglectedWords: (data: Array<{
+          word: string;
+          language: string;
+          topic?: string;
+          translation?: string;
+          sessionId?: number;
+          frequencyPosition?: number;
+        }>) => Promise<number>;
+        recordDictionaryHover: (data: {
+          word: string;
+          language: string;
+          sentenceId?: number;
+          sessionId?: number;
+          hoverDurationMs: number;
+          dictionaryKey?: string;
+          foundInDict: boolean;
+        }) => Promise<number>;
       };
     };
   }

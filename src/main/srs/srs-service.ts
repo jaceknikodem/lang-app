@@ -198,6 +198,8 @@ export class SRSService {
           strengthDelta,
           language
         });
+        const ratingText = reviewResult.recall === 0 ? 'failed' : reviewResult.recall === 1 ? 'hard' : reviewResult.recall === 2 ? 'good' : 'easy';
+        console.log(`[Tracking] Quiz performance: wordId=${wordId}, recall=${ratingText}, strengthDelta=${strengthDelta > 0 ? '+' : ''}${strengthDelta}, sessionId=${sessionId || 'none'}`);
       } catch (error) {
         console.warn(`[SRS Service] Failed to record SRS adjustment:`, error);
       }

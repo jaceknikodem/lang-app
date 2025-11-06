@@ -96,6 +96,7 @@ export class LearningMode extends LitElement {
   private isReloadingFromQueue = false;
   private currentSentenceDisplayLastSeen?: Date;
   private autoScrollTimer: number | null = null;
+  private currentSessionId: number | undefined;
   
   // Track which sentence last started playing audio (to detect if audio completed vs never started)
   private lastSentenceWithAudioStarted: number | null = null;
@@ -559,6 +560,15 @@ export class LearningMode extends LitElement {
     this.wordsIncrementedThisSession.clear();
     
     await this.loadCurrentLanguage();
+    
+    // Create learning session for tracking
+    try {
+      const language = this.currentLanguage || 'spanish';
+      this.currentSessionId = await window.electronAPI.tracking.createSession('learning', language);
+    } catch (error) {
+      console.warn('Failed to create learning session:', error);
+      // Continue without session tracking
+    }
     
     // Setup keyboard bindings
     this.setupKeyboardBindings();
@@ -2015,6 +2025,7 @@ export class LearningMode extends LitElement {
           this.beforeAudioElement!.addEventListener('ended', () => {
             this.beforeAudioElement = null;
             this.currentPlayingAudio = null;
+            // Don't track here - will be tracked once with main sentence audio
             resolve();
           });
           this.beforeAudioElement!.addEventListener('error', (e) => {
@@ -2024,6 +2035,7 @@ export class LearningMode extends LitElement {
             window.electronAPI.audio.playAudio(beforeSentenceAudioPath)
               .then(() => {
                 this.currentPlayingAudio = null;
+                // Don't track here - will be tracked once with main sentence audio
                 resolve();
               })
               .catch(reject);
@@ -2035,6 +2047,7 @@ export class LearningMode extends LitElement {
             window.electronAPI.audio.playAudio(beforeSentenceAudioPath)
               .then(() => {
                 this.currentPlayingAudio = null;
+                // Don't track here - will be tracked once with main sentence audio
                 resolve();
               })
               .catch(reject);
@@ -2045,6 +2058,7 @@ export class LearningMode extends LitElement {
         // Note: For IPC playback, we can't track exactly when it ends, so we'll assume it's done after a delay
         await window.electronAPI.audio.playAudio(beforeSentenceAudioPath);
         this.currentPlayingAudio = null;
+        // Don't track here - will be tracked once with main sentence audio
       }
     } catch (error) {
       console.warn('Failed to play before sentence audio:', error);
@@ -2104,6 +2118,19 @@ export class LearningMode extends LitElement {
               console.warn('Failed to increment sentence play count:', err);
             });
           }
+          // Track audio playback event
+          if (currentSentence.id && this.currentLanguage) {
+            void window.electronAPI.tracking.recordAudioPlayback({
+              sessionId: this.currentSessionId,
+              sentenceId: currentSentence.id,
+              audioPath: currentAudioPath,
+              language: this.currentLanguage,
+              mode: 'learning',
+              playbackSpeed: this.playbackSpeed
+            }).catch((err: unknown) => {
+              console.warn('Failed to record audio playback:', err);
+            });
+          }
           // Auto-scroll to next sentence after 1.5 seconds if enabled
           if (this.autoScrollEnabled) {
             this.clearAutoScrollTimer();
@@ -2128,6 +2155,19 @@ export class LearningMode extends LitElement {
               if (currentSentence.id) {
                 void window.electronAPI.database.incrementSentencePlayCount(currentSentence.id).catch(err => {
                   console.warn('Failed to increment sentence play count:', err);
+                });
+              }
+              // Track audio playback event
+              if (currentSentence.id && this.currentLanguage) {
+                void window.electronAPI.tracking.recordAudioPlayback({
+                  sessionId: this.currentSessionId,
+                  sentenceId: currentSentence.id,
+                  audioPath: currentAudioPath,
+                  language: this.currentLanguage,
+                  mode: 'learning',
+                  playbackSpeed: this.playbackSpeed
+                }).catch((err: unknown) => {
+                  console.warn('Failed to record audio playback:', err);
                 });
               }
             })
@@ -2159,6 +2199,19 @@ export class LearningMode extends LitElement {
           if (currentSentence.id) {
             void window.electronAPI.database.incrementSentencePlayCount(currentSentence.id).catch(err => {
               console.warn('Failed to increment sentence play count:', err);
+            });
+          }
+          // Track audio playback event
+          if (currentSentence.id && this.currentLanguage) {
+            void window.electronAPI.tracking.recordAudioPlayback({
+              sessionId: this.currentSessionId,
+              sentenceId: currentSentence.id,
+              audioPath: currentAudioPath,
+              language: this.currentLanguage,
+              mode: 'learning',
+              playbackSpeed: this.playbackSpeed
+            }).catch((err: unknown) => {
+              console.warn('Failed to record audio playback:', err);
             });
           }
         })

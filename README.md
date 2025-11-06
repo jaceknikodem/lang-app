@@ -11,8 +11,23 @@ A privacy-first desktop language learning application that operates entirely off
 - **Flow Mode**: Hands-free listening sessions (10–60 min) that train your ear and rhythm without screens or clicks
 - **Autopilot Learning**: The app glides between modes — review, quiz, dialogue, flow — so you can just focus on language
 - **Multiple LLM Providers**: Use Gemini or local LLMs — your choice of engine and privacy
-- **Privacy-First Design**: No accounts. No tracking. Your data never leaves your device
+- **Privacy-First Design**: No accounts. No cloud tracking. Your data never leaves your device
 - **Adaptive Intelligence**: The system quietly tracks what you struggle with and targets it — no manual tweaking needed
+
+## On-Device Tracking
+
+All tracking happens locally and never leaves your device. The app tracks:
+
+- **Learning sessions**: Mode, language, duration, and activity counts
+- **Word progress**: Strength, SRS values, last studied timestamps, known/ignored words
+- **Audio playback**: Which sentences you played, playback speeds, and context
+- **Pronunciation practice**: Attempts, similarity scores, transcriptions, and audio recordings
+- **Quiz performance**: Recall ratings and strength changes
+- **Word selection**: Neglected words (shown but not selected)
+- **Dictionary usage**: Hover events for dict lookups
+- **Sentence engagement**: Last shown timestamps and play counts
+
+All data is stored in a local SQLite database and never transmitted anywhere.
 
 ## Tech Stack
 
@@ -25,13 +40,6 @@ A privacy-first desktop language learning application that operates entirely off
 - **SRS**: FSRS and Classic algorithms
 
 ## Dependencies
-
-### Node.js Dependencies
-- `better-sqlite3` - SQLite database
-- `lit` - Web components framework
-- `zod` - Runtime type validation
-- `whisper-node` - Speech recognition
-- `node-record-lpcm16` - Audio recording
 
 ### System Dependencies
 ```bash
@@ -73,13 +81,7 @@ Models are stored in the Electron userData directory:
 
 The app automatically detects and uses any available Whisper model (any `ggml-*.bin` file) in the models directory. It prioritizes larger/better models if multiple are available:
 1. `ggml-large-v3-turbo-q8_0.bin` (best quality, recommended)
-2. `ggml-large-v3-turbo.bin`
-3. `ggml-large-v3.bin`
-4. `ggml-large-v2.bin`
-5. `ggml-large.bin`
-6. `ggml-medium.bin`
-7. `ggml-base.bin`
-8. `ggml-small.bin` (default, smallest/fastest)
+2. `ggml-small.bin` (default, smallest/fastest)
 
 ```bash
 # Download a model to the userData directory
@@ -107,22 +109,7 @@ ollama serve
 # Runs on http://localhost:11434
 ```
 
-**Whisper Server** (speech practice/recognition):
-```bash
-# Note: The model path will be automatically detected when using managed services
-# If running manually, use the full path to any Whisper model in the userData directory:
-# On macOS (replace with your actual model filename):
-whisper-server --model ~/Library/Application\ Support/KotobaAI/models/ggml-large-v3-turbo-q8_0.bin --threads 8 --port 8080
-```
-
-**Stanza Service** (lemmatization):
-```bash
-cd src/main/lemmatization
-uv run python stanza-service.py
-# Runs on http://127.0.0.1:8888
-```
-
-**Optional: Managed Services** (automatic service management):
+**Managed Services** (automatic service management):
 The app can automatically start and manage whisper-server and stanza-service as child processes. Enable this with:
 ```bash
 MANAGE_SERVICES=1 npm run dev

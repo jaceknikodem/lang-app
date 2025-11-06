@@ -314,6 +314,35 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       )
     `);
 
+    // Neglected words tracking
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS neglected_words (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        word TEXT NOT NULL,
+        language TEXT NOT NULL,
+        topic TEXT,
+        translation TEXT,
+        session_id INTEGER REFERENCES learning_sessions(id),
+        ignored_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        frequency_position INTEGER
+      )
+    `);
+
+    // Dictionary hover events tracking
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS dictionary_hover_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        word TEXT NOT NULL,
+        language TEXT NOT NULL,
+        sentence_id INTEGER REFERENCES sentences(id) ON DELETE SET NULL,
+        session_id INTEGER REFERENCES learning_sessions(id),
+        hover_duration_ms INTEGER NOT NULL,
+        dictionary_key TEXT,
+        found_in_dict BOOLEAN DEFAULT FALSE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Create indexes for better query performance
     db.exec(`CREATE INDEX IF NOT EXISTS idx_words_strength ON words(strength)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_words_last_studied ON words(last_studied)`);
@@ -341,6 +370,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_learning_sessions_started_at ON learning_sessions(started_at)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_audio_playback_events_sentence_id ON audio_playback_events(sentence_id)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_audio_playback_events_session_id ON audio_playback_events(session_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_neglected_words_word_lang ON neglected_words(word, language)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_neglected_words_topic ON neglected_words(topic)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_neglected_words_session_id ON neglected_words(session_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_dictionary_hover_events_word_lang ON dictionary_hover_events(word, language)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_dictionary_hover_events_sentence_id ON dictionary_hover_events(sentence_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_dictionary_hover_events_session_id ON dictionary_hover_events(session_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_dictionary_hover_events_created_at ON dictionary_hover_events(created_at)`);
   }
 
   // Word management operations
@@ -3263,6 +3299,85 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       return result.lastInsertRowid as number;
     } catch (error) {
       throw wrapError(error, `Failed to record audio playback`);
+    }
+  }
+
+  /**
+   * Record multiple neglected words in a single transaction
+   */
+  async recordNeglectedWords(data: Array<{
+    word: string;
+    language: string;
+    topic?: string;
+    translation?: string;
+    sessionId?: number;
+    frequencyPosition?: number;
+  }>): Promise<number> {
+    const db = this.getDb();
+    
+    if (data.length === 0) {
+      return 0;
+    }
+    
+    try {
+      const stmt = db.prepare(`
+        INSERT INTO neglected_words (word, language, topic, translation, session_id, frequency_position)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      
+      const transaction = db.transaction((items: Array<typeof data[0]>) => {
+        for (const item of items) {
+          stmt.run(
+            item.word,
+            item.language,
+            item.topic || null,
+            item.translation || null,
+            item.sessionId || null,
+            item.frequencyPosition ?? null
+          );
+        }
+      });
+      
+      transaction(data);
+      return data.length;
+    } catch (error) {
+      throw wrapError(error, `Failed to record neglected words`);
+    }
+  }
+
+  /**
+   * Record dictionary hover event (hover duration > 1s)
+   */
+  async recordDictionaryHover(data: {
+    word: string;
+    language: string;
+    sentenceId?: number;
+    sessionId?: number;
+    hoverDurationMs: number;
+    dictionaryKey?: string;
+    foundInDict: boolean;
+  }): Promise<number> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare(`
+        INSERT INTO dictionary_hover_events (word, language, sentence_id, session_id, hover_duration_ms, dictionary_key, found_in_dict)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      
+      const result = stmt.run(
+        data.word,
+        data.language,
+        data.sentenceId || null,
+        data.sessionId || null,
+        data.hoverDurationMs,
+        data.dictionaryKey || null,
+        data.foundInDict ? 1 : 0
+      );
+      
+      return result.lastInsertRowid as number;
+    } catch (error) {
+      throw wrapError(error, `Failed to record dictionary hover event`);
     }
   }
 }

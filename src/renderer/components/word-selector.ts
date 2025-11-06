@@ -606,6 +606,36 @@ export class WordSelector extends LitElement {
       const failedWords = [...selectedResult.failedWords, ...knownResult.failedWords];
       this.queuedWordIds = selectedResult.queuedWordIds;
 
+      // Track ignored words (words shown but not selected or marked as known)
+      const selectedWordTexts = new Set(selectedWords.map(w => w.word.toLowerCase()));
+      const knownWordTexts = new Set(knownWords.map(w => w.word.toLowerCase()));
+      const ignoredWords = this.generatedWords.filter(
+        word => !selectedWordTexts.has(word.word.toLowerCase()) && !knownWordTexts.has(word.word.toLowerCase())
+      );
+
+      // Record ignored words (batch insert)
+      if (ignoredWords.length > 0) {
+        try {
+          // Get current session ID if available (optional)
+          let sessionId: number | undefined;
+          // Note: session tracking would need to be implemented separately if needed
+
+          const ignoredWordData = ignoredWords.map(word => ({
+            word: word.word,
+            language: this.language,
+            topic: this.topic,
+            translation: word.translation,
+            sessionId,
+            frequencyPosition: word.frequencyPosition
+          }));
+
+          await window.electronAPI.tracking.recordNeglectedWords(ignoredWordData);
+        } catch (error) {
+          console.warn('Failed to record neglected words:', error);
+          // Don't block the flow if tracking fails
+        }
+      }
+
       if (queuedCount === 0 && processedKnown === 0) {
         throw new Error(failedWords.length ? `Failed to process: ${failedWords.join(', ')}` : 'No words were processed. Please try again.');
       }

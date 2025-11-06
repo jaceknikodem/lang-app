@@ -105,6 +105,7 @@ export class DialogMode extends LitElement {
   private currentLanguage = '';
   private currentProficiencyLevel: ProficiencyLevel | null = null;
   private dialogCount = 0; // Track number of dialogs completed in this session
+  private currentSessionId: number | undefined;
 
   private handleExternalLanguageChange = async (event: Event) => {
     const detail = (event as CustomEvent<{ language?: string }>).detail;
@@ -154,11 +155,18 @@ export class DialogMode extends LitElement {
     // Listen for language changes
     document.addEventListener('language-changed', this.handleExternalLanguageChange);
     
-    // Load current language and proficiency level
+    // Load current language and proficiency level, and create dialog session for tracking
     window.electronAPI.database.getCurrentLanguage().then(async language => {
       this.currentLanguage = language;
       const proficiency = await checkProficiencyLevel(language);
       this.currentProficiencyLevel = proficiency as ProficiencyLevel | null;
+      
+      // Create dialog session for tracking
+      try {
+        this.currentSessionId = await window.electronAPI.tracking.createSession('dialog', language);
+      } catch (error) {
+        console.warn('Failed to create dialog session:', error);
+      }
     }).catch(err => {
       console.error('Failed to load current language:', err);
     });
@@ -503,6 +511,19 @@ export class DialogMode extends LitElement {
                 console.warn('Failed to increment sentence play count:', err);
               });
             }
+            // Track audio playback event
+            if (this.currentSentence?.id && this.currentLanguage) {
+              void window.electronAPI.tracking.recordAudioPlayback({
+                sessionId: this.currentSessionId,
+                sentenceId: this.currentSentence.id,
+                audioPath: this.beforeSentenceAudio,
+                language: this.currentLanguage,
+                mode: 'dialog',
+                playbackSpeed: 1.0 // Dialog mode doesn't have playback speed control
+              }).catch((err: unknown) => {
+                console.warn('Failed to record audio playback:', err);
+              });
+            }
           } catch (error) {
             console.error('Failed to play trigger audio:', error);
             // Continue with next audio even if this one fails
@@ -561,6 +582,19 @@ export class DialogMode extends LitElement {
       if (this.currentSentence?.id) {
         void window.electronAPI.database.incrementSentencePlayCount(this.currentSentence.id).catch(err => {
           console.warn('Failed to increment sentence play count:', err);
+        });
+      }
+      // Track audio playback event
+      if (this.currentSentence?.id && this.currentLanguage) {
+        void window.electronAPI.tracking.recordAudioPlayback({
+          sessionId: this.currentSessionId,
+          sentenceId: this.currentSentence.id,
+          audioPath: this.beforeSentenceAudio,
+          language: this.currentLanguage,
+          mode: 'dialog',
+          playbackSpeed: 1.0 // Dialog mode doesn't have playback speed control
+        }).catch((err: unknown) => {
+          console.warn('Failed to record audio playback:', err);
         });
       }
     } catch (error) {

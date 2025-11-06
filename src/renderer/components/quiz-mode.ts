@@ -98,6 +98,8 @@ export class QuizMode extends LitElement {
   private sessionStartTime = Date.now();
   private keyboardUnsubscribe?: () => void;
   private lastAutoplayKey: string | null = null;
+  private currentSessionId: number | undefined;
+  private currentLanguage: string | null = null;
   private recordingTimer: number | null = null;
   private recordingStatusCheckTimer: number | null = null;
   private speechRecognitionCheckTimer: number | null = null;
@@ -1274,13 +1276,18 @@ export class QuizMode extends LitElement {
     // Load autoplay preference
     await this.loadAutoplaySetting();
     
-    // Load proficiency level
+    // Load proficiency level and create quiz session for tracking
     try {
-      const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
-      const proficiency = await checkProficiencyLevel(currentLanguage);
+      this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+      const proficiency = await checkProficiencyLevel(this.currentLanguage);
       this.currentProficiencyLevel = proficiency as ProficiencyLevel | null;
+      
+      // Create quiz session for tracking
+      if (this.currentLanguage) {
+        this.currentSessionId = await window.electronAPI.tracking.createSession('quiz', this.currentLanguage);
+      }
     } catch (error) {
-      console.warn('Failed to load proficiency level:', error);
+      console.warn('Failed to load proficiency level or create session:', error);
     }
 
     // Check if there's an existing quiz session to restore
@@ -1947,6 +1954,19 @@ export class QuizMode extends LitElement {
               console.warn('Failed to increment sentence play count:', err);
             });
           }
+          // Track audio playback event
+          if (this.currentQuestion?.sentence.id && this.currentLanguage) {
+            void window.electronAPI.tracking.recordAudioPlayback({
+              sessionId: this.currentSessionId,
+              sentenceId: this.currentQuestion.sentence.id,
+              audioPath: audioPath,
+              language: this.currentLanguage,
+              mode: 'quiz',
+              playbackSpeed: 1.0 // Quiz mode doesn't have playback speed control
+            }).catch((err: unknown) => {
+              console.warn('Failed to record audio playback:', err);
+            });
+          }
         });
         
         this.currentAudioElement.addEventListener('error', (e) => {
@@ -1959,6 +1979,19 @@ export class QuizMode extends LitElement {
               if (this.currentQuestion?.sentence.id) {
                 void window.electronAPI.database.incrementSentencePlayCount(this.currentQuestion.sentence.id).catch(err => {
                   console.warn('Failed to increment sentence play count:', err);
+                });
+              }
+              // Track audio playback event
+              if (this.currentQuestion?.sentence.id && this.currentLanguage) {
+                void window.electronAPI.tracking.recordAudioPlayback({
+                  sessionId: this.currentSessionId,
+                  sentenceId: this.currentQuestion.sentence.id,
+                  audioPath: audioPath,
+                  language: this.currentLanguage,
+                  mode: 'quiz',
+                  playbackSpeed: 1.0 // Quiz mode doesn't have playback speed control
+                }).catch((err: unknown) => {
+                  console.warn('Failed to record audio playback:', err);
                 });
               }
             })
@@ -1985,6 +2018,19 @@ export class QuizMode extends LitElement {
           if (this.currentQuestion?.sentence.id) {
             void window.electronAPI.database.incrementSentencePlayCount(this.currentQuestion.sentence.id).catch(err => {
               console.warn('Failed to increment sentence play count:', err);
+            });
+          }
+          // Track audio playback event
+          if (this.currentQuestion?.sentence.id && this.currentLanguage) {
+            void window.electronAPI.tracking.recordAudioPlayback({
+              sessionId: this.currentSessionId,
+              sentenceId: this.currentQuestion.sentence.id,
+              audioPath: audioPath,
+              language: this.currentLanguage,
+              mode: 'quiz',
+              playbackSpeed: 1.0 // Quiz mode doesn't have playback speed control
+            }).catch((err: unknown) => {
+              console.warn('Failed to record audio playback:', err);
             });
           }
         })

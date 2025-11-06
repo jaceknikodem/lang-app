@@ -378,7 +378,9 @@ export const IPC_CHANNELS = {
   TRACKING: {
     CREATE_SESSION: 'tracking:createSession',
     UPDATE_SESSION: 'tracking:updateSession',
-    RECORD_AUDIO_PLAYBACK: 'tracking:recordAudioPlayback'
+    RECORD_AUDIO_PLAYBACK: 'tracking:recordAudioPlayback',
+    RECORD_NEGLECTED_WORDS: 'tracking:recordNeglectedWords',
+    RECORD_DICTIONARY_HOVER: 'tracking:recordDictionaryHover'
   },
   LOG: {
     LOG: 'log:log'

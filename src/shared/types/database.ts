@@ -213,6 +213,25 @@ export interface DatabaseLayer {
     mode: 'learning' | 'quiz' | 'dialog' | 'flow';
     playbackSpeed?: number;
   }): Promise<number>;
+
+  recordNeglectedWords(data: Array<{
+    word: string;
+    language: string;
+    topic?: string;
+    translation?: string;
+    sessionId?: number;
+    frequencyPosition?: number;
+  }>): Promise<number>;
+
+  recordDictionaryHover(data: {
+    word: string;
+    language: string;
+    sentenceId?: number;
+    sessionId?: number;
+    hoverDurationMs: number;
+    dictionaryKey?: string;
+    foundInDict: boolean;
+  }): Promise<number>;
 }
 
 export interface DatabaseConfig {

@@ -126,6 +126,35 @@ declare global {
         openBackupDialog: () => Promise<string | null>;
         openBackupDirectory: () => Promise<void>;
       };
+      tracking: {
+        createSession: (mode: 'learning' | 'quiz' | 'dialog' | 'flow', language: string) => Promise<number>;
+        updateSession: (sessionId: number, data: { wordCount?: number; sentenceCount?: number; audioPlayedCount?: number }) => Promise<void>;
+        recordAudioPlayback: (data: {
+          sessionId?: number;
+          sentenceId?: number;
+          audioPath: string;
+          language: string;
+          mode: 'learning' | 'quiz' | 'dialog' | 'flow';
+          playbackSpeed?: number;
+        }) => Promise<number>;
+        recordNeglectedWords: (data: Array<{
+          word: string;
+          language: string;
+          topic?: string;
+          translation?: string;
+          sessionId?: number;
+          frequencyPosition?: number;
+        }>) => Promise<number>;
+        recordDictionaryHover: (data: {
+          word: string;
+          language: string;
+          sentenceId?: number;
+          sessionId?: number;
+          hoverDurationMs: number;
+          dictionaryKey?: string;
+          foundInDict: boolean;
+        }) => Promise<number>;
+      };
     };
   }
 }
