@@ -9,6 +9,15 @@ import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
 
+// Simple queue to limit ElevenLabs API calls to 1 concurrent request
+let apiRequestQueue: Promise<any> = Promise.resolve();
+
+function queueApiRequest<T>(fn: () => Promise<T>): Promise<T> {
+  const current = apiRequestQueue.then(() => fn());
+  apiRequestQueue = current.catch(() => {});
+  return current;
+}
+
 /**
  * ElevenLabs TTS Audio Generator
  * Handles audio file generation using ElevenLabs API, caching, and playback
@@ -94,8 +103,8 @@ export class ElevenLabsAudioGenerator implements AudioGenerator {
       // Store the voiceID that was used for this generation
       this.lastUsedVoiceId = voiceId;
 
-      // Make API request to ElevenLabs
-      const audioBuffer = await this.callElevenLabsAPI(text, voiceId);
+      // Make API request to ElevenLabs (rate-limited to 1 concurrent request)
+      const audioBuffer = await queueApiRequest(() => this.callElevenLabsAPI(text, voiceId));
 
       // Write audio file
       writeFileSync(audioPath, audioBuffer);
