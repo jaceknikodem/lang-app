@@ -16,7 +16,7 @@ export interface WordStatsThresholds {
 
 const DEFAULT_THRESHOLDS: WordStatsThresholds = {
   weak: 30,
-  strong: 70
+  strong: 70,
 };
 
 /**
@@ -33,10 +33,10 @@ export function calculateWordCategoryStats(
     known: 0,
     strong: 0,
     weak: 0,
-    new: 0
+    new: 0,
   };
 
-  words.forEach(word => {
+  words.forEach((word) => {
     if (!word.lastStudied) {
       // Not yet reviewed
       stats.new++;
@@ -54,4 +54,3 @@ export function calculateWordCategoryStats(
 
   return stats;
 }
-

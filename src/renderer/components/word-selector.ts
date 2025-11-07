@@ -8,7 +8,11 @@ import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
 import { useKeyboardBindings, CommonKeys } from '../utils/keyboard-manager.js';
-import { processSelectedWords, processKnownWords, setupWordProcessingSession } from '../utils/word-processor.js';
+import {
+  processSelectedWords,
+  processKnownWords,
+  setupWordProcessingSession,
+} from '../utils/word-processor.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
 import { GeneratedWord, Word } from '../../shared/types/core.js';
 
@@ -337,7 +341,7 @@ export class WordSelector extends LitElement {
           width: 100%;
         }
       }
-    `
+    `,
   ];
 
   connectedCallback() {
@@ -361,10 +365,10 @@ export class WordSelector extends LitElement {
 
   private initializeWords() {
     // Convert generated words to selectable format
-    this.selectableWords = this.generatedWords.map(word => ({
+    this.selectableWords = this.generatedWords.map((word) => ({
       ...word,
-      selected: false,  // Deselect all words by default
-      markedAsKnown: false
+      selected: false, // Deselect all words by default
+      markedAsKnown: false,
     }));
   }
 
@@ -378,7 +382,7 @@ export class WordSelector extends LitElement {
 
     // Update session manager with new language to ensure it uses correct language's session
     sessionManager.setActiveLanguage(newLanguage);
-    
+
     // When language changes in word-selection mode, navigate back to topic-selection
     // since the generated words are for the old language
     router.goToTopicSelection();
@@ -405,18 +409,18 @@ export class WordSelector extends LitElement {
   }
 
   private toggleSelectAllNone() {
-    const selectedCount = this.selectableWords.filter(w => w.selected && !w.markedAsKnown).length;
-    const availableCount = this.selectableWords.filter(w => !w.markedAsKnown).length;
+    const selectedCount = this.selectableWords.filter((w) => w.selected && !w.markedAsKnown).length;
+    const availableCount = this.selectableWords.filter((w) => !w.markedAsKnown).length;
     const allSelected = availableCount > 0 && selectedCount === availableCount;
 
     if (allSelected) {
       // Deselect all
-      this.selectableWords.forEach(word => {
+      this.selectableWords.forEach((word) => {
         word.selected = false;
       });
     } else {
       // Select all
-      this.selectableWords.forEach(word => {
+      this.selectableWords.forEach((word) => {
         if (!word.markedAsKnown) {
           word.selected = true;
         }
@@ -439,7 +443,8 @@ export class WordSelector extends LitElement {
             return this.handleGoToReview();
           }
 
-          const hasSelection = this.getSelectedWords().length > 0 || this.getKnownWords().length > 0;
+          const hasSelection =
+            this.getSelectedWords().length > 0 || this.getKnownWords().length > 0;
           if (!hasSelection) {
             return;
           }
@@ -447,8 +452,8 @@ export class WordSelector extends LitElement {
           return this.handleStartLearning();
         },
         context: 'word-selection',
-        description: 'Start learning with selected words / Go to review'
-      }
+        description: 'Start learning with selected words / Go to review',
+      },
     ];
 
     this.keyboardUnsubscribe = useKeyboardBindings(bindings);
@@ -456,13 +461,13 @@ export class WordSelector extends LitElement {
 
   private getSelectedWords(): GeneratedWord[] {
     return this.selectableWords
-      .filter(word => word.selected && !word.markedAsKnown)
+      .filter((word) => word.selected && !word.markedAsKnown)
       .map(({ selected, markedAsKnown, ...word }) => word);
   }
 
   private getKnownWords(): GeneratedWord[] {
     return this.selectableWords
-      .filter(word => word.markedAsKnown)
+      .filter((word) => word.markedAsKnown)
       .map(({ selected, markedAsKnown, ...word }) => word);
   }
 
@@ -472,7 +477,7 @@ export class WordSelector extends LitElement {
       clearTimeout(this.autoNavigateTimeout);
       this.autoNavigateTimeout = undefined;
     }
-    
+
     // Start a learning session with the queued words that are ready
     // This ensures learning-mode can find the words
     if (this.queuedWordIds.length > 0) {
@@ -492,10 +497,10 @@ export class WordSelector extends LitElement {
             console.warn(`Failed to check word ${wordId}:`, error);
           }
         }
-        
+
         if (readyWords.length > 0) {
           // Start a new learning session with the ready words
-          const wordIds = readyWords.map(w => w.id);
+          const wordIds = readyWords.map((w) => w.id);
           sessionManager.startNewLearningSession(wordIds, Math.min(20, wordIds.length));
           console.log(`Started learning session with ${readyWords.length} ready words`);
         }
@@ -503,7 +508,7 @@ export class WordSelector extends LitElement {
         console.error('Failed to start learning session:', error);
       }
     }
-    
+
     router.goToLearning();
     window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
   }
@@ -512,7 +517,10 @@ export class WordSelector extends LitElement {
    * Poll until the first word in the queue has sentences ready
    * Returns true if first word is ready, false if timeout is reached
    */
-  private async waitForFirstWordReady(wordIds: number[], timeoutMs: number = 60000): Promise<boolean> {
+  private async waitForFirstWordReady(
+    wordIds: number[],
+    timeoutMs: number = 60000
+  ): Promise<boolean> {
     if (wordIds.length === 0) {
       return false;
     }
@@ -526,18 +534,20 @@ export class WordSelector extends LitElement {
       if (wordIndex >= wordIds.length) {
         return false; // All words checked and none ready
       }
-      
+
       const currentWordId = wordIds[wordIndex];
-      
+
       try {
         // Get word processing status
         const processingInfo = await window.electronAPI.jobs.getWordStatus(currentWordId);
-        
+
         if (processingInfo && processingInfo.processingStatus === 'ready') {
           // Word is ready, check if it has sentences
           const sentences = await window.electronAPI.database.getSentencesByWord(currentWordId);
           if (sentences && sentences.length > 0) {
-            console.log(`First word (ID: ${currentWordId}) is ready with ${sentences.length} sentences`);
+            console.log(
+              `First word (ID: ${currentWordId}) is ready with ${sentences.length} sentences`
+            );
             return true;
           }
         } else if (processingInfo && processingInfo.processingStatus === 'failed') {
@@ -551,7 +561,7 @@ export class WordSelector extends LitElement {
       }
 
       // Wait before next poll
-      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
     }
 
     console.warn('Timeout waiting for first word to be ready');
@@ -577,28 +587,36 @@ export class WordSelector extends LitElement {
     this.statusMessage = '';
 
     try {
-      console.log('Processing', selectedWords.length, 'selected words and', knownWords.length, 'known words...');
+      console.log(
+        'Processing',
+        selectedWords.length,
+        'selected words and',
+        knownWords.length,
+        'known words...'
+      );
 
       // Set up processing session (language and topic)
       await setupWordProcessingSession(this.language, this.topic);
-      
+
       // Dispatch language changed event for UI updates
-      this.dispatchEvent(new CustomEvent('language-changed', {
-        detail: { language: this.language },
-        bubbles: true,
-        composed: true
-      }));
+      this.dispatchEvent(
+        new CustomEvent('language-changed', {
+          detail: { language: this.language },
+          bubbles: true,
+          composed: true,
+        })
+      );
 
       // Process known words first (simpler - no sentences needed)
       const knownResult = await processKnownWords(knownWords, {
-        language: this.language
+        language: this.language,
       });
 
       // Process selected words (insert and enqueue for generation)
       const selectedResult = await processSelectedWords(selectedWords, {
         language: this.language,
         topic: this.topic,
-        desiredSentenceCount: 3
+        desiredSentenceCount: 3,
       });
 
       const queuedCount = selectedResult.queuedCount;
@@ -607,10 +625,12 @@ export class WordSelector extends LitElement {
       this.queuedWordIds = selectedResult.queuedWordIds;
 
       // Track ignored words (words shown but not selected or marked as known)
-      const selectedWordTexts = new Set(selectedWords.map(w => w.word.toLowerCase()));
-      const knownWordTexts = new Set(knownWords.map(w => w.word.toLowerCase()));
+      const selectedWordTexts = new Set(selectedWords.map((w) => w.word.toLowerCase()));
+      const knownWordTexts = new Set(knownWords.map((w) => w.word.toLowerCase()));
       const ignoredWords = this.generatedWords.filter(
-        word => !selectedWordTexts.has(word.word.toLowerCase()) && !knownWordTexts.has(word.word.toLowerCase())
+        (word) =>
+          !selectedWordTexts.has(word.word.toLowerCase()) &&
+          !knownWordTexts.has(word.word.toLowerCase())
       );
 
       // Record ignored words (batch insert)
@@ -620,13 +640,13 @@ export class WordSelector extends LitElement {
           let sessionId: number | undefined;
           // Note: session tracking would need to be implemented separately if needed
 
-          const ignoredWordData = ignoredWords.map(word => ({
+          const ignoredWordData = ignoredWords.map((word) => ({
             word: word.word,
             language: this.language,
             topic: this.topic,
             translation: word.translation,
             sessionId,
-            frequencyPosition: word.frequencyPosition
+            frequencyPosition: word.frequencyPosition,
           }));
 
           await window.electronAPI.tracking.recordNeglectedWords(ignoredWordData);
@@ -637,15 +657,23 @@ export class WordSelector extends LitElement {
       }
 
       if (queuedCount === 0 && processedKnown === 0) {
-        throw new Error(failedWords.length ? `Failed to process: ${failedWords.join(', ')}` : 'No words were processed. Please try again.');
+        throw new Error(
+          failedWords.length
+            ? `Failed to process: ${failedWords.join(', ')}`
+            : 'No words were processed. Please try again.'
+        );
       }
 
       const messageParts: string[] = [];
       if (queuedCount > 0) {
-        messageParts.push(`${queuedCount} ${queuedCount === 1 ? 'word' : 'words'} queued for review`);
+        messageParts.push(
+          `${queuedCount} ${queuedCount === 1 ? 'word' : 'words'} queued for review`
+        );
       }
       if (processedKnown > 0) {
-        messageParts.push(`${processedKnown} ${processedKnown === 1 ? 'word' : 'words'} saved as known`);
+        messageParts.push(
+          `${processedKnown} ${processedKnown === 1 ? 'word' : 'words'} saved as known`
+        );
       }
       this.statusMessage = `${messageParts.join(' • ')}${queuedCount > 0 ? '. Sentences will appear in Review soon.' : '.'}`;
 
@@ -657,17 +685,19 @@ export class WordSelector extends LitElement {
       if (queuedCount > 0 || processedKnown > 0) {
         this.wordsProcessed = true;
         window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
-        
+
         // Dispatch event to update word stats in top panel
-        window.dispatchEvent(new CustomEvent('words-updated', {
-          bubbles: true,
-          composed: true
-        }));
-        
+        window.dispatchEvent(
+          new CustomEvent('words-updated', {
+            bubbles: true,
+            composed: true,
+          })
+        );
+
         // Auto-navigate to Review once first word is ready
         if (queuedCount > 0 && this.queuedWordIds.length > 0) {
           // Wait for first word to be ready (non-blocking)
-          void this.waitForFirstWordReady([...this.queuedWordIds]).then(ready => {
+          void this.waitForFirstWordReady([...this.queuedWordIds]).then((ready) => {
             if (ready) {
               this.handleGoToReview();
             }
@@ -700,124 +730,144 @@ export class WordSelector extends LitElement {
       `;
     }
 
-    const selectedCount = this.selectableWords.filter(w => w.selected && !w.markedAsKnown).length;
-    const knownCount = this.selectableWords.filter(w => w.markedAsKnown).length;
-    const learnButtonLabel = selectedCount > 0
-      ? `Learn (${selectedCount} ${selectedCount === 1 ? 'word' : 'words'})`
-      : knownCount > 0
-        ? `Save (${knownCount} known)`
-        : 'Start Learning';
+    const selectedCount = this.selectableWords.filter((w) => w.selected && !w.markedAsKnown).length;
+    const knownCount = this.selectableWords.filter((w) => w.markedAsKnown).length;
+    const learnButtonLabel =
+      selectedCount > 0
+        ? `Learn (${selectedCount} ${selectedCount === 1 ? 'word' : 'words'})`
+        : knownCount > 0
+          ? `Save (${knownCount} known)`
+          : 'Start Learning';
 
     return html`
       <div class="word-selector-container">
-        ${!this.wordsProcessed ? html`
-          ${this.topic ? html`
-            <div class="topic-info">
-              <p class="topic-label">Topic</p>
-              <p class="topic-name">${this.topic}</p>
-            </div>
-          ` : ''}
+        ${!this.wordsProcessed
+          ? html`
+              ${this.topic
+                ? html`
+                    <div class="topic-info">
+                      <p class="topic-label">Topic</p>
+                      <p class="topic-name">${this.topic}</p>
+                    </div>
+                  `
+                : ''}
 
-          <div class="selection-controls">
-            <div class="selection-info">
-              ${selectedCount} selected • ${knownCount} marked as known • ${this.selectableWords.length - selectedCount - knownCount} unselected
-            </div>
-          </div>
+              <div class="selection-controls">
+                <div class="selection-info">
+                  ${selectedCount} selected • ${knownCount} marked as known •
+                  ${this.selectableWords.length - selectedCount - knownCount} unselected
+                </div>
+              </div>
 
-          <div class="action-section">
-            ${this.isProcessing ? html`
-              <div class="loading">
-                <div class="spinner"></div>
-                Processing selected words...
+              <div class="action-section">
+                ${this.isProcessing
+                  ? html`
+                      <div class="loading">
+                        <div class="spinner"></div>
+                        Processing selected words...
+                      </div>
+                    `
+                  : html`
+                      <div class="primary-actions">
+                        <button
+                          class="btn btn-primary start-btn"
+                          @click=${this.handleStartLearning}
+                          ?disabled=${selectedCount === 0 && knownCount === 0}
+                        >
+                          ${learnButtonLabel}
+                        </button>
+                        <button
+                          class="btn btn-small btn-secondary"
+                          @click=${this.toggleSelectAllNone}
+                        >
+                          ${(() => {
+                            const availableCount = this.selectableWords.filter(
+                              (w) => !w.markedAsKnown
+                            ).length;
+                            const allSelected =
+                              availableCount > 0 && selectedCount === availableCount;
+                            return allSelected ? 'Select None' : 'Select All';
+                          })()}
+                        </button>
+                      </div>
+                    `}
               </div>
-            ` : html`
-              <div class="primary-actions">
-                <button
-                  class="btn btn-primary start-btn"
-                  @click=${this.handleStartLearning}
-                  ?disabled=${selectedCount === 0 && knownCount === 0}
-                >
-                  ${learnButtonLabel}
-                </button>
-                <button 
-                  class="btn btn-small btn-secondary" 
-                  @click=${this.toggleSelectAllNone}
-                >
-                  ${(() => {
-                    const availableCount = this.selectableWords.filter(w => !w.markedAsKnown).length;
-                    const allSelected = availableCount > 0 && selectedCount === availableCount;
-                    return allSelected ? 'Select None' : 'Select All';
-                  })()}
-                </button>
-              </div>
-            `}
-          </div>
-        ` : ''}
+            `
+          : ''}
 
         <div class="word-list ${this.wordsProcessed ? 'processed' : ''}">
-          ${(this.wordsProcessed 
-            ? this.selectableWords.filter(w => w.selected || w.markedAsKnown)
+          ${(this.wordsProcessed
+            ? this.selectableWords.filter((w) => w.selected || w.markedAsKnown)
             : this.selectableWords
           ).map((word, index) => {
             // Find the original index in selectableWords array
-            const originalIndex = this.selectableWords.findIndex(w => w.word === word.word && w.translation === word.translation);
+            const originalIndex = this.selectableWords.findIndex(
+              (w) => w.word === word.word && w.translation === word.translation
+            );
             return html`
-            <div 
-              class="word-item ${word.selected ? 'selected' : ''} ${word.markedAsKnown ? 'known' : ''} ${this.wordsProcessed ? 'disabled' : ''}"
-              @click=${() => !this.wordsProcessed && this.toggleWordSelection(originalIndex)}
-            >
-              <div class="word-actions">
-                ${word.frequencyTier ? html`
-                  <span class="frequency-tier">${word.frequencyTier}</span>
-                ` : ''}
-                ${!this.wordsProcessed ? html`
-                  ${word.markedAsKnown ? html`
-                    <button
-                      class="undo-btn"
-                      @click=${(e: Event) => this.markWordAsKnown(originalIndex, e)}
-                      title="Undo mark as known"
-                    >
-                      Undo
-                    </button>
-                  ` : html`
-                    <button
-                      class="known-btn"
-                      @click=${(e: Event) => this.markWordAsKnown(originalIndex, e)}
-                      title="Mark as known"
-                    >
-                      Mark as known
-                    </button>
-                  `}
-                ` : ''}
+              <div
+                class="word-item ${word.selected ? 'selected' : ''} ${word.markedAsKnown
+                  ? 'known'
+                  : ''} ${this.wordsProcessed ? 'disabled' : ''}"
+                @click=${() => !this.wordsProcessed && this.toggleWordSelection(originalIndex)}
+              >
+                <div class="word-actions">
+                  ${word.frequencyTier
+                    ? html` <span class="frequency-tier">${word.frequencyTier}</span> `
+                    : ''}
+                  ${!this.wordsProcessed
+                    ? html`
+                        ${word.markedAsKnown
+                          ? html`
+                              <button
+                                class="undo-btn"
+                                @click=${(e: Event) => this.markWordAsKnown(originalIndex, e)}
+                                title="Undo mark as known"
+                              >
+                                Undo
+                              </button>
+                            `
+                          : html`
+                              <button
+                                class="known-btn"
+                                @click=${(e: Event) => this.markWordAsKnown(originalIndex, e)}
+                                title="Mark as known"
+                              >
+                                Mark as known
+                              </button>
+                            `}
+                      `
+                    : ''}
+                </div>
+                <div class="word-content">
+                  <h4 class="word-foreign">${word.word}</h4>
+                  ${!this.wordsProcessed ? html`•` : ''}
+                  ${!this.wordsProcessed
+                    ? html`<p class="word-translation">${word.translation}</p>`
+                    : ''}
+                </div>
               </div>
-              <div class="word-content">
-                <h4 class="word-foreign">${word.word}</h4>
-                ${!this.wordsProcessed ? html`•` : ''}
-                ${!this.wordsProcessed ? html`<p class="word-translation">${word.translation}</p>` : ''}
-              </div>
-            </div>
-          `;
+            `;
           })}
         </div>
 
-        ${this.error ? html`
-          <div class="error-message">
-            ${this.error}
-          </div>
-        ` : ''}
-
-        ${this.statusMessage ? html`
-          <div class="success-message">
-            ${this.statusMessage}
-            ${this.wordsProcessed && this.statusMessage.includes('queued for review') ? html`
-              <div style="margin-top: var(--spacing-md);">
-                <p style="margin: 0; color: var(--text-secondary);">
-                  You will be redirected when words are ready.
-                </p>
+        ${this.error ? html` <div class="error-message">${this.error}</div> ` : ''}
+        ${this.statusMessage
+          ? html`
+              <div class="success-message">
+                ${this.statusMessage}
+                ${this.wordsProcessed && this.statusMessage.includes('queued for review')
+                  ? html`
+                      <div style="margin-top: var(--spacing-md);">
+                        <p style="margin: 0; color: var(--text-secondary);">
+                          You will be redirected when words are ready.
+                        </p>
+                      </div>
+                    `
+                  : ''}
               </div>
-            ` : ''}
-          </div>
-        ` : ''}
+            `
+          : ''}
       </div>
     `;
   }

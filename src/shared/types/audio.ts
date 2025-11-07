@@ -3,7 +3,15 @@
  */
 
 export interface AudioGenerator {
-  generateAudio(text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, voiceId?: string): Promise<string>;
+  generateAudio(
+    text: string,
+    language: string,
+    word?: string,
+    wordId?: number,
+    sentenceId?: number,
+    variantId?: number,
+    voiceId?: string
+  ): Promise<string>;
   playAudio(audioPath: string): Promise<void>;
   stopAudio(): void;
   audioExists(audioPath: string): Promise<boolean>;
@@ -30,7 +38,15 @@ export interface AudioConfig {
 }
 
 export interface AudioError extends Error {
-  code: 'GENERATION_FAILED' | 'PLAYBACK_FAILED' | 'PLAYBACK_STOPPED' | 'FILE_NOT_FOUND' | 'INVALID_PATH' | 'RECORDING_FAILED' | 'FILE_OPERATION_FAILED' | 'API_ERROR';
+  code:
+    | 'GENERATION_FAILED'
+    | 'PLAYBACK_FAILED'
+    | 'PLAYBACK_STOPPED'
+    | 'FILE_NOT_FOUND'
+    | 'INVALID_PATH'
+    | 'RECORDING_FAILED'
+    | 'FILE_OPERATION_FAILED'
+    | 'API_ERROR';
   audioPath?: string;
 }
 

@@ -40,7 +40,7 @@ export class ScoringService {
     try {
       const newWordCount = await this.database.getNewWordCount(language);
       const weakWordCount = await this.database.getWeakWordCount(language);
-      const score = (0.4 * newWordCount) + (0.25 * weakWordCount);
+      const score = 0.4 * newWordCount + 0.25 * weakWordCount;
       return this.clamp(score, 0, 10);
     } catch (error) {
       console.error('Error calculating review score:', error);
@@ -91,7 +91,8 @@ export class ScoringService {
       const availableSentencesCount = await this.database.getAvailableSentencesCount(language);
       const avgPronunciationScore = await this.database.getAveragePronunciationScore(language);
       const timeSinceLastPractice = await this.database.getTimeSinceLastActivePractice(language);
-      const score = (availableSentencesCount / 10) + (avgPronunciationScore - 7) - (timeSinceLastPractice / 10);
+      const score =
+        availableSentencesCount / 10 + (avgPronunciationScore - 7) - timeSinceLastPractice / 10;
       return this.clamp(score, 0, 10);
     } catch (error) {
       console.error('Error calculating flow score:', error);
@@ -108,7 +109,7 @@ export class ScoringService {
       this.calculateReviewScore(language),
       this.calculateQuizScore(language),
       this.calculateDialogScore(language),
-      this.calculateFlowScore(language)
+      this.calculateFlowScore(language),
     ]);
 
     return {
@@ -116,14 +117,14 @@ export class ScoringService {
       review,
       quiz,
       dialog,
-      flow
+      flow,
     };
   }
 
   /**
    * Get the next recommended mode based on scores with navigation decision logic
    * Returns the next mode to navigate to, along with a ranked list of all modes by score.
-   * 
+   *
    * This method tracks the previous mode internally to prevent bouncing between modes.
    * It excludes the previous mode from selection, and only returns a mode if the highest scoring mode
    * is different from the current mode and at least 1 point better (unless initialTakeover is true).
@@ -140,7 +141,7 @@ export class ScoringService {
   }> {
     try {
       const currentMode = options.currentMode ?? undefined;
-      const language = options.language ?? await this.database.getCurrentLanguage();
+      const language = options.language ?? (await this.database.getCurrentLanguage());
       const initialTakeover = options.initialTakeover;
 
       // Calculate scores internally (never exposed)
@@ -152,19 +153,21 @@ export class ScoringService {
         { mode: 'learning' as const, score: scores.review },
         { mode: 'quiz' as const, score: scores.quiz },
         { mode: 'dialog' as const, score: scores.dialog },
-        { mode: 'flow' as const, score: scores.flow }
+        { mode: 'flow' as const, score: scores.flow },
       ];
 
       // Get current mode score
-      const currentModeScore = currentMode 
-        ? (modeScores.find(m => m.mode === currentMode)?.score ?? 0)
+      const currentModeScore = currentMode
+        ? (modeScores.find((m) => m.mode === currentMode)?.score ?? 0)
         : 0;
 
       // Build exclude modes list - always exclude previous mode and topic-selection
       // Always exclude topic-selection from navigation (we'll handle it separately via auto-add)
       // Note: current mode is NOT excluded - we want to allow staying in the same mode if it has the highest score
-      const excludeModes: Array<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'> = ['topic-selection'];
-      
+      const excludeModes: Array<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'> = [
+        'topic-selection',
+      ];
+
       if (this.previousMode) {
         excludeModes.push(this.previousMode);
       }
@@ -175,18 +178,18 @@ export class ScoringService {
         { mode: 'learning' as const, score: scores.review },
         { mode: 'quiz' as const, score: scores.quiz },
         { mode: 'dialog' as const, score: scores.dialog },
-        { mode: 'flow' as const, score: scores.flow }
+        { mode: 'flow' as const, score: scores.flow },
       ].sort((a, b) => b.score - a.score);
-      
-      const rankedModes = allModeScores.map(m => m.mode);
+
+      const rankedModes = allModeScores.map((m) => m.mode);
 
       // Filter out excluded modes
-      const availableModes = modeScores.filter(m => !excludeModes.includes(m.mode));
+      const availableModes = modeScores.filter((m) => !excludeModes.includes(m.mode));
 
       if (availableModes.length === 0) {
         return {
           nextMode: null,
-          rankedModes
+          rankedModes,
         };
       }
 
@@ -198,7 +201,7 @@ export class ScoringService {
       if (highestMode.score === 0) {
         return {
           nextMode: null,
-          rankedModes
+          rankedModes,
         };
       }
 
@@ -210,14 +213,14 @@ export class ScoringService {
       // Otherwise, only navigate if highest mode is different from current mode AND score is at least 1 point higher
       // This allows staying in the same mode when it has the highest score
       const shouldNavigate = initialTakeover
-        ? (highestMode.score > 0 && highestMode.mode !== currentMode)
-        : (highestMode.score > 0 && highestMode.mode !== currentMode && scoreDifference >= 1);
+        ? highestMode.score > 0 && highestMode.mode !== currentMode
+        : highestMode.score > 0 && highestMode.mode !== currentMode && scoreDifference >= 1;
 
       // Only return the mode if navigation should happen
       if (!shouldNavigate) {
         return {
           nextMode: null,
-          rankedModes
+          rankedModes,
         };
       }
 
@@ -227,18 +230,20 @@ export class ScoringService {
       }
 
       // Log all scores in one line for debugging
-      console.log(`Mode scores: topic-selection=${scores.addWords}, learning=${scores.review}, quiz=${scores.quiz}, dialog=${scores.dialog}, flow=${scores.flow} -> navigating to ${highestMode.mode}`);
+      console.log(
+        `Mode scores: topic-selection=${scores.addWords}, learning=${scores.review}, quiz=${scores.quiz}, dialog=${scores.dialog}, flow=${scores.flow} -> navigating to ${highestMode.mode}`
+      );
 
       // highestMode.mode cannot be 'topic-selection' because it's excluded from availableModes
       return {
         nextMode: highestMode.mode as 'learning' | 'quiz' | 'dialog' | 'flow',
-        rankedModes
+        rankedModes,
       };
     } catch (error) {
       console.error('Error getting next mode:', error);
       return {
         nextMode: null,
-        rankedModes: []
+        rankedModes: [],
       };
     }
   }
@@ -257,7 +262,6 @@ export class ScoringService {
   stop(): void {
     // No cleanup needed - service is used on-demand
   }
-
 
   /**
    * Clamp a value between min and max

@@ -56,8 +56,8 @@ export class KeyboardManager {
    * Get all active bindings for current context
    */
   getActiveBindings(): KeyBinding[] {
-    return Array.from(this.bindings.values()).filter(binding => 
-      !binding.context || binding.context === this.currentContext
+    return Array.from(this.bindings.values()).filter(
+      (binding) => !binding.context || binding.context === this.currentContext
     );
   }
 
@@ -82,7 +82,7 @@ export class KeyboardManager {
     if (binding.altKey) modifiers.push('alt');
     if (binding.shiftKey) modifiers.push('shift');
     if (binding.metaKey) modifiers.push('meta');
-    
+
     const key = binding.key.toLowerCase();
     return [...modifiers, key].join('+');
   }
@@ -103,7 +103,7 @@ export class KeyboardManager {
       shiftKey: event.shiftKey,
       metaKey: event.metaKey,
       description: '',
-      action: () => {}
+      action: () => {},
     });
 
     const binding = this.bindings.get(key);
@@ -111,7 +111,7 @@ export class KeyboardManager {
       // Prevent default to stop button clicks and form submissions
       event.preventDefault();
       event.stopPropagation();
-      
+
       try {
         await binding.action();
       } catch (error) {
@@ -128,11 +128,11 @@ export const keyboardManager = new KeyboardManager();
  * Hook for components to easily register keyboard bindings
  */
 export function useKeyboardBindings(bindings: KeyBinding[]): () => void {
-  const unregisterFunctions = bindings.map(binding => keyboardManager.register(binding));
-  
+  const unregisterFunctions = bindings.map((binding) => keyboardManager.register(binding));
+
   // Return cleanup function
   return () => {
-    unregisterFunctions.forEach(unregister => unregister());
+    unregisterFunctions.forEach((unregister) => unregister());
   };
 }
 
@@ -153,7 +153,7 @@ export const CommonKeys = {
   HOME: 'Home',
   END: 'End',
   PAGE_UP: 'PageUp',
-  PAGE_DOWN: 'PageDown'
+  PAGE_DOWN: 'PageDown',
 } as const;
 
 /**
@@ -162,7 +162,7 @@ export const CommonKeys = {
 export const GlobalShortcuts = {
   // Audio
   PLAY_AUDIO: { key: CommonKeys.SPACE, description: 'Play/Stop audio' },
-  
+
   // Learning actions
   NEXT: { key: CommonKeys.ARROW_RIGHT, description: 'Next item' },
   PREVIOUS: { key: CommonKeys.ARROW_LEFT, description: 'Previous item' },
@@ -170,15 +170,15 @@ export const GlobalShortcuts = {
   MARK_IGNORED: { key: 'i', description: 'Mark word as ignored' },
 
   REVEAL_ANSWER: { key: CommonKeys.ENTER, description: 'Reveal answer/Continue' },
-  
+
   // SRS difficulty ratings
   SRS_FAIL: { key: '1', description: 'Rate as Failed' },
   SRS_HARD: { key: '2', description: 'Rate as Hard' },
   SRS_GOOD: { key: '3', description: 'Rate as Good' },
   SRS_EASY: { key: '4', description: 'Rate as Easy' },
-  
+
   // General
   ESCAPE: { key: CommonKeys.ESCAPE, description: 'Cancel/Go back' },
   TOGGLE_AUDIO_ONLY: { key: 'e', description: 'Toggle audio-only mode' },
-  RECORD_PRONUNCIATION: { key: 'm', description: 'Record pronunciation' }
+  RECORD_PRONUNCIATION: { key: 'm', description: 'Record pronunciation' },
 } as const;

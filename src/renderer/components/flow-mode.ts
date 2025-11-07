@@ -54,22 +54,25 @@ export class FlowMode extends BaseComponent {
 
   connectedCallback() {
     super.connectedCallback();
-    
+
     // Set initial loading state
     this.isLoading = true;
-    
+
     // Create flow session for tracking
-    window.electronAPI.database.getCurrentLanguage().then(async language => {
-      try {
-        this.currentLanguage = language;
-        this.currentSessionId = await window.electronAPI.tracking.createSession('flow', language);
-      } catch (error) {
-        console.warn('Failed to create flow session:', error);
-      }
-    }).catch(err => {
-      console.warn('Failed to get current language for flow session:', err);
-    });
-    
+    window.electronAPI.database
+      .getCurrentLanguage()
+      .then(async (language) => {
+        try {
+          this.currentLanguage = language;
+          this.currentSessionId = await window.electronAPI.tracking.createSession('flow', language);
+        } catch (error) {
+          console.warn('Failed to create flow session:', error);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to get current language for flow session:', err);
+      });
+
     this.loadFlowSentences();
 
     // Set up direct keyboard listener for flow mode (handles space key when overlay is visible)
@@ -112,13 +115,13 @@ export class FlowMode extends BaseComponent {
         const languageSuffix = `_${this.currentLanguage}`;
         const defaultAudioPath = `audio/flow_stitched${languageSuffix}.mp3`;
         const defaultEnglishAudioPath = `audio/flow_stitched_english_${this.currentLanguage}.mp3`;
-        
+
         // Check if cached files exist and are recent (within 2 hours)
         const stats = await window.electronAPI.flow.getFileStats(defaultAudioPath);
         const englishStats = await window.electronAPI.flow.getFileStats(defaultEnglishAudioPath);
-        
+
         const twoHours = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
-        
+
         if (stats) {
           const fileAge = Date.now() - stats.mtime.getTime();
           if (fileAge < twoHours) {
@@ -128,7 +131,7 @@ export class FlowMode extends BaseComponent {
         } else {
           this.stitchedAudioPath = null;
         }
-        
+
         if (englishStats) {
           const fileAge = Date.now() - englishStats.mtime.getTime();
           if (fileAge < twoHours) {
@@ -150,14 +153,14 @@ export class FlowMode extends BaseComponent {
         const audioPaths: string[] = [];
         // Collect audio path pairs for English stitching
         const audioPathPairs: Array<[string, string]> = [];
-        
+
         for (const item of this.flowSentences) {
           if (item.beforeSentenceAudio) {
             audioPaths.push(item.beforeSentenceAudio);
           }
           if (item.sentence.audioPath) {
             audioPaths.push(item.sentence.audioPath);
-            
+
             // For English stitching, construct English audio path
             // English audio is stored as: <language>/word_<wordId>/english_sentence_<sentenceId>.<ext>
             // We need to construct this from the sentence's audio path
@@ -180,7 +183,7 @@ export class FlowMode extends BaseComponent {
             audioPaths.push(item.afterSentenceAudio);
           }
           audioPaths.push(...item.continuationAudios);
-          
+
           // Stop collecting at 200 files
           if (audioPaths.length >= 200) {
             break;
@@ -207,20 +210,29 @@ export class FlowMode extends BaseComponent {
           if (!this.currentLanguage) {
             throw new Error('Current language is required for flow mode audio stitching');
           }
-          
+
           // Stitch regular audio file
           if (needsStitching && audioPaths.length > 0) {
-            this.stitchedAudioPath = await window.electronAPI.flow.stitchAudio(audioPaths, this.currentLanguage);
+            this.stitchedAudioPath = await window.electronAPI.flow.stitchAudio(
+              audioPaths,
+              this.currentLanguage
+            );
             if (!this.stitchedAudioPath) {
               this.error = 'Failed to stitch audio files. Please ensure ffmpeg is installed.';
             }
           }
-          
+
           // Stitch English audio file
           if (needsEnglishStitching && audioPathPairs.length > 0) {
-            this.stitchedAudioPathWithEnglish = await window.electronAPI.flow.stitchAudioWithEnglish(audioPathPairs, this.currentLanguage);
+            this.stitchedAudioPathWithEnglish =
+              await window.electronAPI.flow.stitchAudioWithEnglish(
+                audioPathPairs,
+                this.currentLanguage
+              );
             if (!this.stitchedAudioPathWithEnglish) {
-              console.warn('[Flow] Failed to stitch audio files with English pattern. Will use regular audio only.');
+              console.warn(
+                '[Flow] Failed to stitch audio files with English pattern. Will use regular audio only.'
+              );
             }
           }
         } catch (err) {
@@ -231,14 +243,18 @@ export class FlowMode extends BaseComponent {
         }
       } else {
         // If using cache, still load sentences for display purposes (but don't wait for it)
-        window.electronAPI.database.getCurrentLanguage().then(language => {
-          return window.electronAPI.flow.getFlowSentences(language);
-        }).then(sentences => {
-          this.flowSentences = sentences;
-          this.requestUpdate();
-        }).catch(err => {
-          console.warn('Failed to load flow sentences for display:', err);
-        });
+        window.electronAPI.database
+          .getCurrentLanguage()
+          .then((language) => {
+            return window.electronAPI.flow.getFlowSentences(language);
+          })
+          .then((sentences) => {
+            this.flowSentences = sentences;
+            this.requestUpdate();
+          })
+          .catch((err) => {
+            console.warn('Failed to load flow sentences for display:', err);
+          });
       }
     } catch (err) {
       console.error('Error loading flow sentences:', err);
@@ -252,7 +268,7 @@ export class FlowMode extends BaseComponent {
   async handlePlay() {
     // Show overlay immediately, even if stitching is in progress
     this.showOverlay = true;
-    
+
     if (this.isPlaying) {
       this.pauseAudio();
       return;
@@ -292,14 +308,14 @@ export class FlowMode extends BaseComponent {
     if (this.stitchedAudioPathWithEnglish) {
       availablePaths.push(this.stitchedAudioPathWithEnglish);
     }
-    
+
     if (availablePaths.length === 0) {
       return;
     }
-    
+
     // Randomly select one of the available paths
     const selectedPath = availablePaths[Math.floor(Math.random() * availablePaths.length)];
-    
+
     if (!selectedPath) {
       return;
     }
@@ -309,22 +325,24 @@ export class FlowMode extends BaseComponent {
       if (this.audioElement && !this.isPlaying) {
         const resumePosition = Math.max(0, this.pausedPosition - 0.5);
         this.audioElement.currentTime = resumePosition;
-        
+
         // Show overlay first so canvas is in DOM
         this.showOverlay = true;
         this.isPlaying = true;
-        
+
         // Wait for DOM to update so canvas is accessible
         await this.updateComplete;
-        
+
         // Re-acquire canvas reference since overlay was hidden
-        this.canvasElement = this.shadowRoot?.querySelector('.visualization-canvas') as HTMLCanvasElement;
+        this.canvasElement = this.shadowRoot?.querySelector(
+          '.visualization-canvas'
+        ) as HTMLCanvasElement;
         if (this.canvasElement) {
           // Set canvas size
           this.canvasElement.width = 300;
           this.canvasElement.height = 300;
         }
-        
+
         // Re-setup visualization if needed (audio context might be closed)
         if (!this.audioContext || this.audioContext.state === 'closed') {
           this.setupAudioVisualization();
@@ -332,16 +350,16 @@ export class FlowMode extends BaseComponent {
         if (this.audioContext && this.audioContext.state === 'suspended') {
           await this.audioContext.resume();
         }
-        
+
         await this.audioElement.play();
-        
+
         // Wait another frame to ensure everything is ready
         await this.updateComplete;
         requestAnimationFrame(() => {
           // Restart visualization
           this.startVisualization();
         });
-        
+
         this.lastPauseTime = null;
         return;
       }
@@ -363,7 +381,7 @@ export class FlowMode extends BaseComponent {
 
       // Create audio element
       this.audioElement = new Audio(blobUrl);
-      
+
       // Set current time to paused position if we have one (resume from pause)
       if (this.pausedPosition > 0) {
         this.audioElement.currentTime = this.pausedPosition;
@@ -371,7 +389,7 @@ export class FlowMode extends BaseComponent {
 
       // Set up Web Audio API for visualization
       this.setupAudioVisualization();
-      
+
       // Set up event handlers
       this.audioElement.addEventListener('ended', () => {
         this.stopAudio();
@@ -390,7 +408,7 @@ export class FlowMode extends BaseComponent {
           // currentTime is the absolute position in the audio file
           // Use it directly for tracking (it already accounts for resume position)
           const currentPlaybackTime = this.audioElement.currentTime;
-          
+
           // Check if 2 minutes (120 seconds) have elapsed
           if (currentPlaybackTime >= 120 && this.playbackTimer === null) {
             // Dispatch event for autopilot to check scores after 2 minutes of Flow playback
@@ -405,14 +423,14 @@ export class FlowMode extends BaseComponent {
       await this.audioElement.play();
       this.isPlaying = true;
       this.showOverlay = true;
-      
+
       // Wait a frame for DOM to update and canvas to be rendered
       await this.updateComplete;
       requestAnimationFrame(() => {
         // Start animation loop for visualization
         this.startVisualization();
       });
-      
+
       // When starting/resuming playback, the audio element will continue from its current position
       // We track totalPlaybackTime separately to handle pauses correctly
       this.lastPauseTime = null;
@@ -429,14 +447,14 @@ export class FlowMode extends BaseComponent {
     if (this.audioElement && this.isPlaying) {
       // Store the current position for resuming later
       this.pausedPosition = this.audioElement.currentTime;
-      
+
       this.audioElement.pause();
       this.isPlaying = false;
       this.showOverlay = false;
-      
+
       // Stop visualization
       this.stopVisualization();
-      
+
       // Keep currentTime as-is (don't reset to 0) so we can resume from this position
       this.lastPauseTime = Date.now();
     }
@@ -445,28 +463,28 @@ export class FlowMode extends BaseComponent {
   private stopAudio() {
     // Stop visualization
     this.stopVisualization();
-    
+
     // Close audio context if it exists
     if (this.audioContext) {
-      this.audioContext.close().catch(err => {
+      this.audioContext.close().catch((err) => {
         console.warn('Error closing audio context:', err);
       });
       this.audioContext = null;
     }
-    
+
     this.analyser = null;
     this.dataArray = null;
-    
+
     if (this.audioElement) {
       this.audioElement.pause();
       this.audioElement.currentTime = 0;
-      
+
       // Clean up blob URL
       const src = this.audioElement.src;
       if (src.startsWith('blob:')) {
         URL.revokeObjectURL(src);
       }
-      
+
       this.audioElement = null;
     }
     this.isPlaying = false;
@@ -505,11 +523,10 @@ export class FlowMode extends BaseComponent {
     event.stopPropagation();
   }
 
-
   // Watch for showOverlay changes to toggle keyboard manager
   willUpdate(changedProperties: Map<string | symbol, unknown>): void {
     super.willUpdate(changedProperties);
-    
+
     if (changedProperties.has('showOverlay')) {
       // Disable keyboard manager when overlay becomes visible
       // Re-enable when overlay becomes hidden
@@ -522,33 +539,33 @@ export class FlowMode extends BaseComponent {
       console.warn('[Flow] No audio element available for visualization');
       return;
     }
-    
+
     try {
       // Create audio context (resume if suspended)
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      
+
       // Resume context if suspended (required for some browsers)
       if (this.audioContext.state === 'suspended') {
-        this.audioContext.resume().catch(err => {
+        this.audioContext.resume().catch((err) => {
           console.warn('[Flow] Failed to resume audio context:', err);
         });
       }
-      
+
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 256;
       this.analyser.smoothingTimeConstant = 0.8;
-      
+
       const bufferLength = this.analyser.frequencyBinCount;
       // Create Uint8Array with explicit buffer to satisfy TypeScript
       const buffer = new ArrayBuffer(bufferLength);
       this.dataArray = new Uint8Array(buffer);
-      
+
       // Connect audio element to analyser
       // Note: createMediaElementSource disconnects the audio element from its default output
       const source = this.audioContext.createMediaElementSource(this.audioElement);
       source.connect(this.analyser);
       this.analyser.connect(this.audioContext.destination);
-      
+
       console.log('[Flow] Audio visualization setup complete');
     } catch (err) {
       console.error('[Flow] Failed to set up audio visualization:', err);
@@ -559,20 +576,22 @@ export class FlowMode extends BaseComponent {
   private startVisualization() {
     // Get canvas reference - it might not exist until overlay is shown
     if (!this.canvasElement) {
-      this.canvasElement = this.shadowRoot?.querySelector('.visualization-canvas') as HTMLCanvasElement;
+      this.canvasElement = this.shadowRoot?.querySelector(
+        '.visualization-canvas'
+      ) as HTMLCanvasElement;
       if (this.canvasElement) {
         // Set canvas size
         this.canvasElement.width = 300;
         this.canvasElement.height = 300;
       }
     }
-    
+
     if (!this.canvasElement || !this.analyser || !this.dataArray || !this.isPlaying) {
       console.log('[Flow] Visualization not ready:', {
         canvas: !!this.canvasElement,
         analyser: !!this.analyser,
         dataArray: !!this.dataArray,
-        isPlaying: this.isPlaying
+        isPlaying: this.isPlaying,
       });
       return;
     }
@@ -593,11 +612,11 @@ export class FlowMode extends BaseComponent {
 
       // Get audio data - use frequency data for more reactive visualization
       if (!this.dataArray) return;
-      
+
       // Use type assertion to satisfy TypeScript - the API accepts Uint8Array
       // Use getByteFrequencyData for more noticeable visual response
       this.analyser.getByteFrequencyData(this.dataArray as any);
-      
+
       // Calculate average amplitude from frequency data
       let sum = 0;
       for (let i = 0; i < this.dataArray.length; i++) {
@@ -605,26 +624,26 @@ export class FlowMode extends BaseComponent {
       }
       const average = sum / this.dataArray.length;
       const normalizedAmplitude = average / 255; // Normalize to 0-1 (frequency data is 0-255)
-      
+
       // Calculate radius based on amplitude (with more dramatic effect)
       // Apply exponential scaling for more pronounced wobble
       const amplifiedAmplitude = Math.pow(normalizedAmplitude, 0.7); // Make it more sensitive to changes
       const radiusChange = amplifiedAmplitude * maxRadiusChange * 2.0; // Increased multiplier for more wobble
       const currentRadius = baseRadius + radiusChange;
-      
+
       // Calculate opacity pulse (more noticeable)
-      const opacity = 0.5 + (normalizedAmplitude * 0.4); // Range: 0.5 to 0.9
-      
+      const opacity = 0.5 + normalizedAmplitude * 0.4; // Range: 0.5 to 0.9
+
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
+
       // Draw wobbling circle
       ctx.beginPath();
       ctx.arc(centerX, centerY, currentRadius, 0, Math.PI * 2);
       ctx.strokeStyle = `rgba(150, 150, 150, ${opacity})`; // Grey color
       ctx.lineWidth = 3;
       ctx.stroke();
-      
+
       // Continue animation
       this.animationFrameId = requestAnimationFrame(animate);
     };
@@ -637,7 +656,7 @@ export class FlowMode extends BaseComponent {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
-    
+
     if (this.canvasElement) {
       const ctx = this.canvasElement.getContext('2d');
       if (ctx) {
@@ -703,7 +722,10 @@ export class FlowMode extends BaseComponent {
         z-index: 1;
         pointer-events: none;
         user-select: none;
-        transition: opacity 0.2s, transform 0.2s, font-size 0.2s;
+        transition:
+          opacity 0.2s,
+          transform 0.2s,
+          font-size 0.2s;
         opacity: 0.8;
       }
 
@@ -712,13 +734,15 @@ export class FlowMode extends BaseComponent {
         transform: translate(-50%, -50%) scale(1.3);
         font-size: 62px;
       }
-    `
+    `,
   ];
 
   firstUpdated(changedProperties: Map<string | number | symbol, unknown>) {
     super.firstUpdated(changedProperties);
     // Get canvas reference after first render
-    this.canvasElement = this.shadowRoot?.querySelector('.visualization-canvas') as HTMLCanvasElement;
+    this.canvasElement = this.shadowRoot?.querySelector(
+      '.visualization-canvas'
+    ) as HTMLCanvasElement;
     if (this.canvasElement) {
       // Set canvas size
       this.canvasElement.width = 300;
@@ -729,14 +753,15 @@ export class FlowMode extends BaseComponent {
   render() {
     return html`
       <div class="overlay ${this.showOverlay ? 'visible' : ''}">
-        ${this.showOverlay ? html`
-          <div class="visualization-container" @click=${this.pauseAudio} title="Pause">
-            <canvas class="visualization-canvas"></canvas>
-            <div class="pause-icon">⏸</div>
-          </div>
-        ` : ''}
+        ${this.showOverlay
+          ? html`
+              <div class="visualization-container" @click=${this.pauseAudio} title="Pause">
+                <canvas class="visualization-canvas"></canvas>
+                <div class="pause-icon">⏸</div>
+              </div>
+            `
+          : ''}
       </div>
     `;
   }
 }
-

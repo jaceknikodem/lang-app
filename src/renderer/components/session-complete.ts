@@ -220,12 +220,12 @@ export class SessionComplete extends LitElement {
           width: 100%;
         }
       }
-    `
+    `,
   ];
 
   connectedCallback() {
     super.connectedCallback();
-    
+
     // Clear quiz session when quiz is finished to prevent reloading
     // This is a safety check to ensure the session is removed from session manager
     if (this.sessionSummary?.type === 'quiz') {
@@ -239,7 +239,7 @@ export class SessionComplete extends LitElement {
         sessionManager.clearQuizSession();
       }
     }
-    
+
     this.loadUpdatedStats();
     this.setupKeyboardBindings();
   }
@@ -260,8 +260,8 @@ export class SessionComplete extends LitElement {
             this.handleRecommendedAction();
           }
         },
-        description: 'Keep going'
-      }
+        description: 'Keep going',
+      },
     ];
 
     this.keyboardUnsubscribe = useKeyboardBindings(bindings);
@@ -279,7 +279,7 @@ export class SessionComplete extends LitElement {
   private getRecommendationText(): string {
     switch (this.sessionSummary.nextRecommendation) {
       case 'take-quiz':
-        return 'Ready to test your knowledge? Take a quiz to reinforce what you\'ve learned.';
+        return "Ready to test your knowledge? Take a quiz to reinforce what you've learned.";
       case 'continue-learning':
         return 'Keep the momentum going! Continue learning with more sentences.';
       case 'practice-weak':
@@ -297,17 +297,23 @@ export class SessionComplete extends LitElement {
     try {
       // Get current language
       const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
-      
+
       // Get current mode based on session type
       const currentMode: AppMode = this.sessionSummary.type === 'quiz' ? 'quiz' : 'learning';
-      
+
       // Get next mode from scoring service (scores are calculated internally and never exposed)
       const result = await window.electronAPI.scoring.getNextMode({
-        currentMode: currentMode as 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null,
+        currentMode: currentMode as
+          | 'topic-selection'
+          | 'learning'
+          | 'quiz'
+          | 'dialog'
+          | 'flow'
+          | null,
         language: currentLanguage || null,
-        initialTakeover: false
+        initialTakeover: false,
       });
-      
+
       if (result.nextMode) {
         // Navigate to the recommended mode
         switch (result.nextMode) {
@@ -349,10 +355,12 @@ export class SessionComplete extends LitElement {
   }
 
   private handleNewSession() {
-    this.dispatchEvent(new CustomEvent('start-new-learning-session', {
-      bubbles: true,
-      composed: true
-    }));
+    this.dispatchEvent(
+      new CustomEvent('start-new-learning-session', {
+        bubbles: true,
+        composed: true,
+      })
+    );
   }
 
   private getAutopilotEnabled(): boolean {
@@ -363,19 +371,25 @@ export class SessionComplete extends LitElement {
   render() {
     const isQuiz = this.sessionSummary.type === 'quiz';
     const autopilotEnabled = this.getAutopilotEnabled();
-    
+
     return html`
       <div class="completion-container">
-        ${isQuiz && this.sessionSummary.quizScore !== undefined && this.sessionSummary.quizTotal !== undefined ? html`
-          <div class="quiz-score">
-            <div class="score-percentage">
-              ${Math.round((this.sessionSummary.quizScore / this.sessionSummary.quizTotal) * 100)}%
-            </div>
-            <div class="score-details">
-              ${this.sessionSummary.quizScore} out of ${this.sessionSummary.quizTotal} correct
-            </div>
-          </div>
-        ` : ''}
+        ${isQuiz &&
+        this.sessionSummary.quizScore !== undefined &&
+        this.sessionSummary.quizTotal !== undefined
+          ? html`
+              <div class="quiz-score">
+                <div class="score-percentage">
+                  ${Math.round(
+                    (this.sessionSummary.quizScore / this.sessionSummary.quizTotal) * 100
+                  )}%
+                </div>
+                <div class="score-details">
+                  ${this.sessionSummary.quizScore} out of ${this.sessionSummary.quizTotal} correct
+                </div>
+              </div>
+            `
+          : ''}
 
         <div class="summary-stats">
           <div class="stat-item">
@@ -383,46 +397,56 @@ export class SessionComplete extends LitElement {
             <div class="stat-label">Words ${isQuiz ? 'Tested' : 'Studied'}</div>
           </div>
 
-          ${this.sessionSummary.timeSpent ? html`
-            <div class="stat-item">
-              <div class="stat-value">${this.sessionSummary.timeSpent}</div>
-              <div class="stat-label">Minutes</div>
-            </div>
-          ` : ''}
-
-          ${this.studyStats ? html`
-            <div class="stat-item">
-              <div class="stat-value">${Math.round(this.studyStats.averageStrength)}%</div>
-              <div class="stat-label">Avg Strength</div>
-            </div>
-          ` : ''}
+          ${this.sessionSummary.timeSpent
+            ? html`
+                <div class="stat-item">
+                  <div class="stat-value">${this.sessionSummary.timeSpent}</div>
+                  <div class="stat-label">Minutes</div>
+                </div>
+              `
+            : ''}
+          ${this.studyStats
+            ? html`
+                <div class="stat-item">
+                  <div class="stat-value">${Math.round(this.studyStats.averageStrength)}%</div>
+                  <div class="stat-label">Avg Strength</div>
+                </div>
+              `
+            : ''}
         </div>
 
-        ${this.sessionSummary.completedWords.length > 0 ? html`
-          <div class="words-practiced">
-            <h3 class="words-title">Words ${isQuiz ? 'Tested' : 'Practiced'}</h3>
-            <div class="words-list">
-              ${this.sessionSummary.completedWords.slice(0, 10).map(word => html`
-                <span class="word-tag">${word.word}</span>
-              `)}
-              ${this.sessionSummary.completedWords.length > 10 ? html`
-                <span class="word-tag">+${this.sessionSummary.completedWords.length - 10} more</span>
-              ` : ''}
-            </div>
-          </div>
-        ` : ''}
-
-        ${!autopilotEnabled ? html`
-        <div class="recommendation">
-          <button
-            class="action-button primary"
-            @click=${this.handleRecommendedAction}
-            ?disabled=${this.isLoading}
-          >
-            Keep going!
-          </button>
-        </div>
-        ` : ''}
+        ${this.sessionSummary.completedWords.length > 0
+          ? html`
+              <div class="words-practiced">
+                <h3 class="words-title">Words ${isQuiz ? 'Tested' : 'Practiced'}</h3>
+                <div class="words-list">
+                  ${this.sessionSummary.completedWords
+                    .slice(0, 10)
+                    .map((word) => html` <span class="word-tag">${word.word}</span> `)}
+                  ${this.sessionSummary.completedWords.length > 10
+                    ? html`
+                        <span class="word-tag"
+                          >+${this.sessionSummary.completedWords.length - 10} more</span
+                        >
+                      `
+                    : ''}
+                </div>
+              </div>
+            `
+          : ''}
+        ${!autopilotEnabled
+          ? html`
+              <div class="recommendation">
+                <button
+                  class="action-button primary"
+                  @click=${this.handleRecommendedAction}
+                  ?disabled=${this.isLoading}
+                >
+                  Keep going!
+                </button>
+              </div>
+            `
+          : ''}
       </div>
     `;
   }

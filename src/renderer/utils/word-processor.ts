@@ -42,15 +42,15 @@ export async function processSelectedWords(
         word: word.word,
         language: language,
         translation: word.translation,
-        topic: topic
+        topic: topic,
       });
       console.log('Word inserted with ID:', wordId);
-      
+
       // Enqueue for sentence generation
       await window.electronAPI.jobs.enqueueWordGeneration(wordId, {
         language: language,
         topic: topic,
-        desiredSentenceCount: desiredSentenceCount
+        desiredSentenceCount: desiredSentenceCount,
       });
       queuedCount++;
       queuedWordIds.push(wordId);
@@ -84,7 +84,7 @@ export async function processKnownWords(
       const wordId = await window.electronAPI.database.insertWord({
         word: word.word,
         language: language,
-        translation: word.translation
+        translation: word.translation,
       });
 
       // Mark as known immediately
@@ -103,10 +103,7 @@ export async function processKnownWords(
 /**
  * Set up language and topic for word processing session
  */
-export async function setupWordProcessingSession(
-  language: string,
-  topic?: string
-): Promise<void> {
+export async function setupWordProcessingSession(language: string, topic?: string): Promise<void> {
   // Set the current language in database to match the words being inserted
   await window.electronAPI.database.setCurrentLanguage(language);
   console.log('Set current language to:', language);
@@ -117,4 +114,3 @@ export async function setupWordProcessingSession(
     sessionManager.updateSelectedTopic(topic);
   }
 }
-

@@ -8,11 +8,11 @@ import { ElectronApplication, Page } from 'playwright';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { 
-  insertTestWord, 
-  getWordStrength, 
+import {
+  insertTestWord,
+  getWordStrength,
   getWordKnownStatus,
-  setupWordsForTesting
+  setupWordsForTesting,
 } from './test-helpers.js';
 
 let electronApp: ElectronApplication;
@@ -23,33 +23,33 @@ test.describe('SRS and Strength Updates', () => {
   test.beforeAll(async () => {
     // Create temporary directory for test data
     testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'language-learning-test-'));
-    
+
     // Launch Electron app
     electronApp = await electron.launch({
       args: [path.join(__dirname, '../../dist/main/main/main.js')],
       env: {
         ...process.env,
         NODE_ENV: 'test',
-        TEST_DATA_DIR: testDataDir
-      }
+        TEST_DATA_DIR: testDataDir,
+      },
     });
-    
+
     // Get the first window
     page = await electronApp.firstWindow();
-    
+
     // Wait for app to be ready
     await page.waitForLoadState('domcontentloaded');
-    
+
     // Insert a test word early to prevent proficiency selector from showing
     await insertTestWord(page);
-    
+
     await page.waitForTimeout(3000); // Allow services to initialize
   });
 
   test.afterAll(async () => {
     // Clean up
     await electronApp.close();
-    
+
     // Remove test data directory
     if (fs.existsSync(testDataDir)) {
       fs.rmSync(testDataDir, { recursive: true, force: true });
@@ -63,25 +63,25 @@ test.describe('SRS and Strength Updates', () => {
       const wordId = await electronAPI.database.insertWord({
         word: 'quiz-strength-test',
         language: 'spanish',
-        translation: 'test translation'
+        translation: 'test translation',
       });
       // Set initial strength
       await electronAPI.database.updateWordStrength(wordId, 30);
       return wordId;
     });
-    
+
     // Get initial strength
     const initialStrength = await getWordStrength(page, wordId);
     expect(initialStrength).toBe(30);
-    
+
     // Navigate to quiz mode
     const quizButton = page.locator('nav button:has-text("Quiz")');
     await quizButton.click();
     await page.waitForSelector('quiz-mode', { timeout: 30000 });
-    
+
     // Wait for quiz to load (may show error if no sentences, which is fine)
     await page.waitForTimeout(2000);
-    
+
     // If quiz question is available, answer it
     const questionContainer = page.locator('quiz-mode .question-container');
     if (await questionContainer.isVisible()) {
@@ -90,7 +90,7 @@ test.describe('SRS and Strength Updates', () => {
       if (await knewItButton.isVisible()) {
         await knewItButton.click();
         await page.waitForTimeout(2000);
-        
+
         // Verify strength increased
         const newStrength = await getWordStrength(page, wordId);
         expect(newStrength).toBeGreaterThan(initialStrength || 0);
@@ -105,17 +105,17 @@ test.describe('SRS and Strength Updates', () => {
       const wordId = await electronAPI.database.insertWord({
         word: 'known-strength-test',
         language: 'spanish',
-        translation: 'test translation'
+        translation: 'test translation',
       });
       // Set initial strength
       await electronAPI.database.updateWordStrength(wordId, 50);
       return wordId;
     });
-    
+
     // Get initial strength
     const initialStrength = await getWordStrength(page, wordId);
     expect(initialStrength).toBe(50);
-    
+
     // Mark word as known
     await page.evaluate(async (id) => {
       const electronAPI = (window as any).electronAPI;
@@ -123,11 +123,11 @@ test.describe('SRS and Strength Updates', () => {
       // Marking as known should also set strength to 100
       await electronAPI.database.updateWordStrength(id, 100);
     }, wordId);
-    
+
     // Verify strength is now 100
     const newStrength = await getWordStrength(page, wordId);
     expect(newStrength).toBe(100);
-    
+
     // Verify word is marked as known
     const status = await getWordKnownStatus(page, wordId);
     expect(status?.known).toBe(true);
@@ -140,29 +140,29 @@ test.describe('SRS and Strength Updates', () => {
       const wordId = await electronAPI.database.insertWord({
         word: 'ignored-test',
         language: 'spanish',
-        translation: 'test translation'
+        translation: 'test translation',
       });
       return wordId;
     });
-    
+
     // Mark word as ignored
     await page.evaluate(async (id) => {
       const electronAPI = (window as any).electronAPI;
       await electronAPI.database.markWordIgnored(id, true);
     }, wordId);
-    
+
     // Verify word is marked as ignored
     const status = await getWordKnownStatus(page, wordId);
     expect(status?.ignored).toBe(true);
-    
+
     // Navigate to quiz mode
     const quizButton = page.locator('nav button:has-text("Quiz")');
     await quizButton.click();
     await page.waitForSelector('quiz-mode', { timeout: 30000 });
-    
+
     // Wait for quiz to load
     await page.waitForTimeout(2000);
-    
+
     // Ignored words should not appear in quiz
     // (This is verified by the fact that the word won't be in the quiz questions)
   });
@@ -174,36 +174,36 @@ test.describe('SRS and Strength Updates', () => {
       const wordId = await electronAPI.database.insertWord({
         word: 'persist-strength-test',
         language: 'spanish',
-        translation: 'test translation'
+        translation: 'test translation',
       });
       return wordId;
     });
-    
+
     // Update strength multiple times
     await page.evaluate(async (id) => {
       const electronAPI = (window as any).electronAPI;
       await electronAPI.database.updateWordStrength(id, 40);
     }, wordId);
-    
+
     const strength1 = await getWordStrength(page, wordId);
     expect(strength1).toBe(40);
-    
+
     await page.evaluate(async (id) => {
       const electronAPI = (window as any).electronAPI;
       await electronAPI.database.updateWordStrength(id, 60);
     }, wordId);
-    
+
     const strength2 = await getWordStrength(page, wordId);
     expect(strength2).toBe(60);
-    
+
     await page.evaluate(async (id) => {
       const electronAPI = (window as any).electronAPI;
       await electronAPI.database.updateWordStrength(id, 80);
     }, wordId);
-    
+
     const strength3 = await getWordStrength(page, wordId);
     expect(strength3).toBe(80);
-    
+
     // Verify final strength persisted
     expect(strength3).toBe(80);
   });
@@ -215,17 +215,17 @@ test.describe('SRS and Strength Updates', () => {
       const wordId = await electronAPI.database.insertWord({
         word: 'srs-correct-test',
         language: 'spanish',
-        translation: 'test translation'
+        translation: 'test translation',
       });
       // Set initial low strength
       await electronAPI.database.updateWordStrength(wordId, 20);
       return wordId;
     });
-    
+
     // Get initial strength
     const initialStrength = await getWordStrength(page, wordId);
     expect(initialStrength).toBe(20);
-    
+
     // Simulate correct answer through SRS service
     await page.evaluate(async (id) => {
       const electronAPI = (window as any).electronAPI;
@@ -241,7 +241,7 @@ test.describe('SRS and Strength Updates', () => {
         }
       }
     }, wordId);
-    
+
     // Verify strength increased
     const newStrength = await getWordStrength(page, wordId);
     expect(newStrength).toBeGreaterThan(initialStrength || 0);
@@ -254,17 +254,17 @@ test.describe('SRS and Strength Updates', () => {
       const wordId = await electronAPI.database.insertWord({
         word: 'srs-incorrect-test',
         language: 'spanish',
-        translation: 'test translation'
+        translation: 'test translation',
       });
       // Set initial high strength
       await electronAPI.database.updateWordStrength(wordId, 70);
       return wordId;
     });
-    
+
     // Get initial strength
     const initialStrength = await getWordStrength(page, wordId);
     expect(initialStrength).toBe(70);
-    
+
     // Simulate incorrect answer through SRS service
     await page.evaluate(async (id) => {
       const electronAPI = (window as any).electronAPI;
@@ -280,7 +280,7 @@ test.describe('SRS and Strength Updates', () => {
         }
       }
     }, wordId);
-    
+
     // Verify strength decreased
     const newStrength = await getWordStrength(page, wordId);
     expect(newStrength).toBeLessThan(initialStrength || 100);
@@ -293,24 +293,27 @@ test.describe('SRS and Strength Updates', () => {
       const wordId = await electronAPI.database.insertWord({
         word: 'multiple-updates-test',
         language: 'spanish',
-        translation: 'test translation'
+        translation: 'test translation',
       });
       return wordId;
     });
-    
+
     // Perform multiple strength updates
     const strengths = [30, 45, 60, 75, 90];
-    
+
     for (const targetStrength of strengths) {
-      await page.evaluate(async ({ id, strength }) => {
-        const electronAPI = (window as any).electronAPI;
-        await electronAPI.database.updateWordStrength(id, strength);
-      }, { id: wordId, strength: targetStrength });
-      
+      await page.evaluate(
+        async ({ id, strength }) => {
+          const electronAPI = (window as any).electronAPI;
+          await electronAPI.database.updateWordStrength(id, strength);
+        },
+        { id: wordId, strength: targetStrength }
+      );
+
       const currentStrength = await getWordStrength(page, wordId);
       expect(currentStrength).toBe(targetStrength);
     }
-    
+
     // Verify final strength
     const finalStrength = await getWordStrength(page, wordId);
     expect(finalStrength).toBe(90);
@@ -323,17 +326,17 @@ test.describe('SRS and Strength Updates', () => {
       const wordId = await electronAPI.database.insertWord({
         word: 'pronunciation-boost-test',
         language: 'spanish',
-        translation: 'test translation'
+        translation: 'test translation',
       });
       // Set initial strength
       await electronAPI.database.updateWordStrength(wordId, 50);
       return wordId;
     });
-    
+
     // Get initial strength
     const initialStrength = await getWordStrength(page, wordId);
     expect(initialStrength).toBe(50);
-    
+
     // Simulate pronunciation practice with high similarity
     // In practice, this would happen through quiz mode with pronunciation recording
     // For this test, we'll simulate the boost directly
@@ -347,11 +350,10 @@ test.describe('SRS and Strength Updates', () => {
         await electronAPI.database.updateWordStrength(id, newStrength);
       }
     }, wordId);
-    
+
     // Verify strength increased
     const newStrength = await getWordStrength(page, wordId);
     expect(newStrength).toBeGreaterThan(initialStrength || 0);
     expect(newStrength).toBe(53); // 50 + 3 boost
   });
 });
-

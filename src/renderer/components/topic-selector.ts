@@ -140,10 +140,6 @@ export class TopicSelector extends BaseComponent {
         min-width: 160px;
       }
 
-
-
-
-
       .error-message {
         color: var(--error-color);
         background: #ffebee;
@@ -233,7 +229,7 @@ export class TopicSelector extends BaseComponent {
           width: 100%;
         }
       }
-    `
+    `,
   ];
 
   async connectedCallback() {
@@ -252,29 +248,29 @@ export class TopicSelector extends BaseComponent {
   }
 
   private async loadCurrentLanguage() {
-    this.currentLanguage = await loadCurrentLanguage('spanish') || null;
+    this.currentLanguage = (await loadCurrentLanguage('spanish')) || null;
   }
 
   protected override handleExternalLanguageChange = async (event: Event): Promise<void> => {
     // Call base class handler first
     await super.handleExternalLanguageChange(event);
-    
+
     const detail = (event as CustomEvent<{ language?: string }>).detail;
     const newLanguage = detail?.language;
 
     if (!newLanguage || newLanguage === this.currentLanguage) {
       return;
     }
-    
+
     // Reload lemmatization model for the new language (async, non-blocking)
     void loadLemmatizationModel(newLanguage);
-    
+
     // Reset state for the new language
     this.topic = '';
     this.error = null;
     await this.loadTopics();
     await this.selectRandomSuggestions();
-    
+
     // Request update to reflect changes
     this.requestUpdate();
   };
@@ -297,9 +293,11 @@ export class TopicSelector extends BaseComponent {
     let frequentlyUsedTopics: Set<string> = new Set();
     if (this.currentLanguage) {
       try {
-        const topicCounts = await window.electronAPI.database.getTopicWordCounts(this.currentLanguage);
+        const topicCounts = await window.electronAPI.database.getTopicWordCounts(
+          this.currentLanguage
+        );
         // Get the top ~10 most used topics (or fewer if there aren't that many)
-        const topUsedTopics = topicCounts.slice(0, 10).map(tc => tc.topic);
+        const topUsedTopics = topicCounts.slice(0, 10).map((tc) => tc.topic);
         frequentlyUsedTopics = new Set(topUsedTopics);
       } catch (error) {
         console.error('[TopicSelector] Error getting topic word counts:', error);
@@ -309,7 +307,7 @@ export class TopicSelector extends BaseComponent {
 
     // Filter out frequently used topics
     const availableTopics = this.allTopicSuggestions.filter(
-      topic => !frequentlyUsedTopics.has(topic)
+      (topic) => !frequentlyUsedTopics.has(topic)
     );
 
     // If we filtered out too many, fall back to all topics
@@ -330,22 +328,19 @@ export class TopicSelector extends BaseComponent {
     }
   }
 
-
-
   private handleTopicChange(e: Event) {
     const input = e.target as HTMLInputElement;
     this.topic = input.value;
     this.error = null; // Clear error when user types
   }
 
-
-
-
-
   private async handleGenerateWords() {
     if (this.isGenerating) return;
 
-    console.log('Starting word generation...', { topic: this.topic, language: this.currentLanguage });
+    console.log('Starting word generation...', {
+      topic: this.topic,
+      language: this.currentLanguage,
+    });
 
     this.isGenerating = true;
     this.error = null;
@@ -377,12 +372,14 @@ export class TopicSelector extends BaseComponent {
       router.navigateTo('word-selection', {
         topic: topicToSave,
         generatedWords: words,
-        language: this.currentLanguage
+        language: this.currentLanguage,
       });
-
     } catch (error) {
       console.error('Failed to generate words:', error);
-      this.error = getErrorMessage(error, 'Failed to generate vocabulary words. Please check that Ollama is running and try again.');
+      this.error = getErrorMessage(
+        error,
+        'Failed to generate vocabulary words. Please check that Ollama is running and try again.'
+      );
     } finally {
       this.isGenerating = false;
     }
@@ -406,9 +403,8 @@ export class TopicSelector extends BaseComponent {
         key: CommonKeys.ENTER,
         action: () => this.handleGenerateWords(),
         context: 'topic-selection',
-        description: 'Generate words for topic'
+        description: 'Generate words for topic',
       },
-
     ];
 
     this.keyboardUnsubscribe = useKeyboardBindings(bindings);
@@ -427,9 +423,7 @@ export class TopicSelector extends BaseComponent {
       <div class="topic-container">
         <div class="topic-input-section">
           <div class="input-group">
-            <label class="input-label" for="topic-input">
-              Topic/prompt (Optional)
-            </label>
+            <label class="input-label" for="topic-input"> Topic/prompt (Optional) </label>
             <div class="input-row">
               <input
                 id="topic-input"
@@ -441,49 +435,49 @@ export class TopicSelector extends BaseComponent {
                 placeholder="e.g., travel, food, business, family..."
                 ?disabled=${this.isGenerating}
               />
-              ${this.isGenerating ? html`
-                <div class="loading-state">
-                  <div class="spinner"></div>
-                  Generating...
-                </div>
-              ` : html`
-                <button
-                  class="btn btn-primary generate-btn inline"
-                  @click=${this.handleGenerateWords}
-                  ?disabled=${this.isGenerating}
-                  title="Generate words (Enter)"
-                >
-                  Generate <span class="keyboard-hint">(Enter)</span>
-                </button>
-              `}
+              ${this.isGenerating
+                ? html`
+                    <div class="loading-state">
+                      <div class="spinner"></div>
+                      Generating...
+                    </div>
+                  `
+                : html`
+                    <button
+                      class="btn btn-primary generate-btn inline"
+                      @click=${this.handleGenerateWords}
+                      ?disabled=${this.isGenerating}
+                      title="Generate words (Enter)"
+                    >
+                      Generate <span class="keyboard-hint">(Enter)</span>
+                    </button>
+                  `}
             </div>
           </div>
-          ${this.suggestions.length > 0 && !this.isGenerating ? html`
-            <div class="suggestions-section">
-              <p class="suggestions-label">Suggestions:</p>
-              <div class="suggestions-container">
-                ${this.suggestions.map(suggestion => html`
-                  <button
-                    class="suggestion-btn"
-                    @click=${() => this.handleSuggestionClick(suggestion)}
-                    ?disabled=${this.isGenerating}
-                    type="button"
-                  >
-                    ${suggestion}
-                  </button>
-                `)}
-              </div>
-            </div>
-          ` : ''}
+          ${this.suggestions.length > 0 && !this.isGenerating
+            ? html`
+                <div class="suggestions-section">
+                  <p class="suggestions-label">Suggestions:</p>
+                  <div class="suggestions-container">
+                    ${this.suggestions.map(
+                      (suggestion) => html`
+                        <button
+                          class="suggestion-btn"
+                          @click=${() => this.handleSuggestionClick(suggestion)}
+                          ?disabled=${this.isGenerating}
+                          type="button"
+                        >
+                          ${suggestion}
+                        </button>
+                      `
+                    )}
+                  </div>
+                </div>
+              `
+            : ''}
         </div>
 
-        ${this.error ? html`
-          <div class="error-message">
-            ${this.error}
-          </div>
-        ` : ''}
-
-
+        ${this.error ? html` <div class="error-message">${this.error}</div> ` : ''}
       </div>
     `;
   }

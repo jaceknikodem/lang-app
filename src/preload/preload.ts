@@ -13,25 +13,44 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Database operations
   database: {
     insertWord: (word: any) => ipcRenderer.invoke(IPC_CHANNELS.DATABASE.INSERT_WORD, word),
-    updateWordStrength: (wordId: number, strength: number) => 
+    updateWordStrength: (wordId: number, strength: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.UPDATE_WORD_STRENGTH, wordId, strength),
-    markWordKnown: (wordId: number, known: boolean) => 
+    markWordKnown: (wordId: number, known: boolean) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.MARK_WORD_KNOWN, wordId, known),
-    markWordIgnored: (wordId: number, ignored: boolean) => 
+    markWordIgnored: (wordId: number, ignored: boolean) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.MARK_WORD_IGNORED, wordId, ignored),
-    getWordsToStudy: (limit: number, language?: string) => 
+    getWordsToStudy: (limit: number, language?: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_TO_STUDY, limit, language),
-    getWordById: (wordId: number) => 
+    getWordById: (wordId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORD_BY_ID, wordId),
-    getWordsByIds: (wordIds: number[]) => 
+    getWordsByIds: (wordIds: number[]) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_BY_IDS, wordIds),
-    getAllWords: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_ALL_WORDS, language, includeKnown, includeIgnored),
-    getWordsWithSentences: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES, language, includeKnown, includeIgnored),
-    getWordsWithSentencesOrderedByStrength: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES_ORDERED_BY_STRENGTH, language, includeKnown, includeIgnored),
-    getRecentStudySessions: (limit?: number) => 
+    getAllWords: (language: string, includeKnown?: boolean, includeIgnored?: boolean) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.DATABASE.GET_ALL_WORDS,
+        language,
+        includeKnown,
+        includeIgnored
+      ),
+    getWordsWithSentences: (language: string, includeKnown?: boolean, includeIgnored?: boolean) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES,
+        language,
+        includeKnown,
+        includeIgnored
+      ),
+    getWordsWithSentencesOrderedByStrength: (
+      language: string,
+      includeKnown?: boolean,
+      includeIgnored?: boolean
+    ) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES_ORDERED_BY_STRENGTH,
+        language,
+        includeKnown,
+        includeIgnored
+      ),
+    getRecentStudySessions: (limit?: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_RECENT_STUDY_SESSIONS, limit),
     insertSentence: (
       wordId: number,
@@ -47,7 +66,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       audioGenerationService?: string,
       audioGenerationModel?: string,
       audioGenerationVoiceId?: string
-    ) => 
+    ) =>
       ipcRenderer.invoke(
         IPC_CHANNELS.DATABASE.INSERT_SENTENCE,
         wordId,
@@ -64,40 +83,58 @@ contextBridge.exposeInMainWorld('electronAPI', {
         audioGenerationModel,
         audioGenerationVoiceId
       ),
-    getSentencesByWord: (wordId: number) => 
+    getSentencesByWord: (wordId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_SENTENCES_BY_WORD, wordId),
-    getSentencesByIds: (sentenceIds: number[]) => 
+    getSentencesByIds: (sentenceIds: number[]) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_SENTENCES_BY_IDS, sentenceIds),
     deleteSentence: (sentenceId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.DELETE_SENTENCE, sentenceId),
     updateSentenceLastShown: (sentenceId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_LAST_SHOWN, sentenceId),
-    updateSentenceAudioPath: (sentenceId: number, audioPath: string, audioGenerationVoiceId?: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_AUDIO_PATH, sentenceId, audioPath, audioGenerationVoiceId),
+    updateSentenceAudioPath: (
+      sentenceId: number,
+      audioPath: string,
+      audioGenerationVoiceId?: string
+    ) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_AUDIO_PATH,
+        sentenceId,
+        audioPath,
+        audioGenerationVoiceId
+      ),
     incrementSentencePlayCount: (sentenceId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.INCREMENT_SENTENCE_PLAY_COUNT, sentenceId),
-    recordPronunciationAttempt: (sentenceId: number, similarityScore: number, expectedText: string, transcribedText: string, audioPath?: string | null) =>
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.RECORD_PRONUNCIATION_ATTEMPT, sentenceId, similarityScore, expectedText, transcribedText, audioPath),
+    recordPronunciationAttempt: (
+      sentenceId: number,
+      similarityScore: number,
+      expectedText: string,
+      transcribedText: string,
+      audioPath?: string | null
+    ) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.DATABASE.RECORD_PRONUNCIATION_ATTEMPT,
+        sentenceId,
+        similarityScore,
+        expectedText,
+        transcribedText,
+        audioPath
+      ),
     getPronunciationHistory: (sentenceId: number, limit?: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_PRONUNCIATION_HISTORY, sentenceId, limit),
-    updateLastStudied: (wordId: number) => 
+    updateLastStudied: (wordId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.UPDATE_LAST_STUDIED, wordId),
-    getStudyStats: (language?: string) => 
+    getStudyStats: (language?: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_STUDY_STATS, language),
-    recordStudySession: (wordsStudied: number) => 
+    recordStudySession: (wordsStudied: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.RECORD_STUDY_SESSION, wordsStudied),
-    getSetting: (key: string) => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_SETTING, key),
-    setSetting: (key: string, value: string) => 
+    getSetting: (key: string) => ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_SETTING, key),
+    setSetting: (key: string, value: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.SET_SETTING, key, value),
-    getCurrentLanguage: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_CURRENT_LANGUAGE),
-    setCurrentLanguage: (language: string) => 
+    getCurrentLanguage: () => ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_CURRENT_LANGUAGE),
+    setCurrentLanguage: (language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.SET_CURRENT_LANGUAGE, language),
-    getAvailableLanguages: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_AVAILABLE_LANGUAGES),
-    getLanguageStats: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_LANGUAGE_STATS),
+    getAvailableLanguages: () => ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_AVAILABLE_LANGUAGES),
+    getLanguageStats: () => ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_LANGUAGE_STATS),
     lookupDictionary: (word: string, language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.LOOKUP_DICTIONARY, word, language),
     getNewWordCount: (language: string) =>
@@ -105,85 +142,96 @@ contextBridge.exposeInMainWorld('electronAPI', {
     resetLanguageProgress: (language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.RESET_LANGUAGE_PROGRESS, language),
     getTopicWordCounts: (language: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_TOPIC_WORD_COUNTS, language)
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_TOPIC_WORD_COUNTS, language),
   },
 
   // LLM operations
   llm: {
-    generateWords: (topic: string | undefined, language: string) => 
+    generateWords: (topic: string | undefined, language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.LLM.GENERATE_WORDS, topic, language),
-    generateSentences: (word: string, language: string, topic?: string) => 
+    generateSentences: (word: string, language: string, topic?: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.LLM.GENERATE_SENTENCES, word, language, topic),
-    isAvailable: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LLM.IS_AVAILABLE),
-    getAvailableModels: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_AVAILABLE_MODELS),
-    setModel: (model: string) => 
-      ipcRenderer.invoke(IPC_CHANNELS.LLM.SET_MODEL, model),
-    getCurrentModel: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_CURRENT_MODEL),
-    setWordGenerationModel: (model: string) => 
+    isAvailable: () => ipcRenderer.invoke(IPC_CHANNELS.LLM.IS_AVAILABLE),
+    getAvailableModels: () => ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_AVAILABLE_MODELS),
+    setModel: (model: string) => ipcRenderer.invoke(IPC_CHANNELS.LLM.SET_MODEL, model),
+    getCurrentModel: () => ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_CURRENT_MODEL),
+    setWordGenerationModel: (model: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.LLM.SET_WORD_GENERATION_MODEL, model),
-    setSentenceGenerationModel: (model: string) => 
+    setSentenceGenerationModel: (model: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.LLM.SET_SENTENCE_GENERATION_MODEL, model),
-    getWordGenerationModel: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_WORD_GENERATION_MODEL),
-    getSentenceGenerationModel: () => 
+    getWordGenerationModel: () => ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_WORD_GENERATION_MODEL),
+    getSentenceGenerationModel: () =>
       ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_SENTENCE_GENERATION_MODEL),
     // Provider management
-    getCurrentProvider: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_CURRENT_PROVIDER),
-    switchProvider: (provider: 'ollama' | 'gemini', geminiApiKey?: string) => 
+    getCurrentProvider: () => ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_CURRENT_PROVIDER),
+    switchProvider: (provider: 'ollama' | 'gemini', geminiApiKey?: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.LLM.SWITCH_PROVIDER, provider, geminiApiKey),
-    setGeminiApiKey: (apiKey: string, switchToGemini?: boolean) => 
+    setGeminiApiKey: (apiKey: string, switchToGemini?: boolean) =>
       ipcRenderer.invoke(IPC_CHANNELS.LLM.SET_GEMINI_API_KEY, apiKey, switchToGemini),
-    getAvailableProviders: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_AVAILABLE_PROVIDERS),
-    getModelsForProvider: (provider: 'ollama' | 'gemini') => 
-      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_MODELS_FOR_PROVIDER, provider)
+    getAvailableProviders: () => ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_AVAILABLE_PROVIDERS),
+    getModelsForProvider: (provider: 'ollama' | 'gemini') =>
+      ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_MODELS_FOR_PROVIDER, provider),
   },
 
   // Audio operations
   audio: {
-    generateAudio: (text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number) => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GENERATE_AUDIO, text, language, word, wordId, sentenceId, variantId),
-    playAudio: (audioPath: string) => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.PLAY_AUDIO, audioPath),
-    stopAudio: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.STOP_AUDIO),
-    audioExists: (audioPath: string) => 
+    generateAudio: (
+      text: string,
+      language: string,
+      word?: string,
+      wordId?: number,
+      sentenceId?: number,
+      variantId?: number
+    ) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.AUDIO.GENERATE_AUDIO,
+        text,
+        language,
+        word,
+        wordId,
+        sentenceId,
+        variantId
+      ),
+    playAudio: (audioPath: string) => ipcRenderer.invoke(IPC_CHANNELS.AUDIO.PLAY_AUDIO, audioPath),
+    stopAudio: () => ipcRenderer.invoke(IPC_CHANNELS.AUDIO.STOP_AUDIO),
+    audioExists: (audioPath: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.AUDIO_EXISTS, audioPath),
     normalizeAudioVolume: (audioPath: string, targetDb?: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.NORMALIZE_AUDIO_VOLUME, audioPath, targetDb),
     loadAudioBase64: (audioPath: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.LOAD_AUDIO_BASE64, audioPath),
-    regenerateAudio: (options: { text: string; language: string; word?: string; wordId?: number; sentenceId?: number; variantId?: number; existingPath?: string }) =>
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.REGENERATE_AUDIO, options),
-    startRecording: (options?: any) => 
+    regenerateAudio: (options: {
+      text: string;
+      language: string;
+      word?: string;
+      wordId?: number;
+      sentenceId?: number;
+      variantId?: number;
+      existingPath?: string;
+    }) => ipcRenderer.invoke(IPC_CHANNELS.AUDIO.REGENERATE_AUDIO, options),
+    startRecording: (options?: any) =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.START_RECORDING, options),
-    stopRecording: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.STOP_RECORDING),
-    cancelRecording: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.CANCEL_RECORDING),
-    getCurrentRecordingSession: () => 
+    stopRecording: () => ipcRenderer.invoke(IPC_CHANNELS.AUDIO.STOP_RECORDING),
+    cancelRecording: () => ipcRenderer.invoke(IPC_CHANNELS.AUDIO.CANCEL_RECORDING),
+    getCurrentRecordingSession: () =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GET_CURRENT_RECORDING_SESSION),
-    isRecording: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.IS_RECORDING),
-    getAvailableRecordingDevices: () => 
+    isRecording: () => ipcRenderer.invoke(IPC_CHANNELS.AUDIO.IS_RECORDING),
+    getAvailableRecordingDevices: () =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GET_AVAILABLE_RECORDING_DEVICES),
-    deleteRecording: (filePath: string) => 
+    deleteRecording: (filePath: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.DELETE_RECORDING, filePath),
-    getRecordingInfo: (filePath: string) => 
+    getRecordingInfo: (filePath: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GET_RECORDING_INFO, filePath),
-    initializeSpeechRecognition: () => 
+    initializeSpeechRecognition: () =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.INITIALIZE_SPEECH_RECOGNITION),
-    transcribeAudio: (filePath: string, options?: any) => 
+    transcribeAudio: (filePath: string, options?: any) =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.TRANSCRIBE_AUDIO, filePath, options),
-    onTranscriptionProgress: (
-      callback: (payload: { text: string; isFinal: boolean }) => void
-    ) => {
+    onTranscriptionProgress: (callback: (payload: { text: string; isFinal: boolean }) => void) => {
       const channel = IPC_CHANNELS.AUDIO.TRANSCRIBE_AUDIO_PROGRESS;
-      const listener = (_event: Electron.IpcRendererEvent, payload: { text: string; isFinal: boolean }) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload: { text: string; isFinal: boolean }
+      ) => {
         callback(payload);
       };
       ipcRenderer.on(channel, listener);
@@ -191,56 +239,55 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeListener(channel, listener);
       };
     },
-    compareTranscription: (transcribed: string, expected: string, proficiencyLevel?: string | null) => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.COMPARE_TRANSCRIPTION, transcribed, expected, proficiencyLevel),
-    isSpeechRecognitionReady: () => 
+    compareTranscription: (
+      transcribed: string,
+      expected: string,
+      proficiencyLevel?: string | null
+    ) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.AUDIO.COMPARE_TRANSCRIPTION,
+        transcribed,
+        expected,
+        proficiencyLevel
+      ),
+    isSpeechRecognitionReady: () =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.IS_SPEECH_RECOGNITION_READY),
-    switchToElevenLabs: (apiKey: string) => 
+    switchToElevenLabs: (apiKey: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.SWITCH_TO_ELEVENLABS, apiKey),
-    switchToSystemTTS: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.SWITCH_TO_SYSTEM_TTS),
-    getVoiceMappings: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GET_VOICE_MAPPINGS),
-    saveVoiceMappings: (mappings: Record<string, string[]>) => 
+    switchToSystemTTS: () => ipcRenderer.invoke(IPC_CHANNELS.AUDIO.SWITCH_TO_SYSTEM_TTS),
+    getVoiceMappings: () => ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GET_VOICE_MAPPINGS),
+    saveVoiceMappings: (mappings: Record<string, string[]>) =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.SAVE_VOICE_MAPPINGS, mappings),
-    resetVoiceMappingsToDefaults: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.RESET_VOICE_MAPPINGS_TO_DEFAULTS)
+    resetVoiceMappingsToDefaults: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.RESET_VOICE_MAPPINGS_TO_DEFAULTS),
   },
 
   // Quiz operations
   quiz: {
-    getWeakestWords: (limit: number, language: string) => 
+    getWeakestWords: (limit: number, language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.QUIZ.GET_WEAKEST_WORDS, limit, language),
-    getRandomSentenceForWord: (wordId: number) => 
-      ipcRenderer.invoke(IPC_CHANNELS.QUIZ.GET_RANDOM_SENTENCE_FOR_WORD, wordId)
+    getRandomSentenceForWord: (wordId: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.QUIZ.GET_RANDOM_SENTENCE_FOR_WORD, wordId),
   },
 
   // Lifecycle operations
   lifecycle: {
-    createBackup: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.CREATE_BACKUP),
-    restoreFromBackup: (backupPath: string) => 
+    createBackup: () => ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.CREATE_BACKUP),
+    restoreFromBackup: (backupPath: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.RESTORE_FROM_BACKUP, backupPath),
-    checkForUpdates: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.CHECK_FOR_UPDATES),
-    getAppVersion: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.GET_APP_VERSION),
-    restartAll: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.RESTART_ALL),
-    openBackupDialog: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.OPEN_BACKUP_DIALOG),
-    openBackupDirectory: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.OPEN_BACKUP_DIRECTORY),
-    closeApp: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.CLOSE_APP)
+    checkForUpdates: () => ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.CHECK_FOR_UPDATES),
+    getAppVersion: () => ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.GET_APP_VERSION),
+    restartAll: () => ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.RESTART_ALL),
+    openBackupDialog: () => ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.OPEN_BACKUP_DIALOG),
+    openBackupDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.OPEN_BACKUP_DIRECTORY),
+    closeApp: () => ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.CLOSE_APP),
   },
 
   // Frequency word management
   frequency: {
-    getProgress: (language: string) => 
+    getProgress: (language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.FREQUENCY.GET_PROGRESS, language),
-    getAvailableLanguages: () => 
-      ipcRenderer.invoke(IPC_CHANNELS.FREQUENCY.GET_AVAILABLE_LANGUAGES)
+    getAvailableLanguages: () => ipcRenderer.invoke(IPC_CHANNELS.FREQUENCY.GET_AVAILABLE_LANGUAGES),
   },
 
   jobs: {
@@ -248,145 +295,160 @@ contextBridge.exposeInMainWorld('electronAPI', {
       wordId: number,
       options?: { language?: string; topic?: string; desiredSentenceCount?: number }
     ) => ipcRenderer.invoke(IPC_CHANNELS.JOBS.ENQUEUE_WORD_GENERATION, wordId, options),
-    getWordStatus: (wordId: number) => 
+    getWordStatus: (wordId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.JOBS.GET_WORD_STATUS, wordId),
-    getQueueSummary: (language?: string) => 
+    getQueueSummary: (language?: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.JOBS.GET_QUEUE_SUMMARY, language),
     onWordUpdated: (
-      callback: (payload: { wordId: number; processingStatus: 'queued' | 'processing' | 'ready' | 'failed'; sentenceCount: number }) => void
+      callback: (payload: {
+        wordId: number;
+        processingStatus: 'queued' | 'processing' | 'ready' | 'failed';
+        sentenceCount: number;
+      }) => void
     ) => {
       const channel = IPC_CHANNELS.JOBS.WORD_UPDATED;
-      const listener = (_event: Electron.IpcRendererEvent, payload: { wordId: number; processingStatus: 'queued' | 'processing' | 'ready' | 'failed'; sentenceCount: number }) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload: {
+          wordId: number;
+          processingStatus: 'queued' | 'processing' | 'ready' | 'failed';
+          sentenceCount: number;
+        }
+      ) => {
         callback(payload);
       };
       ipcRenderer.on(channel, listener);
       return () => {
         ipcRenderer.removeListener(channel, listener);
       };
-    }
+    },
   },
 
   // SRS operations
   srs: {
-    processReview: (wordId: number, recall: 0 | 1 | 2 | 3) => 
+    processReview: (wordId: number, recall: 0 | 1 | 2 | 3) =>
       ipcRenderer.invoke(IPC_CHANNELS.SRS.PROCESS_REVIEW, wordId, recall),
-    processQuizResults: (results: Array<{
-      wordId: number;
-      correct: boolean;
-      responseTime?: number;
-      difficulty?: 'easy' | 'medium' | 'hard';
-    }>) => 
-      ipcRenderer.invoke(IPC_CHANNELS.SRS.PROCESS_QUIZ_RESULTS, results),
-    getTodaysStudyWords: (language: string, maxWords?: number) => 
+    processQuizResults: (
+      results: Array<{
+        wordId: number;
+        correct: boolean;
+        responseTime?: number;
+        difficulty?: 'easy' | 'medium' | 'hard';
+      }>
+    ) => ipcRenderer.invoke(IPC_CHANNELS.SRS.PROCESS_QUIZ_RESULTS, results),
+    getTodaysStudyWords: (language: string, maxWords?: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.SRS.GET_TODAYS_STUDY_WORDS, maxWords, language),
-    getDashboardStats: (language: string) => 
+    getDashboardStats: (language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.SRS.GET_DASHBOARD_STATS, language),
-    markWordDifficulty: (wordId: number, difficulty: 'easy' | 'hard') => 
+    markWordDifficulty: (wordId: number, difficulty: 'easy' | 'hard') =>
       ipcRenderer.invoke(IPC_CHANNELS.SRS.MARK_WORD_DIFFICULTY, wordId, difficulty),
-    resetWordProgress: (wordId: number) => 
+    resetWordProgress: (wordId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.SRS.RESET_WORD_PROGRESS, wordId),
-      getOverdueWords: (language: string) => 
-        ipcRenderer.invoke(IPC_CHANNELS.SRS.GET_OVERDUE_WORDS, language),
-      initializeExistingWords: (language: string) => 
-        ipcRenderer.invoke(IPC_CHANNELS.SRS.INITIALIZE_EXISTING_WORDS, language)
-    },
+    getOverdueWords: (language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.SRS.GET_OVERDUE_WORDS, language),
+    initializeExistingWords: (language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.SRS.INITIALIZE_EXISTING_WORDS, language),
+  },
 
-    // Lemmatization operations
-    lemmatization: {
-      getStatus: () => 
-        ipcRenderer.invoke(IPC_CHANNELS.LEMMATIZATION.GET_STATUS),
-      loadModel: (language: string) => 
-        ipcRenderer.invoke(IPC_CHANNELS.LEMMATIZATION.LOAD_MODEL, language),
-      lemmatizeWords: (words: string[], language: string) => 
-        ipcRenderer.invoke(IPC_CHANNELS.LEMMATIZATION.LEMMATIZE_WORDS, words, language)
-    },
+  // Lemmatization operations
+  lemmatization: {
+    getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.LEMMATIZATION.GET_STATUS),
+    loadModel: (language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.LEMMATIZATION.LOAD_MODEL, language),
+    lemmatizeWords: (words: string[], language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.LEMMATIZATION.LEMMATIZE_WORDS, words, language),
+  },
 
-    // Dialog operations
-    dialog: {
-      selectSentence: () => 
-        ipcRenderer.invoke(IPC_CHANNELS.DIALOG.SELECT_SENTENCE),
-      generateVariants: (sentenceId: number) => 
-        ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_VARIANTS, sentenceId),
-      generateFollowUp: (variantId: number) => 
-        ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_FOLLOW_UP, variantId),
-      ensureBeforeSentenceAudio: (sentenceId: number) => 
-        ipcRenderer.invoke(IPC_CHANNELS.DIALOG.ENSURE_BEFORE_SENTENCE_AUDIO, sentenceId),
-      ensureContextSentences: (sentenceId: number) => 
-        ipcRenderer.invoke(IPC_CHANNELS.DIALOG.ENSURE_CONTEXT_SENTENCES, sentenceId),
-      pregenerateSession: () => 
-        ipcRenderer.invoke(IPC_CHANNELS.DIALOG.PREGENERATE_SESSION),
-      pregenerateSessions: (count: number) =>
-        ipcRenderer.invoke(IPC_CHANNELS.DIALOG.PREGENERATE_SESSIONS, count)
-    },
+  // Dialog operations
+  dialog: {
+    selectSentence: () => ipcRenderer.invoke(IPC_CHANNELS.DIALOG.SELECT_SENTENCE),
+    generateVariants: (sentenceId: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_VARIANTS, sentenceId),
+    generateFollowUp: (variantId: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_FOLLOW_UP, variantId),
+    ensureBeforeSentenceAudio: (sentenceId: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DIALOG.ENSURE_BEFORE_SENTENCE_AUDIO, sentenceId),
+    ensureContextSentences: (sentenceId: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DIALOG.ENSURE_CONTEXT_SENTENCES, sentenceId),
+    pregenerateSession: () => ipcRenderer.invoke(IPC_CHANNELS.DIALOG.PREGENERATE_SESSION),
+    pregenerateSessions: (count: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DIALOG.PREGENERATE_SESSIONS, count),
+  },
 
-    // Flow operations
-    flow: {
-      getFlowSentences: (language: string) =>
-        ipcRenderer.invoke(IPC_CHANNELS.FLOW.GET_FLOW_SENTENCES, language),
-      stitchAudio: (audioPaths: string[], language: string) =>
-        ipcRenderer.invoke(IPC_CHANNELS.FLOW.STITCH_AUDIO, audioPaths, language),
-      stitchAudioWithEnglish: (audioPathPairs: Array<[string, string]>, language: string) =>
-        ipcRenderer.invoke(IPC_CHANNELS.FLOW.STITCH_AUDIO_WITH_ENGLISH, audioPathPairs, language),
-      getFileStats: (filePath: string) =>
-        ipcRenderer.invoke(IPC_CHANNELS.FLOW.GET_FILE_STATS, filePath)
-    },
+  // Flow operations
+  flow: {
+    getFlowSentences: (language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.FLOW.GET_FLOW_SENTENCES, language),
+    stitchAudio: (audioPaths: string[], language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.FLOW.STITCH_AUDIO, audioPaths, language),
+    stitchAudioWithEnglish: (audioPathPairs: Array<[string, string]>, language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.FLOW.STITCH_AUDIO_WITH_ENGLISH, audioPathPairs, language),
+    getFileStats: (filePath: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.FLOW.GET_FILE_STATS, filePath),
+  },
 
-    // Scoring operations
-    scoring: {
-      getNextMode: (options: { currentMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null; language: string | null; initialTakeover: boolean }) =>
-        ipcRenderer.invoke(IPC_CHANNELS.SCORING.GET_NEXT_MODE, options),
-      getLanguageProficiency: (language: string | null, timeWindowDays?: number) =>
-        ipcRenderer.invoke(IPC_CHANNELS.SCORING.GET_LANGUAGE_PROFICIENCY, language, timeWindowDays)
-    },
+  // Scoring operations
+  scoring: {
+    getNextMode: (options: {
+      currentMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null;
+      language: string | null;
+      initialTakeover: boolean;
+    }) => ipcRenderer.invoke(IPC_CHANNELS.SCORING.GET_NEXT_MODE, options),
+    getLanguageProficiency: (language: string | null, timeWindowDays?: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.SCORING.GET_LANGUAGE_PROFICIENCY, language, timeWindowDays),
+  },
 
-    // Logging operations
-    log: {
-      log: (level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal', message: string, data?: any) =>
-        ipcRenderer.invoke(IPC_CHANNELS.LOG.LOG, level, message, data)
-    },
+  // Logging operations
+  log: {
+    log: (
+      level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal',
+      message: string,
+      data?: any
+    ) => ipcRenderer.invoke(IPC_CHANNELS.LOG.LOG, level, message, data),
+  },
 
-    // Topics operations
-    topics: {
-      getTopics: () =>
-        ipcRenderer.invoke(IPC_CHANNELS.TOPICS.GET_TOPICS)
-    },
+  // Topics operations
+  topics: {
+    getTopics: () => ipcRenderer.invoke(IPC_CHANNELS.TOPICS.GET_TOPICS),
+  },
 
-    // Tracking operations
-    tracking: {
-      createSession: (mode: 'learning' | 'quiz' | 'dialog' | 'flow', language: string) =>
-        ipcRenderer.invoke(IPC_CHANNELS.TRACKING.CREATE_SESSION, mode, language),
-      updateSession: (sessionId: number, data: { wordCount?: number; sentenceCount?: number; audioPlayedCount?: number }) =>
-        ipcRenderer.invoke(IPC_CHANNELS.TRACKING.UPDATE_SESSION, sessionId, data),
-      recordAudioPlayback: (data: {
-        sessionId?: number;
-        sentenceId?: number;
-        audioPath: string;
-        language: string;
-        mode: 'learning' | 'quiz' | 'dialog' | 'flow';
-        playbackSpeed?: number;
-      }) =>
-        ipcRenderer.invoke(IPC_CHANNELS.TRACKING.RECORD_AUDIO_PLAYBACK, data),
-      recordNeglectedWords: (data: Array<{
+  // Tracking operations
+  tracking: {
+    createSession: (mode: 'learning' | 'quiz' | 'dialog' | 'flow', language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TRACKING.CREATE_SESSION, mode, language),
+    updateSession: (
+      sessionId: number,
+      data: { wordCount?: number; sentenceCount?: number; audioPlayedCount?: number }
+    ) => ipcRenderer.invoke(IPC_CHANNELS.TRACKING.UPDATE_SESSION, sessionId, data),
+    recordAudioPlayback: (data: {
+      sessionId?: number;
+      sentenceId?: number;
+      audioPath: string;
+      language: string;
+      mode: 'learning' | 'quiz' | 'dialog' | 'flow';
+      playbackSpeed?: number;
+    }) => ipcRenderer.invoke(IPC_CHANNELS.TRACKING.RECORD_AUDIO_PLAYBACK, data),
+    recordNeglectedWords: (
+      data: Array<{
         word: string;
         language: string;
         topic?: string;
         translation?: string;
         sessionId?: number;
         frequencyPosition?: number;
-      }>) =>
-        ipcRenderer.invoke(IPC_CHANNELS.TRACKING.RECORD_NEGLECTED_WORDS, data),
-      recordDictionaryHover: (data: {
-        word: string;
-        language: string;
-        sentenceId?: number;
-        sessionId?: number;
-        hoverDurationMs: number;
-        dictionaryKey?: string;
-        foundInDict: boolean;
-      }) =>
-        ipcRenderer.invoke(IPC_CHANNELS.TRACKING.RECORD_DICTIONARY_HOVER, data)
-    }
-  });
+      }>
+    ) => ipcRenderer.invoke(IPC_CHANNELS.TRACKING.RECORD_NEGLECTED_WORDS, data),
+    recordDictionaryHover: (data: {
+      word: string;
+      language: string;
+      sentenceId?: number;
+      sessionId?: number;
+      hoverDurationMs: number;
+      dictionaryKey?: string;
+      foundInDict: boolean;
+    }) => ipcRenderer.invoke(IPC_CHANNELS.TRACKING.RECORD_DICTIONARY_HOVER, data),
+  },
+});
 
 // Type declaration for the exposed API
 declare global {
@@ -400,27 +462,59 @@ declare global {
         getWordsToStudy: (limit: number, language: string) => Promise<any[]>;
         getWordById: (wordId: number) => Promise<any | null>;
         getWordsByIds: (wordIds: number[]) => Promise<any[]>;
-        getAllWords: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => Promise<any[]>;
-        getWordsWithSentences: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => Promise<any[]>;
-        getWordsWithSentencesOrderedByStrength: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => Promise<any[]>;
+        getAllWords: (
+          language: string,
+          includeKnown?: boolean,
+          includeIgnored?: boolean
+        ) => Promise<any[]>;
+        getWordsWithSentences: (
+          language: string,
+          includeKnown?: boolean,
+          includeIgnored?: boolean
+        ) => Promise<any[]>;
+        getWordsWithSentencesOrderedByStrength: (
+          language: string,
+          includeKnown?: boolean,
+          includeIgnored?: boolean
+        ) => Promise<any[]>;
         getRecentStudySessions: (limit?: number) => Promise<any[]>;
-        insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string, contextBefore?: string, contextAfter?: string, contextBeforeTranslation?: string, contextAfterTranslation?: string) => Promise<number>;
+        insertSentence: (
+          wordId: number,
+          sentence: string,
+          translation: string,
+          audioPath: string,
+          contextBefore?: string,
+          contextAfter?: string,
+          contextBeforeTranslation?: string,
+          contextAfterTranslation?: string
+        ) => Promise<number>;
         getSentencesByWord: (wordId: number) => Promise<any[]>;
         getSentencesByIds: (sentenceIds: number[]) => Promise<any[]>;
         deleteSentence: (sentenceId: number) => Promise<void>;
         updateSentenceLastShown: (sentenceId: number) => Promise<void>;
         updateSentenceAudioPath: (sentenceId: number, audioPath: string) => Promise<void>;
         incrementSentencePlayCount: (sentenceId: number) => Promise<void>;
-        recordPronunciationAttempt: (sentenceId: number, similarityScore: number, expectedText: string, transcribedText: string, audioPath?: string | null) => Promise<void>;
-        getPronunciationHistory: (sentenceId: number, limit?: number) => Promise<Array<{
-          id: number;
-          sentenceId: number;
-          similarityScore: number;
-          expectedText: string;
-          transcribedText: string;
-          audioPath: string | null;
-          createdAt: Date;
-        }>>;
+        recordPronunciationAttempt: (
+          sentenceId: number,
+          similarityScore: number,
+          expectedText: string,
+          transcribedText: string,
+          audioPath?: string | null
+        ) => Promise<void>;
+        getPronunciationHistory: (
+          sentenceId: number,
+          limit?: number
+        ) => Promise<
+          Array<{
+            id: number;
+            sentenceId: number;
+            similarityScore: number;
+            expectedText: string;
+            transcribedText: string;
+            audioPath: string | null;
+            createdAt: Date;
+          }>
+        >;
         updateLastStudied: (wordId: number) => Promise<void>;
         getStudyStats: (language: string) => Promise<any>;
         recordStudySession: (wordsStudied: number) => Promise<void>;
@@ -429,13 +523,26 @@ declare global {
         getCurrentLanguage: () => Promise<string>;
         setCurrentLanguage: (language: string) => Promise<void>;
         getAvailableLanguages: () => Promise<string[]>;
-        getLanguageStats: () => Promise<Array<{language: string, totalWords: number, studiedWords: number, averagePronunciationScore: number | null, pronunciationAttemptCount: number}>>;
-        lookupDictionary: (word: string, language: string) => Promise<Array<{
-          word: string;
-          pos: string;
-          glosses: string[];
-          lang: string;
-        }>>;
+        getLanguageStats: () => Promise<
+          Array<{
+            language: string;
+            totalWords: number;
+            studiedWords: number;
+            averagePronunciationScore: number | null;
+            pronunciationAttemptCount: number;
+          }>
+        >;
+        lookupDictionary: (
+          word: string,
+          language: string
+        ) => Promise<
+          Array<{
+            word: string;
+            pos: string;
+            glosses: string[];
+            lang: string;
+          }>
+        >;
         getNewWordCount: (language: string) => Promise<number>;
         resetLanguageProgress: (language: string) => Promise<void>;
         getTopicWordCounts: (language: string) => Promise<Array<{ topic: string; count: number }>>;
@@ -459,13 +566,30 @@ declare global {
         getModelsForProvider: (provider: 'ollama' | 'gemini') => Promise<string[]>;
       };
       audio: {
-        generateAudio: (text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number) => Promise<string>;
+        generateAudio: (
+          text: string,
+          language: string,
+          word?: string,
+          wordId?: number,
+          sentenceId?: number,
+          variantId?: number
+        ) => Promise<string>;
         playAudio: (audioPath: string) => Promise<void>;
         stopAudio: () => Promise<void>;
         audioExists: (audioPath: string) => Promise<boolean>;
         normalizeAudioVolume: (audioPath: string, targetDb?: number) => Promise<string | null>;
-        loadAudioBase64: (audioPath: string) => Promise<{ data: ArrayBuffer; mimeType: string } | null>;
-        regenerateAudio: (options: { text: string; language: string; word?: string; wordId?: number; sentenceId?: number; variantId?: number; existingPath?: string }) => Promise<{ audioPath: string }>;
+        loadAudioBase64: (
+          audioPath: string
+        ) => Promise<{ data: ArrayBuffer; mimeType: string } | null>;
+        regenerateAudio: (options: {
+          text: string;
+          language: string;
+          word?: string;
+          wordId?: number;
+          sentenceId?: number;
+          variantId?: number;
+          existingPath?: string;
+        }) => Promise<{ audioPath: string }>;
         startRecording: (options?: any) => Promise<any>;
         stopRecording: () => Promise<any>;
         cancelRecording: () => Promise<void>;
@@ -479,7 +603,11 @@ declare global {
         onTranscriptionProgress: (
           callback: (payload: { text: string; isFinal: boolean }) => void
         ) => () => void;
-        compareTranscription: (transcribed: string, expected: string, proficiencyLevel?: string | null) => Promise<any>;
+        compareTranscription: (
+          transcribed: string,
+          expected: string,
+          proficiencyLevel?: string | null
+        ) => Promise<any>;
         isSpeechRecognitionReady: () => Promise<boolean>;
         switchToElevenLabs: (apiKey: string) => Promise<void>;
         switchToSystemTTS: () => Promise<void>;
@@ -539,17 +667,23 @@ declare global {
           }>;
         }>;
         onWordUpdated: (
-          callback: (payload: { wordId: number; processingStatus: 'queued' | 'processing' | 'ready' | 'failed'; sentenceCount: number }) => void
+          callback: (payload: {
+            wordId: number;
+            processingStatus: 'queued' | 'processing' | 'ready' | 'failed';
+            sentenceCount: number;
+          }) => void
         ) => () => void;
       };
       srs: {
         processReview: (wordId: number, recall: 0 | 1 | 2 | 3) => Promise<void>;
-        processQuizResults: (results: Array<{
-          wordId: number;
-          correct: boolean;
-          responseTime?: number;
-          difficulty?: 'easy' | 'medium' | 'hard';
-        }>) => Promise<void>;
+        processQuizResults: (
+          results: Array<{
+            wordId: number;
+            correct: boolean;
+            responseTime?: number;
+            difficulty?: 'easy' | 'medium' | 'hard';
+          }>
+        ) => Promise<void>;
         getTodaysStudyWords: (language: string, maxWords?: number) => Promise<any[]>;
         getDashboardStats: (language: string) => Promise<{
           totalWords: number;
@@ -565,43 +699,66 @@ declare global {
         initializeExistingWords: (language: string) => Promise<number>;
       };
       lemmatization: {
-        getStatus: () => Promise<{ status: string; loadedModels: string[]; service: string } | null>;
+        getStatus: () => Promise<{
+          status: string;
+          loadedModels: string[];
+          service: string;
+        } | null>;
         loadModel: (language: string) => Promise<void>;
         lemmatizeWords: (words: string[], language: string) => Promise<Record<string, string>>;
       };
       dialog: {
         selectSentence: () => Promise<any | null>;
         generateVariants: (sentenceId: number) => Promise<any[]>;
-        generateFollowUp: (variantId: number) => Promise<{ text: string; translation: string; audio?: string }>;
+        generateFollowUp: (
+          variantId: number
+        ) => Promise<{ text: string; translation: string; audio?: string }>;
         ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
-        ensureContextSentences: (sentenceId: number) => Promise<{ beforeSentenceAudio: string | null; afterSentenceAudio: string | null }>;
+        ensureContextSentences: (
+          sentenceId: number
+        ) => Promise<{ beforeSentenceAudio: string | null; afterSentenceAudio: string | null }>;
         pregenerateSession: () => Promise<any | null>;
         pregenerateSessions: (count: number) => Promise<any[]>;
       };
       flow: {
-        getFlowSentences: (language: string) => Promise<Array<{
-          sentence: any;
-          words: any[];
-          beforeSentenceAudio?: string;
-          afterSentenceAudio?: string;
-          continuationAudios: string[];
-        }>>;
+        getFlowSentences: (language: string) => Promise<
+          Array<{
+            sentence: any;
+            words: any[];
+            beforeSentenceAudio?: string;
+            afterSentenceAudio?: string;
+            continuationAudios: string[];
+          }>
+        >;
         stitchAudio: (audioPaths: string[], language: string) => Promise<string>;
         getFileStats: (filePath: string) => Promise<{ mtime: Date } | null>;
       };
       scoring: {
-        getNextMode: (options: { currentMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null; language: string | null; initialTakeover: boolean }) => Promise<{
+        getNextMode: (options: {
+          currentMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null;
+          language: string | null;
+          initialTakeover: boolean;
+        }) => Promise<{
           nextMode: 'learning' | 'quiz' | 'dialog' | 'flow' | null;
           rankedModes: Array<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'>;
         }>;
-        getLanguageProficiency: (language: string | null, timeWindowDays?: number) => Promise<number>;
+        getLanguageProficiency: (
+          language: string | null,
+          timeWindowDays?: number
+        ) => Promise<number>;
       };
       topics: {
         getTopics: () => Promise<string[]>;
       };
       tracking: {
-        createSession: (mode: 'learning' | 'quiz' | 'dialog' | 'flow', language: string) => Promise<number>;
-        updateSession: (sessionId: number, data: { wordCount?: number; sentenceCount?: number; audioPlayedCount?: number }) => Promise<void>;
+        createSession: (
+          mode: 'learning' | 'quiz' | 'dialog' | 'flow',
+          language: string
+        ) => Promise<number>;
+        updateSession: (
+          sessionId: number,
+          data: { wordCount?: number; sentenceCount?: number; audioPlayedCount?: number }
+        ) => Promise<void>;
         recordAudioPlayback: (data: {
           sessionId?: number;
           sentenceId?: number;
@@ -610,14 +767,16 @@ declare global {
           mode: 'learning' | 'quiz' | 'dialog' | 'flow';
           playbackSpeed?: number;
         }) => Promise<number>;
-        recordNeglectedWords: (data: Array<{
-          word: string;
-          language: string;
-          topic?: string;
-          translation?: string;
-          sessionId?: number;
-          frequencyPosition?: number;
-        }>) => Promise<number>;
+        recordNeglectedWords: (
+          data: Array<{
+            word: string;
+            language: string;
+            topic?: string;
+            translation?: string;
+            sessionId?: number;
+            frequencyPosition?: number;
+          }>
+        ) => Promise<number>;
         recordDictionaryHover: (data: {
           word: string;
           language: string;

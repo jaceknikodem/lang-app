@@ -10,19 +10,19 @@ const DIFFICULTY_ADJUSTMENTS: Record<0 | 1 | 2 | 3, number> = {
   0: -1.0,
   1: -0.4,
   2: 0,
-  3: 0.3
+  3: 0.3,
 };
 const TARGET_RETENTION: Record<0 | 1 | 2 | 3, number> = {
   0: 0.5,
   1: 0.8,
   2: 0.9,
-  3: 0.95
+  3: 0.95,
 };
 const STRENGTH_DELTA: Record<0 | 1 | 2 | 3, number> = {
   0: -30,
   1: 5,
   2: 15,
-  3: 25
+  3: 25,
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -50,7 +50,7 @@ export class FsrsEngine implements SchedulerEngine {
       fsrsDifficulty: DEFAULT_DIFFICULTY,
       fsrsStability: DEFAULT_STABILITY,
       fsrsLapses: 0,
-      fsrsLastRating: null
+      fsrsLastRating: null,
     };
   }
 
@@ -62,7 +62,11 @@ export class FsrsEngine implements SchedulerEngine {
     const retrievability = Math.exp(-elapsedDays / previousStability);
 
     const difficultyAdjustment = DIFFICULTY_ADJUSTMENTS[recall];
-    const newDifficulty = clamp(previousDifficulty + difficultyAdjustment, MIN_DIFFICULTY, MAX_DIFFICULTY);
+    const newDifficulty = clamp(
+      previousDifficulty + difficultyAdjustment,
+      MIN_DIFFICULTY,
+      MAX_DIFFICULTY
+    );
 
     let lapses = word.fsrsLapses ?? 0;
     let newStability: number;
@@ -81,7 +85,8 @@ export class FsrsEngine implements SchedulerEngine {
     } else {
       const growthFactor = recall === 1 ? 0.6 : recall === 2 ? 1.0 : 1.4;
       const difficultyFactor = Math.exp(-(newDifficulty - 5) / 6);
-      const stabilityGain = previousStability * growthFactor * difficultyFactor * (1 - retrievability);
+      const stabilityGain =
+        previousStability * growthFactor * difficultyFactor * (1 - retrievability);
       const maxStability = previousStability * (1 + growthFactor * 1.2);
       const rawStability = previousStability + stabilityGain;
       newStability = clamp(rawStability, 0.4, maxStability);
@@ -89,10 +94,7 @@ export class FsrsEngine implements SchedulerEngine {
 
     const targetRetention = TARGET_RETENTION[recall];
     const rawIntervalDays = -newStability * Math.log(targetRetention);
-    const scheduledIntervalDays =
-      recall === 0
-        ? 1
-        : Math.max(1, Math.round(rawIntervalDays));
+    const scheduledIntervalDays = recall === 0 ? 1 : Math.max(1, Math.round(rawIntervalDays));
 
     const intervalWithFuzz = this.applyIntervalFuzz(scheduledIntervalDays, recall);
 
@@ -114,7 +116,7 @@ export class FsrsEngine implements SchedulerEngine {
       fsrsDifficulty: newDifficulty,
       fsrsStability: newStability,
       fsrsLapses: lapses,
-      fsrsLastRating: recall
+      fsrsLastRating: recall,
     };
 
     return result;

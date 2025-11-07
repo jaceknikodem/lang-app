@@ -29,19 +29,19 @@ export class LifecycleManager {
   async handleStartup(): Promise<void> {
     try {
       console.log('Starting application lifecycle initialization...');
-      
+
       // Migrate audio files from old location to userData directory
       await this.migrateAudioFiles();
-      
+
       // Ensure required directories exist
       await this.ensureDirectories();
-      
+
       // Check for and restore from backup if needed
       await this.checkForRecovery();
-      
+
       // Clean up old backups
       await this.cleanupOldBackups();
-      
+
       console.log('Application startup completed successfully');
     } catch (error) {
       console.error('Error during application startup:', error);
@@ -56,17 +56,17 @@ export class LifecycleManager {
     if (this.isShuttingDown) {
       return;
     }
-    
+
     this.isShuttingDown = true;
-    
+
     try {
       console.log('Starting graceful shutdown...');
-      
+
       // Close database connections
       if (this.config.databaseLayer) {
         await this.config.databaseLayer.close();
       }
-      
+
       console.log('Graceful shutdown completed');
     } catch (error) {
       console.error('Error during shutdown:', error);
@@ -82,46 +82,43 @@ export class LifecycleManager {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const backupDir = path.join(this.config.userDataPath, 'backups');
       const backupPath = path.join(backupDir, `backup-${timestamp}`);
-      
+
       // Ensure backup directory exists
       await fs.mkdir(backupDir, { recursive: true });
       await fs.mkdir(backupPath, { recursive: true });
-      
+
       // Backup database
       const dbPath = path.join(this.config.userDataPath, 'language_learning.db');
       const backupDbPath = path.join(backupPath, 'language_learning.db');
-      
+
       try {
         await fs.copyFile(dbPath, backupDbPath);
       } catch (error) {
         // Database might not exist yet, that's okay
         console.log('No database to backup (this is normal for first run)');
       }
-      
+
       // Backup audio files
       const audioDir = path.join(app.getPath('userData'), 'audio');
       const backupAudioDir = path.join(backupPath, 'audio');
-      
+
       try {
         await this.copyDirectory(audioDir, backupAudioDir);
       } catch (error) {
         // Audio directory might not exist yet
         console.log('No audio files to backup');
       }
-      
+
       // Create backup metadata
       const metadata = {
         timestamp: new Date().toISOString(),
         version: app.getVersion(),
         platform: process.platform,
-        arch: process.arch
+        arch: process.arch,
       };
-      
-      await fs.writeFile(
-        path.join(backupPath, 'metadata.json'),
-        JSON.stringify(metadata, null, 2)
-      );
-      
+
+      await fs.writeFile(path.join(backupPath, 'metadata.json'), JSON.stringify(metadata, null, 2));
+
       console.log(`Backup created successfully: ${backupPath}`);
       return backupPath;
     } catch (error) {
@@ -136,28 +133,28 @@ export class LifecycleManager {
   async restoreFromBackup(backupPath: string): Promise<void> {
     try {
       console.log(`Restoring from backup: ${backupPath}`);
-      
+
       // Verify backup exists and is valid
       const metadataPath = path.join(backupPath, 'metadata.json');
       const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf-8'));
-      
+
       console.log(`Restoring backup from ${metadata.timestamp}`);
-      
+
       // Restore database
       const backupDbPath = path.join(backupPath, 'language_learning.db');
       const dbPath = path.join(this.config.userDataPath, 'language_learning.db');
-      
+
       try {
         await fs.copyFile(backupDbPath, dbPath);
         console.log('Database restored successfully');
       } catch (error) {
         console.log('No database in backup to restore');
       }
-      
+
       // Restore audio files
       const backupAudioDir = path.join(backupPath, 'audio');
       const audioDir = path.join(app.getPath('userData'), 'audio');
-      
+
       try {
         await fs.rm(audioDir, { recursive: true, force: true });
         await this.copyDirectory(backupAudioDir, audioDir);
@@ -165,7 +162,7 @@ export class LifecycleManager {
       } catch (error) {
         console.log('No audio files in backup to restore');
       }
-      
+
       console.log('Backup restoration completed successfully');
     } catch (error) {
       console.error('Failed to restore from backup:', error);
@@ -179,7 +176,7 @@ export class LifecycleManager {
   private async checkForRecovery(): Promise<void> {
     try {
       const dbPath = path.join(this.config.userDataPath, 'language_learning.db');
-      
+
       // Check if database exists and is accessible
       try {
         await fs.access(dbPath);
@@ -200,15 +197,15 @@ export class LifecycleManager {
   private async offerBackupRecovery(): Promise<void> {
     try {
       const backupDir = path.join(this.config.userDataPath, 'backups');
-      
+
       try {
         const backups = await fs.readdir(backupDir);
         const validBackups = [];
-        
+
         for (const backup of backups) {
           const backupPath = path.join(backupDir, backup);
           const metadataPath = path.join(backupPath, 'metadata.json');
-          
+
           try {
             await fs.access(metadataPath);
             validBackups.push({ name: backup, path: backupPath });
@@ -216,20 +213,20 @@ export class LifecycleManager {
             // Skip invalid backups
           }
         }
-        
+
         if (validBackups.length > 0) {
           // Sort by name (which includes timestamp) to get most recent first
           validBackups.sort((a, b) => b.name.localeCompare(a.name));
-          
+
           const result = await dialog.showMessageBox({
             type: 'question',
             buttons: ['Restore Latest Backup', 'Start Fresh', 'Cancel'],
             defaultId: 0,
             title: 'Data Recovery',
             message: 'No database found. Would you like to restore from a backup?',
-            detail: `Found ${validBackups.length} backup(s). Latest: ${validBackups[0].name}`
+            detail: `Found ${validBackups.length} backup(s). Latest: ${validBackups[0].name}`,
           });
-          
+
           if (result.response === 0) {
             await this.restoreFromBackup(validBackups[0].path);
           }
@@ -250,14 +247,14 @@ export class LifecycleManager {
     try {
       const backupDir = path.join(this.config.userDataPath, 'backups');
       const cutoffDate = subDays(new Date(), this.config.backupRetentionDays);
-      
+
       try {
         const backups = await fs.readdir(backupDir);
-        
+
         for (const backup of backups) {
           const backupPath = path.join(backupDir, backup);
           const stats = await fs.stat(backupPath);
-          
+
           if (stats.isDirectory() && stats.mtime < cutoffDate) {
             await fs.rm(backupPath, { recursive: true, force: true });
             console.log(`Cleaned up old backup: ${backup}`);
@@ -278,9 +275,9 @@ export class LifecycleManager {
     const directories = [
       path.join(this.config.userDataPath, 'backups'),
       path.join(app.getPath('userData'), 'audio'),
-      path.join(process.cwd(), 'data')
+      path.join(process.cwd(), 'data'),
     ];
-    
+
     for (const dir of directories) {
       await fs.mkdir(dir, { recursive: true });
     }
@@ -292,7 +289,7 @@ export class LifecycleManager {
   async restartAll(): Promise<void> {
     try {
       console.log('Starting complete data reset...');
-      
+
       // Backup all settings before deleting database
       const settingsBackup: Record<string, string> = {};
       try {
@@ -309,12 +306,12 @@ export class LifecycleManager {
       } catch (error) {
         console.log('No settings to backup (this is normal for first run)');
       }
-      
+
       // Close database connection first
       if (this.config.databaseLayer) {
         await this.config.databaseLayer.close();
       }
-      
+
       // Remove database file
       const dbPath = path.join(this.config.userDataPath, 'language_learning.db');
       try {
@@ -323,7 +320,7 @@ export class LifecycleManager {
       } catch (error) {
         console.log('No database file to remove (this is normal)');
       }
-      
+
       // Remove all audio files recursively (including subdirectories)
       const audioDir = path.join(app.getPath('userData'), 'audio');
       try {
@@ -346,10 +343,10 @@ export class LifecycleManager {
       } catch (error) {
         console.log('No audio files to remove');
       }
-      
+
       // Reinitialize database
       await this.config.databaseLayer.initialize();
-      
+
       // Restore all settings
       if (Object.keys(settingsBackup).length > 0) {
         for (const [key, value] of Object.entries(settingsBackup)) {
@@ -357,7 +354,7 @@ export class LifecycleManager {
         }
         console.log(`Restored ${Object.keys(settingsBackup).length} settings`);
       }
-      
+
       console.log('Complete data reset completed successfully');
     } catch (error) {
       console.error('Failed to restart all:', error);
@@ -372,13 +369,13 @@ export class LifecycleManager {
     try {
       const { shell } = await import('electron');
       const backupDir = path.join(this.config.userDataPath, 'backups');
-      
+
       // Ensure backup directory exists
       await fs.mkdir(backupDir, { recursive: true });
-      
+
       // Open the directory in the system file manager
       await shell.openPath(backupDir);
-      
+
       console.log(`Opened backup directory: ${backupDir}`);
     } catch (error) {
       console.error('Failed to open backup directory:', error);
@@ -393,7 +390,7 @@ export class LifecycleManager {
     try {
       const oldAudioDir = path.join(process.cwd(), 'audio');
       const newAudioDir = path.join(app.getPath('userData'), 'audio');
-      
+
       // Check if old audio directory exists
       try {
         await fs.access(oldAudioDir);
@@ -402,7 +399,7 @@ export class LifecycleManager {
         console.log('No audio files to migrate from old location');
         return;
       }
-      
+
       // Check if new audio directory already has files
       let newDirExists = false;
       let newDirHasFiles = false;
@@ -414,17 +411,17 @@ export class LifecycleManager {
       } catch {
         // New directory doesn't exist yet
       }
-      
+
       if (newDirHasFiles) {
         console.log('New audio directory already has files, skipping migration');
         return;
       }
-      
+
       console.log(`Migrating audio files from ${oldAudioDir} to ${newAudioDir}...`);
-      
+
       // Copy all files and directories from old location to new location
       await this.copyDirectory(oldAudioDir, newAudioDir);
-      
+
       console.log('Audio files migrated successfully');
     } catch (error) {
       // Don't throw - migration failure shouldn't block app startup
@@ -438,11 +435,11 @@ export class LifecycleManager {
   private async copyDirectory(src: string, dest: string): Promise<void> {
     await fs.mkdir(dest, { recursive: true });
     const entries = await fs.readdir(src, { withFileTypes: true });
-    
+
     for (const entry of entries) {
       const srcPath = path.join(src, entry.name);
       const destPath = path.join(dest, entry.name);
-      
+
       if (entry.isDirectory()) {
         await this.copyDirectory(srcPath, destPath);
       } else {

@@ -19,9 +19,14 @@ class MockLLMClient implements LLMClient {
     return this.isAvailableResponse;
   }
 
-  async generateTopicWords(topic: string, language: string, count: number, proficiencyLevel?: string): Promise<GeneratedWord[]> {
+  async generateTopicWords(
+    topic: string,
+    language: string,
+    count: number,
+    proficiencyLevel?: string
+  ): Promise<GeneratedWord[]> {
     this.calls++;
-    
+
     if (this.shouldFail && this.failCount < this.maxFailures) {
       this.failCount++;
       throw new Error(`Test error ${this.failCount}`);
@@ -33,33 +38,53 @@ class MockLLMClient implements LLMClient {
 
     return Array.from({ length: count }, (_, i) => ({
       word: `${topic || 'word'}_${i + 1}`,
-      translation: `translation ${i + 1}`
+      translation: `translation ${i + 1}`,
     }));
   }
 
-  async generateSentences(word: string, language: string, count: number, topic?: string, proficiencyLevel?: string): Promise<GeneratedSentence[]> {
+  async generateSentences(
+    word: string,
+    language: string,
+    count: number,
+    topic?: string,
+    proficiencyLevel?: string
+  ): Promise<GeneratedSentence[]> {
     this.calls++;
-    
+
     if (this.shouldFail && this.failCount < this.maxFailures) {
       this.failCount++;
       throw new Error(`Test error ${this.failCount}`);
     }
 
-    if (Array.isArray(this.responses) && this.responses.length > 0 && 'sentence' in this.responses[0]) {
+    if (
+      Array.isArray(this.responses) &&
+      this.responses.length > 0 &&
+      'sentence' in this.responses[0]
+    ) {
       return this.responses as GeneratedSentence[];
     }
 
     return Array.from({ length: count }, (_, i) => ({
       sentence: `${word} sentence ${i + 1}`,
-      translation: `translation ${i + 1}`
+      translation: `translation ${i + 1}`,
     }));
   }
 
-  async generateContextSentences(sentence: string, translation: string, language: string): Promise<any> {
+  async generateContextSentences(
+    sentence: string,
+    translation: string,
+    language: string
+  ): Promise<any> {
     return {};
   }
 
-  async generateDialogueVariants(triggerSentence: string, triggerTranslation: string, language: string, knownWords: string[], count: number): Promise<any[]> {
+  async generateDialogueVariants(
+    triggerSentence: string,
+    triggerTranslation: string,
+    language: string,
+    knownWords: string[],
+    count: number
+  ): Promise<any[]> {
     return [];
   }
 
@@ -101,7 +126,7 @@ describe('ContentGenerator Error Handling', () => {
     mockClient = new MockLLMClient();
     generator = new ContentGenerator(mockClient, {
       retryAttempts: 3,
-      retryDelay: 10 // Fast delay for tests
+      retryDelay: 10, // Fast delay for tests
     });
     jest.clearAllMocks();
   });
@@ -110,7 +135,7 @@ describe('ContentGenerator Error Handling', () => {
     it('should succeed on first attempt', async () => {
       mockClient.responses = [
         { word: 'hola', translation: 'hello' },
-        { word: 'casa', translation: 'house' }
+        { word: 'casa', translation: 'house' },
       ];
 
       const words = await generator.generateTopicVocabulary('test', 'Spanish', 2);
@@ -124,9 +149,7 @@ describe('ContentGenerator Error Handling', () => {
       mockClient.maxFailures = 10; // Always fail
 
       // The error should be propagated (retries are now handled at HTTP level in LLM clients)
-      await expect(
-        generator.generateTopicVocabulary('test', 'Spanish', 2)
-      ).rejects.toThrow();
+      await expect(generator.generateTopicVocabulary('test', 'Spanish', 2)).rejects.toThrow();
 
       // Should have called the LLM client at least once
       expect(mockClient.calls).toBeGreaterThanOrEqual(1);
@@ -143,9 +166,9 @@ describe('ContentGenerator Error Handling', () => {
         throw llmError;
       });
 
-      await expect(
-        generator.generateTopicVocabulary('test', 'Spanish', 2)
-      ).rejects.toThrow('LLM Error');
+      await expect(generator.generateTopicVocabulary('test', 'Spanish', 2)).rejects.toThrow(
+        'LLM Error'
+      );
 
       // Should have called the LLM client
       expect(callCount).toBeGreaterThanOrEqual(1);
@@ -208,33 +231,33 @@ describe('ContentGenerator Error Handling', () => {
     it('should throw error when LLM is not available', async () => {
       mockClient.isAvailableResponse = false;
 
-      await expect(
-        generator.generateTopicVocabulary('food', 'Spanish', 5)
-      ).rejects.toThrow('vocabulary generation failed');
+      await expect(generator.generateTopicVocabulary('food', 'Spanish', 5)).rejects.toThrow(
+        'vocabulary generation failed'
+      );
     });
 
     it('should throw specific error for Ollama', async () => {
       const ollamaGenerator = new ContentGenerator(mockClient, {
-        llmProvider: 'ollama'
+        llmProvider: 'ollama',
       });
       (ollamaGenerator as any).getCurrentProvider = jest.fn().mockReturnValue('ollama');
       mockClient.isAvailableResponse = false;
 
-      await expect(
-        ollamaGenerator.generateTopicVocabulary('food', 'Spanish', 5)
-      ).rejects.toThrow('vocabulary generation failed');
+      await expect(ollamaGenerator.generateTopicVocabulary('food', 'Spanish', 5)).rejects.toThrow(
+        'vocabulary generation failed'
+      );
     });
 
     it('should throw specific error for Gemini', async () => {
       const geminiGenerator = new ContentGenerator(mockClient, {
-        llmProvider: 'gemini'
+        llmProvider: 'gemini',
       });
       (geminiGenerator as any).getCurrentProvider = jest.fn().mockReturnValue('gemini');
       mockClient.isAvailableResponse = false;
 
-      await expect(
-        geminiGenerator.generateTopicVocabulary('food', 'Spanish', 5)
-      ).rejects.toThrow('vocabulary generation failed');
+      await expect(geminiGenerator.generateTopicVocabulary('food', 'Spanish', 5)).rejects.toThrow(
+        'vocabulary generation failed'
+      );
     });
   });
 
@@ -245,7 +268,7 @@ describe('ContentGenerator Error Handling', () => {
         { word: '', translation: 'empty' }, // Invalid
         { word: '   ', translation: 'whitespace' }, // Invalid
         { word: 'casa', translation: 'house' },
-        { word: 'perro', translation: '' } // Invalid
+        { word: 'perro', translation: '' }, // Invalid
       ];
 
       const validWords = (generator as any).validateGeneratedWords(words);
@@ -258,7 +281,7 @@ describe('ContentGenerator Error Handling', () => {
         { word: 'hola', translation: 'hello' },
         { word: 'a'.repeat(51), translation: 'too long' }, // Word > 50 chars
         { word: 'casa', translation: 'b'.repeat(101) }, // Translation > 100 chars
-        { word: 'perro', translation: 'dog' }
+        { word: 'perro', translation: 'dog' },
       ];
 
       const validWords = (generator as any).validateGeneratedWords(words);
@@ -279,7 +302,7 @@ describe('ContentGenerator Error Handling', () => {
         { word: null, translation: 'hello' }, // Invalid
         { word: 'casa', translation: undefined }, // Invalid
         { word: undefined, translation: null }, // Invalid
-        { word: 'perro', translation: 'dog' }
+        { word: 'perro', translation: 'dog' },
       ];
 
       const validWords = (generator as any).validateGeneratedWords(words);
@@ -290,7 +313,7 @@ describe('ContentGenerator Error Handling', () => {
     it('should preserve valid words with frequency info', () => {
       const words: GeneratedWord[] = [
         { word: 'hola', translation: 'hello', frequencyPosition: 1, frequencyTier: 'top 100' },
-        { word: 'casa', translation: 'house', frequencyPosition: 2 }
+        { word: 'casa', translation: 'house', frequencyPosition: 2 },
       ];
 
       const validWords = (generator as any).validateGeneratedWords(words);
@@ -306,12 +329,15 @@ describe('ContentGenerator Error Handling', () => {
         { sentence: 'Hola mundo', translation: 'Hello world' },
         { sentence: '', translation: 'empty' }, // Invalid
         { sentence: 'Buenos días', translation: 'Good morning' },
-        { sentence: 'Adiós', translation: '' } // Invalid
+        { sentence: 'Adiós', translation: '' }, // Invalid
       ];
 
       const validSentences = (generator as any).validateGeneratedSentences(sentences, 'hola');
       expect(validSentences).toHaveLength(2);
-      expect(validSentences.map((s: GeneratedSentence) => s.sentence)).toEqual(['Hola mundo', 'Buenos días']);
+      expect(validSentences.map((s: GeneratedSentence) => s.sentence)).toEqual([
+        'Hola mundo',
+        'Buenos días',
+      ]);
     });
 
     it('should handle non-array input', () => {
@@ -326,12 +352,15 @@ describe('ContentGenerator Error Handling', () => {
         { sentence: null, translation: 'Hello' }, // Invalid
         { sentence: 'Buenos días', translation: undefined }, // Invalid
         { sentence: undefined, translation: null }, // Invalid
-        { sentence: 'Adiós', translation: 'Goodbye' }
+        { sentence: 'Adiós', translation: 'Goodbye' },
       ];
 
       const validSentences = (generator as any).validateGeneratedSentences(sentences, 'hola');
       expect(validSentences).toHaveLength(2);
-      expect(validSentences.map((s: GeneratedSentence) => s.sentence)).toEqual(['Hola mundo', 'Adiós']);
+      expect(validSentences.map((s: GeneratedSentence) => s.sentence)).toEqual([
+        'Hola mundo',
+        'Adiós',
+      ]);
     });
 
     it('should filter out sentences exceeding length limits', () => {
@@ -339,12 +368,15 @@ describe('ContentGenerator Error Handling', () => {
         { sentence: 'Hola mundo', translation: 'Hello world' },
         { sentence: 'a'.repeat(201), translation: 'too long' }, // Sentence > 200 chars
         { sentence: 'Buenos días', translation: 'b'.repeat(301) }, // Translation > 300 chars
-        { sentence: 'Adiós', translation: 'Goodbye' }
+        { sentence: 'Adiós', translation: 'Goodbye' },
       ];
 
       const validSentences = (generator as any).validateGeneratedSentences(sentences, 'hola');
       expect(validSentences).toHaveLength(2);
-      expect(validSentences.map((s: GeneratedSentence) => s.sentence)).toEqual(['Hola mundo', 'Adiós']);
+      expect(validSentences.map((s: GeneratedSentence) => s.sentence)).toEqual([
+        'Hola mundo',
+        'Adiós',
+      ]);
     });
   });
 
@@ -357,7 +389,7 @@ describe('ContentGenerator Error Handling', () => {
       expect(shuffled).toHaveLength(original.length);
 
       // Should contain all elements
-      original.forEach(item => {
+      original.forEach((item) => {
         expect(shuffled).toContain(item);
       });
 
@@ -382,7 +414,7 @@ describe('ContentGenerator Error Handling', () => {
       const shuffled = (generator as any).shuffleArray(original);
 
       expect(shuffled).toHaveLength(original.length);
-      original.forEach(item => {
+      original.forEach((item) => {
         expect(shuffled).toContain(item);
       });
     });
@@ -391,13 +423,13 @@ describe('ContentGenerator Error Handling', () => {
       const original = [
         { word: 'hola', translation: 'hello' },
         { word: 'casa', translation: 'house' },
-        { word: 'perro', translation: 'dog' }
+        { word: 'perro', translation: 'dog' },
       ];
       const shuffled = (generator as any).shuffleArray(original);
 
       expect(shuffled).toHaveLength(original.length);
       // Check that all original objects are present
-      original.forEach(item => {
+      original.forEach((item) => {
         expect(shuffled).toContainEqual(item);
       });
     });
@@ -421,7 +453,7 @@ describe('ContentGenerator Error Handling', () => {
 
       // Check that at least some shuffles are different (statistical test)
       // With 10 elements, probability of all being same is extremely low
-      const allSame = results.every(arr => JSON.stringify(arr) === JSON.stringify(original));
+      const allSame = results.every((arr) => JSON.stringify(arr) === JSON.stringify(original));
       expect(allSame).toBe(false); // Very unlikely all 10 shuffles match original
     });
   });

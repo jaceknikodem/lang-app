@@ -11,7 +11,7 @@ jest.mock('p-limit', () => {
     default: jest.fn((concurrency) => {
       let running = 0;
       const queue: Array<() => void> = [];
-      
+
       const limit = async (fn: () => Promise<any>) => {
         if (running < concurrency) {
           running++;
@@ -44,9 +44,9 @@ jest.mock('p-limit', () => {
           });
         }
       };
-      
+
       return limit;
-    })
+    }),
   };
 });
 

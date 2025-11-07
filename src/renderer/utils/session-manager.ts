@@ -2,7 +2,6 @@
  * Session manager for persisting and restoring application state
  */
 
-
 export interface LearningSessionState {
   id: string;
   wordIds: number[];
@@ -46,7 +45,14 @@ export interface DialogSessionState {
 }
 
 export interface SessionState {
-  currentMode: 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'dialog' | 'progress' | 'settings';
+  currentMode:
+    | 'topic-selection'
+    | 'word-selection'
+    | 'learning'
+    | 'quiz'
+    | 'dialog'
+    | 'progress'
+    | 'settings';
   selectedTopic?: string;
   playbackSpeed?: number;
   learningProgress?: {
@@ -139,7 +145,7 @@ export class SessionManager {
       const updatedSession: SessionState = {
         ...currentSession,
         ...sessionState,
-        lastActivity: new Date()
+        lastActivity: new Date(),
       };
 
       const languageKey = this.getActiveLanguageKey();
@@ -191,7 +197,6 @@ export class SessionManager {
     }
   }
 
-
   /**
    * Get the current learning session state if available
    */
@@ -202,7 +207,12 @@ export class SessionManager {
   /**
    * Start a brand new learning session with a predefined set of words
    */
-  startNewLearningSession(wordIds: number[], maxSentences: number, sentenceIds?: number[], audioPaths?: string[]): void {
+  startNewLearningSession(
+    wordIds: number[],
+    maxSentences: number,
+    sentenceIds?: number[],
+    audioPaths?: string[]
+  ): void {
     const newSession: LearningSessionState = {
       id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
       wordIds,
@@ -210,15 +220,15 @@ export class SessionManager {
       audioPaths,
       maxSentences,
       createdAt: new Date().toISOString(),
-      completed: false
+      completed: false,
     };
 
     this.saveSession({
       learningSession: newSession,
       learningProgress: {
         currentWordIndex: 0,
-        currentSentenceIndex: 0
-      }
+        currentSentenceIndex: 0,
+      },
     });
   }
 
@@ -249,8 +259,8 @@ export class SessionManager {
     this.saveSession({
       learningSession: {
         ...session.learningSession,
-        wordIds: mergedWordIds
-      }
+        wordIds: mergedWordIds,
+      },
     });
   }
 
@@ -295,8 +305,8 @@ export class SessionManager {
       learningSession: {
         ...session.learningSession,
         sentenceIds: mergedSentenceIds,
-        audioPaths: mergedAudioPaths.length > 0 ? mergedAudioPaths : undefined
-      }
+        audioPaths: mergedAudioPaths.length > 0 ? mergedAudioPaths : undefined,
+      },
     });
   }
 
@@ -312,8 +322,8 @@ export class SessionManager {
     this.saveSession({
       learningSession: {
         ...session.learningSession,
-        completed: true
-      }
+        completed: true,
+      },
     });
   }
 
@@ -330,7 +340,7 @@ export class SessionManager {
       ...session,
       learningSession: undefined,
       learningProgress: undefined,
-      lastActivity: new Date()
+      lastActivity: new Date(),
     };
     delete updatedSession.learningSession;
     delete updatedSession.learningProgress;
@@ -346,7 +356,6 @@ export class SessionManager {
     }
   }
 
-
   /**
    * Update current mode in session
    */
@@ -361,8 +370,8 @@ export class SessionManager {
     this.saveSession({
       learningProgress: {
         currentWordIndex: wordIndex,
-        currentSentenceIndex: sentenceIndex
-      }
+        currentSentenceIndex: sentenceIndex,
+      },
     });
   }
 
@@ -374,8 +383,8 @@ export class SessionManager {
       quizProgress: {
         currentQuestionIndex: questionIndex,
         score,
-        totalQuestions
-      }
+        totalQuestions,
+      },
     });
   }
 
@@ -389,10 +398,7 @@ export class SessionManager {
   /**
    * Start a brand new quiz session with a predefined set of words
    */
-  startNewQuizSession(
-    wordIds: number[],
-    audioOnlyMode: boolean = false
-  ): void {
+  startNewQuizSession(wordIds: number[], audioOnlyMode: boolean = false): void {
     const newSession: QuizSessionState = {
       id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
       wordIds,
@@ -401,7 +407,7 @@ export class SessionManager {
       totalQuestions: wordIds.length,
       isComplete: false,
       audioOnlyMode,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     };
 
     this.saveSession({
@@ -409,8 +415,8 @@ export class SessionManager {
       quizProgress: {
         currentQuestionIndex: 0,
         score: 0,
-        totalQuestions: wordIds.length
-      }
+        totalQuestions: wordIds.length,
+      },
     });
   }
 
@@ -425,7 +431,7 @@ export class SessionManager {
 
     const updatedQuizSession: QuizSessionState = {
       ...session.quizSession,
-      ...updates
+      ...updates,
     };
 
     this.saveSession({
@@ -433,8 +439,8 @@ export class SessionManager {
       quizProgress: {
         currentQuestionIndex: updatedQuizSession.currentQuestionIndex,
         score: updatedQuizSession.score,
-        totalQuestions: updatedQuizSession.totalQuestions
-      }
+        totalQuestions: updatedQuizSession.totalQuestions,
+      },
     });
   }
 
@@ -450,8 +456,8 @@ export class SessionManager {
     this.saveSession({
       quizSession: {
         ...session.quizSession,
-        isComplete: true
-      }
+        isComplete: true,
+      },
     });
   }
 
@@ -468,7 +474,7 @@ export class SessionManager {
       ...session,
       quizSession: undefined,
       quizProgress: undefined,
-      lastActivity: new Date()
+      lastActivity: new Date(),
     };
     delete updatedSession.quizSession;
     delete updatedSession.quizProgress;
@@ -491,7 +497,6 @@ export class SessionManager {
     this.saveSession({ selectedTopic: topic });
   }
 
-
   /**
    * Get the current dialog session from the queue
    */
@@ -501,35 +506,35 @@ export class SessionManager {
       console.log('[SessionManager] getCurrentDialogSession - no sessions in cache');
       return undefined;
     }
-    
+
     // Ensure currentDialogIndex is always set if sessions exist (for persistence across restarts)
     let currentIndex = session.currentDialogIndex;
     if (currentIndex === undefined) {
       console.log('[SessionManager] getCurrentDialogSession - initializing undefined index to 0', {
-        totalSessions: session.dialogSessions.length
+        totalSessions: session.dialogSessions.length,
       });
       currentIndex = 0;
       // Persist the initialized index so it's preserved across restarts
       this.saveSession({ currentDialogIndex: 0 });
     }
-    
+
     if (currentIndex >= session.dialogSessions.length) {
       console.log('[SessionManager] getCurrentDialogSession - index out of bounds', {
         currentIndex,
-        totalSessions: session.dialogSessions.length
+        totalSessions: session.dialogSessions.length,
       });
       return undefined;
     }
-    
+
     const dialogSession = session.dialogSessions[currentIndex];
     console.log('[SessionManager] getCurrentDialogSession - returning cached session', {
       sessionId: dialogSession.id,
       sentenceId: dialogSession.sentenceId,
       currentIndex,
       totalSessions: session.dialogSessions.length,
-      queueIndices: session.dialogSessions.map((s, i) => ({ index: i, sentenceId: s.sentenceId }))
+      queueIndices: session.dialogSessions.map((s, i) => ({ index: i, sentenceId: s.sentenceId })),
     });
-    
+
     return dialogSession;
   }
 
@@ -541,38 +546,38 @@ export class SessionManager {
   addDialogSession(newSession: DialogSessionState): void {
     const session = this.getCurrentSession();
     const languageKey = this.getActiveLanguageKey();
-    
+
     const existingSessions = session.dialogSessions || [];
-    
+
     // Check if a session with the same sentenceId already exists in the queue
     const duplicateExists = existingSessions.some(
-      existingSession => existingSession.sentenceId === newSession.sentenceId
+      (existingSession) => existingSession.sentenceId === newSession.sentenceId
     );
-    
+
     if (duplicateExists) {
       console.log('[SessionManager] addDialogSession - duplicate sentenceId detected, skipping', {
         newSessionId: newSession.id,
         newSentenceId: newSession.sentenceId,
-        existingSessionsCount: existingSessions.length
+        existingSessionsCount: existingSessions.length,
       });
       return; // Don't add duplicate
     }
-    
+
     let updatedSessions: DialogSessionState[];
     let updatedCurrentIndex: number | undefined;
-    
+
     console.log('[SessionManager] addDialogSession - adding to cache', {
       newSessionId: newSession.id,
       newSentenceId: newSession.sentenceId,
       existingSessionsCount: existingSessions.length,
-      currentIndex: session.currentDialogIndex
+      currentIndex: session.currentDialogIndex,
     });
 
     if (existingSessions.length >= 5) {
       // FIFO: Remove the oldest session (first in queue) and add new one at the end
       const removedSession = existingSessions.shift(); // Remove first element
       updatedSessions = [...existingSessions, newSession];
-      
+
       // Adjust currentDialogIndex if needed
       const currentIndex = session.currentDialogIndex ?? 0;
       if (currentIndex > 0) {
@@ -582,14 +587,14 @@ export class SessionManager {
         // We removed the current session, keep index at 0 (pointing to the next session)
         updatedCurrentIndex = 0;
       }
-      
+
       console.log('[SessionManager] addDialogSession - queue full, FIFO removal', {
         removedSessionId: removedSession?.id,
         removedSentenceId: removedSession?.sentenceId,
         addedSessionId: newSession.id,
         addedSentenceId: newSession.sentenceId,
         oldIndex: currentIndex,
-        newIndex: updatedCurrentIndex
+        newIndex: updatedCurrentIndex,
       });
     } else {
       // Queue has space, just add to the end
@@ -597,12 +602,12 @@ export class SessionManager {
       // Ensure currentDialogIndex is set if sessions exist
       // If this is the first session, set to 0, otherwise preserve existing index
       updatedCurrentIndex = session.currentDialogIndex ?? (updatedSessions.length === 1 ? 0 : 0);
-      
+
       console.log('[SessionManager] addDialogSession - added to queue', {
         addedSessionId: newSession.id,
         addedSentenceId: newSession.sentenceId,
         totalSessions: updatedSessions.length,
-        currentIndex: updatedCurrentIndex
+        currentIndex: updatedCurrentIndex,
       });
     }
 
@@ -610,7 +615,7 @@ export class SessionManager {
       ...session,
       dialogSessions: updatedSessions,
       currentDialogIndex: updatedCurrentIndex,
-      lastActivity: new Date()
+      lastActivity: new Date(),
     };
 
     this.sessionsByLanguage[languageKey] = updatedSession;
@@ -642,14 +647,14 @@ export class SessionManager {
       consumedSentenceId: consumedSession?.sentenceId,
       oldIndex: currentIndex,
       newIndex: nextIndex < session.dialogSessions.length ? nextIndex : undefined,
-      totalSessions: session.dialogSessions.length
+      totalSessions: session.dialogSessions.length,
     });
 
     const languageKey = this.getActiveLanguageKey();
     const updatedSession: SessionState = {
       ...session,
       currentDialogIndex: nextIndex < session.dialogSessions.length ? nextIndex : undefined,
-      lastActivity: new Date()
+      lastActivity: new Date(),
     };
 
     this.sessionsByLanguage[languageKey] = updatedSession;
@@ -668,12 +673,12 @@ export class SessionManager {
   clearDialogSession(): void {
     const session = this.getCurrentSession();
     const languageKey = this.getActiveLanguageKey();
-    
+
     const updatedSession: SessionState = {
       ...session,
       dialogSessions: undefined,
       currentDialogIndex: undefined,
-      lastActivity: new Date()
+      lastActivity: new Date(),
     };
     delete updatedSession.dialogSessions;
     delete updatedSession.currentDialogIndex;
@@ -694,12 +699,12 @@ export class SessionManager {
   setDialogSessions(sessions: DialogSessionState[], startIndex: number = 0): void {
     const session = this.getCurrentSession();
     const languageKey = this.getActiveLanguageKey();
-    
+
     const updatedSession: SessionState = {
       ...session,
       dialogSessions: sessions,
       currentDialogIndex: sessions.length > 0 ? startIndex : undefined,
-      lastActivity: new Date()
+      lastActivity: new Date(),
     };
 
     this.sessionsByLanguage[languageKey] = updatedSession;
@@ -727,15 +732,13 @@ export class SessionManager {
     this.saveSession({ playbackSpeed: speed });
   }
 
-
-
   /**
    * Create default session state
    */
   private createDefaultSession(): SessionState {
     return {
       currentMode: 'topic-selection',
-      lastActivity: new Date()
+      lastActivity: new Date(),
     };
   }
 
@@ -763,9 +766,16 @@ export class SessionManager {
         return;
       }
 
-      const parsed = JSON.parse(raw) as SessionStoragePayload | (Partial<SessionState> & { lastActivity?: string });
+      const parsed = JSON.parse(raw) as
+        | SessionStoragePayload
+        | (Partial<SessionState> & { lastActivity?: string });
 
-      if (parsed && typeof parsed === 'object' && 'version' in parsed && parsed.version === SESSION_STORAGE_VERSION) {
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        'version' in parsed &&
+        parsed.version === SESSION_STORAGE_VERSION
+      ) {
         const payload = parsed as SessionStoragePayload;
 
         const sessionEntries = Object.entries(payload.sessions ?? {});
@@ -773,7 +783,8 @@ export class SessionManager {
           this.sessionsByLanguage[language] = this.hydrateSession(sessionData);
         }
 
-        const storedActiveLanguage = typeof payload.activeLanguage === 'string' ? payload.activeLanguage : undefined;
+        const storedActiveLanguage =
+          typeof payload.activeLanguage === 'string' ? payload.activeLanguage : undefined;
         if (storedActiveLanguage) {
           if (!this.sessionsByLanguage[storedActiveLanguage]) {
             this.sessionsByLanguage[storedActiveLanguage] = this.createDefaultSession();
@@ -805,19 +816,21 @@ export class SessionManager {
   }
 
   private hydrateSession(
-    sessionData: Partial<Omit<SessionState, 'lastActivity'>> & { lastActivity?: string | Date } & { dialogSession?: DialogSessionState }
+    sessionData: Partial<Omit<SessionState, 'lastActivity'>> & { lastActivity?: string | Date } & {
+      dialogSession?: DialogSessionState;
+    }
   ): SessionState {
     // Handle backward compatibility: if there's an old dialogSession, convert it to dialogSessions array
     let dialogSessions = sessionData.dialogSessions;
     let currentDialogIndex = sessionData.currentDialogIndex;
-    
+
     if (!dialogSessions && (sessionData as any).dialogSession) {
       // Migrate old single session to new array format
       const oldSession = (sessionData as any).dialogSession as DialogSessionState;
       dialogSessions = [oldSession];
       currentDialogIndex = 0;
     }
-    
+
     return {
       currentMode: sessionData.currentMode ?? 'topic-selection',
       selectedTopic: sessionData.selectedTopic,
@@ -828,7 +841,7 @@ export class SessionManager {
       quizSession: sessionData.quizSession,
       dialogSessions,
       currentDialogIndex,
-      lastActivity: sessionData.lastActivity ? new Date(sessionData.lastActivity) : new Date()
+      lastActivity: sessionData.lastActivity ? new Date(sessionData.lastActivity) : new Date(),
     };
   }
 
@@ -847,14 +860,14 @@ export class SessionManager {
 
         sessions[language] = {
           ...session,
-          lastActivity: session.lastActivity.toISOString()
+          lastActivity: session.lastActivity.toISOString(),
         };
       }
 
       const payload: SessionStoragePayload = {
         version: SESSION_STORAGE_VERSION,
         activeLanguage: this.activeLanguage ?? undefined,
-        sessions
+        sessions,
       };
 
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(payload));

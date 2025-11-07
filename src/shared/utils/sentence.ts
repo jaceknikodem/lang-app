@@ -80,4 +80,3 @@ export function parseTokenizedTokens(serialized: string | null | undefined): any
     return undefined;
   }
 }
-

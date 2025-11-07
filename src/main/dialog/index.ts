@@ -3,4 +3,3 @@
  */
 
 export { DialogService, DialogServiceConfig } from './dialog-service.js';
-

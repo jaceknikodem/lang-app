@@ -20,7 +20,7 @@ describe('STRENGTH_BOOST_CONFIG.getPronunciationBoost', () => {
   });
 
   it('should return 3 for very good pronunciation (90-94%)', () => {
-    expect(STRENGTH_BOOST_CONFIG.getPronunciationBoost(0.90)).toBe(3);
+    expect(STRENGTH_BOOST_CONFIG.getPronunciationBoost(0.9)).toBe(3);
     expect(STRENGTH_BOOST_CONFIG.getPronunciationBoost(0.92)).toBe(3);
     expect(STRENGTH_BOOST_CONFIG.getPronunciationBoost(0.94)).toBe(3);
     expect(STRENGTH_BOOST_CONFIG.getPronunciationBoost(0.949)).toBe(3);
@@ -41,7 +41,7 @@ describe('STRENGTH_BOOST_CONFIG.getPronunciationBoost', () => {
     // Just below very good
     expect(STRENGTH_BOOST_CONFIG.getPronunciationBoost(0.8999)).toBe(2);
     // At very good threshold
-    expect(STRENGTH_BOOST_CONFIG.getPronunciationBoost(0.90)).toBe(3);
+    expect(STRENGTH_BOOST_CONFIG.getPronunciationBoost(0.9)).toBe(3);
     // Just below excellent
     expect(STRENGTH_BOOST_CONFIG.getPronunciationBoost(0.9499)).toBe(3);
     // At excellent threshold
@@ -58,4 +58,3 @@ describe('STRENGTH_BOOST_CONFIG.getPronunciationBoost', () => {
     expect(STRENGTH_BOOST_CONFIG.getPronunciationBoost(2.0)).toBe(4);
   });
 });
-

@@ -28,7 +28,7 @@ export abstract class BaseComponent extends LitElement {
     }
 
     this.currentLanguage = newLanguage;
-    
+
     // Update session manager with new language to ensure it uses correct language's session
     sessionManager.setActiveLanguage(newLanguage);
   }
@@ -71,4 +71,3 @@ export abstract class BaseComponent extends LitElement {
     this.currentLanguage = language;
   }
 }
-

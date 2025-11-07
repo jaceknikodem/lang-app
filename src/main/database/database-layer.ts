@@ -6,10 +6,30 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import { promises as fsPromises } from 'fs';
 import { addDays, subHours, addMilliseconds, differenceInDays, endOfDay } from 'date-fns';
-import { DatabaseLayer, DatabaseConfig, JobWordInfo, WordGenerationJob, WordGenerationJobStatus, WordProcessingStatus } from '../../shared/types/database.js';
-import { Word, Sentence, StudyStats, CreateWordRequest, DictionaryEntry, DialogueVariant } from '../../shared/types/core.js';
+import {
+  DatabaseLayer,
+  DatabaseConfig,
+  JobWordInfo,
+  WordGenerationJob,
+  WordGenerationJobStatus,
+  WordProcessingStatus,
+} from '../../shared/types/database.js';
+import {
+  Word,
+  Sentence,
+  StudyStats,
+  CreateWordRequest,
+  DictionaryEntry,
+  DialogueVariant,
+} from '../../shared/types/core.js';
 import { DatabaseConnection } from './connection.js';
-import { splitSentenceIntoParts, serializeSentenceParts, parseSentenceParts, serializeTokenizedTokens, parseTokenizedTokens } from '../../shared/utils/sentence.js';
+import {
+  splitSentenceIntoParts,
+  serializeSentenceParts,
+  parseSentenceParts,
+  serializeTokenizedTokens,
+  parseTokenizedTokens,
+} from '../../shared/utils/sentence.js';
 import { backfillSentenceTokens } from './backfill-sentence-tokens.js';
 import { getErrorMessage, wrapError } from '../../shared/utils/error.js';
 
@@ -26,7 +46,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   async initialize(): Promise<void> {
     try {
       const db = await this.connection.connect();
-      
+
       // Initialize schema
       this.initializeSchema(db);
 
@@ -55,7 +75,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           console.warn('Dictionary population skipped due to error:', dictError);
         }
       });
-      
+
       console.log('Database initialized successfully');
     } catch (error) {
       throw wrapError(error, `Failed to initialize database`);
@@ -366,34 +386,70 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_words_known_ignored ON words(known, ignored)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_words_next_due ON words(next_due)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_words_srs_review ON words(next_due, strength)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_words_fsrs_state ON words(fsrs_stability, fsrs_difficulty)`);
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_words_fsrs_state ON words(fsrs_stability, fsrs_difficulty)`
+    );
     db.exec(`CREATE INDEX IF NOT EXISTS idx_words_language_topic ON words(language, topic)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_sentences_word_id ON sentences(word_id)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_progress_when_studied ON progress(when_studied)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_word_lang ON dict(word, lang)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_word_generation_queue_status ON word_generation_queue(status, updated_at)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_sentence_words_sentence_id ON sentence_words(sentence_id)`);
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_word_generation_queue_status ON word_generation_queue(status, updated_at)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_sentence_words_sentence_id ON sentence_words(sentence_id)`
+    );
     db.exec(`CREATE INDEX IF NOT EXISTS idx_sentence_words_word_id ON sentence_words(word_id)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_sentence_lemmas_lemma ON sentence_lemmas(lemma)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_sentence_lemmas_sentence_id ON sentence_lemmas(sentence_id)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_dialogue_variants_sentence_id ON dialogue_variants(sentence_id)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_dialogue_variants_created_at ON dialogue_variants(created_at)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_pronunciation_attempts_sentence_id ON pronunciation_attempts(sentence_id)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_pronunciation_attempts_created_at ON pronunciation_attempts(created_at)`);
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_sentence_lemmas_sentence_id ON sentence_lemmas(sentence_id)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_dialogue_variants_sentence_id ON dialogue_variants(sentence_id)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_dialogue_variants_created_at ON dialogue_variants(created_at)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_pronunciation_attempts_sentence_id ON pronunciation_attempts(sentence_id)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_pronunciation_attempts_created_at ON pronunciation_attempts(created_at)`
+    );
     db.exec(`CREATE INDEX IF NOT EXISTS idx_srs_adjustments_word_id ON srs_adjustments(word_id)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_srs_adjustments_session_id ON srs_adjustments(session_id)`);
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_srs_adjustments_session_id ON srs_adjustments(session_id)`
+    );
     db.exec(`CREATE INDEX IF NOT EXISTS idx_srs_adjustments_language ON srs_adjustments(language)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_learning_sessions_mode ON learning_sessions(mode)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_learning_sessions_started_at ON learning_sessions(started_at)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_audio_playback_events_sentence_id ON audio_playback_events(sentence_id)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_audio_playback_events_session_id ON audio_playback_events(session_id)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_neglected_words_word_lang ON neglected_words(word, language)`);
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_learning_sessions_started_at ON learning_sessions(started_at)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_audio_playback_events_sentence_id ON audio_playback_events(sentence_id)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_audio_playback_events_session_id ON audio_playback_events(session_id)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_neglected_words_word_lang ON neglected_words(word, language)`
+    );
     db.exec(`CREATE INDEX IF NOT EXISTS idx_neglected_words_topic ON neglected_words(topic)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_neglected_words_session_id ON neglected_words(session_id)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_dictionary_hover_events_word_lang ON dictionary_hover_events(word, language)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_dictionary_hover_events_sentence_id ON dictionary_hover_events(sentence_id)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_dictionary_hover_events_session_id ON dictionary_hover_events(session_id)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_dictionary_hover_events_created_at ON dictionary_hover_events(created_at)`);
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_neglected_words_session_id ON neglected_words(session_id)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_dictionary_hover_events_word_lang ON dictionary_hover_events(word, language)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_dictionary_hover_events_sentence_id ON dictionary_hover_events(sentence_id)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_dictionary_hover_events_session_id ON dictionary_hover_events(session_id)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_dictionary_hover_events_created_at ON dictionary_hover_events(created_at)`
+    );
   }
 
   // Word management operations
@@ -404,11 +460,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async insertWord(wordData: CreateWordRequest): Promise<number> {
     const db = this.getDb();
-    
+
     try {
       // Initialize SRS values for new word
       const tomorrow = addDays(new Date(), 1);
-      
+
       const stmt = db.prepare(`
         INSERT INTO words (
           word, language, translation, topic,
@@ -416,7 +472,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         )
         VALUES (?, ?, ?, ?, 20, 1, 2.5, ?)
       `);
-      
+
       const result = stmt.run(
         wordData.word,
         wordData.language,
@@ -429,16 +485,18 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       // Find existing sentences that contain this word's lemma (same language only)
       const normalizedWord = wordData.word.toLowerCase().trim();
-      
+
       const findSentencesStmt = db.prepare(`
         SELECT DISTINCT sl.sentence_id 
         FROM sentence_lemmas sl
         INNER JOIN sentences s ON sl.sentence_id = s.id
         WHERE sl.lemma = ? AND s.language = ?
       `);
-      
-      const matchingSentences = findSentencesStmt.all(normalizedWord, wordData.language) as Array<{ sentence_id: number }>;
-      
+
+      const matchingSentences = findSentencesStmt.all(normalizedWord, wordData.language) as Array<{
+        sentence_id: number;
+      }>;
+
       if (matchingSentences.length > 0) {
         // Link these sentences to the new word via sentence_words junction table
         const insertJunction = db.prepare(`
@@ -457,9 +515,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           updateSentenceCount.run(wordId);
         }
 
-        console.log(`[insertWord] Linked ${matchingSentences.length} existing sentences to new word ${wordData.word} (ID: ${wordId})`);
+        console.log(
+          `[insertWord] Linked ${matchingSentences.length} existing sentences to new word ${wordData.word} (ID: ${wordId})`
+        );
       }
-      
+
       return wordId;
     } catch (error) {
       throw wrapError(error, `Failed to insert word`);
@@ -471,16 +531,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async updateWordStrength(wordId: number, strength: number): Promise<void> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         UPDATE words 
         SET strength = ?, last_studied = CURRENT_TIMESTAMP
         WHERE id = ?
       `);
-      
+
       const result = stmt.run(strength, wordId);
-      
+
       if (result.changes === 0) {
         throw new Error(`Word with ID ${wordId} not found`);
       }
@@ -494,16 +554,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async markWordKnown(wordId: number, known: boolean): Promise<void> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         UPDATE words 
         SET known = ?, last_studied = CURRENT_TIMESTAMP
         WHERE id = ?
       `);
-      
+
       const result = stmt.run(known ? 1 : 0, wordId);
-      
+
       if (result.changes === 0) {
         throw new Error(`Word with ID ${wordId} not found`);
       }
@@ -517,16 +577,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async markWordIgnored(wordId: number, ignored: boolean): Promise<void> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         UPDATE words 
         SET ignored = ?, last_studied = CURRENT_TIMESTAMP
         WHERE id = ?
       `);
-      
+
       const result = stmt.run(ignored ? 1 : 0, wordId);
-      
+
       if (result.changes === 0) {
         throw new Error(`Word with ID ${wordId} not found`);
       }
@@ -540,20 +600,20 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getWordsToStudy(limit: number, language: string): Promise<Word[]> {
     const db = this.getDb();
-    
+
     try {
       // First, get words due for review (SRS priority)
       const dueWords = await this.getWordsDueWithPriority(language, limit);
-      
+
       // If we have enough due words, return them
       if (dueWords.length >= limit) {
         return dueWords.slice(0, limit);
       }
-      
+
       // If we need more words, get additional words by strength (only words with sentences)
       const remainingLimit = limit - dueWords.length;
       const now = new Date().toISOString();
-      
+
       const stmt = db.prepare(`
         SELECT DISTINCT w.* FROM words w
         INNER JOIN sentence_words sw ON w.id = sw.word_id
@@ -562,10 +622,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ORDER BY w.strength ASC, RANDOM()
         LIMIT ?
       `);
-      
+
       const rows = stmt.all(language, now, remainingLimit) as any[];
       const additionalWords = rows.map(this.mapRowToWord);
-      
+
       // Combine due words with additional words
       return [...dueWords, ...additionalWords];
     } catch (error) {
@@ -576,9 +636,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get words by strength range for targeted practice
    */
-  async getWordsByStrength(minStrength: number, maxStrength: number, language: string, limit?: number): Promise<Word[]> {
+  async getWordsByStrength(
+    minStrength: number,
+    maxStrength: number,
+    language: string,
+    limit?: number
+  ): Promise<Word[]> {
     const db = this.getDb();
-    
+
     try {
       let query = `
         SELECT * FROM words 
@@ -586,15 +651,17 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         AND strength >= ? AND strength <= ? AND language = ?
         ORDER BY last_studied ASC NULLS FIRST
       `;
-      
+
       if (limit) {
         query += ' LIMIT ?';
       }
-      
+
       const stmt = db.prepare(query);
-      const params = limit ? [minStrength, maxStrength, language, limit] : [minStrength, maxStrength, language];
+      const params = limit
+        ? [minStrength, maxStrength, language, limit]
+        : [minStrength, maxStrength, language];
       const rows = stmt.all(...params) as any[];
-      
+
       return rows.map(this.mapRowToWord);
     } catch (error) {
       throw wrapError(error, `Failed to get words by strength`);
@@ -604,22 +671,26 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get words that have sentences available for learning
    */
-  async getWordsWithSentences(language: string, includeKnown: boolean = true, includeIgnored: boolean = false): Promise<Word[]> {
+  async getWordsWithSentences(
+    language: string,
+    includeKnown: boolean = true,
+    includeIgnored: boolean = false
+  ): Promise<Word[]> {
     const db = this.getDb();
-    
+
     try {
-      let whereConditions: string[] = [`w.language = ?`];
-      
+      const whereConditions: string[] = [`w.language = ?`];
+
       if (!includeKnown) {
         whereConditions.push('w.known = FALSE');
       }
-      
+
       if (!includeIgnored) {
         whereConditions.push('w.ignored = FALSE');
       }
-      
+
       const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
-      
+
       // Use sentence_words junction table instead of direct join on sentences.word_id
       const stmt = db.prepare(`
         SELECT DISTINCT w.* FROM words w
@@ -627,10 +698,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ${whereClause}
         ORDER BY w.strength ASC, RANDOM()
       `);
-      
+
       const rows = stmt.all(language) as any[];
       const words = rows.map(this.mapRowToWord);
-      
+
       return this.shuffleArray(words);
     } catch (error) {
       throw wrapError(error, `Failed to get words with sentences`);
@@ -640,22 +711,26 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get words that have sentences available for review, ordered by last_studied (least recently studied first)
    */
-  async getWordsWithSentencesOrderedByStrength(language: string, includeKnown: boolean = true, includeIgnored: boolean = false): Promise<Word[]> {
+  async getWordsWithSentencesOrderedByStrength(
+    language: string,
+    includeKnown: boolean = true,
+    includeIgnored: boolean = false
+  ): Promise<Word[]> {
     const db = this.getDb();
-    
+
     try {
-      let whereConditions: string[] = [`w.language = ?`];
-      
+      const whereConditions: string[] = [`w.language = ?`];
+
       if (!includeKnown) {
         whereConditions.push('w.known = FALSE');
       }
-      
+
       if (!includeIgnored) {
         whereConditions.push('w.ignored = FALSE');
       }
-      
+
       const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
-      
+
       // Use sentence_words junction table instead of direct join on sentences.word_id
       const stmt = db.prepare(`
         SELECT DISTINCT w.* FROM words w
@@ -663,7 +738,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ${whereClause}
         ORDER BY w.last_studied ASC NULLS FIRST
       `);
-      
+
       const rows = stmt.all(language) as any[];
       return rows.map(this.mapRowToWord);
     } catch (error) {
@@ -674,41 +749,46 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get all words with optional filtering and shuffling for learning
    */
-  async getAllWords(language: string, includeKnown: boolean = true, includeIgnored: boolean = false): Promise<Word[]> {
+  async getAllWords(
+    language: string,
+    includeKnown: boolean = true,
+    includeIgnored: boolean = false
+  ): Promise<Word[]> {
     const db = this.getDb();
-    
+
     try {
-      let whereConditions: string[] = [`language = ?`];
-      
+      const whereConditions: string[] = [`language = ?`];
+
       if (!includeKnown) {
         whereConditions.push('known = FALSE');
       }
-      
+
       if (!includeIgnored) {
         whereConditions.push('ignored = FALSE');
       }
-      
+
       const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
-      
+
       // If we're getting words for learning (not including known/ignored), shuffle them
-      const orderClause = (!includeKnown && !includeIgnored) 
-        ? 'ORDER BY strength ASC, RANDOM()'
-        : 'ORDER BY created_at DESC';
-      
+      const orderClause =
+        !includeKnown && !includeIgnored
+          ? 'ORDER BY strength ASC, RANDOM()'
+          : 'ORDER BY created_at DESC';
+
       const stmt = db.prepare(`
         SELECT * FROM words 
         ${whereClause}
         ${orderClause}
       `);
-      
+
       const rows = stmt.all(language) as any[];
       const words = rows.map(this.mapRowToWord);
-      
+
       // Additional shuffling for learning words to ensure variety
       if (!includeKnown && !includeIgnored) {
         return this.shuffleArray(words);
       }
-      
+
       return words;
     } catch (error) {
       throw wrapError(error, `Failed to get all words`);
@@ -720,11 +800,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getWordById(wordId: number): Promise<Word | null> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare('SELECT * FROM words WHERE id = ?');
       const row = stmt.get(wordId) as any;
-      
+
       return row ? this.mapRowToWord(row) : null;
     } catch (error) {
       throw wrapError(error, `Failed to get word by ID`);
@@ -735,9 +815,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    * Get known words for sentence generation
    * Returns word strings only, limited and randomized for use in prompts
    */
-  async getKnownWordsForSentenceGeneration(language: string, limit: number = 50): Promise<string[]> {
+  async getKnownWordsForSentenceGeneration(
+    language: string,
+    limit: number = 50
+  ): Promise<string[]> {
     const db = this.getDb();
-    
+
     try {
       // Get all known words for the language, shuffled
       const stmt = db.prepare(`
@@ -746,17 +829,21 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ORDER BY RANDOM()
         LIMIT ?
       `);
-      
+
       const rows = stmt.all(language, limit) as Array<{ word: string }>;
-      return rows.map(row => row.word);
+      return rows.map((row) => row.word);
     } catch (error) {
       throw wrapError(error, `Failed to get known words for sentence generation`);
     }
   }
 
-  async getKnownWords(language: string, minWordStrength: number, maxWords: number): Promise<string[]> {
+  async getKnownWords(
+    language: string,
+    minWordStrength: number,
+    maxWords: number
+  ): Promise<string[]> {
     const db = this.getDb();
-    
+
     try {
       // Get words that are either known OR have strength >= minWordStrength
       const stmt = db.prepare(`
@@ -765,9 +852,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ORDER BY RANDOM()
         LIMIT ?
       `);
-      
+
       const rows = stmt.all(language, minWordStrength, maxWords) as Array<{ word: string }>;
-      return rows.map(row => row.word);
+      return rows.map((row) => row.word);
     } catch (error) {
       throw wrapError(error, `Failed to get known words`);
     }
@@ -779,27 +866,31 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    * @param topic - Optional topic parameter to filter words by topic
    * @param limit - Optional limit on the number of words to return
    */
-  async getExistingWordsForDuplicateChecking(language: string, topic?: string, limit?: number): Promise<string[]> {
+  async getExistingWordsForDuplicateChecking(
+    language: string,
+    topic?: string,
+    limit?: number
+  ): Promise<string[]> {
     const db = this.getDb();
-    
+
     try {
       // Get words (learning, known, and ignored) for the language, optionally filtered by topic and limited
       // This includes ignored words to ensure they are filtered out during generation
       let query = `SELECT word FROM words WHERE language = ?`;
       const params: any[] = [language];
-      
+
       if (topic) {
         query += ` AND topic = ?`;
         params.push(topic);
       }
-      
+
       if (limit && limit > 0) {
         query += ` LIMIT ${Math.floor(limit)}`;
       }
-      
+
       const stmt = db.prepare(query);
       const rows = stmt.all(...params) as Array<{ word: string }>;
-      return rows.map(row => row.word);
+      return rows.map((row) => row.word);
     } catch (error) {
       throw wrapError(error, `Failed to get existing words for duplicate checking`);
     }
@@ -813,19 +904,19 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getIgnoredWords(language: string, topic?: string): Promise<string[]> {
     const db = this.getDb();
-    
+
     try {
       let query = `SELECT word FROM words WHERE language = ? AND ignored = TRUE`;
       const params: any[] = [language];
-      
+
       if (topic) {
         query += ` AND topic = ?`;
         params.push(topic);
       }
-      
+
       const stmt = db.prepare(query);
       const rows = stmt.all(...params) as Array<{ word: string }>;
-      return rows.map(row => row.word);
+      return rows.map((row) => row.word);
     } catch (error) {
       throw wrapError(error, `Failed to get ignored words`);
     }
@@ -842,36 +933,36 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async checkWordsExist(language: string, words: string[], topic?: string): Promise<Set<string>> {
     const db = this.getDb();
-    
+
     if (words.length === 0) {
       return new Set();
     }
-    
+
     try {
       // Normalize words to lowercase for comparison
-      const normalizedWords = words.map(w => w.toLowerCase());
-      
+      const normalizedWords = words.map((w) => w.toLowerCase());
+
       // Create placeholders for IN clause
       const placeholders = normalizedWords.map(() => '?').join(',');
-      
+
       // Query 1: Check words table (existing words - learning, known, or ignored)
       let wordsQuery = `
         SELECT LOWER(word) as word 
         FROM words 
         WHERE language = ? AND LOWER(word) IN (${placeholders})
       `;
-      
+
       const wordsParams: any[] = [language, ...normalizedWords];
-      
+
       if (topic) {
         wordsQuery += ` AND topic = ?`;
         wordsParams.push(topic);
       }
-      
+
       const wordsStmt = db.prepare(wordsQuery);
       const wordsRows = wordsStmt.all(...wordsParams) as Array<{ word: string }>;
-      const existingWordsSet = new Set(wordsRows.map(row => row.word));
-      
+      const existingWordsSet = new Set(wordsRows.map((row) => row.word));
+
       // Query 2: Check neglected_words table (words neglected 3+ times in last 7 days)
       // Filter by language only (no topic filtering - if neglected in any topic, filter it out)
       const neglectedQuery = `
@@ -883,15 +974,15 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         GROUP BY LOWER(word)
         HAVING COUNT(*) >= 3
       `;
-      
+
       const neglectedParams: any[] = [language, ...normalizedWords];
       const neglectedStmt = db.prepare(neglectedQuery);
       const neglectedRows = neglectedStmt.all(...neglectedParams) as Array<{ word: string }>;
-      const neglectedWordsSet = new Set(neglectedRows.map(row => row.word));
-      
+      const neglectedWordsSet = new Set(neglectedRows.map((row) => row.word));
+
       // Combine both sets
       const combinedSet = new Set([...existingWordsSet, ...neglectedWordsSet]);
-      
+
       return combinedSet;
     } catch (error) {
       throw wrapError(error, `Failed to check words existence`);
@@ -903,7 +994,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getWordsByIds(wordIds: number[]): Promise<Word[]> {
     const db = this.getDb();
-    
+
     try {
       if (wordIds.length === 0) {
         return [];
@@ -912,8 +1003,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const placeholders = wordIds.map(() => '?').join(',');
       const stmt = db.prepare(`SELECT * FROM words WHERE id IN (${placeholders})`);
       const rows = stmt.all(...wordIds) as any[];
-      
-      return rows.map(row => this.mapRowToWord(row));
+
+      return rows.map((row) => this.mapRowToWord(row));
     } catch (error) {
       throw wrapError(error, `Failed to get words by IDs`);
     }
@@ -927,49 +1018,52 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   private findMatchingLearningWords(sentence: string, language: string): Word[] {
     const db = this.getDb();
-    
+
     try {
       // Tokenize sentence: split by whitespace and punctuation
       const parts = splitSentenceIntoParts(sentence);
       const wordsInSentence = new Set<string>();
-      
+
       // Extract and normalize words from sentence parts
       for (const part of parts) {
         // Skip whitespace and punctuation-only parts
         if (/^\s*$/.test(part) || /^[.,!?;:]+$/.test(part)) {
           continue;
         }
-        
+
         // Normalize word: remove punctuation, convert to lowercase
-        const normalized = part.replace(/[.,!?;:]/g, '').toLowerCase().trim();
+        const normalized = part
+          .replace(/[.,!?;:]/g, '')
+          .toLowerCase()
+          .trim();
         if (normalized && normalized.length > 0) {
           wordsInSentence.add(normalized);
         }
       }
-      
+
       if (wordsInSentence.size === 0) {
         return [];
       }
-      
+
       // Get all learning words (not known, not ignored) in the same language
       const stmt = db.prepare(`
         SELECT * FROM words
         WHERE language = ? AND known = FALSE AND ignored = FALSE
       `);
-      
+
       const learningWords = stmt.all(language) as any[];
-      
+
       // Match sentence words against learning words (case-insensitive)
       const matchingWords: Word[] = [];
       const wordLookup = new Map<string, Word>();
-      
+
       // Build lookup map for learning words
       for (const word of learningWords) {
         const mappedWord = this.mapRowToWord(word);
         const normalizedWord = word.word.toLowerCase().trim();
         wordLookup.set(normalizedWord, mappedWord);
       }
-      
+
       // Find matches
       for (const sentenceWord of wordsInSentence) {
         const matchedWord = wordLookup.get(sentenceWord);
@@ -977,7 +1071,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           matchingWords.push(matchedWord);
         }
       }
-      
+
       return matchingWords;
     } catch (error) {
       console.error('Failed to find matching learning words:', error);
@@ -988,23 +1082,23 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
   /**
    * Insert a new sentence for a word
-   * 
+   *
    * This method creates two types of word-sentence linkages:
    * 1. Direct link: sentences.word_id - the primary word this sentence was generated for
    * 2. Junction table: sentence_words - links sentences to ALL words they contain
-   * 
+   *
    * IMPORTANT: The primary word (wordId) is ALWAYS added to the sentence_words junction table,
    * regardless of whether it was found by the matching algorithm or its known/ignored status.
    * This ensures the junction table is the single source of truth for all sentence-word relationships.
-   * 
+   *
    * Additionally, the method finds all other learning words that appear in the sentence and
    * links them via the junction table, allowing sentences to be discoverable when studying
    * any word they contain, not just the primary word.
    */
   async insertSentence(
-    wordId: number, 
-    sentence: string, 
-    translation: string, 
+    wordId: number,
+    sentence: string,
+    translation: string,
     audioPath: string,
     contextBefore?: string,
     contextAfter?: string,
@@ -1018,7 +1112,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     tokenizedTokens?: any[]
   ): Promise<number> {
     const db = this.getDb();
-    
+
     try {
       const parts = sentenceParts ?? splitSentenceIntoParts(sentence);
       const serializedParts = serializeSentenceParts(parts);
@@ -1040,12 +1134,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
-      
+
       const result = stmt.run(
         wordId,
         word.language,
-        sentence, 
-        translation, 
+        sentence,
+        translation,
         audioPath,
         contextBefore || null,
         contextAfter || null,
@@ -1092,14 +1186,17 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           } catch (error) {
             // Ignore duplicate key errors (if entry already exists)
             if (error instanceof Error && !error.message.includes('UNIQUE constraint')) {
-              console.warn(`Failed to insert junction table entry for sentence ${sentenceId}, word ${matchedWord.id}:`, error);
+              console.warn(
+                `Failed to insert junction table entry for sentence ${sentenceId}, word ${matchedWord.id}:`,
+                error
+              );
             }
           }
         }
       }
 
       // Update sentenceCount for the primary word (if it wasn't already updated above)
-      if (!matchingWords.find(w => w.id === wordId)) {
+      if (!matchingWords.find((w) => w.id === wordId)) {
         updateSentenceCount.run(wordId);
       }
 
@@ -1109,7 +1206,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           // tokenizedTokens is already an array, not a serialized string
           const parsedTokens = tokenizedTokens;
           const lemmas = new Set<string>();
-          
+
           parsedTokens.forEach((token: any) => {
             if (token.lemma) {
               lemmas.add(token.lemma.toLowerCase().trim());
@@ -1124,7 +1221,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
               VALUES (?, ?)
             `);
 
-            lemmas.forEach(lemma => {
+            lemmas.forEach((lemma) => {
               if (lemma && lemma.length > 0) {
                 insertLemma.run(sentenceId, lemma);
               }
@@ -1133,10 +1230,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
             console.log(`[insertSentence] Stored ${lemmas.size} lemmas for sentence ${sentenceId}`);
           }
         } catch (error) {
-          console.warn(`Failed to store lemmas for sentence ${sentenceId} during insertion:`, error);
+          console.warn(
+            `Failed to store lemmas for sentence ${sentenceId} during insertion:`,
+            error
+          );
         }
       }
-      
+
       return sentenceId;
     } catch (error) {
       throw wrapError(error, `Failed to insert sentence`);
@@ -1149,20 +1249,20 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getSentencesByWord(wordId: number): Promise<Sentence[]> {
     const db = this.getDb();
-    
+
     try {
       // Get sentence IDs from junction table (the single source of truth)
       const sentenceIdsStmt = db.prepare(`
         SELECT sentence_id FROM sentence_words WHERE word_id = ?
       `);
-      
+
       const sentenceIdsResult = sentenceIdsStmt.all(wordId) as Array<{ sentence_id: number }>;
-      const sentenceIds = sentenceIdsResult.map(row => row.sentence_id);
-      
+      const sentenceIds = sentenceIdsResult.map((row) => row.sentence_id);
+
       if (sentenceIds.length === 0) {
         return [];
       }
-      
+
       // Fetch sentences by IDs (excluding ignored sentences)
       const placeholders = sentenceIds.map(() => '?').join(',');
       const stmt = db.prepare(`
@@ -1171,9 +1271,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           AND (ignored IS NULL OR ignored = FALSE)
         ORDER BY RANDOM()
       `);
-      
+
       const rows = stmt.all(...sentenceIds) as any[];
-      
+
       return rows.map(this.mapRowToSentence);
     } catch (error) {
       throw wrapError(error, `Failed to get sentences by word`);
@@ -1185,17 +1285,19 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getSentencesByIds(sentenceIds: number[]): Promise<Sentence[]> {
     const db = this.getDb();
-    
+
     try {
       if (sentenceIds.length === 0) {
         return [];
       }
 
       const placeholders = sentenceIds.map(() => '?').join(',');
-      const stmt = db.prepare(`SELECT * FROM sentences WHERE id IN (${placeholders}) AND (ignored IS NULL OR ignored = FALSE)`);
+      const stmt = db.prepare(
+        `SELECT * FROM sentences WHERE id IN (${placeholders}) AND (ignored IS NULL OR ignored = FALSE)`
+      );
       const rows = stmt.all(...sentenceIds) as any[];
-      
-      return rows.map(row => this.mapRowToSentence(row));
+
+      return rows.map((row) => this.mapRowToSentence(row));
     } catch (error) {
       throw wrapError(error, `Failed to get sentences by IDs`);
     }
@@ -1206,16 +1308,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async updateSentenceLastShown(sentenceId: number): Promise<void> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         UPDATE sentences 
         SET last_shown = CURRENT_TIMESTAMP
         WHERE id = ?
       `);
-      
+
       const result = stmt.run(sentenceId);
-      
+
       if (result.changes === 0) {
         throw new Error(`Sentence with ID ${sentenceId} not found`);
       }
@@ -1227,7 +1329,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Update sentence audio path after successful regeneration
    */
-  async updateSentenceAudioPath(sentenceId: number, audioPath: string, audioGenerationVoiceId?: string): Promise<void> {
+  async updateSentenceAudioPath(
+    sentenceId: number,
+    audioPath: string,
+    audioGenerationVoiceId?: string
+  ): Promise<void> {
     const db = this.getDb();
     try {
       if (audioGenerationVoiceId !== undefined) {
@@ -1301,7 +1407,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async updateSentenceTokens(sentenceId: number, tokens: any[]): Promise<void> {
     const db = this.getDb();
-    
+
     try {
       const serializedTokens = serializeTokenizedTokens(tokens);
       const stmt = db.prepare(`
@@ -1320,9 +1426,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       if (!parsedTokens || parsedTokens.length === 0) {
         return;
       }
-      
+
       const lemmas = new Set<string>();
-      
+
       parsedTokens.forEach((token: any) => {
         // Collect lemmas (normalized)
         if (token.lemma) {
@@ -1347,7 +1453,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       deleteOldLemmas.run(sentenceId);
 
       // Insert all lemmas
-      lemmas.forEach(lemma => {
+      lemmas.forEach((lemma) => {
         if (lemma && lemma.length > 0) {
           insertLemma.run(sentenceId, lemma);
         }
@@ -1364,7 +1470,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async incrementSentencePlayCount(sentenceId: number): Promise<void> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         UPDATE sentences
@@ -1386,21 +1492,27 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    * Pronunciation stats can be queried from the pronunciation_attempts table.
    */
   async recordPronunciationAttempt(
-    sentenceId: number, 
-    similarityScore: number, 
-    expectedText: string, 
+    sentenceId: number,
+    similarityScore: number,
+    expectedText: string,
     transcribedText: string,
     audioPath?: string | null
   ): Promise<void> {
     const db = this.getDb();
-    
+
     try {
       // Insert into pronunciation_attempts history table
       const insertAttempt = db.prepare(`
         INSERT INTO pronunciation_attempts (sentence_id, similarity_score, expected_text, transcribed_text, audio_path)
         VALUES (?, ?, ?, ?, ?)
       `);
-      insertAttempt.run(sentenceId, similarityScore, expectedText, transcribedText, audioPath || null);
+      insertAttempt.run(
+        sentenceId,
+        similarityScore,
+        expectedText,
+        transcribedText,
+        audioPath || null
+      );
     } catch (error) {
       throw wrapError(error, `Failed to record pronunciation attempt`);
     }
@@ -1409,33 +1521,38 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get pronunciation history for a sentence
    */
-  async getPronunciationHistory(sentenceId: number, limit?: number): Promise<Array<{
-    id: number;
-    sentenceId: number;
-    similarityScore: number;
-    expectedText: string;
-    transcribedText: string;
-    audioPath: string | null;
-    createdAt: Date;
-  }>> {
+  async getPronunciationHistory(
+    sentenceId: number,
+    limit?: number
+  ): Promise<
+    Array<{
+      id: number;
+      sentenceId: number;
+      similarityScore: number;
+      expectedText: string;
+      transcribedText: string;
+      audioPath: string | null;
+      createdAt: Date;
+    }>
+  > {
     const db = this.getDb();
-    
+
     try {
-      const query = limit 
+      const query = limit
         ? `SELECT * FROM pronunciation_attempts WHERE sentence_id = ? ORDER BY created_at DESC LIMIT ?`
         : `SELECT * FROM pronunciation_attempts WHERE sentence_id = ? ORDER BY created_at DESC`;
-      
+
       const stmt = limit ? db.prepare(query) : db.prepare(query);
-      const rows = limit ? stmt.all(sentenceId, limit) : stmt.all(sentenceId) as any[];
-      
-      return rows.map(row => ({
+      const rows = limit ? stmt.all(sentenceId, limit) : (stmt.all(sentenceId) as any[]);
+
+      return rows.map((row) => ({
         id: row.id,
         sentenceId: row.sentence_id,
         similarityScore: row.similarity_score,
         expectedText: row.expected_text,
         transcribedText: row.transcribed_text,
         audioPath: row.audio_path || null,
-        createdAt: new Date(row.created_at)
+        createdAt: new Date(row.created_at),
       }));
     } catch (error) {
       throw wrapError(error, `Failed to get pronunciation history`);
@@ -1445,15 +1562,19 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Insert a dialogue variant for a sentence
    */
-  async insertDialogueVariant(sentenceId: number, variantSentence: string, variantTranslation: string): Promise<number> {
+  async insertDialogueVariant(
+    sentenceId: number,
+    variantSentence: string,
+    variantTranslation: string
+  ): Promise<number> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         INSERT INTO dialogue_variants (sentence_id, variant_sentence, variant_translation)
         VALUES (?, ?, ?)
       `);
-      
+
       const result = stmt.run(sentenceId, variantSentence, variantTranslation);
       return result.lastInsertRowid as number;
     } catch (error) {
@@ -1464,24 +1585,27 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get dialogue variants for a sentence
    */
-  async getDialogueVariantsBySentenceId(sentenceId: number, limit?: number): Promise<DialogueVariant[]> {
+  async getDialogueVariantsBySentenceId(
+    sentenceId: number,
+    limit?: number
+  ): Promise<DialogueVariant[]> {
     const db = this.getDb();
-    
+
     try {
       let query = `
         SELECT * FROM dialogue_variants
         WHERE sentence_id = ?
         ORDER BY created_at DESC
       `;
-      
+
       if (limit) {
         query += ` LIMIT ?`;
       }
-      
+
       const stmt = limit ? db.prepare(query) : db.prepare(query);
-      const rows = limit ? stmt.all(sentenceId, limit) as any[] : stmt.all(sentenceId) as any[];
-      
-      return rows.map(row => ({
+      const rows = limit ? (stmt.all(sentenceId, limit) as any[]) : (stmt.all(sentenceId) as any[]);
+
+      return rows.map((row) => ({
         id: row.id,
         sentenceId: row.sentence_id,
         variantSentence: row.variant_sentence,
@@ -1489,7 +1613,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         createdAt: new Date(row.created_at),
         continuationText: row.continuation_text || undefined,
         continuationTranslation: row.continuation_translation || undefined,
-        continuationAudio: row.continuation_audio || undefined
+        continuationAudio: row.continuation_audio || undefined,
       }));
     } catch (error) {
       throw wrapError(error, `Failed to get dialogue variants`);
@@ -1501,13 +1625,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getDialogueVariantCount(sentenceId: number): Promise<number> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         SELECT COUNT(*) as count FROM dialogue_variants
         WHERE sentence_id = ?
       `);
-      
+
       const result = stmt.get(sentenceId) as { count: number };
       return result.count;
     } catch (error) {
@@ -1520,18 +1644,18 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getDialogueVariantById(variantId: number): Promise<DialogueVariant | null> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         SELECT * FROM dialogue_variants
         WHERE id = ?
       `);
-      
+
       const row = stmt.get(variantId) as any;
       if (!row) {
         return null;
       }
-      
+
       return {
         id: row.id,
         sentenceId: row.sentence_id,
@@ -1540,7 +1664,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         createdAt: new Date(row.created_at),
         continuationText: row.continuation_text || undefined,
         continuationTranslation: row.continuation_translation || undefined,
-        continuationAudio: row.continuation_audio || undefined
+        continuationAudio: row.continuation_audio || undefined,
       };
     } catch (error) {
       throw wrapError(error, `Failed to get dialogue variant`);
@@ -1557,14 +1681,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     continuationAudio?: string
   ): Promise<void> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         UPDATE dialogue_variants
         SET continuation_text = ?, continuation_translation = ?, continuation_audio = ?
         WHERE id = ?
       `);
-      
+
       stmt.run(continuationText, continuationTranslation, continuationAudio || null, variantId);
     } catch (error) {
       throw wrapError(error, `Failed to update dialogue variant continuation`);
@@ -1576,12 +1700,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getAllSentences(): Promise<Sentence[]> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare('SELECT * FROM sentences ORDER BY id');
       const rows = stmt.all() as any[];
-      
-      return rows.map(row => this.mapRowToSentence(row));
+
+      return rows.map((row) => this.mapRowToSentence(row));
     } catch (error) {
       throw wrapError(error, `Failed to get all sentences`);
     }
@@ -1592,11 +1716,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getSentenceById(sentenceId: number): Promise<Sentence | null> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare('SELECT * FROM sentences WHERE id = ?');
       const row = stmt.get(sentenceId) as any;
-      
+
       return row ? this.mapRowToSentence(row) : null;
     } catch (error) {
       throw wrapError(error, `Failed to get sentence by ID`);
@@ -1608,12 +1732,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async deleteSentence(sentenceId: number): Promise<void> {
     const db = this.getDb();
-    
+
     try {
       // Mark the sentence as ignored instead of deleting it
       const stmt = db.prepare('UPDATE sentences SET ignored = TRUE WHERE id = ?');
       const result = stmt.run(sentenceId);
-      
+
       if (result.changes === 0) {
         throw new Error(`Sentence with ID ${sentenceId} not found`);
       }
@@ -1629,16 +1753,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async updateLastStudied(wordId: number): Promise<void> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         UPDATE words 
         SET last_studied = CURRENT_TIMESTAMP
         WHERE id = ?
       `);
-      
+
       const result = stmt.run(wordId);
-      
+
       if (result.changes === 0) {
         throw new Error(`Word with ID ${wordId} not found`);
       }
@@ -1652,7 +1776,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getStudyStats(language: string): Promise<StudyStats> {
     const db = this.getDb();
-    
+
     try {
       const statsStmt = db.prepare(`
         SELECT 
@@ -1663,14 +1787,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         FROM words
         WHERE ignored = FALSE AND language = ?
       `);
-      
+
       const stats = statsStmt.get(language) as any;
-      
+
       return {
         totalWords: stats.totalWords || 0,
         wordsStudied: stats.wordsStudied || 0,
         averageStrength: stats.averageStrength || 0,
-        lastStudyDate: stats.lastStudyDate ? new Date(stats.lastStudyDate) : undefined
+        lastStudyDate: stats.lastStudyDate ? new Date(stats.lastStudyDate) : undefined,
       };
     } catch (error) {
       throw wrapError(error, `Failed to get study stats`);
@@ -1682,13 +1806,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async recordStudySession(wordsStudied: number): Promise<void> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         INSERT INTO progress (words_studied, when_studied)
         VALUES (?, CURRENT_TIMESTAMP)
       `);
-      
+
       stmt.run(wordsStudied);
     } catch (error) {
       throw wrapError(error, `Failed to record study session`);
@@ -1698,9 +1822,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get recent study sessions
    */
-  async getRecentStudySessions(limit: number = 10): Promise<Array<{id: number, wordsStudied: number, whenStudied: Date}>> {
+  async getRecentStudySessions(
+    limit: number = 10
+  ): Promise<Array<{ id: number; wordsStudied: number; whenStudied: Date }>> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         SELECT id, words_studied, when_studied
@@ -1708,13 +1834,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ORDER BY when_studied DESC
         LIMIT ?
       `);
-      
+
       const rows = stmt.all(limit) as any[];
-      
-      return rows.map(row => ({
+
+      return rows.map((row) => ({
         id: row.id,
         wordsStudied: row.words_studied,
-        whenStudied: new Date(row.when_studied)
+        whenStudied: new Date(row.when_studied),
       }));
     } catch (error) {
       throw wrapError(error, `Failed to get recent study sessions`);
@@ -1728,15 +1854,15 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getWeakestWords(limit: number, language: string): Promise<Word[]> {
     const db = this.getDb();
-    
+
     try {
       // Prioritize words due for review, then weakest words
       const dueWords = await this.getWordsDueWithPriority(language, limit);
-      
+
       if (dueWords.length >= limit) {
         return dueWords.slice(0, limit);
       }
-      
+
       // Get additional weak words if needed (only words with sentences)
       // Exclude words that were recently reviewed/studied to prevent immediate re-quizzing
       const remainingLimit = limit - dueWords.length;
@@ -1745,7 +1871,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // Exclude words reviewed/studied within the last 24 hours
       const cutoffTime = subHours(now, 24);
       const cutoffTimeIso = cutoffTime.toISOString();
-      
+
       const stmt = db.prepare(`
         SELECT DISTINCT w.* FROM words w
         INNER JOIN sentence_words sw ON w.id = sw.word_id
@@ -1756,10 +1882,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ORDER BY w.strength ASC, RANDOM()
         LIMIT ?
       `);
-      
-      const rows = stmt.all(language, nowIso, cutoffTimeIso, cutoffTimeIso, remainingLimit) as any[];
+
+      const rows = stmt.all(
+        language,
+        nowIso,
+        cutoffTimeIso,
+        cutoffTimeIso,
+        remainingLimit
+      ) as any[];
       const additionalWords = rows.map(this.mapRowToWord);
-      
+
       return [...dueWords, ...additionalWords];
     } catch (error) {
       throw wrapError(error, `Failed to get weakest words`);
@@ -1771,21 +1903,21 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getRandomSentenceForWord(wordId: number): Promise<Sentence | null> {
     const db = this.getDb();
-    
+
     try {
       // First get sentence IDs from junction table
       const sentenceIdsStmt = db.prepare(`
         SELECT sentence_id FROM sentence_words WHERE word_id = ?
       `);
-      
+
       const sentenceIdsResult = sentenceIdsStmt.all(wordId) as Array<{ sentence_id: number }>;
-      
+
       if (sentenceIdsResult.length === 0) {
         return null;
       }
-      
-      const sentenceIds = sentenceIdsResult.map(row => row.sentence_id);
-      
+
+      const sentenceIds = sentenceIdsResult.map((row) => row.sentence_id);
+
       // Then fetch a random sentence by IDs using the junction table (excluding ignored sentences)
       const placeholders = sentenceIds.map(() => '?').join(',');
       const stmt = db.prepare(`
@@ -1795,9 +1927,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ORDER BY RANDOM()
         LIMIT 1
       `);
-      
+
       const row = stmt.get(...sentenceIds) as any;
-      
+
       return row ? this.mapRowToSentence(row) : null;
     } catch (error) {
       throw wrapError(error, `Failed to get random sentence for word`);
@@ -1808,15 +1940,17 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    * Get all sentences with audio for Flow feature
    * Includes sentences, connected words, before sentence audio paths, and continuation audio paths
    */
-      async getFlowSentences(language: string): Promise<Array<{
-        sentence: Sentence;
-        words: Word[];
-        beforeSentenceAudio?: string;
-        afterSentenceAudio?: string;
-        continuationAudios: string[];
-      }>> {
+  async getFlowSentences(language: string): Promise<
+    Array<{
+      sentence: Sentence;
+      words: Word[];
+      beforeSentenceAudio?: string;
+      afterSentenceAudio?: string;
+      continuationAudios: string[];
+    }>
+  > {
     const db = this.getDb();
-    
+
     try {
       // Get all sentences for the language that have audio (excluding ignored sentences)
       const stmt = db.prepare(`
@@ -1828,10 +1962,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           AND (ignored IS NULL OR ignored = FALSE)
         ORDER BY id ASC
       `);
-      
+
       const sentenceRows = stmt.all(language) as any[];
-      const sentences = sentenceRows.map(row => this.mapRowToSentence(row));
-      
+      const sentences = sentenceRows.map((row) => this.mapRowToSentence(row));
+
       const result: Array<{
         sentence: Sentence;
         words: Word[];
@@ -1839,7 +1973,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         afterSentenceAudio?: string;
         continuationAudios: string[];
       }> = [];
-      
+
       // For each sentence, get connected words and audio paths
       for (const sentence of sentences) {
         // Get all words connected to this sentence from sentence_words (if any)
@@ -1847,10 +1981,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           SELECT word_id FROM sentence_words WHERE sentence_id = ?
         `);
         const wordIds = wordIdsStmt.all(sentence.id) as Array<{ word_id: number }>;
-        
+
         const words: Word[] = [];
         const wordIdSet = new Set<number>();
-        
+
         // Add words from sentence_words junction table
         if (wordIds.length > 0) {
           const placeholders = wordIds.map(() => '?').join(',');
@@ -1858,14 +1992,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
             SELECT * FROM words 
             WHERE id IN (${placeholders}) AND language = ?
           `);
-          const wordRows = wordsStmt.all(...wordIds.map(w => w.word_id), language) as any[];
+          const wordRows = wordsStmt.all(...wordIds.map((w) => w.word_id), language) as any[];
           for (const row of wordRows) {
             const word = this.mapRowToWord(row);
             words.push(word);
             wordIdSet.add(word.id);
           }
         }
-        
+
         // Always include the primary word (sentence.word_id) if it's in the correct language and not already included
         if (sentence.wordId && !wordIdSet.has(sentence.wordId)) {
           const primaryWord = await this.getWordById(sentence.wordId);
@@ -1873,11 +2007,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
             words.push(primaryWord);
           }
         }
-        
+
         // Get before and after sentence audio paths from database (if stored)
         const beforeSentenceAudioPath = sentence.beforeSentenceAudioPath || undefined;
         const afterSentenceAudioPath = sentence.afterSentenceAudioPath || undefined;
-        
+
         // Get dialogue variants and their continuation audio
         const variantsStmt = db.prepare(`
           SELECT continuation_audio FROM dialogue_variants
@@ -1885,18 +2019,18 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         `);
         const variantRows = variantsStmt.all(sentence.id) as Array<{ continuation_audio: string }>;
         const continuationAudios = variantRows
-          .map(row => row.continuation_audio)
+          .map((row) => row.continuation_audio)
           .filter((audio): audio is string => !!audio && audio.trim() !== '');
-        
+
         result.push({
           sentence,
           words,
           beforeSentenceAudio: beforeSentenceAudioPath, // We'll check existence later
           afterSentenceAudio: afterSentenceAudioPath, // We'll check existence later
-          continuationAudios
+          continuationAudios,
         });
       }
-      
+
       return result;
     } catch (error) {
       throw wrapError(error, `Failed to get flow sentences`);
@@ -1910,7 +2044,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getRandomDialogSentence(language: string): Promise<Sentence | null> {
     const db = this.getDb();
-    
+
     try {
       // Single query: join sentences to their primary word
       // Filter by: language, ignored = FALSE, contextBefore exists and is not empty
@@ -1926,13 +2060,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ORDER BY RANDOM()
         LIMIT 1
       `);
-      
+
       const row = stmt.get(language) as any;
-      
+
       if (!row) {
         return null;
       }
-      
+
       return this.mapRowToSentence(row);
     } catch (error) {
       throw wrapError(error, `Failed to get random dialog sentence`);
@@ -1946,7 +2080,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getRandomDialogSentences(count: number, language: string): Promise<Sentence[]> {
     const db = this.getDb();
-    
+
     try {
       if (count <= 0) {
         return [];
@@ -1965,10 +2099,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ORDER BY RANDOM()
         LIMIT ?
       `);
-      
+
       const rows = stmt.all(language, count) as any[];
-      
-      return rows.map(row => this.mapRowToSentence(row));
+
+      return rows.map((row) => this.mapRowToSentence(row));
     } catch (error) {
       throw wrapError(error, `Failed to get random dialog sentences`);
     }
@@ -1981,11 +2115,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getSetting(key: string): Promise<string | null> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare('SELECT value FROM settings WHERE key = ?');
       const row = stmt.get(key) as any;
-      
+
       return row ? row.value : null;
     } catch (error) {
       throw wrapError(error, `Failed to get setting`);
@@ -1997,13 +2131,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async setSetting(key: string, value: string): Promise<void> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         INSERT OR REPLACE INTO settings (key, value, updated_at)
         VALUES (?, ?, CURRENT_TIMESTAMP)
       `);
-      
+
       stmt.run(key, value);
     } catch (error) {
       throw wrapError(error, `Failed to set setting`);
@@ -2030,17 +2164,17 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getAvailableLanguages(): Promise<string[]> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         SELECT DISTINCT language 
         FROM words 
         ORDER BY language ASC
       `);
-      
+
       const rows = stmt.all() as any[];
-      
-      return rows.map(row => row.language);
+
+      return rows.map((row) => row.language);
     } catch (error) {
       throw wrapError(error, `Failed to get available languages`);
     }
@@ -2049,9 +2183,17 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get word count statistics per language
    */
-  async getLanguageStats(): Promise<Array<{language: string, totalWords: number, studiedWords: number, averagePronunciationScore: number | null, pronunciationAttemptCount: number}>> {
+  async getLanguageStats(): Promise<
+    Array<{
+      language: string;
+      totalWords: number;
+      studiedWords: number;
+      averagePronunciationScore: number | null;
+      pronunciationAttemptCount: number;
+    }>
+  > {
     const db = this.getDb();
-    
+
     try {
       // Get word counts per language
       const wordStatsStmt = db.prepare(`
@@ -2064,9 +2206,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         GROUP BY language
         ORDER BY language ASC
       `);
-      
+
       const wordStatsRows = wordStatsStmt.all() as any[];
-      
+
       // Get average pronunciation scores and count per language
       const pronunciationStatsStmt = db.prepare(`
         SELECT 
@@ -2077,29 +2219,29 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         INNER JOIN sentences s ON pa.sentence_id = s.id
         GROUP BY s.language
       `);
-      
+
       const pronunciationStatsRows = pronunciationStatsStmt.all() as any[];
-      
+
       // Create a map of language -> pronunciation data for quick lookup
       const pronunciationDataMap = new Map<string, { score: number; count: number }>();
       pronunciationStatsRows.forEach((row: any) => {
         if (row.averagePronunciationScore !== null) {
           pronunciationDataMap.set(row.language, {
             score: row.averagePronunciationScore,
-            count: row.pronunciationAttemptCount || 0
+            count: row.pronunciationAttemptCount || 0,
           });
         }
       });
-      
+
       // Combine word stats with pronunciation scores
-      return wordStatsRows.map(row => {
+      return wordStatsRows.map((row) => {
         const pronunciationData = pronunciationDataMap.get(row.language);
         return {
           language: row.language,
           totalWords: row.totalWords || 0,
           studiedWords: row.studiedWords || 0,
           averagePronunciationScore: pronunciationData?.score ?? null,
-          pronunciationAttemptCount: pronunciationData?.count ?? 0
+          pronunciationAttemptCount: pronunciationData?.count ?? 0,
         };
       });
     } catch (error) {
@@ -2113,7 +2255,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getTopicWordCounts(language: string): Promise<Array<{ topic: string; count: number }>> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         SELECT 
@@ -2124,7 +2266,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         GROUP BY topic
         ORDER BY count DESC
       `);
-      
+
       const rows = stmt.all(language) as Array<{ topic: string; count: number }>;
       return rows;
     } catch (error) {
@@ -2153,11 +2295,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         lang: string;
       }>;
 
-      return rows.map(row => ({
+      return rows.map((row) => ({
         word: row.word,
         pos: row.pos,
         glosses: this.parseGlossesField(row.glosses),
-        lang: row.lang
+        lang: row.lang,
       }));
     } catch (error) {
       throw wrapError(error, `Failed to lookup dictionary entry`);
@@ -2179,7 +2321,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
-  async getWordProcessingInfo(wordId: number): Promise<{ processingStatus: WordProcessingStatus; sentenceCount: number } | null> {
+  async getWordProcessingInfo(
+    wordId: number
+  ): Promise<{ processingStatus: WordProcessingStatus; sentenceCount: number } | null> {
     const db = this.getDb();
 
     try {
@@ -2189,9 +2333,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         WHERE id = ?
       `);
 
-      const row = stmt.get(wordId) as { processing_status: WordProcessingStatus; sentence_count: number } | undefined;
+      const row = stmt.get(wordId) as
+        | { processing_status: WordProcessingStatus; sentence_count: number }
+        | undefined;
       return row
-        ? { processingStatus: row.processing_status ?? 'ready', sentenceCount: row.sentence_count ?? 0 }
+        ? {
+            processingStatus: row.processing_status ?? 'ready',
+            sentenceCount: row.sentence_count ?? 0,
+          }
         : null;
     } catch (error) {
       throw wrapError(error, `Failed to get word processing info`);
@@ -2215,9 +2364,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         GROUP BY status
       `;
 
-      const rows = (language
-        ? db.prepare(statusQuery).all(language)
-        : db.prepare(statusQuery).all()) as Array<{ status: string; total: number }>;
+      const rows = (
+        language ? db.prepare(statusQuery).all(language) : db.prepare(statusQuery).all()
+      ) as Array<{ status: string; total: number }>;
 
       const summary = rows.reduce(
         (acc, row) => {
@@ -2231,7 +2380,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           processing: 0,
           failed: 0,
           queuedWords: [] as JobWordInfo[],
-          processingWords: [] as JobWordInfo[]
+          processingWords: [] as JobWordInfo[],
         }
       );
 
@@ -2252,9 +2401,15 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           q.updated_at ASC
       `;
 
-      const jobWordRows = (language
-        ? db.prepare(jobWordQuery).all(language)
-        : db.prepare(jobWordQuery).all()) as Array<{ wordId: number; status: string; language: string; topic: string | null; word: string }>;
+      const jobWordRows = (
+        language ? db.prepare(jobWordQuery).all(language) : db.prepare(jobWordQuery).all()
+      ) as Array<{
+        wordId: number;
+        status: string;
+        language: string;
+        topic: string | null;
+        word: string;
+      }>;
 
       for (const job of jobWordRows) {
         const info: JobWordInfo = {
@@ -2262,7 +2417,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           word: job.word,
           status: job.status as WordGenerationJobStatus,
           language: job.language,
-          topic: job.topic ?? undefined
+          topic: job.topic ?? undefined,
         };
         if (job.status === 'processing') {
           summary.processingWords.push(info);
@@ -2277,7 +2432,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
-  async enqueueWordGeneration(wordId: number, language: string, topic?: string, desiredSentenceCount: number = 3): Promise<void> {
+  async enqueueWordGeneration(
+    wordId: number,
+    language: string,
+    topic?: string,
+    desiredSentenceCount: number = 3
+  ): Promise<void> {
     const db = this.getDb();
 
     try {
@@ -2309,12 +2469,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
 
     try {
-      const row = db.prepare(`
+      const row = db
+        .prepare(
+          `
         SELECT * FROM word_generation_queue
         WHERE status = 'queued'
         ORDER BY updated_at ASC, created_at ASC
         LIMIT 1
-      `).get() as any | undefined;
+      `
+        )
+        .get() as any | undefined;
 
       return row ? this.mapRowToWordGenerationJob(row) : null;
     } catch (error) {
@@ -2340,7 +2504,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
-  async rescheduleWordGenerationJob(jobId: number, delayMs: number, lastError?: string): Promise<void> {
+  async rescheduleWordGenerationJob(
+    jobId: number,
+    delayMs: number,
+    lastError?: string
+  ): Promise<void> {
     const db = this.getDb();
     const nextAttempt = addMilliseconds(new Date(), delayMs).toISOString();
 
@@ -2413,7 +2581,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   ): Promise<void> {
     const db = this.getDb();
-    
+
     try {
       const nowIso = new Date().toISOString();
       const updates = [
@@ -2422,7 +2590,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         'ease_factor = ?',
         'last_review = ?',
         'next_due = ?',
-        'last_studied = ?'
+        'last_studied = ?',
       ];
       const params: Array<number | string | null> = [
         strength,
@@ -2430,9 +2598,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         easeFactor,
         nowIso,
         nextDue.toISOString(),
-        nowIso
+        nowIso,
       ];
-      
+
       if (options) {
         if (options.fsrsDifficulty !== undefined) {
           updates.push('fsrs_difficulty = ?');
@@ -2457,9 +2625,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         SET ${updates.join(', ')}
         WHERE id = ?
       `);
-      
+
       const result = stmt.run(...params, wordId);
-      
+
       if (result.changes === 0) {
         throw new Error(`Word with ID ${wordId} not found`);
       }
@@ -2473,25 +2641,25 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getWordsDueForReview(language: string, limit?: number): Promise<Word[]> {
     const db = this.getDb();
-    
+
     try {
       const now = new Date().toISOString();
-      
+
       let query = `
         SELECT * FROM words 
         WHERE known = FALSE AND ignored = FALSE 
         AND language = ? AND next_due <= ?
         ORDER BY next_due ASC, strength ASC
       `;
-      
+
       if (limit) {
         query += ' LIMIT ?';
       }
-      
+
       const stmt = db.prepare(query);
       const params = limit ? [language, now, limit] : [language, now];
       const rows = stmt.all(...params) as any[];
-      
+
       return rows.map(this.mapRowToWord);
     } catch (error) {
       throw wrapError(error, `Failed to get words due for review`);
@@ -2503,16 +2671,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getWordsDueCount(language: string): Promise<number> {
     const db = this.getDb();
-    
+
     try {
       const now = new Date().toISOString();
-      
+
       const stmt = db.prepare(`
         SELECT COUNT(*) as count FROM words 
         WHERE known = FALSE AND ignored = FALSE 
         AND language = ? AND next_due <= ?
       `);
-      
+
       const result = stmt.get(language, now) as { count: number };
       return result.count;
     } catch (error) {
@@ -2525,10 +2693,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getWordsDueWithPriority(language: string, limit?: number): Promise<Word[]> {
     const db = this.getDb();
-    
+
     try {
       const now = new Date().toISOString();
-      
+
       // Get all due words that have sentences (required for quiz mode)
       const stmt = db.prepare(`
         SELECT DISTINCT w.* FROM words w
@@ -2536,25 +2704,25 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         WHERE w.known = FALSE AND w.ignored = FALSE 
         AND w.language = ? AND w.next_due <= ?
       `);
-      
+
       const rows = stmt.all(language, now) as any[];
       const words = rows.map(this.mapRowToWord);
-      
+
       // Sort by SRS priority (overdue first, then by strength)
       const sortedWords = words.sort((a, b) => {
         const now = new Date();
         const aDaysOverdue = Math.max(0, differenceInDays(now, a.nextDue));
         const bDaysOverdue = Math.max(0, differenceInDays(now, b.nextDue));
-        
+
         // First sort by overdue status
         if (aDaysOverdue !== bDaysOverdue) {
           return bDaysOverdue - aDaysOverdue; // More overdue first
         }
-        
+
         // Then by strength (weaker first)
         return a.strength - b.strength;
       });
-      
+
       return limit ? sortedWords.slice(0, limit) : sortedWords;
     } catch (error) {
       throw wrapError(error, `Failed to get words due with priority`);
@@ -2572,11 +2740,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     averageEaseFactor: number;
   }> {
     const db = this.getDb();
-    
+
     try {
       const now = new Date().toISOString();
       const todayStr = endOfDay(new Date()).toISOString();
-      
+
       const stmt = db.prepare(`
         SELECT 
           COUNT(*) as totalWords,
@@ -2587,15 +2755,15 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         FROM words
         WHERE ignored = FALSE AND known = FALSE AND language = ?
       `);
-      
+
       const result = stmt.get(todayStr, now, language) as any;
-      
+
       return {
         totalWords: result.totalWords || 0,
         dueToday: result.dueToday || 0,
         overdue: result.overdue || 0,
         averageInterval: result.averageInterval || 1,
-        averageEaseFactor: result.averageEaseFactor || 2.5
+        averageEaseFactor: result.averageEaseFactor || 2.5,
       };
     } catch (error) {
       throw wrapError(error, `Failed to get SRS stats`);
@@ -2608,7 +2776,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   private async populateDictionaryFromFiles(): Promise<void> {
     const dictDir = path.join(process.cwd(), 'dicts');
-    
+
     // Check if directory exists before proceeding
     try {
       await fsPromises.access(dictDir);
@@ -2630,14 +2798,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       return;
     }
 
-    const jsonlFiles = files.filter(file => file.endsWith('_dict.jsonl'));
+    const jsonlFiles = files.filter((file) => file.endsWith('_dict.jsonl'));
     if (jsonlFiles.length === 0) {
       return;
     }
 
     const db = this.getDb();
     const deleteStmt = db.prepare('DELETE FROM dict WHERE lang = ?');
-    const insertStmt = db.prepare('INSERT INTO dict (word, pos, glosses, lang) VALUES (?, ?, ?, ?)');
+    const insertStmt = db.prepare(
+      'INSERT INTO dict (word, pos, glosses, lang) VALUES (?, ?, ?, ?)'
+    );
     const hasEntriesStmt = db.prepare('SELECT 1 FROM dict WHERE lang = ? LIMIT 1');
 
     // Check all markers FIRST before doing any expensive file operations
@@ -2679,12 +2849,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       try {
         const entries = await this.parseDictionaryFile(filePath, language);
 
-        const transaction = db.transaction((dictionaryEntries: Array<{ word: string; pos: string; glosses: string; lang: string }>) => {
-          deleteStmt.run(language);
-          for (const entry of dictionaryEntries) {
-            insertStmt.run(entry.word, entry.pos, entry.glosses, entry.lang);
+        const transaction = db.transaction(
+          (
+            dictionaryEntries: Array<{ word: string; pos: string; glosses: string; lang: string }>
+          ) => {
+            deleteStmt.run(language);
+            for (const entry of dictionaryEntries) {
+              insertStmt.run(entry.word, entry.pos, entry.glosses, entry.lang);
+            }
           }
-        });
+        );
 
         transaction(entries);
         await this.setSetting(markerKey, 'true');
@@ -2736,9 +2910,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
         let glossesArray: string[] = [];
         if (Array.isArray(parsed.glosses)) {
-          glossesArray = parsed.glosses
-            .map(gloss => String(gloss).trim())
-            .filter(Boolean);
+          glossesArray = parsed.glosses.map((gloss) => String(gloss).trim()).filter(Boolean);
         } else if (parsed.glosses) {
           glossesArray = [String(parsed.glosses).trim()].filter(Boolean);
         }
@@ -2753,10 +2925,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           word,
           pos,
           glosses: JSON.stringify(glossesArray),
-          lang: language
+          lang: language,
         });
       } catch (error) {
-        console.warn(`Failed to parse dictionary entry in ${path.basename(filePath)} at line ${index + 1}:`, error);
+        console.warn(
+          `Failed to parse dictionary entry in ${path.basename(filePath)} at line ${index + 1}:`,
+          error
+        );
       }
     });
 
@@ -2785,20 +2960,24 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         WHERE sentence_parts IS NULL OR sentence_parts = ''
       `);
       const checkResult = checkStmt.get() as { count: number };
-      
+
       if (!checkResult.count || checkResult.count === 0) {
         // No sentences need backfilling - skip entirely
         return;
       }
 
-      const rows = db.prepare(`
+      const rows = db
+        .prepare(
+          `
         SELECT id, sentence 
         FROM sentences 
         WHERE sentence_parts IS NULL OR sentence_parts = ''
-      `).all() as Array<{ id: number; sentence: string }>;
+      `
+        )
+        .all() as Array<{ id: number; sentence: string }>;
 
       const updates = rows
-        .map(row => {
+        .map((row) => {
           const parts = splitSentenceIntoParts(row.sentence);
           const serialized = serializeSentenceParts(parts);
           if (!serialized) {
@@ -2813,11 +2992,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       }
 
       const updateStmt = db.prepare('UPDATE sentences SET sentence_parts = ? WHERE id = ?');
-      const updateTransaction = db.transaction((items: Array<{ id: number; serialized: string }>) => {
-        for (const item of items) {
-          updateStmt.run(item.serialized, item.id);
+      const updateTransaction = db.transaction(
+        (items: Array<{ id: number; serialized: string }>) => {
+          for (const item of items) {
+            updateStmt.run(item.serialized, item.id);
+          }
         }
-      });
+      );
 
       updateTransaction(updates);
       console.log(`Backfilled sentence_parts for ${updates.length} sentences`);
@@ -2839,7 +3020,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         db.prepare('SELECT sentence_tokens FROM sentences LIMIT 1').get();
       } catch (error) {
         // Column doesn't exist yet - migration may not have run
-        console.log('Sentence tokens column not found, skipping backfill (migration may not have run)');
+        console.log(
+          'Sentence tokens column not found, skipping backfill (migration may not have run)'
+        );
         return;
       }
 
@@ -2850,7 +3033,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           if (processed % 50 === 0) {
             console.log(`Backfilling sentence tokens: ${processed}/${total} processed`);
           }
-        }
+        },
       });
       console.log('Sentence token backfill completed');
     } catch (error) {
@@ -2881,7 +3064,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       fsrsLastRating: row.fsrs_last_rating ?? undefined,
       processingStatus: row.processing_status ?? 'ready',
       sentenceCount: row.sentence_count ?? 0,
-      topic: row.topic ?? undefined
+      topic: row.topic ?? undefined,
     };
   }
 
@@ -2908,7 +3091,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       audioGenerationVoiceId: row.audio_generation_voice_id || undefined,
       beforeSentenceAudioPath: row.before_sentence_audio_path || undefined,
       afterSentenceAudioPath: row.after_sentence_audio_path || undefined,
-      ignored: row.ignored === 1 || row.ignored === true
+      ignored: row.ignored === 1 || row.ignored === true,
     };
   }
 
@@ -2924,7 +3107,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       lastError: row.last_error ?? undefined,
       createdAt: row.created_at ? new Date(row.created_at) : new Date(),
       updatedAt: row.updated_at ? new Date(row.updated_at) : new Date(),
-      startedAt: row.started_at ? new Date(row.started_at) : undefined
+      startedAt: row.started_at ? new Date(row.started_at) : undefined,
     };
   }
 
@@ -2936,9 +3119,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     try {
       const parsed = JSON.parse(glosses);
       if (Array.isArray(parsed)) {
-        return parsed
-          .map(item => String(item).trim())
-          .filter(Boolean);
+        return parsed.map((item) => String(item).trim()).filter(Boolean);
       }
     } catch {
       // Ignore JSON parsing errors and fall back to string parsing
@@ -2946,7 +3127,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
     return glosses
       .split(/[;,]/)
-      .map(part => part.trim())
+      .map((part) => part.trim())
       .filter(Boolean);
   }
 
@@ -2957,7 +3138,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getNewWordCount(language: string): Promise<number> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         SELECT COUNT(*) as count FROM words 
@@ -2966,7 +3147,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         AND ignored = FALSE 
         AND last_studied IS NULL
       `);
-      
+
       const result = stmt.get(language) as { count: number };
       return result.count;
     } catch (error) {
@@ -2979,7 +3160,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getWeakWordCount(language: string): Promise<number> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         SELECT COUNT(*) as count FROM words 
@@ -2988,7 +3169,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         AND ignored = FALSE 
         AND strength < 30
       `);
-      
+
       const result = stmt.get(language) as { count: number };
       return result.count;
     } catch (error) {
@@ -3003,7 +3184,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getDialogueReadinessRatio(language: string, minStrength: number = 40): Promise<number> {
     const db = this.getDb();
-    
+
     try {
       // Get total unique words associated with dialog sentences (sentences with contextBefore)
       const totalWordsStmt = db.prepare(`
@@ -3016,14 +3197,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         AND s.context_before IS NOT NULL
         AND TRIM(s.context_before) != ''
       `);
-      
+
       const totalResult = totalWordsStmt.get(language) as { count: number };
       const totalWords = totalResult.count;
-      
+
       if (totalWords === 0) {
         return 0; // No dialog sentences yet
       }
-      
+
       // Get known words (known=true OR strength >= minStrength) associated with dialog sentences
       const knownWordsStmt = db.prepare(`
         SELECT COUNT(DISTINCT w.id) as count
@@ -3036,10 +3217,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         AND TRIM(s.context_before) != ''
         AND (w.known = TRUE OR w.strength >= ?)
       `);
-      
+
       const knownResult = knownWordsStmt.get(language, minStrength) as { count: number };
       const knownWords = knownResult.count;
-      
+
       return knownWords / totalWords;
     } catch (error) {
       throw wrapError(error, `Failed to get dialogue readiness ratio`);
@@ -3052,7 +3233,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getAveragePronunciationScore(language: string): Promise<number> {
     const db = this.getDb();
-    
+
     try {
       // Get average similarity score from pronunciation_attempts
       // Join with sentences to filter by language
@@ -3062,13 +3243,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         INNER JOIN sentences s ON pa.sentence_id = s.id
         WHERE s.language = ?
       `);
-      
+
       const result = stmt.get(language) as { avg_score: number | null };
-      
+
       if (result.avg_score === null) {
         return 0; // No pronunciation attempts yet
       }
-      
+
       // Convert from 0-1 scale to 0-10 scale
       return result.avg_score * 10;
     } catch (error) {
@@ -3081,7 +3262,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getAvailableSentencesCount(language: string): Promise<number> {
     const db = this.getDb();
-    
+
     try {
       // Count sentences with audio for the language
       const stmt = db.prepare(`
@@ -3091,7 +3272,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         AND audio_path IS NOT NULL
         AND TRIM(audio_path) != ''
       `);
-      
+
       const result = stmt.get(language) as { count: number };
       return result.count;
     } catch (error) {
@@ -3107,17 +3288,17 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async getTimeSinceLastActivePractice(language: string): Promise<number> {
     const db = this.getDb();
-    
+
     try {
       const now = new Date();
-      
+
       // Get most recent study session
       const sessionStmt = db.prepare(`
         SELECT MAX(when_studied) as last_session
         FROM progress
       `);
       const sessionResult = sessionStmt.get() as { last_session: string | null };
-      
+
       // Get most recent word review/study
       // Use the later of last_review or last_studied for each word, then find the max
       const wordStmt = db.prepare(`
@@ -3134,30 +3315,30 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         AND (last_review IS NOT NULL OR last_studied IS NOT NULL)
       `);
       const wordResult = wordStmt.get(language) as { last_practice: string | null };
-      
+
       // Find the most recent timestamp
       let lastPractice: Date | null = null;
-      
+
       if (sessionResult.last_session) {
         lastPractice = new Date(sessionResult.last_session);
       }
-      
+
       if (wordResult.last_practice) {
         const wordDate = new Date(wordResult.last_practice);
         if (!lastPractice || wordDate > lastPractice) {
           lastPractice = wordDate;
         }
       }
-      
+
       if (!lastPractice) {
         // No practice recorded yet - return a very large number to penalize heavily
         return 1000; // 1000 hours (~41 days)
       }
-      
+
       // Calculate hours since last practice
       const diffMs = now.getTime() - lastPractice.getTime();
       const diffHours = diffMs / (1000 * 60 * 60);
-      
+
       return diffHours;
     } catch (error) {
       throw wrapError(error, `Failed to get time since last active practice`);
@@ -3174,7 +3355,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    */
   async resetLanguageProgress(language: string): Promise<void> {
     const db = this.getDb();
-    
+
     try {
       // Calculate tomorrow's date for next_due
       const tomorrow = addDays(new Date(), 1);
@@ -3187,7 +3368,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         DELETE FROM words 
         WHERE language = ? AND (known = TRUE OR ignored = TRUE)
       `);
-      
+
       deleteKnownIgnoredStmt.run(language);
 
       // Clear any queued/processing word generation jobs for remaining words in this language
@@ -3196,7 +3377,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         DELETE FROM word_generation_queue 
         WHERE language = ? AND status IN ('queued', 'processing')
       `);
-      
+
       clearQueueStmt.run(language);
 
       // Reset all word progress fields for the remaining words in the language
@@ -3216,7 +3397,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           fsrs_last_rating = NULL
         WHERE language = ?
       `);
-      
+
       resetWordsStmt.run(tomorrowIso, language);
 
       // Reset all sentence progress fields for the language
@@ -3227,7 +3408,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           play_count = 0
         WHERE language = ?
       `);
-      
+
       resetSentencesStmt.run(language);
 
       // Delete all pronunciation attempts for sentences in that language
@@ -3237,7 +3418,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           SELECT id FROM sentences WHERE language = ?
         )
       `);
-      
+
       deletePronunciationStmt.run(language);
 
       console.log(`Successfully reset progress for language: ${language}`);
@@ -3259,13 +3440,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     language: string;
   }): Promise<number> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         INSERT INTO srs_adjustments (word_id, session_id, recall_rating, strength_delta, language)
         VALUES (?, ?, ?, ?, ?)
       `);
-      
+
       const result = stmt.run(
         data.wordId,
         data.sessionId || null,
@@ -3273,7 +3454,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         data.strengthDelta,
         data.language
       );
-      
+
       return result.lastInsertRowid as number;
     } catch (error) {
       throw wrapError(error, `Failed to record SRS adjustment`);
@@ -3288,13 +3469,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     language: string;
   }): Promise<number> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         INSERT INTO learning_sessions (mode, language, started_at)
         VALUES (?, ?, CURRENT_TIMESTAMP)
       `);
-      
+
       const result = stmt.run(data.mode, data.language);
       return result.lastInsertRowid as number;
     } catch (error) {
@@ -3305,23 +3486,26 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Update learning session on completion
    */
-  async updateLearningSession(sessionId: number, data: {
-    wordCount?: number;
-    sentenceCount?: number;
-    audioPlayedCount?: number;
-  }): Promise<void> {
+  async updateLearningSession(
+    sessionId: number,
+    data: {
+      wordCount?: number;
+      sentenceCount?: number;
+      audioPlayedCount?: number;
+    }
+  ): Promise<void> {
     const db = this.getDb();
-    
+
     try {
       const session = await this.getLearningSession(sessionId);
       if (!session) {
         throw new Error(`Session ${sessionId} not found`);
       }
-      
+
       const startedAt = new Date(session.startedAt);
       const endedAt = new Date();
       const durationSeconds = Math.floor((endedAt.getTime() - startedAt.getTime()) / 1000);
-      
+
       const stmt = db.prepare(`
         UPDATE learning_sessions
         SET ended_at = CURRENT_TIMESTAMP,
@@ -3331,7 +3515,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
             audio_played_count = COALESCE(?, audio_played_count)
         WHERE id = ?
       `);
-      
+
       stmt.run(
         durationSeconds,
         data.wordCount ?? null,
@@ -3354,24 +3538,24 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     startedAt: Date;
   } | null> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         SELECT id, mode, language, started_at
         FROM learning_sessions
         WHERE id = ?
       `);
-      
+
       const row = stmt.get(sessionId) as any;
       if (!row) {
         return null;
       }
-      
+
       return {
         id: row.id,
         mode: row.mode,
         language: row.language,
-        startedAt: new Date(row.started_at)
+        startedAt: new Date(row.started_at),
       };
     } catch (error) {
       throw wrapError(error, `Failed to get learning session`);
@@ -3390,13 +3574,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     playbackSpeed?: number;
   }): Promise<number> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         INSERT INTO audio_playback_events (session_id, sentence_id, audio_path, language, mode, playback_speed)
         VALUES (?, ?, ?, ?, ?, ?)
       `);
-      
+
       const result = stmt.run(
         data.sessionId || null,
         data.sentenceId || null,
@@ -3405,7 +3589,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         data.mode,
         data.playbackSpeed ?? 1.0
       );
-      
+
       return result.lastInsertRowid as number;
     } catch (error) {
       throw wrapError(error, `Failed to record audio playback`);
@@ -3415,27 +3599,29 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Record multiple neglected words in a single transaction
    */
-  async recordNeglectedWords(data: Array<{
-    word: string;
-    language: string;
-    topic?: string;
-    translation?: string;
-    sessionId?: number;
-    frequencyPosition?: number;
-  }>): Promise<number> {
+  async recordNeglectedWords(
+    data: Array<{
+      word: string;
+      language: string;
+      topic?: string;
+      translation?: string;
+      sessionId?: number;
+      frequencyPosition?: number;
+    }>
+  ): Promise<number> {
     const db = this.getDb();
-    
+
     if (data.length === 0) {
       return 0;
     }
-    
+
     try {
       const stmt = db.prepare(`
         INSERT INTO neglected_words (word, language, topic, translation, session_id, frequency_position)
         VALUES (?, ?, ?, ?, ?, ?)
       `);
-      
-      const transaction = db.transaction((items: Array<typeof data[0]>) => {
+
+      const transaction = db.transaction((items: Array<(typeof data)[0]>) => {
         for (const item of items) {
           stmt.run(
             item.word,
@@ -3447,7 +3633,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           );
         }
       });
-      
+
       transaction(data);
       return data.length;
     } catch (error) {
@@ -3468,13 +3654,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     foundInDict: boolean;
   }): Promise<number> {
     const db = this.getDb();
-    
+
     try {
       const stmt = db.prepare(`
         INSERT INTO dictionary_hover_events (word, language, sentence_id, session_id, hover_duration_ms, dictionary_key, found_in_dict)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `);
-      
+
       const result = stmt.run(
         data.word,
         data.language,
@@ -3484,7 +3670,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         data.dictionaryKey || null,
         data.foundInDict ? 1 : 0
       );
-      
+
       return result.lastInsertRowid as number;
     } catch (error) {
       throw wrapError(error, `Failed to record dictionary hover event`);
@@ -3495,7 +3681,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    * Process frequently looked-up words from dictionary_hover_events
    * Finds words that are frequently hovered but not yet in the words table,
    * then inserts them and enqueues for sentence generation
-   * 
+   *
    * @param language - Language to process
    * @param minHoverCount - Minimum number of hover events to consider (default: 3)
    * @param lookbackDays - How many days back to look (default: 30)
@@ -3507,15 +3693,15 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     lookbackDays: number = 30
   ): Promise<number> {
     const db = this.getDb();
-    
+
     try {
       const currentLanguage = language;
-      
+
       // Calculate the lookback date
       const lookbackDate = new Date();
       lookbackDate.setDate(lookbackDate.getDate() - lookbackDays);
       const lookbackDateStr = lookbackDate.toISOString();
-      
+
       // Find frequently looked-up words from dictionary_hover_events
       // Group by word and language, count occurrences, filter by min count and lookback period
       const frequentlyLookedUpStmt = db.prepare(`
@@ -3532,7 +3718,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         HAVING COUNT(*) >= ?
         ORDER BY hover_count DESC, last_hover DESC
       `);
-      
+
       const frequentlyLookedUp = frequentlyLookedUpStmt.all(
         currentLanguage,
         lookbackDateStr,
@@ -3543,20 +3729,24 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         hover_count: number;
         last_hover: string;
       }>;
-      
+
       if (frequentlyLookedUp.length === 0) {
-        console.log(`[processFrequentlyLookedUpWords] No frequently looked-up words found for ${currentLanguage}`);
+        console.log(
+          `[processFrequentlyLookedUpWords] No frequently looked-up words found for ${currentLanguage}`
+        );
         return 0;
       }
-      
-      console.log(`[processFrequentlyLookedUpWords] Found ${frequentlyLookedUp.length} frequently looked-up words for ${currentLanguage}`);
-      
+
+      console.log(
+        `[processFrequentlyLookedUpWords] Found ${frequentlyLookedUp.length} frequently looked-up words for ${currentLanguage}`
+      );
+
       // Check which words already exist in the words table
       const checkWordExistsStmt = db.prepare(`
         SELECT id FROM words 
         WHERE LOWER(word) = LOWER(?) AND language = ?
       `);
-      
+
       // Get dictionary lookup for translation
       const getDictTranslationStmt = db.prepare(`
         SELECT glosses 
@@ -3564,22 +3754,26 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         WHERE LOWER(word) = LOWER(?) AND lang = ?
         LIMIT 1
       `);
-      
+
       let wordsAdded = 0;
       const wordsToAdd: Array<{ word: string; language: string; translation: string }> = [];
-      
+
       for (const item of frequentlyLookedUp) {
         // Check if word already exists
-        const existingWord = checkWordExistsStmt.get(item.word, item.language) as { id: number } | undefined;
-        
+        const existingWord = checkWordExistsStmt.get(item.word, item.language) as
+          | { id: number }
+          | undefined;
+
         if (existingWord) {
           // Word already exists, skip
           continue;
         }
-        
+
         // Try to get translation from dictionary
-        const dictEntry = getDictTranslationStmt.get(item.word, item.language) as { glosses: string } | undefined;
-        
+        const dictEntry = getDictTranslationStmt.get(item.word, item.language) as
+          | { glosses: string }
+          | undefined;
+
         let translation: string;
         if (dictEntry && dictEntry.glosses) {
           try {
@@ -3602,21 +3796,25 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           // No dictionary entry found, use word as placeholder
           translation = item.word;
         }
-        
+
         wordsToAdd.push({
           word: item.word,
           language: item.language,
-          translation
+          translation,
         });
       }
-      
+
       if (wordsToAdd.length === 0) {
-        console.log(`[processFrequentlyLookedUpWords] All frequently looked-up words already exist`);
+        console.log(
+          `[processFrequentlyLookedUpWords] All frequently looked-up words already exist`
+        );
         return 0;
       }
-      
-      console.log(`[processFrequentlyLookedUpWords] Adding ${wordsToAdd.length} new words from dictionary hovers`);
-      
+
+      console.log(
+        `[processFrequentlyLookedUpWords] Adding ${wordsToAdd.length} new words from dictionary hovers`
+      );
+
       // Insert words and enqueue for generation
       for (const wordData of wordsToAdd) {
         try {
@@ -3624,21 +3822,28 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           const wordId = await this.insertWord({
             word: wordData.word,
             language: wordData.language,
-            translation: wordData.translation
+            translation: wordData.translation,
           });
-          
+
           // Enqueue for sentence generation
           await this.enqueueWordGeneration(wordId, wordData.language, undefined, 3);
-          
+
           wordsAdded++;
-          console.log(`[processFrequentlyLookedUpWords] Added word: ${wordData.word} (ID: ${wordId})`);
+          console.log(
+            `[processFrequentlyLookedUpWords] Added word: ${wordData.word} (ID: ${wordId})`
+          );
         } catch (error) {
-          console.warn(`[processFrequentlyLookedUpWords] Failed to add word "${wordData.word}":`, error);
+          console.warn(
+            `[processFrequentlyLookedUpWords] Failed to add word "${wordData.word}":`,
+            error
+          );
           // Continue with next word
         }
       }
-      
-      console.log(`[processFrequentlyLookedUpWords] Successfully added ${wordsAdded} words from dictionary hovers`);
+
+      console.log(
+        `[processFrequentlyLookedUpWords] Successfully added ${wordsAdded} words from dictionary hovers`
+      );
       return wordsAdded;
     } catch (error) {
       throw wrapError(error, `Failed to process frequently looked-up words`);

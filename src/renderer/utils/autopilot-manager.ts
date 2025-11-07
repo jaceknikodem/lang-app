@@ -12,7 +12,7 @@ export interface AutopilotConfig {
 }
 
 const DEFAULT_CONFIG: AutopilotConfig = {
-  checkIntervalMs: 30000 // 30 seconds
+  checkIntervalMs: 30000, // 30 seconds
 };
 
 export class AutopilotManager {
@@ -33,12 +33,12 @@ export class AutopilotManager {
   start(initialTakeover: boolean = true): void {
     // Stop existing intervals if any
     this.stop();
-    
+
     this.enabled = true;
-    
+
     // Check scores immediately - take over control on first run
     void this.callbacks.onCheck(initialTakeover);
-    
+
     // Set up event listeners for specific actions
     this.checkTriggerHandler = () => {
       if (this.enabled) {
@@ -46,7 +46,7 @@ export class AutopilotManager {
       }
     };
     window.addEventListener('autopilot-check-trigger', this.checkTriggerHandler);
-    
+
     // Set up interval for checking scores periodically
     this.intervalId = window.setInterval(() => {
       void this.callbacks.onCheck(false);
@@ -58,12 +58,12 @@ export class AutopilotManager {
    */
   stop(): void {
     this.enabled = false;
-    
+
     if (this.intervalId !== null) {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
-    
+
     // Remove event listener
     if (this.checkTriggerHandler) {
       window.removeEventListener('autopilot-check-trigger', this.checkTriggerHandler);

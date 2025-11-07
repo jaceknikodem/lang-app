@@ -23,11 +23,11 @@ function convertKeysToCamelCase(obj: any): any {
   if (obj === null || obj === undefined) {
     return obj;
   }
-  
+
   if (Array.isArray(obj)) {
-    return obj.map(item => convertKeysToCamelCase(item));
+    return obj.map((item) => convertKeysToCamelCase(item));
   }
-  
+
   if (typeof obj === 'object') {
     const converted: any = {};
     for (const key in obj) {
@@ -38,7 +38,7 @@ function convertKeysToCamelCase(obj: any): any {
     }
     return converted;
   }
-  
+
   return obj;
 }
 
@@ -90,7 +90,7 @@ convict.addFormat({
   },
   coerce: (val: any) => {
     return String(val);
-  }
+  },
 });
 
 convict.addFormat({
@@ -103,7 +103,7 @@ convict.addFormat({
   },
   coerce: (val: any) => {
     return Number(val);
-  }
+  },
 });
 
 convict.addFormat({
@@ -116,7 +116,7 @@ convict.addFormat({
   },
   coerce: (val: any) => {
     return Number(val);
-  }
+  },
 });
 
 // Define configuration schema with validation
@@ -125,7 +125,7 @@ const config = convict({
     doc: 'The application environment',
     format: ['development', 'production', 'test'],
     default: 'development',
-    env: 'NODE_ENV'
+    env: 'NODE_ENV',
   },
 
   // Service Management
@@ -134,42 +134,42 @@ const config = convict({
       doc: 'Whether to manage external services (whisper, lemmatization)',
       format: Boolean,
       default: false,
-      env: 'MANAGE_SERVICES'
+      env: 'MANAGE_SERVICES',
     },
     whisper: {
       port: {
         doc: 'Whisper server port',
         format: 'port',
         default: 8080,
-        env: 'WHISPER_PORT'
+        env: 'WHISPER_PORT',
       },
       serverUrl: {
         doc: 'Whisper server URL',
         format: 'url',
         default: 'http://127.0.0.1:8080',
-        env: 'WHISPER_SERVER_URL'
-      }
+        env: 'WHISPER_SERVER_URL',
+      },
     },
     lemmatization: {
       port: {
         doc: 'Lemmatization server port',
         format: 'port',
         default: 8888,
-        env: 'LEMMATIZATION_PORT'
+        env: 'LEMMATIZATION_PORT',
       },
       serverUrl: {
         doc: 'Lemmatization server URL',
         format: 'url',
         default: 'http://127.0.0.1:8888',
-        env: 'LEMMATIZATION_SERVER_URL'
-      }
+        env: 'LEMMATIZATION_SERVER_URL',
+      },
     },
     maxRestarts: {
       doc: 'Maximum service restart attempts',
       format: 'int',
       default: 10,
-      env: 'MAX_SERVICE_RESTARTS'
-    }
+      env: 'MAX_SERVICE_RESTARTS',
+    },
   },
 
   // LLM Configuration
@@ -178,82 +178,82 @@ const config = convict({
       doc: 'Ollama base URL',
       format: 'url',
       default: 'http://localhost:11434',
-      env: 'OLLAMA_BASE_URL'
+      env: 'OLLAMA_BASE_URL',
     },
     defaultModel: {
       doc: 'Default LLM model',
       format: String,
       default: 'granite4:tiny-h',
-      env: 'LLM_DEFAULT_MODEL'
+      env: 'LLM_DEFAULT_MODEL',
     },
     wordGenerationModel: {
       doc: 'Model for word generation',
       format: String,
       default: 'granite4:tiny-h',
-      env: 'LLM_WORD_GENERATION_MODEL'
+      env: 'LLM_WORD_GENERATION_MODEL',
     },
     sentenceGenerationModel: {
       doc: 'Model for sentence generation',
       format: String,
       default: 'granite4:tiny-h',
-      env: 'LLM_SENTENCE_GENERATION_MODEL'
+      env: 'LLM_SENTENCE_GENERATION_MODEL',
     },
     timeout: {
       doc: 'LLM request timeout in milliseconds',
       format: 'int',
       default: 80000,
-      env: 'LLM_TIMEOUT'
+      env: 'LLM_TIMEOUT',
     },
     maxRetries: {
       doc: 'Maximum retry attempts for LLM requests',
       format: 'int',
       default: 3,
-      env: 'LLM_MAX_RETRIES'
+      env: 'LLM_MAX_RETRIES',
     },
     minWordCountThreshold: {
       doc: 'Minimum word count threshold ratio (0-1)',
       format: 'float',
       default: 0.4,
-      env: 'LLM_MIN_WORD_COUNT_THRESHOLD'
+      env: 'LLM_MIN_WORD_COUNT_THRESHOLD',
     },
     minSentenceCountThreshold: {
       doc: 'Minimum sentence count threshold ratio (0-1)',
       format: 'float',
       default: 0.7,
-      env: 'LLM_MIN_SENTENCE_COUNT_THRESHOLD'
+      env: 'LLM_MIN_SENTENCE_COUNT_THRESHOLD',
     },
     maxExistingWordsInPrompt: {
       doc: 'Maximum existing words to include in prompt',
       format: 'int',
       default: 50,
-      env: 'LLM_MAX_EXISTING_WORDS_IN_PROMPT'
+      env: 'LLM_MAX_EXISTING_WORDS_IN_PROMPT',
     },
     gemini: {
       defaultModel: {
         doc: 'Default Gemini model',
         format: String,
         default: 'gemini-2.5-flash',
-        env: 'GEMINI_DEFAULT_MODEL'
+        env: 'GEMINI_DEFAULT_MODEL',
       },
       wordModel: {
         doc: 'Gemini model for word generation',
         format: String,
         default: 'gemini-2.5-flash-lite',
-        env: 'GEMINI_WORD_MODEL'
+        env: 'GEMINI_WORD_MODEL',
       },
       sentenceModel: {
         doc: 'Gemini model for sentence generation',
         format: String,
         default: 'gemini-2.5-flash',
-        env: 'GEMINI_SENTENCE_MODEL'
+        env: 'GEMINI_SENTENCE_MODEL',
       },
       timeout: {
         doc: 'Gemini request timeout in milliseconds',
         format: 'int',
         default: 30000,
-        env: 'GEMINI_TIMEOUT'
-      }
-    }
+        env: 'GEMINI_TIMEOUT',
+      },
+    },
   },
 
   // Application Configuration
@@ -262,56 +262,56 @@ const config = convict({
       doc: 'SQLite database filename',
       format: String,
       default: 'language_learning.db',
-      env: 'APP_DATABASE_NAME'
+      env: 'APP_DATABASE_NAME',
     },
     audioDirectory: {
       doc: 'Audio files directory',
       format: String,
       default: 'audio',
-      env: 'APP_AUDIO_DIRECTORY'
+      env: 'APP_AUDIO_DIRECTORY',
     },
     defaultLanguage: {
       doc: 'Default learning language',
       format: ['spanish', 'italian', 'portuguese', 'polish', 'indonesian'],
       default: 'spanish',
-      env: 'APP_DEFAULT_LANGUAGE'
+      env: 'APP_DEFAULT_LANGUAGE',
     },
     defaultWordCount: {
       doc: 'Default number of words to generate',
       format: 'int',
       default: 5,
-      env: 'APP_DEFAULT_WORD_COUNT'
+      env: 'APP_DEFAULT_WORD_COUNT',
     },
     defaultSentenceCount: {
       doc: 'Default number of sentences to generate',
       format: 'int',
       default: 3,
-      env: 'APP_DEFAULT_SENTENCE_COUNT'
+      env: 'APP_DEFAULT_SENTENCE_COUNT',
     },
     maxWordStrength: {
       doc: 'Maximum word strength value',
       format: 'int',
       default: 100,
-      env: 'APP_MAX_WORD_STRENGTH'
+      env: 'APP_MAX_WORD_STRENGTH',
     },
     minWordStrength: {
       doc: 'Minimum word strength value',
       format: 'int',
       default: 0,
-      env: 'APP_MIN_WORD_STRENGTH'
+      env: 'APP_MIN_WORD_STRENGTH',
     },
     quizWordLimit: {
       doc: 'Maximum words in quiz mode',
       format: 'int',
       default: 10,
-      env: 'APP_QUIZ_WORD_LIMIT'
+      env: 'APP_QUIZ_WORD_LIMIT',
     },
     openDevtools: {
       doc: 'Automatically open DevTools on startup',
       format: Boolean,
       default: false,
-      env: 'APP_OPEN_DEVTOOLS'
-    }
+      env: 'APP_OPEN_DEVTOOLS',
+    },
   },
 
   // Audio Configuration
@@ -320,20 +320,20 @@ const config = convict({
       doc: 'Audio file extension',
       format: String,
       default: '.aiff',
-      env: 'AUDIO_FILE_EXTENSION'
+      env: 'AUDIO_FILE_EXTENSION',
     },
     ttsCommand: {
       doc: 'Text-to-speech command',
       format: String,
       default: 'say',
-      env: 'AUDIO_TTS_COMMAND'
+      env: 'AUDIO_TTS_COMMAND',
     },
     defaultRate: {
       doc: 'Default TTS speech rate',
       format: 'int',
       default: 160,
-      env: 'AUDIO_DEFAULT_RATE'
-    }
+      env: 'AUDIO_DEFAULT_RATE',
+    },
   },
 
   // Strength Boost Configuration
@@ -342,34 +342,34 @@ const config = convict({
       doc: 'Strength boost when a sentence is played',
       format: 'int',
       default: 1,
-      env: 'STRENGTH_BOOST_SENTENCE_PLAYED'
+      env: 'STRENGTH_BOOST_SENTENCE_PLAYED',
     },
     pronunciationBoosts: {
       minSimilarity: {
         doc: 'Minimum similarity score (0-1) to qualify for any boost',
         format: 'float',
         default: 0.85,
-        env: 'STRENGTH_BOOST_MIN_SIMILARITY'
+        env: 'STRENGTH_BOOST_MIN_SIMILARITY',
       },
       good: {
         doc: 'Boost amount for good pronunciation (85-89%)',
         format: 'int',
         default: 2,
-        env: 'STRENGTH_BOOST_GOOD'
+        env: 'STRENGTH_BOOST_GOOD',
       },
       veryGood: {
         doc: 'Boost amount for very good pronunciation (90-94%)',
         format: 'int',
         default: 3,
-        env: 'STRENGTH_BOOST_VERY_GOOD'
+        env: 'STRENGTH_BOOST_VERY_GOOD',
       },
       excellent: {
         doc: 'Boost amount for excellent pronunciation (95%+)',
         format: 'int',
         default: 4,
-        env: 'STRENGTH_BOOST_EXCELLENT'
-      }
-    }
+        env: 'STRENGTH_BOOST_EXCELLENT',
+      },
+    },
   },
 
   // Testing Configuration
@@ -378,9 +378,9 @@ const config = convict({
       doc: 'Force local services in E2E tests',
       format: Boolean,
       default: false,
-      env: 'E2E_FORCE_LOCAL_SERVICES'
-    }
-  }
+      env: 'E2E_FORCE_LOCAL_SERVICES',
+    },
+  },
 });
 
 // Load TOML data into convict (if file exists)
@@ -399,13 +399,13 @@ export const serviceConfig = {
   manageServices: config.get('services.manageServices'),
   whisper: {
     port: config.get('services.whisper.port'),
-    serverUrl: config.get('services.whisper.serverUrl')
+    serverUrl: config.get('services.whisper.serverUrl'),
   },
   lemmatization: {
     port: config.get('services.lemmatization.port'),
-    serverUrl: config.get('services.lemmatization.serverUrl')
+    serverUrl: config.get('services.lemmatization.serverUrl'),
   },
-  maxRestarts: config.get('services.maxRestarts')
+  maxRestarts: config.get('services.maxRestarts'),
 };
 
 export const llmConfig = {
@@ -422,8 +422,8 @@ export const llmConfig = {
     defaultModel: config.get('llm.gemini.defaultModel'),
     wordModel: config.get('llm.gemini.wordModel'),
     sentenceModel: config.get('llm.gemini.sentenceModel'),
-    timeout: config.get('llm.gemini.timeout')
-  }
+    timeout: config.get('llm.gemini.timeout'),
+  },
 };
 
 export const appConfig = {
@@ -436,13 +436,13 @@ export const appConfig = {
   minWordStrength: config.get('app.minWordStrength'),
   quizWordLimit: config.get('app.quizWordLimit'),
   openDevtools: config.get('app.openDevtools'),
-  supportedLanguages: ['spanish', 'italian', 'portuguese', 'polish', 'indonesian'] as const
+  supportedLanguages: ['spanish', 'italian', 'portuguese', 'polish', 'indonesian'] as const,
 };
 
 export const audioConfig = {
   fileExtension: config.get('audio.fileExtension'),
   ttsCommand: config.get('audio.ttsCommand'),
-  defaultRate: config.get('audio.defaultRate')
+  defaultRate: config.get('audio.defaultRate'),
 };
 
 export const strengthBoostConfig = {
@@ -451,14 +451,13 @@ export const strengthBoostConfig = {
     minSimilarity: config.get('strengthBoost.pronunciationBoosts.minSimilarity'),
     good: config.get('strengthBoost.pronunciationBoosts.good'),
     veryGood: config.get('strengthBoost.pronunciationBoosts.veryGood'),
-    excellent: config.get('strengthBoost.pronunciationBoosts.excellent')
-  }
+    excellent: config.get('strengthBoost.pronunciationBoosts.excellent'),
+  },
 };
 
 export const testingConfig = {
-  e2eForceLocalServices: config.get('testing.e2eForceLocalServices')
+  e2eForceLocalServices: config.get('testing.e2eForceLocalServices'),
 };
 
 // Export environment
 export const env = config.get('env');
-

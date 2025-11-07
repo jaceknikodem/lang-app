@@ -8,7 +8,11 @@
 
 import { GeneratedWord } from '../../shared/types/core.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
-import { processSelectedWords, setupWordProcessingSession, ProcessWordsOptions } from './word-processor.js';
+import {
+  processSelectedWords,
+  setupWordProcessingSession,
+  ProcessWordsOptions,
+} from './word-processor.js';
 
 export interface AutoAddWordsResult {
   success: boolean;
@@ -20,7 +24,7 @@ export interface AutoAddWordsResult {
 /**
  * Select top words from generated words, preferring those with lower frequencyPosition.
  * If fewer than requested words are available, returns all available words.
- * 
+ *
  * @param words - Array of generated words
  * @param count - Number of words to select (default: 5)
  * @returns Array of selected words
@@ -48,11 +52,11 @@ function selectTopWords(words: GeneratedWord[], count: number = 5): GeneratedWor
   // Then randomly select from the top portion to add some variety
   const topPortion = Math.min(count * 2, sortedWords.length); // Consider top 2x requested
   const candidates = sortedWords.slice(0, topPortion);
-  
+
   // Randomly select count words from candidates
   const selected: GeneratedWord[] = [];
   const remaining = [...candidates];
-  
+
   for (let i = 0; i < Math.min(count, remaining.length); i++) {
     const randomIndex = Math.floor(Math.random() * remaining.length);
     selected.push(remaining[randomIndex]);
@@ -65,7 +69,7 @@ function selectTopWords(words: GeneratedWord[], count: number = 5): GeneratedWor
 /**
  * Automatically add new words by selecting a random topic, generating words,
  * and processing 5 top words automatically.
- * 
+ *
  * @param language - The target language (defaults to current language if not provided)
  * @returns Result object with success status and details
  */
@@ -79,13 +83,13 @@ export async function autoAddNewWords(language?: string): Promise<AutoAddWordsRe
 
     // Check if there are too many unreviewed/new words before adding more
     const unreviewedCount = await window.electronAPI.database.getNewWordCount(targetLanguage);
-    
+
     if (unreviewedCount > 10) {
       return {
         success: false,
         topic: '',
         wordsAdded: 0,
-        error: `Too many unreviewed words (${unreviewedCount}). Not adding more.`
+        error: `Too many unreviewed words (${unreviewedCount}). Not adding more.`,
       };
     }
 
@@ -96,7 +100,7 @@ export async function autoAddNewWords(language?: string): Promise<AutoAddWordsRe
         success: false,
         topic: '',
         wordsAdded: 0,
-        error: 'No topics available'
+        error: 'No topics available',
       };
     }
     const randomIndex = Math.floor(Math.random() * topics.length);
@@ -116,7 +120,7 @@ export async function autoAddNewWords(language?: string): Promise<AutoAddWordsRe
         success: false,
         topic: selectedTopic,
         wordsAdded: 0,
-        error: 'No words were generated. Please try again.'
+        error: 'No words were generated. Please try again.',
       };
     }
 
@@ -131,7 +135,7 @@ export async function autoAddNewWords(language?: string): Promise<AutoAddWordsRe
         success: false,
         topic: selectedTopic,
         wordsAdded: 0,
-        error: 'No words were selected for processing.'
+        error: 'No words were selected for processing.',
       };
     }
 
@@ -142,7 +146,7 @@ export async function autoAddNewWords(language?: string): Promise<AutoAddWordsRe
     const options: ProcessWordsOptions = {
       language: targetLanguage,
       topic: selectedTopic,
-      desiredSentenceCount: 3
+      desiredSentenceCount: 3,
     };
 
     const result = await processSelectedWords(selectedWords, options);
@@ -155,9 +159,10 @@ export async function autoAddNewWords(language?: string): Promise<AutoAddWordsRe
         success: false,
         topic: selectedTopic,
         wordsAdded: 0,
-        error: result.failedWords.length > 0 
-          ? `Failed to add words: ${result.failedWords.join(', ')}`
-          : 'No words were added. Please try again.'
+        error:
+          result.failedWords.length > 0
+            ? `Failed to add words: ${result.failedWords.join(', ')}`
+            : 'No words were added. Please try again.',
       };
     }
 
@@ -165,9 +170,10 @@ export async function autoAddNewWords(language?: string): Promise<AutoAddWordsRe
       success: true,
       topic: selectedTopic,
       wordsAdded: result.queuedCount,
-      error: result.failedWords.length > 0 
-        ? `Some words failed: ${result.failedWords.join(', ')}`
-        : undefined
+      error:
+        result.failedWords.length > 0
+          ? `Some words failed: ${result.failedWords.join(', ')}`
+          : undefined,
     };
   } catch (error) {
     console.error('[Auto Add] Error in autoAddNewWords:', error);
@@ -175,8 +181,7 @@ export async function autoAddNewWords(language?: string): Promise<AutoAddWordsRe
       success: false,
       topic: '',
       wordsAdded: 0,
-      error: getErrorMessage(error, 'Failed to auto-add words. Please try again.')
+      error: getErrorMessage(error, 'Failed to auto-add words. Please try again.'),
     };
   }
 }
-

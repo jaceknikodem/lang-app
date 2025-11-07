@@ -60,7 +60,7 @@ export async function checkFlowSentences(): Promise<boolean> {
   try {
     const language = await window.electronAPI.database.getCurrentLanguage();
     const flowSentences = await window.electronAPI.flow.getFlowSentences(language);
-    
+
     // Collect all audio paths using the same logic as handleFlowPlay()
     const audioPaths: string[] = [];
     for (const item of flowSentences) {
@@ -75,7 +75,7 @@ export async function checkFlowSentences(): Promise<boolean> {
       }
       audioPaths.push(...item.continuationAudios);
     }
-    
+
     // Only enable Flow button if we have at least one audio file
     return audioPaths.length > 0;
   } catch (error) {

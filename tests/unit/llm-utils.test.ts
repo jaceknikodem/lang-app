@@ -36,10 +36,10 @@ describe('cleanLLMResponse', () => {
       'Here is [{"word": "hola", "translation": "hello"}]',
       'The [{"word": "hola", "translation": "hello"}]',
       'Response: [{"word": "hola", "translation": "hello"}]',
-      'JSON: [{"word": "hola", "translation": "hello"}]'
+      'JSON: [{"word": "hola", "translation": "hello"}]',
     ];
 
-    inputs.forEach(input => {
+    inputs.forEach((input) => {
       expect(cleanLLMResponse(input)).toBe('[{"word": "hola", "translation": "hello"}]');
     });
   });
@@ -50,7 +50,8 @@ describe('cleanLLMResponse', () => {
   });
 
   it('should remove text before the first JSON bracket', () => {
-    const input = 'Sure! Here is the response you requested: [{"word": "hola", "translation": "hello"}]';
+    const input =
+      'Sure! Here is the response you requested: [{"word": "hola", "translation": "hello"}]';
     expect(cleanLLMResponse(input)).toBe('[{"word": "hola", "translation": "hello"}]');
   });
 
@@ -83,7 +84,8 @@ describe('cleanLLMResponse', () => {
   });
 
   it('should handle complex nested JSON', () => {
-    const input = '```json\n[{"word": "hola", "translation": "hello", "examples": [{"sentence": "test"}]}]\n```';
+    const input =
+      '```json\n[{"word": "hola", "translation": "hello", "examples": [{"sentence": "test"}]}]\n```';
     const result = cleanLLMResponse(input);
     expect(result).toContain('"word": "hola"');
     expect(result).toContain('"examples"');
@@ -92,7 +94,8 @@ describe('cleanLLMResponse', () => {
   });
 
   it('should handle multiple JSON objects in array', () => {
-    const input = 'Here are the words: [{"word": "hola"}, {"word": "casa"}, {"word": "perro"}] Done!';
+    const input =
+      'Here are the words: [{"word": "hola"}, {"word": "casa"}, {"word": "perro"}] Done!';
     expect(cleanLLMResponse(input)).toBe('[{"word": "hola"}, {"word": "casa"}, {"word": "perro"}]');
   });
 

@@ -7,12 +7,33 @@ import { customElement, state } from 'lit/decorators.js';
 import { router, RouteState, AppMode } from '../utils/router.js';
 import { sessionManager, SessionState } from '../utils/session-manager.js';
 import { sharedStyles } from '../styles/shared.js';
-import { keyboardManager, useKeyboardBindings, GlobalShortcuts } from '../utils/keyboard-manager.js';
+import {
+  keyboardManager,
+  useKeyboardBindings,
+  GlobalShortcuts,
+} from '../utils/keyboard-manager.js';
 import { autoAddNewWords } from '../utils/auto-add-words.js';
-import { loadCurrentLanguageWithSession, changeLanguage, capitalizeLanguage, getLanguageFlag, getSupportedLanguages } from '../utils/language-manager.js';
+import {
+  loadCurrentLanguageWithSession,
+  changeLanguage,
+  capitalizeLanguage,
+  getLanguageFlag,
+  getSupportedLanguages,
+} from '../utils/language-manager.js';
 import { calculateWordCategoryStats } from '../utils/word-stats.js';
-import { checkElectronAPI, checkLLMAvailability, loadAutoplayAudioSetting, checkExistingWords, checkFlowSentences, checkProficiencyLevel, scheduleDeferred } from '../utils/app-initializer.js';
-import { transformDialogSessionData, queueDialogSessions } from '../utils/dialog-session-helpers.js';
+import {
+  checkElectronAPI,
+  checkLLMAvailability,
+  loadAutoplayAudioSetting,
+  checkExistingWords,
+  checkFlowSentences,
+  checkProficiencyLevel,
+  scheduleDeferred,
+} from '../utils/app-initializer.js';
+import {
+  transformDialogSessionData,
+  queueDialogSessions,
+} from '../utils/dialog-session-helpers.js';
 import type { ProficiencyLevel } from './language-proficiency-selector.js';
 import type { LanguageDataState, UIState } from './app-root-state.js';
 import { createInitialLanguageDataState, createInitialUIState } from './app-root-state.js';
@@ -42,11 +63,16 @@ export class AppRoot extends LitElement {
   private languageDataState: LanguageDataState = createInitialLanguageDataState();
 
   @state()
-  private languageStats: Array<{language: string, totalWords: number, studiedWords: number, averagePronunciationScore: number | null, pronunciationAttemptCount: number}> = [];
-  
+  private languageStats: Array<{
+    language: string;
+    totalWords: number;
+    studiedWords: number;
+    averagePronunciationScore: number | null;
+    pronunciationAttemptCount: number;
+  }> = [];
+
   @state()
   private proficiencyScores: Map<string, number> = new Map();
-
 
   private routerUnsubscribe?: () => void;
   private keyboardUnsubscribe?: () => void;
@@ -385,7 +411,6 @@ export class AppRoot extends LitElement {
         margin-left: auto;
       }
 
-
       .content-area {
         flex: 1;
         display: flex;
@@ -434,18 +459,18 @@ export class AppRoot extends LitElement {
         .app-container {
           padding: var(--spacing-sm);
         }
-        
+
         .app-header {
           flex-direction: column;
           gap: var(--spacing-md);
           align-items: stretch;
         }
-        
+
         .navigation {
           justify-content: center;
           flex-wrap: wrap;
         }
-        
+
         .nav-button {
           flex: 1;
           text-align: center;
@@ -465,7 +490,7 @@ export class AppRoot extends LitElement {
           min-width: 120px;
         }
       }
-    `
+    `,
   ];
 
   async connectedCallback() {
@@ -473,7 +498,7 @@ export class AppRoot extends LitElement {
 
     // Initialize autopilot manager
     this.autopilotManager = new AutopilotManager({
-      onCheck: (initialTakeover) => this.checkScoresAndNavigate(initialTakeover)
+      onCheck: (initialTakeover) => this.checkScoresAndNavigate(initialTakeover),
     });
 
     // Subscribe to router changes
@@ -488,7 +513,6 @@ export class AppRoot extends LitElement {
 
     // Listen for word updates to refresh stats
     this.addEventListener('words-updated', this.handleWordsUpdated);
-
 
     // Initialize current route
     this.currentRoute = router.getCurrentRoute();
@@ -578,16 +602,19 @@ export class AppRoot extends LitElement {
   }
 
   private async checkExistingWords() {
-    this.languageDataState = { 
-      ...this.languageDataState, 
-      hasExistingWords: await checkExistingWords(this.languageDataState.currentLanguage || await window.electronAPI.database.getCurrentLanguage())
+    this.languageDataState = {
+      ...this.languageDataState,
+      hasExistingWords: await checkExistingWords(
+        this.languageDataState.currentLanguage ||
+          (await window.electronAPI.database.getCurrentLanguage())
+      ),
     };
-    
+
     // Check proficiency level (will show selector if no words and no proficiency set)
     if (this.languageDataState.currentLanguage) {
       await this.checkProficiencyLevelInternal();
     }
-    
+
     if (this.languageDataState.hasExistingWords === false && router.isCurrentMode('learning')) {
       router.goToTopicSelection();
     }
@@ -602,14 +629,14 @@ export class AppRoot extends LitElement {
     this.languageDataState = {
       ...this.languageDataState,
       currentProficiencyLevel: proficiency as ProficiencyLevel | null,
-      showProficiencySelector: !this.languageDataState.hasExistingWords && !proficiency
+      showProficiencySelector: !this.languageDataState.hasExistingWords && !proficiency,
     };
   }
 
   private async checkFlowSentences() {
-    this.languageDataState = { 
-      ...this.languageDataState, 
-      hasFlowSentences: await checkFlowSentences() 
+    this.languageDataState = {
+      ...this.languageDataState,
+      hasFlowSentences: await checkFlowSentences(),
     };
   }
 
@@ -629,8 +656,14 @@ export class AppRoot extends LitElement {
         return;
       }
 
-      const language = this.languageDataState.currentLanguage || (await window.electronAPI.database.getCurrentLanguage());
-      const candidates = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(language, true, false);
+      const language =
+        this.languageDataState.currentLanguage ||
+        (await window.electronAPI.database.getCurrentLanguage());
+      const candidates = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(
+        language,
+        true,
+        false
+      );
 
       const sessionWordIds: number[] = [];
       for (const word of candidates) {
@@ -675,10 +708,10 @@ export class AppRoot extends LitElement {
       return;
     }
 
-      await this.refreshCurrentLanguage();
-      // Reload stats for new language
-      await this.loadWordStats();
-    };
+    await this.refreshCurrentLanguage();
+    // Reload stats for new language
+    await this.loadWordStats();
+  };
 
   private handleWordsUpdated = async () => {
     // Reload word stats when words are added/updated
@@ -715,36 +748,38 @@ export class AppRoot extends LitElement {
         // Reload language stats after language change
         await this.loadLanguageStats();
         this.sessionState = sessionManager.getCurrentSession();
-        
+
         await this.checkExistingWords();
         await this.checkFlowSentences();
         await this.ensureLearningSession();
-        
+
         // Reload stats for new language
         await this.loadWordStats();
-        
+
         this.requestUpdate();
 
         // Dispatch event to notify other components (like settings panel)
-        this.dispatchEvent(new CustomEvent('language-changed', {
-          detail: { language: newLanguage },
-          bubbles: true,
-          composed: true
-        }));
+        this.dispatchEvent(
+          new CustomEvent('language-changed', {
+            detail: { language: newLanguage },
+            bubbles: true,
+            composed: true,
+          })
+        );
 
         // Pre-generate dialog session for the new language
         this.pregenerateDialogSessionAfterLanguageChange();
       });
     } catch (error) {
       console.error('Failed to change language:', error);
-        // Revert the selection
+      // Revert the selection
       select.value = this.languageDataState.currentLanguage;
     }
   }
 
   private async handleProficiencySelected(event: CustomEvent<{ level: ProficiencyLevel }>) {
     const { level } = event.detail;
-    
+
     if (!this.languageDataState.currentLanguage) {
       return;
     }
@@ -755,7 +790,7 @@ export class AppRoot extends LitElement {
       this.languageDataState = {
         ...this.languageDataState,
         currentProficiencyLevel: level,
-        showProficiencySelector: false
+        showProficiencySelector: false,
       };
     } catch (error) {
       console.error('Failed to save proficiency level:', error);
@@ -768,16 +803,17 @@ export class AppRoot extends LitElement {
     this.languageDataState = { ...this.languageDataState, showProficiencySelector: false };
   }
 
-
   private async loadLanguageStats() {
     try {
       this.languageStats = await window.electronAPI.database.getLanguageStats();
-      
+
       // Load proficiency scores for all languages
       const proficiencyMap = new Map<string, number>();
       for (const langStat of this.languageStats) {
         try {
-          const proficiency = await window.electronAPI.scoring.getLanguageProficiency(langStat.language);
+          const proficiency = await window.electronAPI.scoring.getLanguageProficiency(
+            langStat.language
+          );
           proficiencyMap.set(langStat.language, proficiency);
         } catch (error) {
           console.warn(`Failed to get proficiency for ${langStat.language}:`, error);
@@ -796,10 +832,14 @@ export class AppRoot extends LitElement {
         return;
       }
 
-      const allWords = await window.electronAPI.database.getAllWords(this.languageDataState.currentLanguage, true, false);
+      const allWords = await window.electronAPI.database.getAllWords(
+        this.languageDataState.currentLanguage,
+        true,
+        false
+      );
       this.languageDataState = {
         ...this.languageDataState,
-        wordCategoryStats: calculateWordCategoryStats(allWords)
+        wordCategoryStats: calculateWordCategoryStats(allWords),
       };
     } catch (error) {
       console.error('Failed to load word stats:', error);
@@ -807,13 +847,20 @@ export class AppRoot extends LitElement {
     }
   }
 
-
   private updateSessionFromRoute() {
     // Update session manager with current route state
     const routeData = router.getRouteData();
 
-      // Update mode (flow is not a route, so it won't be in currentRoute)
-      sessionManager.updateCurrentMode(this.currentRoute.mode as 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'dialog' | 'settings');
+    // Update mode (flow is not a route, so it won't be in currentRoute)
+    sessionManager.updateCurrentMode(
+      this.currentRoute.mode as
+        | 'topic-selection'
+        | 'word-selection'
+        | 'learning'
+        | 'quiz'
+        | 'dialog'
+        | 'settings'
+    );
 
     if (routeData?.topic) {
       sessionManager.updateSelectedTopic(routeData.topic);
@@ -828,8 +875,15 @@ export class AppRoot extends LitElement {
       case 'learning':
         // Check if there are words with sentences available for review in the current language
         try {
-          const language = this.languageDataState.currentLanguage || await window.electronAPI.database.getCurrentLanguage();
-          const wordsWithSentences = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(language, true, false);
+          const language =
+            this.languageDataState.currentLanguage ||
+            (await window.electronAPI.database.getCurrentLanguage());
+          const wordsWithSentences =
+            await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(
+              language,
+              true,
+              false
+            );
           if (wordsWithSentences.length > 0) {
             router.goToLearning();
           } else {
@@ -881,10 +935,12 @@ export class AppRoot extends LitElement {
 
     // If we were in review mode (learning mode), stop auto-scroll
     if (this.currentRoute.mode === 'learning') {
-      window.dispatchEvent(new CustomEvent('stop-auto-scroll', {
-        bubbles: true,
-        composed: true
-      }));
+      window.dispatchEvent(
+        new CustomEvent('stop-auto-scroll', {
+          bubbles: true,
+          composed: true,
+        })
+      );
     }
 
     // Don't navigate - flow mode is just an overlay
@@ -904,7 +960,7 @@ export class AppRoot extends LitElement {
   private handleToggleAutopilot(event: Event) {
     const customEvent = event as CustomEvent<{ checked: boolean }>;
     this.uiState = { ...this.uiState, autopilotEnabled: customEvent.detail.checked };
-    
+
     if (this.uiState.autopilotEnabled && this.autopilotManager) {
       this.autopilotManager.start(true);
     } else if (this.autopilotManager) {
@@ -917,7 +973,8 @@ export class AppRoot extends LitElement {
     const previousValue = this.uiState.autoplayAudioEnabled;
     this.uiState = { ...this.uiState, autoplayAudioEnabled: customEvent.detail.checked };
 
-    window.electronAPI.database.setSetting('autoplay_audio', this.uiState.autoplayAudioEnabled ? 'true' : 'false')
+    window.electronAPI.database
+      .setSetting('autoplay_audio', this.uiState.autoplayAudioEnabled ? 'true' : 'false')
       .catch((error: Error) => {
         console.error('Failed to save autoplay audio setting:', error);
         // Revert the state if saving failed
@@ -928,8 +985,6 @@ export class AppRoot extends LitElement {
   private async loadAutoplayAudioSetting() {
     this.uiState = { ...this.uiState, autoplayAudioEnabled: await loadAutoplayAudioSetting() };
   }
-
-
 
   /**
    * Show transition message and clear it after a delay
@@ -971,40 +1026,46 @@ export class AppRoot extends LitElement {
     try {
       // Get current mode - only pass valid scoring modes to the service
       const currentMode = router.getCurrentRoute().mode;
-      const validScoringModes: Set<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'> = new Set(['topic-selection', 'learning', 'quiz', 'dialog', 'flow']);
-      const isScoringMode = (mode: AppMode): mode is 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' => {
+      const validScoringModes: Set<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'> =
+        new Set(['topic-selection', 'learning', 'quiz', 'dialog', 'flow']);
+      const isScoringMode = (
+        mode: AppMode
+      ): mode is 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' => {
         return validScoringModes.has(mode as any);
       };
-      
+
       // Only pass current mode if it's a valid scoring mode
       const currentScoringMode = isScoringMode(currentMode) ? currentMode : undefined;
-      
+
       // Get next mode and ranked modes from scoring service
       const result = await window.electronAPI.scoring.getNextMode({
         currentMode: currentScoringMode ?? null,
         language: this.languageDataState.currentLanguage || null,
-        initialTakeover: initialTakeover ?? false
+        initialTakeover: initialTakeover ?? false,
       });
-      
+
       // Check if we have fewer than 5 unreviewed words, and if so, add more
-      const unreviewedCount = await window.electronAPI.database.getNewWordCount(this.languageDataState.currentLanguage || await window.electronAPI.database.getCurrentLanguage());
-      
+      const unreviewedCount = await window.electronAPI.database.getNewWordCount(
+        this.languageDataState.currentLanguage ||
+          (await window.electronAPI.database.getCurrentLanguage())
+      );
+
       if (unreviewedCount < 5) {
         void this.handleAutoAddNew();
       }
-      
+
       // If no mode returned, navigation is not recommended
       if (!result.nextMode) {
         return;
       }
-      
+
       // Show transition message
       const message = AutopilotManager.getTransitionMessage(result.nextMode);
       this.showTransitionMessage(message);
-      
+
       // Navigate to the recommended mode
       await this.handleNavigation(result.nextMode);
-      
+
       // If it's flow mode, also start playing
       if (result.nextMode === 'flow') {
         setTimeout(async () => {
@@ -1023,12 +1084,12 @@ export class AppRoot extends LitElement {
   private async handleAutoAddNew(): Promise<void> {
     try {
       const result = await autoAddNewWords(this.languageDataState.currentLanguage);
-      
+
       if (result.success) {
         // Reload stats and check existing words after adding
         await this.loadWordStats();
         await this.checkExistingWords();
-        
+
         // Trigger autopilot check
         window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
       } else {
@@ -1038,10 +1099,6 @@ export class AppRoot extends LitElement {
       console.error('[Auto Add] Error in handleAutoAddNew:', error);
     }
   }
-
-
-
-
 
   private updateKeyboardContext() {
     // Set keyboard context based on current route
@@ -1058,14 +1115,12 @@ export class AppRoot extends LitElement {
             this.handleProficiencyCancelled();
           }
         },
-        description: 'Close proficiency pop-up'
-      }
+        description: 'Close proficiency pop-up',
+      },
     ];
 
     this.keyboardUnsubscribe = useKeyboardBindings(bindings);
   }
-
-
 
   render() {
     if (this.uiState.isLoading) {
@@ -1086,113 +1141,164 @@ export class AppRoot extends LitElement {
         <header class="app-header">
           <nav class="navigation">
             <div class="nav-left-group">
-              ${!this.uiState.autopilotEnabled ? html`
-                <button 
-                  class="nav-button flow-button"
-                  @click=${() => this.handleFlowPlay()}
-                  ?disabled=${!this.languageDataState.hasFlowSentences}
-                  title=${this.languageDataState.hasFlowSentences ? 'Get into the Flow' : 'Not enough sentences with audio available'}
-                >
-                  ▶
-                </button>
-                <button 
-                  class="nav-button ${router.isCurrentMode('topic-selection') || router.isCurrentMode('word-selection') ? 'active' : ''}"
-                  @click=${() => this.handleNavigation('topic-selection')}
-                  title="Learn new words"
-                >
-                  Add new
-                </button>
-                <button 
-                  class="nav-button ${router.isCurrentMode('learning') ? 'active' : ''}"
-                  @click=${() => this.handleNavigation('learning')}
-                  title="Review existing words"
-                >
-                  Review
-                </button>
-                <button 
-                  class="nav-button ${router.isCurrentMode('quiz') ? 'active' : ''}"
-                  @click=${() => this.handleNavigation('quiz')}
-                  title="Take a quiz"
-                >
-                  Quiz
-                </button>
-                <button 
-                  class="nav-button ${router.isCurrentMode('dialog') ? 'active' : ''}"
-                  @click=${() => this.handleNavigation('dialog')}
-                  title="Practice speaking"
-                >
-                  Dialog
-                </button>
-              ` : ''}
-              ${this.languageDataState.currentLanguage ? html`
-                <div class="language-dropdown">
-                  <select 
-                    class="language-select"
-                    .value=${this.languageDataState.currentLanguage}
-                    @change=${this.handleLanguageDropdownChange}
-                    title="Select Language"
-                  >
-                    ${getSupportedLanguages().map(language => html`
-                      <option value=${language} ?selected=${language === this.languageDataState.currentLanguage}>
-                        ${getLanguageFlag(language)} ${capitalizeLanguage(language)}
-                      </option>
-                    `)}
-                  </select>
-                  ${(() => {
-                    const currentLangStats = this.languageStats.find(s => s.language === this.languageDataState.currentLanguage);
-                    const pronunciationScore = currentLangStats?.averagePronunciationScore;
-                    const pronunciationAttemptCount = currentLangStats?.pronunciationAttemptCount || 0;
-                    const proficiencyScore = this.proficiencyScores.get(this.languageDataState.currentLanguage);
-                    const hasStats = this.languageDataState.wordCategoryStats || (pronunciationScore !== null && pronunciationScore !== undefined) || (proficiencyScore !== undefined && proficiencyScore !== null);
-                    const proficiencyLevelDisplay = this.languageDataState.currentProficiencyLevel 
-                      ? (this.languageDataState.currentProficiencyLevel === 'newbie' ? 'New' : this.languageDataState.currentProficiencyLevel.toUpperCase()).substring(0, 3)
-                      : null;
-                    
-                    if (!hasStats && !proficiencyLevelDisplay) return '';
-                    
-                    return html`
-                      <div class="stats-display">
-                        ${this.languageDataState.wordCategoryStats ? html`
-                          <div class="stat-box known">
-                            <span class="stat-value">${this.languageDataState.wordCategoryStats.known}</span>
-                            <div class="tooltip">Known: confidently remembered (strength > 80)</div>
+              ${!this.uiState.autopilotEnabled
+                ? html`
+                    <button
+                      class="nav-button flow-button"
+                      @click=${() => this.handleFlowPlay()}
+                      ?disabled=${!this.languageDataState.hasFlowSentences}
+                      title=${this.languageDataState.hasFlowSentences
+                        ? 'Get into the Flow'
+                        : 'Not enough sentences with audio available'}
+                    >
+                      ▶
+                    </button>
+                    <button
+                      class="nav-button ${router.isCurrentMode('topic-selection') ||
+                      router.isCurrentMode('word-selection')
+                        ? 'active'
+                        : ''}"
+                      @click=${() => this.handleNavigation('topic-selection')}
+                      title="Learn new words"
+                    >
+                      Add new
+                    </button>
+                    <button
+                      class="nav-button ${router.isCurrentMode('learning') ? 'active' : ''}"
+                      @click=${() => this.handleNavigation('learning')}
+                      title="Review existing words"
+                    >
+                      Review
+                    </button>
+                    <button
+                      class="nav-button ${router.isCurrentMode('quiz') ? 'active' : ''}"
+                      @click=${() => this.handleNavigation('quiz')}
+                      title="Take a quiz"
+                    >
+                      Quiz
+                    </button>
+                    <button
+                      class="nav-button ${router.isCurrentMode('dialog') ? 'active' : ''}"
+                      @click=${() => this.handleNavigation('dialog')}
+                      title="Practice speaking"
+                    >
+                      Dialog
+                    </button>
+                  `
+                : ''}
+              ${this.languageDataState.currentLanguage
+                ? html`
+                    <div class="language-dropdown">
+                      <select
+                        class="language-select"
+                        .value=${this.languageDataState.currentLanguage}
+                        @change=${this.handleLanguageDropdownChange}
+                        title="Select Language"
+                      >
+                        ${getSupportedLanguages().map(
+                          (language) => html`
+                            <option
+                              value=${language}
+                              ?selected=${language === this.languageDataState.currentLanguage}
+                            >
+                              ${getLanguageFlag(language)} ${capitalizeLanguage(language)}
+                            </option>
+                          `
+                        )}
+                      </select>
+                      ${(() => {
+                        const currentLangStats = this.languageStats.find(
+                          (s) => s.language === this.languageDataState.currentLanguage
+                        );
+                        const pronunciationScore = currentLangStats?.averagePronunciationScore;
+                        const pronunciationAttemptCount =
+                          currentLangStats?.pronunciationAttemptCount || 0;
+                        const proficiencyScore = this.proficiencyScores.get(
+                          this.languageDataState.currentLanguage
+                        );
+                        const hasStats =
+                          this.languageDataState.wordCategoryStats ||
+                          (pronunciationScore !== null && pronunciationScore !== undefined) ||
+                          (proficiencyScore !== undefined && proficiencyScore !== null);
+                        const proficiencyLevelDisplay = this.languageDataState
+                          .currentProficiencyLevel
+                          ? (this.languageDataState.currentProficiencyLevel === 'newbie'
+                              ? 'New'
+                              : this.languageDataState.currentProficiencyLevel.toUpperCase()
+                            ).substring(0, 3)
+                          : null;
+
+                        if (!hasStats && !proficiencyLevelDisplay) return '';
+
+                        return html`
+                          <div class="stats-display">
+                            ${this.languageDataState.wordCategoryStats
+                              ? html`
+                                  <div class="stat-box known">
+                                    <span class="stat-value"
+                                      >${this.languageDataState.wordCategoryStats.known}</span
+                                    >
+                                    <div class="tooltip">
+                                      Known: confidently remembered (strength > 80)
+                                    </div>
+                                  </div>
+                                  <div class="stat-box strong">
+                                    <span class="stat-value"
+                                      >${this.languageDataState.wordCategoryStats.strong}</span
+                                    >
+                                    <div class="tooltip">Strong: mostly remembered (30–80)</div>
+                                  </div>
+                                  <div class="stat-box weak">
+                                    <span class="stat-value"
+                                      >${this.languageDataState.wordCategoryStats.weak}</span
+                                    >
+                                    <div class="tooltip">Weak: shaky or forgotten (&lt;30)</div>
+                                  </div>
+                                  <div class="stat-box new">
+                                    <span class="stat-value"
+                                      >${this.languageDataState.wordCategoryStats.new}</span
+                                    >
+                                    <div class="tooltip">New: not yet reviewed</div>
+                                  </div>
+                                `
+                              : ''}
+                            ${pronunciationScore !== null && pronunciationScore !== undefined
+                              ? html`
+                                  <div class="stat-box pronunciation">
+                                    <span class="stat-value">${pronunciationScore.toFixed(1)}</span>
+                                    <div class="tooltip">
+                                      Average pronunciation score (0-10 scale) based on
+                                      ${pronunciationAttemptCount}
+                                      attempt${pronunciationAttemptCount !== 1 ? 's' : ''}
+                                    </div>
+                                  </div>
+                                `
+                              : ''}
+                            ${proficiencyScore !== undefined && proficiencyScore !== null
+                              ? html`
+                                  <div class="stat-box proficiency-score">
+                                    <span class="stat-value">${proficiencyScore.toFixed(0)}%</span>
+                                    <div class="tooltip">
+                                      Overall proficiency score (0-100%) based on pronunciation,
+                                      audio speed, engagement, word position, and strength
+                                    </div>
+                                  </div>
+                                `
+                              : ''}
+                            ${proficiencyLevelDisplay
+                              ? html`
+                                  <div class="stat-box proficiency">
+                                    <span class="stat-value">${proficiencyLevelDisplay}</span>
+                                    <div class="tooltip">Proficiency level</div>
+                                  </div>
+                                `
+                              : ''}
                           </div>
-                          <div class="stat-box strong">
-                            <span class="stat-value">${this.languageDataState.wordCategoryStats.strong}</span>
-                            <div class="tooltip">Strong: mostly remembered (30–80)</div>
-                          </div>
-                          <div class="stat-box weak">
-                            <span class="stat-value">${this.languageDataState.wordCategoryStats.weak}</span>
-                            <div class="tooltip">Weak: shaky or forgotten (&lt;30)</div>
-                          </div>
-                          <div class="stat-box new">
-                            <span class="stat-value">${this.languageDataState.wordCategoryStats.new}</span>
-                            <div class="tooltip">New: not yet reviewed</div>
-                          </div>
-                        ` : ''}
-                        ${pronunciationScore !== null && pronunciationScore !== undefined ? html`
-                          <div class="stat-box pronunciation">
-                            <span class="stat-value">${pronunciationScore.toFixed(1)}</span>
-                            <div class="tooltip">Average pronunciation score (0-10 scale) based on ${pronunciationAttemptCount} attempt${pronunciationAttemptCount !== 1 ? 's' : ''}</div>
-                          </div>
-                        ` : ''}
-                        ${proficiencyScore !== undefined && proficiencyScore !== null ? html`
-                          <div class="stat-box proficiency-score">
-                            <span class="stat-value">${proficiencyScore.toFixed(0)}%</span>
-                            <div class="tooltip">Overall proficiency score (0-100%) based on pronunciation, audio speed, engagement, word position, and strength</div>
-                          </div>
-                        ` : ''}
-                        ${proficiencyLevelDisplay ? html`
-                          <div class="stat-box proficiency">
-                            <span class="stat-value">${proficiencyLevelDisplay}</span>
-                            <div class="tooltip">Proficiency level</div>
-                          </div>
-                        ` : ''}
-                      </div>
-                    `;
-                  })()}
-                </div>
-              ` : ''}
+                        `;
+                      })()}
+                    </div>
+                  `
+                : ''}
             </div>
             <div class="nav-right-group">
               <toggle-switch
@@ -1207,18 +1313,14 @@ export class AppRoot extends LitElement {
                 title="Autopilot: Automatically navigate to highest-scoring mode"
                 @toggle-changed=${this.handleToggleAutopilot}
               ></toggle-switch>
-              <button 
+              <button
                 class="settings-button ${router.isCurrentMode('settings') ? 'active' : ''}"
                 @click=${() => this.handleNavigation('settings')}
                 title="Settings"
               >
                 ⚙️
               </button>
-              <button 
-                class="close-button"
-                @click=${this.handleCloseApp}
-                title="Close Application"
-              >
+              <button class="close-button" @click=${this.handleCloseApp} title="Close Application">
                 ×
               </button>
             </div>
@@ -1226,9 +1328,7 @@ export class AppRoot extends LitElement {
         </header>
 
         <main class="content-area">
-          <div class="route-content">
-            ${this.renderCurrentRoute()}
-          </div>
+          <div class="route-content">${this.renderCurrentRoute()}</div>
         </main>
       </div>
 
@@ -1241,14 +1341,16 @@ export class AppRoot extends LitElement {
       <!-- Flow mode overlay - always rendered, appears on top when active -->
       <flow-mode></flow-mode>
 
-      ${this.languageDataState.showProficiencySelector ? html`
-        <language-proficiency-selector
-          .language=${this.languageDataState.currentLanguage}
-          .currentLevel=${this.languageDataState.currentProficiencyLevel}
-          @proficiency-selected=${this.handleProficiencySelected}
-          @proficiency-cancelled=${this.handleProficiencyCancelled}
-        ></language-proficiency-selector>
-      ` : ''}
+      ${this.languageDataState.showProficiencySelector
+        ? html`
+            <language-proficiency-selector
+              .language=${this.languageDataState.currentLanguage}
+              .currentLevel=${this.languageDataState.currentProficiencyLevel}
+              @proficiency-selected=${this.handleProficiencySelected}
+              @proficiency-cancelled=${this.handleProficiencyCancelled}
+            ></language-proficiency-selector>
+          `
+        : ''}
     `;
   }
 
@@ -1272,9 +1374,7 @@ export class AppRoot extends LitElement {
         return html`<learning-mode></learning-mode>`;
 
       case 'quiz':
-        return html`
-          <quiz-mode></quiz-mode>
-        `;
+        return html` <quiz-mode></quiz-mode> `;
 
       case 'dialog':
         return html`<dialog-mode></dialog-mode>`;
@@ -1305,10 +1405,10 @@ export class AppRoot extends LitElement {
       }
 
       const sessionsToGenerate = 5 - existingSessions.length;
-      
+
       // Generate all sessions in one batch (batches DB queries, processes LLM calls sequentially)
       const sessionsData = await window.electronAPI.dialog.pregenerateSessions(sessionsToGenerate);
-      
+
       // Transform API response to DialogSessionState
       const generatedSessions = transformDialogSessionData(sessionsData, existingSessions.length);
 
@@ -1325,5 +1425,4 @@ export class AppRoot extends LitElement {
       // Non-critical error - don't throw
     }
   }
-
 }

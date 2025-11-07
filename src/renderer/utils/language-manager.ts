@@ -43,14 +43,14 @@ export async function loadCurrentLanguageWithSession(
 ): Promise<string> {
   const language = await loadCurrentLanguage(defaultLanguage);
   const languageToUse = language || defaultLanguage;
-  
+
   sessionManager.setActiveLanguage(languageToUse);
-  
+
   if (loadLemmatization) {
     // Load lemmatization model asynchronously (non-blocking)
     void loadLemmatizationModel(languageToUse);
   }
-  
+
   return languageToUse;
 }
 
@@ -71,10 +71,10 @@ export async function changeLanguage(
   try {
     await window.electronAPI.database.setCurrentLanguage(newLanguage);
     sessionManager.setActiveLanguage(newLanguage);
-    
+
     // Load lemmatization model for the new language (async, non-blocking)
     void loadLemmatizationModel(newLanguage);
-    
+
     // Call optional callback
     if (onLanguageChanged) {
       await onLanguageChanged(newLanguage);
@@ -101,11 +101,11 @@ export function capitalizeLanguage(language: string): string {
  */
 export function getLanguageFlag(language: string): string {
   const flags: Record<string, string> = {
-    'italian': '🇮🇹',
-    'spanish': '🇪🇸',
-    'portuguese': '🇵🇹',
-    'polish': '🇵🇱',
-    'indonesian': '🇮🇩'
+    italian: '🇮🇹',
+    spanish: '🇪🇸',
+    portuguese: '🇵🇹',
+    polish: '🇵🇱',
+    indonesian: '🇮🇩',
   };
   return flags[language] || '🌐';
 }
@@ -117,4 +117,3 @@ export function getLanguageFlag(language: string): string {
 export function getSupportedLanguages(): string[] {
   return ['italian', 'spanish', 'portuguese', 'polish', 'indonesian'];
 }
-

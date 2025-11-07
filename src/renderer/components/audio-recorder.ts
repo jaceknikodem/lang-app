@@ -28,7 +28,7 @@ export class AudioRecorder extends LitElement {
     channels: 1,
     threshold: 0.5,
     silence: '1.0',
-    endOnSilence: true
+    endOnSilence: true,
   };
 
   @state()
@@ -132,9 +132,15 @@ export class AudioRecorder extends LitElement {
       }
 
       @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.1); }
-        100% { transform: scale(1); }
+        0% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.1);
+        }
+        100% {
+          transform: scale(1);
+        }
       }
 
       .stop-button {
@@ -209,8 +215,14 @@ export class AudioRecorder extends LitElement {
       }
 
       @keyframes blink {
-        0%, 50% { opacity: 1; }
-        51%, 100% { opacity: 0.3; }
+        0%,
+        50% {
+          opacity: 1;
+        }
+        51%,
+        100% {
+          opacity: 0.3;
+        }
       }
 
       .playback-section {
@@ -218,7 +230,6 @@ export class AudioRecorder extends LitElement {
         padding-top: var(--spacing-lg);
         border-top: 1px solid var(--border-color);
       }
-
 
       .recording-info {
         font-size: 14px;
@@ -256,7 +267,8 @@ export class AudioRecorder extends LitElement {
           font-size: 20px;
         }
 
-        .stop-button, .cancel-button {
+        .stop-button,
+        .cancel-button {
           width: 50px;
           height: 50px;
           font-size: 16px;
@@ -267,15 +279,15 @@ export class AudioRecorder extends LitElement {
           gap: var(--spacing-sm);
         }
       }
-    `
+    `,
   ];
 
   async connectedCallback() {
     super.connectedCallback();
-    
+
     // Check if there's an ongoing recording session
     await this.checkCurrentSession();
-    
+
     // Set up periodic check for recording status (in case of auto-stop)
     this.setupRecordingStatusCheck();
   }
@@ -305,7 +317,7 @@ export class AudioRecorder extends LitElement {
     try {
       this.error = null;
       const session = await window.electronAPI.audio.startRecording(this.recordingOptions);
-      
+
       this.currentSession = session;
       this.isRecording = true;
       this.recordingTime = 0;
@@ -313,11 +325,12 @@ export class AudioRecorder extends LitElement {
       this.setupRecordingStatusCheck();
 
       // Dispatch start event
-      this.dispatchEvent(new CustomEvent('recording-started', {
-        detail: { session },
-        bubbles: true
-      }));
-
+      this.dispatchEvent(
+        new CustomEvent('recording-started', {
+          detail: { session },
+          bubbles: true,
+        })
+      );
     } catch (error) {
       console.error('Error starting recording:', error);
       this.error = `Failed to start recording: ${getErrorMessage(error)}`;
@@ -329,27 +342,28 @@ export class AudioRecorder extends LitElement {
 
     try {
       const completedSession = await window.electronAPI.audio.stopRecording();
-      
+
       this.isRecording = false;
       this.clearTimer();
       this.clearStatusCheck();
-      
+
       if (completedSession) {
         this.lastRecording = {
           session: completedSession,
           filePath: completedSession.filePath,
-          duration: completedSession.duration || 0
+          duration: completedSession.duration || 0,
         };
 
         // Dispatch completion event
-        this.dispatchEvent(new CustomEvent('recording-completed', {
-          detail: { recording: this.lastRecording },
-          bubbles: true
-        }));
+        this.dispatchEvent(
+          new CustomEvent('recording-completed', {
+            detail: { recording: this.lastRecording },
+            bubbles: true,
+          })
+        );
       }
 
       this.currentSession = null;
-
     } catch (error) {
       console.error('Error stopping recording:', error);
       this.error = `Failed to stop recording: ${getErrorMessage(error)}`;
@@ -364,17 +378,18 @@ export class AudioRecorder extends LitElement {
 
     try {
       await window.electronAPI.audio.cancelRecording();
-      
+
       this.isRecording = false;
       this.currentSession = null;
       this.clearTimer();
       this.clearStatusCheck();
 
       // Dispatch cancel event
-      this.dispatchEvent(new CustomEvent('recording-cancelled', {
-        bubbles: true
-      }));
-
+      this.dispatchEvent(
+        new CustomEvent('recording-cancelled', {
+          bubbles: true,
+        })
+      );
     } catch (error) {
       console.error('Error cancelling recording:', error);
       this.error = `Failed to cancel recording: ${getErrorMessage(error)}`;
@@ -403,10 +418,11 @@ export class AudioRecorder extends LitElement {
       this.lastRecording = null;
 
       // Dispatch delete event
-      this.dispatchEvent(new CustomEvent('recording-deleted', {
-        bubbles: true
-      }));
-
+      this.dispatchEvent(
+        new CustomEvent('recording-deleted', {
+          bubbles: true,
+        })
+      );
     } catch (error) {
       console.error('Error deleting recording:', error);
       this.error = `Failed to delete recording: ${getErrorMessage(error)}`;
@@ -467,33 +483,34 @@ export class AudioRecorder extends LitElement {
     try {
       // Get the completed session
       const completedSession = await window.electronAPI.audio.getCurrentRecordingSession();
-      
+
       this.isRecording = false;
       this.clearTimer();
       this.clearStatusCheck();
-      
+
       if (completedSession && !completedSession.isRecording) {
         this.lastRecording = {
           session: completedSession,
           filePath: completedSession.filePath,
-          duration: completedSession.duration || 0
+          duration: completedSession.duration || 0,
         };
 
         // Show success message for auto-stop
         this.error = null;
-        
+
         // Dispatch completion event
-        this.dispatchEvent(new CustomEvent('recording-completed', {
-          detail: { 
-            recording: this.lastRecording,
-            autoStopped: true 
-          },
-          bubbles: true
-        }));
+        this.dispatchEvent(
+          new CustomEvent('recording-completed', {
+            detail: {
+              recording: this.lastRecording,
+              autoStopped: true,
+            },
+            bubbles: true,
+          })
+        );
       }
 
       this.currentSession = null;
-
     } catch (error) {
       console.error('Error handling auto-stop:', error);
       this.error = 'Recording stopped automatically but there was an error processing it.';
@@ -508,9 +525,7 @@ export class AudioRecorder extends LitElement {
       <div class="recorder-container ${this.isRecording ? 'recording' : ''}">
         <div class="recorder-prompt">${this.prompt}</div>
         ${this.isRecording ? this.renderRecordingControls() : this.renderIdleControls()}
-
         ${this.lastRecording && !this.isRecording ? this.renderPlaybackSection() : ''}
-
         ${this.error ? html`<div class="error-message">${this.error}</div>` : ''}
       </div>
     `;
@@ -519,7 +534,7 @@ export class AudioRecorder extends LitElement {
   private renderIdleControls() {
     return html`
       <div class="recording-controls">
-        <button 
+        <button
           class="record-button"
           @click=${this.startRecording}
           ?disabled=${this.disabled}
@@ -534,19 +549,11 @@ export class AudioRecorder extends LitElement {
   private renderRecordingControls() {
     return html`
       <div class="recording-controls">
-        <button 
-          class="record-button recording"
-          @click=${this.stopRecording}
-          title="Stop recording"
-        >
+        <button class="record-button recording" @click=${this.stopRecording} title="Stop recording">
           ⏹️
         </button>
-        
-        <button 
-          class="cancel-button"
-          @click=${this.cancelRecording}
-          title="Cancel recording"
-        >
+
+        <button class="cancel-button" @click=${this.cancelRecording} title="Cancel recording">
           ✕
         </button>
       </div>
@@ -555,7 +562,9 @@ export class AudioRecorder extends LitElement {
         <div class="recording-time">${this.formatTime(this.recordingTime)}</div>
         <div class="recording-indicator">
           <div class="recording-dot"></div>
-          ${this.recordingOptions.endOnSilence ? 'Recording... (auto-stop enabled)' : 'Recording...'}
+          ${this.recordingOptions.endOnSilence
+            ? 'Recording... (auto-stop enabled)'
+            : 'Recording...'}
         </div>
       </div>
     `;
@@ -564,9 +573,6 @@ export class AudioRecorder extends LitElement {
   private renderPlaybackSection() {
     if (!this.lastRecording) return '';
 
-    return html`
-      <div class="playback-section">
-      </div>
-    `;
+    return html` <div class="playback-section"></div> `;
   }
 }

@@ -70,7 +70,7 @@ export class StatusMessage extends LitElement {
       .dismiss-button:hover {
         opacity: 1;
       }
-    `
+    `,
   ];
 
   @property({ type: String })
@@ -87,10 +87,12 @@ export class StatusMessage extends LitElement {
 
   private handleDismiss() {
     this.isDismissed = true;
-    this.dispatchEvent(new CustomEvent('dismiss', {
-      bubbles: true,
-      composed: true
-    }));
+    this.dispatchEvent(
+      new CustomEvent('dismiss', {
+        bubbles: true,
+        composed: true,
+      })
+    );
   }
 
   render() {
@@ -101,18 +103,19 @@ export class StatusMessage extends LitElement {
     return html`
       <div class="status-message status-${this.type}">
         <div class="message-content">${this.message}</div>
-        ${this.dismissible ? html`
-          <button 
-            class="dismiss-button"
-            @click=${this.handleDismiss}
-            type="button"
-            aria-label="Dismiss message"
-          >
-            ×
-          </button>
-        ` : ''}
+        ${this.dismissible
+          ? html`
+              <button
+                class="dismiss-button"
+                @click=${this.handleDismiss}
+                type="button"
+                aria-label="Dismiss message"
+              >
+                ×
+              </button>
+            `
+          : ''}
       </div>
     `;
   }
 }
-

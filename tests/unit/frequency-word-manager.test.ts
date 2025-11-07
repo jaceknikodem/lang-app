@@ -28,10 +28,10 @@ describe('FrequencyWordManager', () => {
     // Create temporary directory for tests
     tempDir = join(os.tmpdir(), `test-words-${Date.now()}`);
     manager = new FrequencyWordManager({ wordsDirectory: tempDir });
-    
+
     // Mock database layer
     mockDatabase = {
-      getAllWords: jest.fn().mockResolvedValue([])
+      getAllWords: jest.fn().mockResolvedValue([]),
     } as any;
 
     jest.clearAllMocks();
@@ -57,7 +57,7 @@ describe('FrequencyWordManager', () => {
       (manager as any).wordLists.set('spanish', [
         { word: 'hola', translation: 'hello', position: 1 },
         { word: 'casa', translation: 'house', position: 2 },
-        { word: 'perro', translation: 'dog', position: 3 }
+        { word: 'perro', translation: 'dog', position: 3 },
       ]);
     });
 
@@ -77,11 +77,7 @@ describe('FrequencyWordManager', () => {
   describe('getAvailableLanguages', () => {
     it('should return languages from word list files and handle edge cases', () => {
       // Normal case
-      readdirSync.mockReturnValue([
-        'spanish_words.txt',
-        'italian_words.txt',
-        'other_file.txt'
-      ]);
+      readdirSync.mockReturnValue(['spanish_words.txt', 'italian_words.txt', 'other_file.txt']);
       existsSync.mockReturnValue(true);
       expect(manager.getAvailableLanguages()).toEqual(['spanish', 'italian']);
 
@@ -124,8 +120,9 @@ describe('FrequencyWordManager', () => {
     it('should throw error if file not found', async () => {
       existsSync.mockReturnValue(false);
 
-      await expect((manager as any).loadWordList('spanish'))
-        .rejects.toThrow('Word list file not found for language: spanish');
+      await expect((manager as any).loadWordList('spanish')).rejects.toThrow(
+        'Word list file not found for language: spanish'
+      );
     });
 
     it('should throw error on file read failure', async () => {
@@ -134,8 +131,9 @@ describe('FrequencyWordManager', () => {
         throw new Error('Cannot read file');
       });
 
-      await expect((manager as any).loadWordList('spanish'))
-        .rejects.toThrow('Failed to load word list for spanish: Cannot read file');
+      await expect((manager as any).loadWordList('spanish')).rejects.toThrow(
+        'Failed to load word list for spanish: Cannot read file'
+      );
     });
 
     it('should initialize position tracking', async () => {
@@ -156,7 +154,7 @@ describe('FrequencyWordManager', () => {
         { word: 'hola', translation: 'hello', position: 1 },
         { word: 'casa', translation: 'house', position: 2 },
         { word: 'perro', translation: 'dog', position: 3 },
-        { word: 'gato', translation: 'cat', position: 4 }
+        { word: 'gato', translation: 'cat', position: 4 },
       ]);
       (manager as any).wordPositions.set('spanish', 0);
     });
@@ -174,7 +172,7 @@ describe('FrequencyWordManager', () => {
     it('should skip words already in database', async () => {
       mockDatabase.getAllWords = jest.fn().mockResolvedValue([
         { id: 1, word: 'hola', language: 'spanish' },
-        { id: 2, word: 'casa', language: 'spanish' }
+        { id: 2, word: 'casa', language: 'spanish' },
       ]);
 
       const words = await manager.getNextWordsToProcess('spanish', mockDatabase, 2);
@@ -185,9 +183,9 @@ describe('FrequencyWordManager', () => {
     });
 
     it('should handle case-insensitive duplicate checking', async () => {
-      mockDatabase.getAllWords = jest.fn().mockResolvedValue([
-        { id: 1, word: 'HOLA', language: 'spanish' }
-      ]);
+      mockDatabase.getAllWords = jest
+        .fn()
+        .mockResolvedValue([{ id: 1, word: 'HOLA', language: 'spanish' }]);
 
       const words = await manager.getNextWordsToProcess('spanish', mockDatabase, 2);
 
@@ -219,7 +217,7 @@ describe('FrequencyWordManager', () => {
       // The loadWordList is called internally, so we verify by result
       expect((manager as any).wordLists.has('spanish')).toBe(true);
       // Verify the words we loaded
-      const wordLowercases = words.map(w => w.word.toLowerCase());
+      const wordLowercases = words.map((w) => w.word.toLowerCase());
       expect(wordLowercases).toContain('hola');
       expect(wordLowercases).toContain('casa');
       expect(wordLowercases).toContain('perro');
@@ -238,11 +236,14 @@ describe('FrequencyWordManager', () => {
     it('should use default batch size if not specified', async () => {
       mockDatabase.getAllWords = jest.fn().mockResolvedValue([]);
       // Set up word list with more than default batch size
-      (manager as any).wordLists.set('spanish', Array.from({ length: 15 }, (_, i) => ({
-        word: `word${i + 1}`,
-        translation: `translation${i + 1}`,
-        position: i + 1
-      })));
+      (manager as any).wordLists.set(
+        'spanish',
+        Array.from({ length: 15 }, (_, i) => ({
+          word: `word${i + 1}`,
+          translation: `translation${i + 1}`,
+          position: i + 1,
+        }))
+      );
 
       const words = await manager.getNextWordsToProcess('spanish', mockDatabase);
 
@@ -255,7 +256,7 @@ describe('FrequencyWordManager', () => {
       (manager as any).wordLists.set('spanish', [
         { word: 'hola', translation: 'hello', position: 1 },
         { word: 'casa', translation: 'house', position: 2 },
-        { word: 'perro', translation: 'dog', position: 3 }
+        { word: 'perro', translation: 'dog', position: 3 },
       ]);
       (manager as any).wordPositions.set('spanish', 0);
     });
@@ -275,9 +276,9 @@ describe('FrequencyWordManager', () => {
       // Partial completion
       jest.clearAllMocks();
       (manager as any).wordPositions.set('spanish', 1);
-      mockDatabase.getAllWords = jest.fn().mockResolvedValue([
-        { id: 1, word: 'hola', language: 'spanish' }
-      ]);
+      mockDatabase.getAllWords = jest
+        .fn()
+        .mockResolvedValue([{ id: 1, word: 'hola', language: 'spanish' }]);
       let progress = await manager.getLanguageProgress('spanish', mockDatabase);
       expect(progress.processedWords).toBe(1);
       expect(progress.percentComplete).toBeCloseTo(33.33, 1);
@@ -288,7 +289,7 @@ describe('FrequencyWordManager', () => {
       mockDatabase.getAllWords = jest.fn().mockResolvedValue([
         { id: 1, word: 'hola', language: 'spanish' },
         { id: 2, word: 'casa', language: 'spanish' },
-        { id: 3, word: 'perro', language: 'spanish' }
+        { id: 3, word: 'perro', language: 'spanish' },
       ]);
       progress = await manager.getLanguageProgress('spanish', mockDatabase);
       expect(progress.processedWords).toBe(3);
@@ -311,7 +312,7 @@ describe('FrequencyWordManager', () => {
     beforeEach(() => {
       (manager as any).wordLists.set('spanish', [
         { word: 'hola', translation: 'hello', position: 1 },
-        { word: 'casa', translation: 'house', position: 2 }
+        { word: 'casa', translation: 'house', position: 2 },
       ]);
     });
 
@@ -327,7 +328,7 @@ describe('FrequencyWordManager', () => {
       (manager as any).wordPositions.set('spanish', 2);
       mockDatabase.getAllWords = jest.fn().mockResolvedValue([
         { id: 1, word: 'hola', language: 'spanish' },
-        { id: 2, word: 'casa', language: 'spanish' }
+        { id: 2, word: 'casa', language: 'spanish' },
       ]);
       expect(await manager.hasMoreWords('spanish', mockDatabase)).toBe(false);
     });
@@ -348,7 +349,7 @@ describe('FrequencyWordManager', () => {
     it('should return word list for language or empty array for non-existent', () => {
       const wordList = [
         { word: 'hola', translation: 'hello', position: 1 },
-        { word: 'casa', translation: 'house', position: 2 }
+        { word: 'casa', translation: 'house', position: 2 },
       ];
       (manager as any).wordLists.set('spanish', wordList);
       expect(manager.getWordList('spanish')).toEqual(wordList);
@@ -361,14 +362,14 @@ describe('FrequencyWordManager', () => {
       (manager as any).wordLists.set('spanish', [
         { word: 'hola', translation: 'hello', position: 1 },
         { word: 'casa', translation: 'house', position: 2 },
-        { word: 'perro', translation: 'dog', position: 3 }
+        { word: 'perro', translation: 'dog', position: 3 },
       ]);
     });
 
     it('should update position based on database words', async () => {
       mockDatabase.getAllWords = jest.fn().mockResolvedValue([
         { id: 1, word: 'hola', language: 'spanish' },
-        { id: 2, word: 'casa', language: 'spanish' }
+        { id: 2, word: 'casa', language: 'spanish' },
       ]);
 
       await (manager as any).updatePositionFromDatabase('spanish', mockDatabase);
@@ -380,9 +381,9 @@ describe('FrequencyWordManager', () => {
       // Case-insensitive matching
       jest.clearAllMocks();
       (manager as any).wordPositions.set('spanish', 0);
-      mockDatabase.getAllWords = jest.fn().mockResolvedValue([
-        { id: 1, word: 'HOLA', language: 'spanish' }
-      ]);
+      mockDatabase.getAllWords = jest
+        .fn()
+        .mockResolvedValue([{ id: 1, word: 'HOLA', language: 'spanish' }]);
       await (manager as any).updatePositionFromDatabase('spanish', mockDatabase);
       expect((manager as any).wordPositions.get('spanish')).toBe(1);
 
@@ -391,7 +392,7 @@ describe('FrequencyWordManager', () => {
       (manager as any).wordPositions.set('spanish', 0);
       mockDatabase.getAllWords = jest.fn().mockResolvedValue([
         { id: 1, word: 'hola', language: 'spanish' },
-        { id: 3, word: 'perro', language: 'spanish' } // Missing casa
+        { id: 3, word: 'perro', language: 'spanish' }, // Missing casa
       ]);
       await (manager as any).updatePositionFromDatabase('spanish', mockDatabase);
       expect((manager as any).wordPositions.get('spanish')).toBe(1);
@@ -406,7 +407,7 @@ describe('FrequencyWordManager', () => {
 
     it('should handle database errors gracefully', async () => {
       mockDatabase.getAllWords = jest.fn().mockRejectedValue(new Error('Database error'));
-      
+
       // Initialize position first
       (manager as any).wordPositions.set('spanish', 0);
 
@@ -420,9 +421,9 @@ describe('FrequencyWordManager', () => {
 
     it('should keep existing position if it is higher', async () => {
       (manager as any).wordPositions.set('spanish', 3);
-      mockDatabase.getAllWords = jest.fn().mockResolvedValue([
-        { id: 1, word: 'hola', language: 'spanish' }
-      ]);
+      mockDatabase.getAllWords = jest
+        .fn()
+        .mockResolvedValue([{ id: 1, word: 'hola', language: 'spanish' }]);
 
       await (manager as any).updatePositionFromDatabase('spanish', mockDatabase);
 

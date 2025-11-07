@@ -38,7 +38,7 @@ const transliterationMap: Record<string, string> = {
   '\u00F0': 'd', // ð
   '\u00FE': 'th', // þ
   '\u0192': 'f', // ƒ
-  '\u00DF': 'ss' // ß
+  '\u00DF': 'ss', // ß
 };
 
 /**

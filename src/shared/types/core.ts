@@ -7,16 +7,16 @@ export interface Word {
   word: string;
   language: string;
   translation: string;
-  strength: number;        // User mastery level (0+), can exceed 100
+  strength: number; // User mastery level (0+), can exceed 100
   known: boolean;
   ignored: boolean;
   createdAt: Date;
   lastStudied?: Date;
   // SRS fields
-  intervalDays: number;    // Days until next review
-  easeFactor: number;      // Multiplier for interval calculation (starts at 2.5)
-  lastReview?: Date;       // When word was last reviewed
-  nextDue: Date;          // When word is next due for review
+  intervalDays: number; // Days until next review
+  easeFactor: number; // Multiplier for interval calculation (starts at 2.5)
+  lastReview?: Date; // When word was last reviewed
+  nextDue: Date; // When word is next due for review
   // FSRS fields (optional until migration initialized)
   fsrsDifficulty?: number;
   fsrsStability?: number;
@@ -24,7 +24,7 @@ export interface Word {
   fsrsLastRating?: number;
   processingStatus?: 'queued' | 'processing' | 'ready' | 'failed';
   sentenceCount?: number;
-  topic?: string;          // Topic the word was generated for
+  topic?: string; // Topic the word was generated for
 }
 
 export interface DictionaryEntry {
@@ -73,8 +73,6 @@ export interface PrecomputedToken {
   lemma?: string; // Lemmatized form of the word (base form)
 }
 
-
-
 export interface QuizQuestion {
   word: Word;
   sentence: Sentence;
@@ -88,19 +86,19 @@ export interface StudyStats {
 }
 
 export interface GeneratedWord {
-  word: string;        // Foreign language word
+  word: string; // Foreign language word
   translation: string; // English translation
   frequencyPosition?: number; // 1-based position in frequency list
   frequencyTier?: string; // Human-readable tier like "top 100", "top 500"
 }
 
 export interface GeneratedSentence {
-  sentence: string;    // Foreign language sentence
+  sentence: string; // Foreign language sentence
   translation: string; // English translation
   contextBefore?: string; // Optional sentence before for context
-  contextAfter?: string;  // Optional sentence after for context
+  contextAfter?: string; // Optional sentence after for context
   contextBeforeTranslation?: string; // Translation of context before
-  contextAfterTranslation?: string;  // Translation of context after
+  contextAfterTranslation?: string; // Translation of context after
   audioUrl?: string; // Optional external audio source URL
 }
 

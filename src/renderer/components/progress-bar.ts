@@ -58,7 +58,7 @@ export class ProgressBar extends LitElement {
         font-variant-numeric: tabular-nums;
         color: var(--text-secondary);
       }
-    `
+    `,
   ];
 
   @property({ type: Number })
@@ -87,22 +87,24 @@ export class ProgressBar extends LitElement {
 
   render() {
     const percentage = this.percentage;
-    const displayLabel = this.showLabel ? (this.label || `${Math.round(percentage)}%`) : '';
+    const displayLabel = this.showLabel ? this.label || `${Math.round(percentage)}%` : '';
 
     return html`
-      ${this.showLabel ? html`
-        <div class="progress-label">
-          <span class="progress-label-text">${displayLabel}</span>
-          ${this.showLabel && !this.label ? html`
-            <span class="progress-percentage">${Math.round(percentage)}%</span>
-          ` : ''}
-        </div>
-      ` : ''}
-      <div 
+      ${this.showLabel
+        ? html`
+            <div class="progress-label">
+              <span class="progress-label-text">${displayLabel}</span>
+              ${this.showLabel && !this.label
+                ? html` <span class="progress-percentage">${Math.round(percentage)}%</span> `
+                : ''}
+            </div>
+          `
+        : ''}
+      <div
         class="progress-bar ${this.showLabel ? 'has-label' : ''}"
         style="height: ${this.height};"
       >
-        <div 
+        <div
           class="progress-fill variant-${this.variant === 'default' ? 'primary' : this.variant}"
           style="width: ${percentage}%;"
         ></div>
@@ -110,4 +112,3 @@ export class ProgressBar extends LitElement {
     `;
   }
 }
-

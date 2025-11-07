@@ -2,9 +2,26 @@
  * IPC bridge interfaces for secure communication between main and renderer processes
  */
 
-import { Word, Sentence, StudyStats, GeneratedWord, GeneratedSentence, CreateWordRequest, DictionaryEntry, DialogueVariant, ModeScores, DialogSession } from './core.js';
+import {
+  Word,
+  Sentence,
+  StudyStats,
+  GeneratedWord,
+  GeneratedSentence,
+  CreateWordRequest,
+  DictionaryEntry,
+  DialogueVariant,
+  ModeScores,
+  DialogSession,
+} from './core.js';
 import { JobWordInfo, WordProcessingStatus } from './database.js';
-import { RecordingOptions, RecordingSession, TranscriptionOptions, TranscriptionResult, TranscriptionComparison } from './audio.js';
+import {
+  RecordingOptions,
+  RecordingSession,
+  TranscriptionOptions,
+  TranscriptionResult,
+  TranscriptionComparison,
+} from './audio.js';
 
 export interface IPCBridge {
   // Database operations
@@ -16,10 +33,24 @@ export interface IPCBridge {
     getWordsToStudy: (limit: number, language: string) => Promise<Word[]>;
     getWordById: (wordId: number) => Promise<Word | null>;
     getWordsByIds: (wordIds: number[]) => Promise<Word[]>;
-    getAllWords: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
-    getWordsWithSentences: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
-    getWordsWithSentencesOrderedByStrength: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
-    getRecentStudySessions: (limit?: number) => Promise<Array<{ id: number, wordsStudied: number, whenStudied: Date }>>;
+    getAllWords: (
+      language: string,
+      includeKnown?: boolean,
+      includeIgnored?: boolean
+    ) => Promise<Word[]>;
+    getWordsWithSentences: (
+      language: string,
+      includeKnown?: boolean,
+      includeIgnored?: boolean
+    ) => Promise<Word[]>;
+    getWordsWithSentencesOrderedByStrength: (
+      language: string,
+      includeKnown?: boolean,
+      includeIgnored?: boolean
+    ) => Promise<Word[]>;
+    getRecentStudySessions: (
+      limit?: number
+    ) => Promise<Array<{ id: number; wordsStudied: number; whenStudied: Date }>>;
     insertSentence: (
       wordId: number,
       sentence: string,
@@ -39,17 +70,31 @@ export interface IPCBridge {
     getSentencesByIds: (sentenceIds: number[]) => Promise<Sentence[]>;
     deleteSentence: (sentenceId: number) => Promise<void>;
     updateSentenceLastShown: (sentenceId: number) => Promise<void>;
-    updateSentenceAudioPath: (sentenceId: number, audioPath: string, audioGenerationVoiceId?: string) => Promise<void>;
+    updateSentenceAudioPath: (
+      sentenceId: number,
+      audioPath: string,
+      audioGenerationVoiceId?: string
+    ) => Promise<void>;
     incrementSentencePlayCount: (sentenceId: number) => Promise<void>;
-    recordPronunciationAttempt: (sentenceId: number, similarityScore: number, expectedText: string, transcribedText: string) => Promise<void>;
-    getPronunciationHistory: (sentenceId: number, limit?: number) => Promise<Array<{
-      id: number;
-      sentenceId: number;
-      similarityScore: number;
-      expectedText: string;
-      transcribedText: string;
-      createdAt: Date;
-    }>>;
+    recordPronunciationAttempt: (
+      sentenceId: number,
+      similarityScore: number,
+      expectedText: string,
+      transcribedText: string
+    ) => Promise<void>;
+    getPronunciationHistory: (
+      sentenceId: number,
+      limit?: number
+    ) => Promise<
+      Array<{
+        id: number;
+        sentenceId: number;
+        similarityScore: number;
+        expectedText: string;
+        transcribedText: string;
+        createdAt: Date;
+      }>
+    >;
     updateLastStudied: (wordId: number) => Promise<void>;
     getStudyStats: () => Promise<StudyStats>;
     recordStudySession: (wordsStudied: number) => Promise<void>;
@@ -58,7 +103,15 @@ export interface IPCBridge {
     getCurrentLanguage: () => Promise<string>;
     setCurrentLanguage: (language: string) => Promise<void>;
     getAvailableLanguages: () => Promise<string[]>;
-    getLanguageStats: () => Promise<Array<{ language: string, totalWords: number, studiedWords: number, averagePronunciationScore: number | null, pronunciationAttemptCount: number }>>;
+    getLanguageStats: () => Promise<
+      Array<{
+        language: string;
+        totalWords: number;
+        studiedWords: number;
+        averagePronunciationScore: number | null;
+        pronunciationAttemptCount: number;
+      }>
+    >;
     lookupDictionary: (word: string, language: string) => Promise<DictionaryEntry[]>;
     getNewWordCount: (language: string) => Promise<number>;
     resetLanguageProgress: (language: string) => Promise<void>;
@@ -68,12 +121,14 @@ export interface IPCBridge {
   // SRS operations
   srs: {
     processReview: (wordId: number, recall: 0 | 1 | 2 | 3) => Promise<void>;
-    processQuizResults: (results: Array<{
-      wordId: number;
-      correct: boolean;
-      responseTime?: number;
-      difficulty?: 'easy' | 'medium' | 'hard';
-    }>) => Promise<void>;
+    processQuizResults: (
+      results: Array<{
+        wordId: number;
+        correct: boolean;
+        responseTime?: number;
+        difficulty?: 'easy' | 'medium' | 'hard';
+      }>
+    ) => Promise<void>;
     getTodaysStudyWords: (language: string, maxWords?: number) => Promise<Word[]>;
     getDashboardStats: (language: string) => Promise<{
       totalWords: number;
@@ -92,7 +147,11 @@ export interface IPCBridge {
   // LLM operations
   llm: {
     generateWords: (topic: string | undefined, language: string) => Promise<GeneratedWord[]>;
-    generateSentences: (word: string, language: string, topic?: string) => Promise<GeneratedSentence[]>;
+    generateSentences: (
+      word: string,
+      language: string,
+      topic?: string
+    ) => Promise<GeneratedSentence[]>;
     isAvailable: () => Promise<boolean>;
     getAvailableModels: () => Promise<string[]>;
     setModel: (model: string) => Promise<void>;
@@ -129,7 +188,9 @@ export interface IPCBridge {
         desiredSentenceCount?: number;
       }
     ) => Promise<void>;
-    getWordStatus: (wordId: number) => Promise<{ processingStatus: WordProcessingStatus; sentenceCount: number } | null>;
+    getWordStatus: (
+      wordId: number
+    ) => Promise<{ processingStatus: WordProcessingStatus; sentenceCount: number } | null>;
     getQueueSummary: (language?: string) => Promise<{
       queued: number;
       processing: number;
@@ -138,37 +199,55 @@ export interface IPCBridge {
       processingWords: JobWordInfo[];
     }>;
     onWordUpdated: (
-      callback: (payload: { wordId: number; processingStatus: WordProcessingStatus; sentenceCount: number }) => void
+      callback: (payload: {
+        wordId: number;
+        processingStatus: WordProcessingStatus;
+        sentenceCount: number;
+      }) => void
     ) => () => void;
   };
 
   // Audio operations
-    audio: {
-      generateAudio: (text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number) => Promise<string>;
-      playAudio: (audioPath: string) => Promise<void>;
-      stopAudio: () => Promise<void>;
-      audioExists: (audioPath: string) => Promise<boolean>;
-      normalizeAudioVolume: (audioPath: string, targetDb?: number) => Promise<string | null>;
-      regenerateAudio: (options: {
-        text: string;
-        language: string;
-        word?: string;
-        wordId?: number;
-        sentenceId?: number;
-        variantId?: number;
-        existingPath?: string;
-      }) => Promise<{ audioPath: string }>;
-      startRecording: (options?: RecordingOptions) => Promise<RecordingSession>;
-      stopRecording: () => Promise<RecordingSession | null>;
-      cancelRecording: () => Promise<void>;
-      getCurrentRecordingSession: () => Promise<RecordingSession | null>;
-      isRecording: () => Promise<boolean>;
-      getAvailableRecordingDevices: () => Promise<string[]>;
-      deleteRecording: (filePath: string) => Promise<void>;
+  audio: {
+    generateAudio: (
+      text: string,
+      language: string,
+      word?: string,
+      wordId?: number,
+      sentenceId?: number,
+      variantId?: number
+    ) => Promise<string>;
+    playAudio: (audioPath: string) => Promise<void>;
+    stopAudio: () => Promise<void>;
+    audioExists: (audioPath: string) => Promise<boolean>;
+    normalizeAudioVolume: (audioPath: string, targetDb?: number) => Promise<string | null>;
+    regenerateAudio: (options: {
+      text: string;
+      language: string;
+      word?: string;
+      wordId?: number;
+      sentenceId?: number;
+      variantId?: number;
+      existingPath?: string;
+    }) => Promise<{ audioPath: string }>;
+    startRecording: (options?: RecordingOptions) => Promise<RecordingSession>;
+    stopRecording: () => Promise<RecordingSession | null>;
+    cancelRecording: () => Promise<void>;
+    getCurrentRecordingSession: () => Promise<RecordingSession | null>;
+    isRecording: () => Promise<boolean>;
+    getAvailableRecordingDevices: () => Promise<string[]>;
+    deleteRecording: (filePath: string) => Promise<void>;
     getRecordingInfo: (filePath: string) => Promise<{ size: number; duration?: number } | null>;
     initializeSpeechRecognition: () => Promise<void>;
-    transcribeAudio: (filePath: string, options?: TranscriptionOptions) => Promise<TranscriptionResult>;
-    compareTranscription: (transcribed: string, expected: string, proficiencyLevel?: string | null) => Promise<TranscriptionComparison>;
+    transcribeAudio: (
+      filePath: string,
+      options?: TranscriptionOptions
+    ) => Promise<TranscriptionResult>;
+    compareTranscription: (
+      transcribed: string,
+      expected: string,
+      proficiencyLevel?: string | null
+    ) => Promise<TranscriptionComparison>;
     isSpeechRecognitionReady: () => Promise<boolean>;
     switchToElevenLabs: (apiKey: string) => Promise<void>;
     switchToSystemTTS: () => Promise<void>;
@@ -206,30 +285,43 @@ export interface IPCBridge {
   dialog: {
     selectSentence: () => Promise<Sentence | null>;
     generateVariants: (sentenceId: number) => Promise<DialogueVariant[]>;
-    generateFollowUp: (variantId: number) => Promise<{ text: string; translation: string; audio?: string }>;
+    generateFollowUp: (
+      variantId: number
+    ) => Promise<{ text: string; translation: string; audio?: string }>;
     ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
-    ensureContextSentences: (sentenceId: number) => Promise<{ beforeSentenceAudio: string | null; afterSentenceAudio: string | null }>;
+    ensureContextSentences: (
+      sentenceId: number
+    ) => Promise<{ beforeSentenceAudio: string | null; afterSentenceAudio: string | null }>;
     pregenerateSession: () => Promise<DialogSession | null>;
     pregenerateSessions: (count: number) => Promise<DialogSession[]>;
   };
 
   // Flow operations
   flow: {
-    getFlowSentences: (language: string) => Promise<Array<{
-      sentence: Sentence;
-      words: Word[];
-      beforeSentenceAudio?: string;
-      afterSentenceAudio?: string;
-      continuationAudios: string[];
-    }>>;
+    getFlowSentences: (language: string) => Promise<
+      Array<{
+        sentence: Sentence;
+        words: Word[];
+        beforeSentenceAudio?: string;
+        afterSentenceAudio?: string;
+        continuationAudios: string[];
+      }>
+    >;
     stitchAudio: (audioPaths: string[], language: string) => Promise<string>;
-    stitchAudioWithEnglish: (audioPathPairs: Array<[string, string]>, language: string) => Promise<string>;
+    stitchAudioWithEnglish: (
+      audioPathPairs: Array<[string, string]>,
+      language: string
+    ) => Promise<string>;
     getFileStats: (filePath: string) => Promise<{ mtime: Date } | null>;
   };
 
   // Scoring operations
   scoring: {
-    getNextMode: (options: { currentMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null; language: string | null; initialTakeover: boolean }) => Promise<{
+    getNextMode: (options: {
+      currentMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null;
+      language: string | null;
+      initialTakeover: boolean;
+    }) => Promise<{
       nextMode: 'learning' | 'quiz' | 'dialog' | 'flow' | null;
       rankedModes: Array<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'>;
     }>;
@@ -237,7 +329,11 @@ export interface IPCBridge {
 
   // Logging operations
   log: {
-    log: (level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal', message: string, data?: any) => Promise<void>;
+    log: (
+      level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal',
+      message: string,
+      data?: any
+    ) => Promise<void>;
   };
 
   // Topics operations
@@ -281,7 +377,7 @@ export const IPC_CHANNELS = {
     LOOKUP_DICTIONARY: 'database:lookupDictionary',
     GET_NEW_WORD_COUNT: 'database:getNewWordCount',
     RESET_LANGUAGE_PROGRESS: 'database:resetLanguageProgress',
-    GET_TOPIC_WORD_COUNTS: 'database:getTopicWordCounts'
+    GET_TOPIC_WORD_COUNTS: 'database:getTopicWordCounts',
   },
   LLM: {
     GENERATE_WORDS: 'llm:generateWords',
@@ -299,16 +395,16 @@ export const IPC_CHANNELS = {
     SWITCH_PROVIDER: 'llm:switchProvider',
     SET_GEMINI_API_KEY: 'llm:setGeminiApiKey',
     GET_AVAILABLE_PROVIDERS: 'llm:getAvailableProviders',
-    GET_MODELS_FOR_PROVIDER: 'llm:getModelsForProvider'
+    GET_MODELS_FOR_PROVIDER: 'llm:getModelsForProvider',
   },
-    AUDIO: {
-      GENERATE_AUDIO: 'audio:generateAudio',
-      PLAY_AUDIO: 'audio:playAudio',
-      STOP_AUDIO: 'audio:stopAudio',
-      AUDIO_EXISTS: 'audio:audioExists',
-      NORMALIZE_AUDIO_VOLUME: 'audio:normalizeAudioVolume',
-      LOAD_AUDIO_BASE64: 'audio:loadAudioBase64',
-      REGENERATE_AUDIO: 'audio:regenerateAudio',
+  AUDIO: {
+    GENERATE_AUDIO: 'audio:generateAudio',
+    PLAY_AUDIO: 'audio:playAudio',
+    STOP_AUDIO: 'audio:stopAudio',
+    AUDIO_EXISTS: 'audio:audioExists',
+    NORMALIZE_AUDIO_VOLUME: 'audio:normalizeAudioVolume',
+    LOAD_AUDIO_BASE64: 'audio:loadAudioBase64',
+    REGENERATE_AUDIO: 'audio:regenerateAudio',
     START_RECORDING: 'audio:startRecording',
     STOP_RECORDING: 'audio:stopRecording',
     CANCEL_RECORDING: 'audio:cancelRecording',
@@ -326,11 +422,11 @@ export const IPC_CHANNELS = {
     SWITCH_TO_SYSTEM_TTS: 'audio:switchToSystemTTS',
     GET_VOICE_MAPPINGS: 'audio:getVoiceMappings',
     SAVE_VOICE_MAPPINGS: 'audio:saveVoiceMappings',
-    RESET_VOICE_MAPPINGS_TO_DEFAULTS: 'audio:resetVoiceMappingsToDefaults'
+    RESET_VOICE_MAPPINGS_TO_DEFAULTS: 'audio:resetVoiceMappingsToDefaults',
   },
   QUIZ: {
     GET_WEAKEST_WORDS: 'quiz:getWeakestWords',
-    GET_RANDOM_SENTENCE_FOR_WORD: 'quiz:getRandomSentenceForWord'
+    GET_RANDOM_SENTENCE_FOR_WORD: 'quiz:getRandomSentenceForWord',
   },
   LIFECYCLE: {
     CREATE_BACKUP: 'lifecycle:createBackup',
@@ -340,11 +436,11 @@ export const IPC_CHANNELS = {
     RESTART_ALL: 'lifecycle:restartAll',
     OPEN_BACKUP_DIALOG: 'lifecycle:openBackupDialog',
     OPEN_BACKUP_DIRECTORY: 'lifecycle:openBackupDirectory',
-    CLOSE_APP: 'lifecycle:closeApp'
+    CLOSE_APP: 'lifecycle:closeApp',
   },
   FREQUENCY: {
     GET_PROGRESS: 'frequency:getProgress',
-    GET_AVAILABLE_LANGUAGES: 'frequency:getAvailableLanguages'
+    GET_AVAILABLE_LANGUAGES: 'frequency:getAvailableLanguages',
   },
   SRS: {
     PROCESS_REVIEW: 'srs:processReview',
@@ -354,18 +450,18 @@ export const IPC_CHANNELS = {
     MARK_WORD_DIFFICULTY: 'srs:markWordDifficulty',
     RESET_WORD_PROGRESS: 'srs:resetWordProgress',
     GET_OVERDUE_WORDS: 'srs:getOverdueWords',
-    INITIALIZE_EXISTING_WORDS: 'srs:initializeExistingWords'
+    INITIALIZE_EXISTING_WORDS: 'srs:initializeExistingWords',
   },
   JOBS: {
     ENQUEUE_WORD_GENERATION: 'jobs:enqueueWordGeneration',
     GET_WORD_STATUS: 'jobs:getWordStatus',
     GET_QUEUE_SUMMARY: 'jobs:getQueueSummary',
-    WORD_UPDATED: 'jobs:word-updated'
+    WORD_UPDATED: 'jobs:word-updated',
   },
   LEMMATIZATION: {
     GET_STATUS: 'lemmatization:getStatus',
     LOAD_MODEL: 'lemmatization:loadModel',
-    LEMMATIZE_WORDS: 'lemmatization:lemmatizeWords'
+    LEMMATIZE_WORDS: 'lemmatization:lemmatizeWords',
   },
   DIALOG: {
     SELECT_SENTENCE: 'dialog:selectSentence',
@@ -374,29 +470,29 @@ export const IPC_CHANNELS = {
     ENSURE_BEFORE_SENTENCE_AUDIO: 'dialog:ensureBeforeSentenceAudio',
     ENSURE_CONTEXT_SENTENCES: 'dialog:ensureContextSentences',
     PREGENERATE_SESSION: 'dialog:pregenerateSession',
-    PREGENERATE_SESSIONS: 'dialog:pregenerateSessions'
+    PREGENERATE_SESSIONS: 'dialog:pregenerateSessions',
   },
   FLOW: {
     GET_FLOW_SENTENCES: 'flow:getFlowSentences',
     STITCH_AUDIO: 'flow:stitchAudio',
     STITCH_AUDIO_WITH_ENGLISH: 'flow:stitchAudioWithEnglish',
-    GET_FILE_STATS: 'flow:getFileStats'
+    GET_FILE_STATS: 'flow:getFileStats',
   },
   SCORING: {
     GET_NEXT_MODE: 'scoring:getNextMode',
-    GET_LANGUAGE_PROFICIENCY: 'scoring:getLanguageProficiency'
+    GET_LANGUAGE_PROFICIENCY: 'scoring:getLanguageProficiency',
   },
   TRACKING: {
     CREATE_SESSION: 'tracking:createSession',
     UPDATE_SESSION: 'tracking:updateSession',
     RECORD_AUDIO_PLAYBACK: 'tracking:recordAudioPlayback',
     RECORD_NEGLECTED_WORDS: 'tracking:recordNeglectedWords',
-    RECORD_DICTIONARY_HOVER: 'tracking:recordDictionaryHover'
+    RECORD_DICTIONARY_HOVER: 'tracking:recordDictionaryHover',
   },
   LOG: {
-    LOG: 'log:log'
+    LOG: 'log:log',
   },
   TOPICS: {
-    GET_TOPICS: 'topics:getTopics'
-  }
+    GET_TOPICS: 'topics:getTopics',
+  },
 } as const;

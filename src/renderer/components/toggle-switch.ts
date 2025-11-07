@@ -69,22 +69,24 @@ export class ToggleSwitch extends LitElement {
       .toggle-switch:hover {
         border-color: var(--primary-color);
       }
-    `
+    `,
   ];
 
   private handleClick(event: Event) {
     event.preventDefault();
-    this.dispatchEvent(new CustomEvent('toggle-changed', {
-      detail: { checked: !this.checked },
-      bubbles: true,
-      composed: true
-    }));
+    this.dispatchEvent(
+      new CustomEvent('toggle-changed', {
+        detail: { checked: !this.checked },
+        bubbles: true,
+        composed: true,
+      })
+    );
   }
 
   render() {
     return html`
       ${this.label ? html`<span class="toggle-label">${this.label}</span>` : ''}
-      <div 
+      <div
         class="toggle-switch ${this.checked ? 'active' : ''}"
         @click=${this.handleClick}
         title=${this.title || ''}
@@ -96,4 +98,3 @@ export class ToggleSwitch extends LitElement {
     `;
   }
 }
-

@@ -12,7 +12,6 @@ import { getLogger } from '../utils/logger.js';
 import { z } from 'zod';
 import axios from 'axios';
 
-
 interface GeminiRequest {
   contents: Array<{
     parts: Array<{
@@ -48,9 +47,10 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
       baseUrl: config.baseUrl || defaultBaseUrl,
       model: config.model || LLM_CONFIG.GEMINI_DEFAULT_MODEL,
       wordGenerationModel: config.wordGenerationModel || LLM_CONFIG.GEMINI_DEFAULT_WORD_MODEL,
-      sentenceGenerationModel: config.sentenceGenerationModel || LLM_CONFIG.GEMINI_DEFAULT_SENTENCE_MODEL,
+      sentenceGenerationModel:
+        config.sentenceGenerationModel || LLM_CONFIG.GEMINI_DEFAULT_SENTENCE_MODEL,
       timeout: config.timeout || LLM_CONFIG.GEMINI_DEFAULT_TIMEOUT,
-      maxRetries: config.maxRetries || LLM_CONFIG.MAX_RETRIES
+      maxRetries: config.maxRetries || LLM_CONFIG.MAX_RETRIES,
     });
     this.apiKey = apiKey || '';
   }
@@ -68,16 +68,16 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
       logger.warn('[GeminiClient] API key is empty or not set');
       return false;
     }
-    
+
     try {
       // Try the models endpoint first (lightweight check)
       const modelsUrl = `${this.baseUrl}?key=${this.apiKey}`;
-      
+
       const response = await axios.get(modelsUrl, {
         timeout: 5000,
-        validateStatus: () => true // Don't throw on any status
+        validateStatus: () => true, // Don't throw on any status
       });
-      
+
       if (response.status !== 200) {
         let errorMessage = '';
         try {
@@ -98,27 +98,37 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         } catch {
           errorMessage = 'Unable to read error response';
         }
-        
-        logger.warn({ status: response.status, statusText: response.statusText, errorMessage }, '[GeminiClient] Availability check failed');
-        
+
+        logger.warn(
+          { status: response.status, statusText: response.statusText, errorMessage },
+          '[GeminiClient] Availability check failed'
+        );
+
         // If it's a 403 or 400, it might be a regional/billing issue
         if (response.status === 403 || response.status === 400) {
-          logger.warn('[GeminiClient] This might be a regional restriction or billing issue. Check your Google Cloud Console settings.');
+          logger.warn(
+            '[GeminiClient] This might be a regional restriction or billing issue. Check your Google Cloud Console settings.'
+          );
         }
-        
+
         return false;
       }
-      
+
       return true;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.warn({ error, errorMessage }, '[GeminiClient] Availability check error');
-      
+
       // If it's a timeout, log that specifically
-      if (axios.isAxiosError(error) && (error.code === 'ECONNABORTED' || error.message.includes('timeout'))) {
-        logger.warn('[GeminiClient] Request timed out. This might indicate network issues or the API is slow to respond.');
+      if (
+        axios.isAxiosError(error) &&
+        (error.code === 'ECONNABORTED' || error.message.includes('timeout'))
+      ) {
+        logger.warn(
+          '[GeminiClient] Request timed out. This might indicate network issues or the API is slow to respond.'
+        );
       }
-      
+
       return false;
     }
   }
@@ -150,9 +160,9 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
   private ensureApiKey(): void {
     if (!this.apiKey || this.apiKey.trim() === '') {
       throw super.createLLMError(
-        new Error('Gemini API key is required'), 
-        'Gemini API key not configured', 
-        'MODEL_ERROR', 
+        new Error('Gemini API key is required'),
+        'Gemini API key not configured',
+        'MODEL_ERROR',
         false
       );
     }
@@ -166,29 +176,29 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
   private extractRetryDelay(errorText: string): number | null {
     try {
       const errorJson = JSON.parse(errorText);
-      
+
       // Check if error.details exists and is an array
       if (errorJson.error?.details && Array.isArray(errorJson.error.details)) {
         // Find the RetryInfo entry
         const retryInfo = errorJson.error.details.find(
           (detail: any) => detail['@type'] === 'type.googleapis.com/google.rpc.RetryInfo'
         );
-        
+
         if (retryInfo?.retryDelay) {
           // Parse delay string like "23s" or "23.41586998s"
           const delayStr = retryInfo.retryDelay;
           // Remove 's' suffix and parse as float
           const seconds = parseFloat(delayStr.replace(/s$/, ''));
-          
+
           if (!isNaN(seconds)) {
             const milliseconds = seconds * 1000;
             const twoMinutes = 2 * 60 * 1000; // 120,000ms
-            
+
             // If delay is >= 2 minutes, return null to give up
             if (milliseconds >= twoMinutes) {
               return null;
             }
-            
+
             return Math.ceil(milliseconds); // Round up to ensure we wait long enough
           }
         }
@@ -197,11 +207,16 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
       // If parsing fails, return null to fall back to exponential backoff
       return null;
     }
-    
+
     return null;
   }
 
-  async generateTopicWords(topic: string, language: string, count: number, proficiencyLevel?: string): Promise<GeneratedWord[]> {
+  async generateTopicWords(
+    topic: string,
+    language: string,
+    count: number,
+    proficiencyLevel?: string
+  ): Promise<GeneratedWord[]> {
     this.ensureApiKey();
 
     // Call base class implementation, but add validation logging
@@ -214,12 +229,24 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
     }
   }
 
-  async generateSentences(word: string, language: string, count: number, topic?: string, proficiencyLevel?: string): Promise<GeneratedSentence[]> {
+  async generateSentences(
+    word: string,
+    language: string,
+    count: number,
+    topic?: string,
+    proficiencyLevel?: string
+  ): Promise<GeneratedSentence[]> {
     this.ensureApiKey();
 
     // Call base class implementation, but add validation logging
     try {
-      const sentences = await super.generateSentences(word, language, count, topic, proficiencyLevel);
+      const sentences = await super.generateSentences(
+        word,
+        language,
+        count,
+        topic,
+        proficiencyLevel
+      );
       return sentences;
     } catch (error) {
       this.logValidationError(error, 'GEMINI SENTENCE VALIDATION FAILED');
@@ -227,7 +254,17 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
     }
   }
 
-  async generateContextSentences(sentence: string, translation: string, language: string, proficiencyLevel?: string): Promise<{ contextBefore?: string; contextAfter?: string; contextBeforeTranslation?: string; contextAfterTranslation?: string }> {
+  async generateContextSentences(
+    sentence: string,
+    translation: string,
+    language: string,
+    proficiencyLevel?: string
+  ): Promise<{
+    contextBefore?: string;
+    contextAfter?: string;
+    contextBeforeTranslation?: string;
+    contextAfterTranslation?: string;
+  }> {
     if (!this.apiKey || this.apiKey.trim() === '') {
       // Return empty context instead of throwing if API key not configured
       return {};
@@ -235,7 +272,12 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
 
     // Call base class implementation, but add validation logging
     try {
-      const context = await super.generateContextSentences(sentence, translation, language, proficiencyLevel);
+      const context = await super.generateContextSentences(
+        sentence,
+        translation,
+        language,
+        proficiencyLevel
+      );
       return context;
     } catch (error) {
       this.logValidationError(error, 'GEMINI CONTEXT SENTENCE VALIDATION FAILED');
@@ -250,17 +292,21 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
     try {
       const selectedModel = model || this.config.model;
       const requestBody: GeminiRequest = {
-        contents: [{
-          parts: [{
-            text: prompt
-          }]
-        }],
+        contents: [
+          {
+            parts: [
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
         generationConfig: {
           temperature: 0.7,
           topK: 40,
           topP: 0.95,
-          maxOutputTokens: 2048
-        }
+          maxOutputTokens: 2048,
+        },
       };
 
       const response = await axios.post<GeminiResponse>(
@@ -269,8 +315,8 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         {
           timeout: this.config.timeout || 60000,
           headers: {
-            'Content-Type': 'application/json'
-          }
+            'Content-Type': 'application/json',
+          },
         }
       );
 
@@ -287,7 +333,10 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
 
       return candidate.content.parts[0].text.trim();
     } catch (error) {
-      if (axios.isAxiosError(error) && (error.code === 'ECONNABORTED' || error.message.includes('timeout'))) {
+      if (
+        axios.isAxiosError(error) &&
+        (error.code === 'ECONNABORTED' || error.message.includes('timeout'))
+      ) {
         throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
       }
       const err = ensureError(error);
@@ -298,17 +347,21 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
   protected async makeRequest(prompt: string, model?: string): Promise<any> {
     const selectedModel = model || this.config.model;
     const requestBody: GeminiRequest = {
-      contents: [{
-        parts: [{
-          text: prompt
-        }]
-      }],
+      contents: [
+        {
+          parts: [
+            {
+              text: prompt,
+            },
+          ],
+        },
+      ],
       generationConfig: {
         temperature: 0.3, // Lower temperature for more consistent JSON output
         topK: 40,
         topP: 0.95,
-        maxOutputTokens: 2048
-      }
+        maxOutputTokens: 2048,
+      },
     };
 
     const maxRetries = this.config.maxRetries!;
@@ -317,7 +370,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
     const factor = 2; // Exponential backoff factor
 
     let lastError: unknown;
-    
+
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
       try {
         const response = await axios.post<GeminiResponse>(
@@ -326,14 +379,15 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
           {
             timeout: this.config.timeout || 60000,
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
             },
-            validateStatus: () => true // Don't throw on any status
+            validateStatus: () => true, // Don't throw on any status
           }
         );
 
         if (response.status !== 200) {
-          const errorText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+          const errorText =
+            typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
           const error = new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
           // Attach response status and errorText to error for retry logic
           (error as any).status = response.status;
@@ -348,7 +402,11 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         }
 
         const candidate = data.candidates[0];
-        if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+        if (
+          !candidate.content ||
+          !candidate.content.parts ||
+          candidate.content.parts.length === 0
+        ) {
           throw new Error('Empty response from Gemini');
         }
 
@@ -367,14 +425,17 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         return parsed;
       } catch (error: unknown) {
         lastError = error;
-        
+
         // Don't retry on certain errors
         if (error instanceof Error) {
           // Timeout errors - don't retry
-          if (axios.isAxiosError(error) && (error.code === 'ECONNABORTED' || error.message.includes('timeout'))) {
+          if (
+            axios.isAxiosError(error) &&
+            (error.code === 'ECONNABORTED' || error.message.includes('timeout'))
+          ) {
             throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
           }
-          
+
           // JSON parsing errors - don't retry (unless it's "Insufficient" which might be retryable)
           if (error.message.includes('JSON') && !error.message.includes('Insufficient')) {
             throw super.createLLMError(error, 'Invalid response format', 'INVALID_RESPONSE', false);
@@ -382,50 +443,88 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
 
           // If we've exhausted retries, throw the error
           if (attempt > maxRetries) {
-            if (axios.isAxiosError(error) && (error.code === 'ECONNABORTED' || error.message.includes('timeout'))) {
+            if (
+              axios.isAxiosError(error) &&
+              (error.code === 'ECONNABORTED' || error.message.includes('timeout'))
+            ) {
               throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
             }
-            throw super.createLLMError(ensureError(error), 'Max retries exceeded', 'CONNECTION_ERROR', false);
+            throw super.createLLMError(
+              ensureError(error),
+              'Max retries exceeded',
+              'CONNECTION_ERROR',
+              false
+            );
           }
 
           // Check if this is a 429 error and extract retry delay
           const errorWithStatus = error as Error & { status?: number; errorText?: string };
           if (errorWithStatus.status === 429 && errorWithStatus.errorText) {
             const retryDelayMs = this.extractRetryDelay(errorWithStatus.errorText);
-            
+
             // If retryDelay is null (>= 2 minutes), give up immediately
             if (retryDelayMs === null) {
-              throw super.createLLMError(error, 'Rate limit exceeded - retry delay too long', 'CONNECTION_ERROR', false);
+              throw super.createLLMError(
+                error,
+                'Rate limit exceeded - retry delay too long',
+                'CONNECTION_ERROR',
+                false
+              );
             }
 
             // Use the extracted retry delay from the API
             const seconds = Math.ceil(retryDelayMs / 1000);
             const logger = getLogger();
-            logger.info({ attemptNumber: attempt, retryDelay: seconds }, `Attempt ${attempt} failed with HTTP 429, retrying in ${seconds}s (as specified by API)...`);
-            await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+            logger.info(
+              { attemptNumber: attempt, retryDelay: seconds },
+              `Attempt ${attempt} failed with HTTP 429, retrying in ${seconds}s (as specified by API)...`
+            );
+            await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
           } else {
             // Use exponential backoff for other errors
-            const backoffSeconds = Math.min(Math.max(Math.pow(factor, attempt - 1), minTimeout / 1000), maxTimeout / 1000);
+            const backoffSeconds = Math.min(
+              Math.max(Math.pow(factor, attempt - 1), minTimeout / 1000),
+              maxTimeout / 1000
+            );
             const logger = getLogger();
-            logger.info({ attemptNumber: attempt, retryDelay: backoffSeconds }, `Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`);
-            await new Promise(resolve => setTimeout(resolve, backoffSeconds * 1000));
+            logger.info(
+              { attemptNumber: attempt, retryDelay: backoffSeconds },
+              `Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`
+            );
+            await new Promise((resolve) => setTimeout(resolve, backoffSeconds * 1000));
           }
         } else {
           // If we've exhausted retries, throw the error
           if (attempt > maxRetries) {
-            throw super.createLLMError(ensureError(error), 'Max retries exceeded', 'CONNECTION_ERROR', false);
+            throw super.createLLMError(
+              ensureError(error),
+              'Max retries exceeded',
+              'CONNECTION_ERROR',
+              false
+            );
           }
-          
+
           // Use exponential backoff for unknown errors
-          const backoffSeconds = Math.min(Math.max(Math.pow(factor, attempt - 1), minTimeout / 1000), maxTimeout / 1000);
+          const backoffSeconds = Math.min(
+            Math.max(Math.pow(factor, attempt - 1), minTimeout / 1000),
+            maxTimeout / 1000
+          );
           const logger = getLogger();
-          logger.info({ attemptNumber: attempt, retryDelay: backoffSeconds }, `Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`);
-          await new Promise(resolve => setTimeout(resolve, backoffSeconds * 1000));
+          logger.info(
+            { attemptNumber: attempt, retryDelay: backoffSeconds },
+            `Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`
+          );
+          await new Promise((resolve) => setTimeout(resolve, backoffSeconds * 1000));
         }
       }
     }
 
     // Should never reach here, but TypeScript needs it
-    throw super.createLLMError(ensureError(lastError), 'Max retries exceeded', 'CONNECTION_ERROR', false);
+    throw super.createLLMError(
+      ensureError(lastError),
+      'Max retries exceeded',
+      'CONNECTION_ERROR',
+      false
+    );
   }
 }

@@ -36,28 +36,31 @@ export class DatabaseConnection {
       const logger = getLogger();
       this.db = new Database(this.config.databasePath, {
         timeout: this.config.timeout || 5000,
-        verbose: env === 'development' 
-          ? (message?: unknown, ...additionalArgs: unknown[]) => {
-              const sql = typeof message === 'string' ? message : String(message);
-              logger.debug({ sql, additionalArgs }, 'SQL query');
-            }
-          : undefined
+        verbose:
+          env === 'development'
+            ? (message?: unknown, ...additionalArgs: unknown[]) => {
+                const sql = typeof message === 'string' ? message : String(message);
+                logger.debug({ sql, additionalArgs }, 'SQL query');
+              }
+            : undefined,
       });
 
       // Configure database settings
       if (this.config.enableWAL !== false) {
         this.db.pragma('journal_mode = WAL');
       }
-      
+
       // Enable foreign key constraints
       this.db.pragma('foreign_keys = ON');
-      
+
       // Set synchronous mode for better performance with WAL
       this.db.pragma('synchronous = NORMAL');
 
       return this.db;
     } catch (error) {
-      throw new Error(`Failed to connect to database: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to connect to database: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
@@ -80,7 +83,9 @@ export class DatabaseConnection {
         this.db.close();
         this.db = null;
       } catch (error) {
-        throw new Error(`Failed to close database: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(
+          `Failed to close database: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     }
   }

@@ -206,7 +206,7 @@ export class LanguageProficiencySelector extends LitElement {
       .button-secondary:hover {
         background: var(--background-tertiary);
       }
-    `
+    `,
   ];
 
   connectedCallback() {
@@ -242,20 +242,21 @@ export class LanguageProficiencySelector extends LitElement {
 
   private getLevelDisplayName(level: ProficiencyLevel): string {
     const names: Record<ProficiencyLevel, string> = {
-      'newbie': 'Newbie',
-      'a1': 'A1',
-      'a2': 'A2',
-      'b1': 'B1'
+      newbie: 'Newbie',
+      a1: 'A1',
+      a2: 'A2',
+      b1: 'B1',
     };
     return names[level];
   }
 
   private getLevelDescription(level: ProficiencyLevel): string {
     const descriptions: Record<ProficiencyLevel, string> = {
-      'newbie': 'Just starting out. Can recognize a few words but need help with basic phrases and pronunciation.',
-      'a1': 'Beginner level. Can understand and use familiar everyday expressions and very basic phrases aimed at the satisfaction of concrete needs.',
-      'a2': 'Elementary level. Can understand sentences and frequently used expressions related to areas of immediate relevance.',
-      'b1': 'Intermediate level. Can understand the main points of clear standard input on familiar matters regularly encountered in work, school, leisure, etc.'
+      newbie:
+        'Just starting out. Can recognize a few words but need help with basic phrases and pronunciation.',
+      a1: 'Beginner level. Can understand and use familiar everyday expressions and very basic phrases aimed at the satisfaction of concrete needs.',
+      a2: 'Elementary level. Can understand sentences and frequently used expressions related to areas of immediate relevance.',
+      b1: 'Intermediate level. Can understand the main points of clear standard input on familiar matters regularly encountered in work, school, leisure, etc.',
     };
     return descriptions[level];
   }
@@ -265,18 +266,22 @@ export class LanguageProficiencySelector extends LitElement {
   }
 
   private async handleConfirm() {
-    this.dispatchEvent(new CustomEvent('proficiency-selected', {
-      detail: { level: this.selectedLevel },
-      bubbles: true,
-      composed: true
-    }));
+    this.dispatchEvent(
+      new CustomEvent('proficiency-selected', {
+        detail: { level: this.selectedLevel },
+        bubbles: true,
+        composed: true,
+      })
+    );
   }
 
   private handleCancel() {
-    this.dispatchEvent(new CustomEvent('proficiency-cancelled', {
-      bubbles: true,
-      composed: true
-    }));
+    this.dispatchEvent(
+      new CustomEvent('proficiency-cancelled', {
+        bubbles: true,
+        composed: true,
+      })
+    );
   }
 
   render() {
@@ -284,18 +289,19 @@ export class LanguageProficiencySelector extends LitElement {
     const levels: ProficiencyLevel[] = ['newbie', 'a1', 'a2', 'b1'];
 
     return html`
-      <div class="modal-overlay" @click=${(e: Event) => {
-        if (e.target === e.currentTarget) {
-          this.handleCancel();
-        }
-      }}>
+      <div
+        class="modal-overlay"
+        @click=${(e: Event) => {
+          if (e.target === e.currentTarget) {
+            this.handleCancel();
+          }
+        }}
+      >
         <div class="modal-content">
-          <button class="close-button" @click=${this.handleCancel} title="Close">
-            ×
-          </button>
+          <button class="close-button" @click=${this.handleCancel} title="Close">×</button>
           <h2 class="modal-title">New to ${this.capitalizeLanguage(this.language)}?</h2>
           <p class="modal-subtitle">What level are you at?</p>
-          
+
           <div class="slider-container">
             <input
               type="range"
@@ -306,32 +312,33 @@ export class LanguageProficiencySelector extends LitElement {
               class="slider"
               @input=${this.handleSliderChange}
             />
-            
+
             <div class="level-labels">
-              ${levels.map(level => html`
-                <span 
-                  class="level-label ${this.selectedLevel === level ? 'active' : ''}"
-                  @click=${() => this.handleLevelClick(level)}
-                >
-                  ${this.getLevelDisplayName(level)}
-                </span>
-              `)}
+              ${levels.map(
+                (level) => html`
+                  <span
+                    class="level-label ${this.selectedLevel === level ? 'active' : ''}"
+                    @click=${() => this.handleLevelClick(level)}
+                  >
+                    ${this.getLevelDisplayName(level)}
+                  </span>
+                `
+              )}
             </div>
 
             <div class="level-description">
-              <div class="level-description-title">${this.getLevelDisplayName(this.selectedLevel)}</div>
+              <div class="level-description-title">
+                ${this.getLevelDisplayName(this.selectedLevel)}
+              </div>
               <p class="level-description-text">${this.getLevelDescription(this.selectedLevel)}</p>
             </div>
           </div>
 
           <div class="button-container">
-            <button class="button button-primary" @click=${this.handleConfirm}>
-              Continue
-            </button>
+            <button class="button button-primary" @click=${this.handleConfirm}>Continue</button>
           </div>
         </div>
       </div>
     `;
   }
 }
-

@@ -7,7 +7,7 @@ import {
   serializeSentenceParts,
   parseSentenceParts,
   serializeTokenizedTokens,
-  parseTokenizedTokens
+  parseTokenizedTokens,
 } from '../../src/shared/utils/sentence';
 
 describe('splitSentenceIntoParts', () => {
@@ -157,7 +157,7 @@ describe('serializeTokenizedTokens', () => {
     const tokens = [
       { text: 'Hola', isTargetWord: true },
       { text: ' ', isTargetWord: false },
-      { text: 'mundo', isTargetWord: false }
+      { text: 'mundo', isTargetWord: false },
     ];
     const result = serializeTokenizedTokens(tokens);
     expect(result).toBe(JSON.stringify(tokens));
@@ -179,15 +179,15 @@ describe('serializeTokenizedTokens', () => {
     // Create circular reference to trigger error
     const circular: any = { token: 'test' };
     circular.self = circular;
-    
+
     // Mock console.warn to avoid test output
     const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    
+
     const result = serializeTokenizedTokens(circular);
-    
+
     expect(result).toBeNull();
     expect(consoleSpy).toHaveBeenCalled();
-    
+
     consoleSpy.mockRestore();
   });
 });
@@ -196,7 +196,7 @@ describe('parseTokenizedTokens', () => {
   it('should parse JSON string to tokens array', () => {
     const tokens = [
       { text: 'Hola', isTargetWord: true },
-      { text: ' ', isTargetWord: false }
+      { text: ' ', isTargetWord: false },
     ];
     const serialized = JSON.stringify(tokens);
     const result = parseTokenizedTokens(serialized);
@@ -214,10 +214,10 @@ describe('parseTokenizedTokens', () => {
   it('should return undefined for invalid JSON', () => {
     // Mock console.warn to avoid test output
     const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    
+
     expect(parseTokenizedTokens('invalid json')).toBeUndefined();
     expect(consoleSpy).toHaveBeenCalled();
-    
+
     consoleSpy.mockRestore();
   });
 
@@ -231,7 +231,7 @@ describe('parseTokenizedTokens', () => {
     const tokens = [
       { text: 'Hola', isTargetWord: true, wordId: 1 },
       { text: ' ', isTargetWord: false },
-      { text: 'mundo', isTargetWord: false }
+      { text: 'mundo', isTargetWord: false },
     ];
     const serialized = serializeTokenizedTokens(tokens);
     const parsed = parseTokenizedTokens(serialized);

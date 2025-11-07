@@ -54,8 +54,8 @@ export async function tokenizeSentenceWithDictionary(
 
   const parts = sentence.split(/(\s+|[.,!?;:])/);
   const tokens: InternalToken[] = parts
-    .filter(part => part !== '')
-    .map(part => {
+    .filter((part) => part !== '')
+    .map((part) => {
       if (/^\s+$/.test(part)) {
         return { text: part, type: 'whitespace' as const };
       }
@@ -106,7 +106,7 @@ export async function tokenizeSentenceWithDictionary(
         dictionaryForm: candidate.dictionaryForm,
         dictionaryKey: candidate.dictionaryKey,
         cache: dictionaryCache,
-        language: fallbackLanguage
+        language: fallbackLanguage,
       });
 
       if (entries && entries.length > 0) {
@@ -124,7 +124,8 @@ export async function tokenizeSentenceWithDictionary(
       continue;
     }
 
-    const dictionaryKey = selected.dictionaryKey ?? buildDictionaryKey(dictionaryForm, fallbackLanguage);
+    const dictionaryKey =
+      selected.dictionaryKey ?? buildDictionaryKey(dictionaryForm, fallbackLanguage);
     const wordData = wordLookup.get(cleanText);
     const isTargetWord = Boolean(targetWord?.word && cleanText === targetWord.word.toLowerCase());
 
@@ -133,7 +134,7 @@ export async function tokenizeSentenceWithDictionary(
       isTargetWord,
       wordData,
       dictionaryForm,
-      dictionaryKey
+      dictionaryKey,
     });
 
     index = selected.endIndex;
@@ -167,7 +168,7 @@ function collectPhraseCandidates(
     wordsCollected += 1;
     index += 1;
 
-    const dictionaryForm = (dictionaryWords.join(' ').trim() || currentText.trim());
+    const dictionaryForm = dictionaryWords.join(' ').trim() || currentText.trim();
     const dictionaryKey = buildDictionaryKey(dictionaryForm, targetWord?.language?.toLowerCase());
 
     candidates.push({
@@ -175,7 +176,7 @@ function collectPhraseCandidates(
       dictionaryForm,
       dictionaryKey,
       endIndex: index,
-      wordCount: wordsCollected
+      wordCount: wordsCollected,
     });
 
     if (wordsCollected >= maxPhraseWords) {

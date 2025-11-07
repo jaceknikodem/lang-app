@@ -175,7 +175,7 @@ export class SpeechRecognitionService {
         throw error;
       }
       // Check file size - if too small, likely no speech
-      let stats = fs.statSync(filePath);
+      const stats = fs.statSync(filePath);
       console.log(`Transcribing audio: ${filePath} (${(stats.size / 1024).toFixed(1)} KB)`);
 
       // Fix WAV headers using ffmpeg to ensure correct sample rate, channels, and format

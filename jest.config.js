@@ -16,4 +16,12 @@ module.exports = {
     '!src/renderer/**/*.ts', // Exclude renderer components from node tests
   ],
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
+  coverageThreshold: {
+    global: {
+      branches: 50,
+      functions: 65,
+      lines: 55,
+      statements: 55,
+    },
+  },
 };

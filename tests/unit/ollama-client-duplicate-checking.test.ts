@@ -13,7 +13,11 @@ const mockedAxios = axios as jest.Mocked<typeof axios>;
 // Mock database layer interface
 interface MockDatabaseLayer {
   getAllWords(includeKnown?: boolean, includeIgnored?: boolean): Promise<any[]>;
-  getExistingWordsForDuplicateChecking(language: string, topic?: string, limit?: number): Promise<string[]>;
+  getExistingWordsForDuplicateChecking(
+    language: string,
+    topic?: string,
+    limit?: number
+  ): Promise<string[]>;
   checkWordsExist(language: string, words: string[], topic?: string): Promise<Set<string>>;
 }
 
@@ -25,20 +29,20 @@ describe('OllamaClient Duplicate Checking', () => {
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
-    
+
     // Spy on the logger - get the actual logger and spy on its methods
     try {
       const { getLogger } = require('../../dist/main/main/utils/logger');
       const logger = getLogger();
       loggerSpy = {
         warn: jest.spyOn(logger, 'warn').mockImplementation(() => {}),
-        error: jest.spyOn(logger, 'error').mockImplementation(() => {})
+        error: jest.spyOn(logger, 'error').mockImplementation(() => {}),
       };
     } catch (e) {
       // If logger not available, create a no-op spy
       loggerSpy = {
         warn: jest.fn(),
-        error: jest.fn()
+        error: jest.fn(),
       };
     }
 
@@ -47,14 +51,14 @@ describe('OllamaClient Duplicate Checking', () => {
       baseUrl: 'http://localhost:11434',
       model: 'test-model',
       timeout: 5000,
-      maxRetries: 1
+      maxRetries: 1,
     });
 
     // Create mock database layer
     mockDatabaseLayer = {
       getAllWords: jest.fn(),
       getExistingWordsForDuplicateChecking: jest.fn().mockResolvedValue([]),
-      checkWordsExist: jest.fn().mockResolvedValue(new Set())
+      checkWordsExist: jest.fn().mockResolvedValue(new Set()),
     };
   });
 
@@ -70,34 +74,44 @@ describe('OllamaClient Duplicate Checking', () => {
     it('should return empty array when no database layer is set', async () => {
       // Don't set database layer
       loggerSpy.warn.mockClear();
-      
+
       // Access private method through any cast for testing
       const existingWords = await (ollamaClient as any).getExistingWords('Spanish');
-      
+
       expect(existingWords).toEqual([]);
-      expect(loggerSpy.warn).toHaveBeenCalledWith('Database layer not set, cannot check for duplicates');
+      expect(loggerSpy.warn).toHaveBeenCalledWith(
+        'Database layer not set, cannot check for duplicates'
+      );
     });
 
     it('should return words for the specified language', async () => {
       const mockWords = ['hola', 'casa'];
 
-      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest.fn().mockResolvedValue(mockWords);
+      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest
+        .fn()
+        .mockResolvedValue(mockWords);
       ollamaClient.setDatabaseLayer(mockDatabaseLayer);
 
       const existingWords = await (ollamaClient as any).getExistingWords('Spanish');
 
-      expect(mockDatabaseLayer.getExistingWordsForDuplicateChecking).toHaveBeenCalledWith('Spanish', undefined, undefined);
+      expect(mockDatabaseLayer.getExistingWordsForDuplicateChecking).toHaveBeenCalledWith(
+        'Spanish',
+        undefined,
+        undefined
+      );
       expect(existingWords).toEqual(['hola', 'casa']);
     });
 
     it('should handle database errors gracefully', async () => {
-      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest.fn().mockRejectedValue(new Error('Database error'));
+      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest
+        .fn()
+        .mockRejectedValue(new Error('Database error'));
       ollamaClient.setDatabaseLayer(mockDatabaseLayer);
 
       loggerSpy.error.mockClear();
-      
+
       const existingWords = await (ollamaClient as any).getExistingWords('Spanish');
-      
+
       expect(existingWords).toEqual([]);
       expect(loggerSpy.error).toHaveBeenCalledWith(
         { error: expect.any(Error) },
@@ -109,25 +123,35 @@ describe('OllamaClient Duplicate Checking', () => {
   describe('createTopicWordsPrompt', () => {
     it('should include exclusion list when existing words are provided', () => {
       const existingWords = ['hola', 'casa', 'perro'];
-      
-      const prompt = (ollamaClient as any).createTopicWordsPrompt('food', 'Spanish', 3, existingWords);
-      
+
+      const prompt = (ollamaClient as any).createTopicWordsPrompt(
+        'food',
+        'Spanish',
+        3,
+        existingWords
+      );
+
       expect(prompt).toContain('Do NOT include any of these existing words: hola, casa, perro');
       expect(prompt).toContain('Do NOT use any words from the exclusion list above');
     });
 
     it('should not include exclusion text when no existing words', () => {
       const prompt = (ollamaClient as any).createTopicWordsPrompt('food', 'Spanish', 3, []);
-      
+
       expect(prompt).not.toContain('Do NOT include any of these existing words');
       expect(prompt).toContain('Do NOT use any words from the exclusion list above');
     });
 
     it('should truncate long exclusion lists', () => {
       const existingWords = Array.from({ length: 60 }, (_, i) => `word${i}`);
-      
-      const prompt = (ollamaClient as any).createTopicWordsPrompt('food', 'Spanish', 3, existingWords);
-      
+
+      const prompt = (ollamaClient as any).createTopicWordsPrompt(
+        'food',
+        'Spanish',
+        3,
+        existingWords
+      );
+
       expect(prompt).toContain('...');
       // Should only include first 50 words
       expect(prompt).toContain('word49');
@@ -136,18 +160,23 @@ describe('OllamaClient Duplicate Checking', () => {
 
     it('should handle topic-specific prompts', () => {
       const existingWords = ['hola', 'casa'];
-      
-      const prompt = (ollamaClient as any).createTopicWordsPrompt('animals', 'Spanish', 3, existingWords);
-      
+
+      const prompt = (ollamaClient as any).createTopicWordsPrompt(
+        'animals',
+        'Spanish',
+        3,
+        existingWords
+      );
+
       expect(prompt).toContain('related to "animals"');
       expect(prompt).toContain('Do NOT include any of these existing words: hola, casa');
     });
 
     it('should handle general vocabulary prompts', () => {
       const existingWords = ['hola', 'casa'];
-      
+
       const prompt = (ollamaClient as any).createTopicWordsPrompt('', 'Spanish', 3, existingWords);
-      
+
       expect(prompt).toContain('related to ""');
       expect(prompt).toContain('Do NOT include any of these existing words: hola, casa');
     });
@@ -161,16 +190,18 @@ describe('OllamaClient Duplicate Checking', () => {
           response: JSON.stringify([
             { word: 'comida', translation: 'food' },
             { word: 'hola', translation: 'hello' }, // This should be filtered as duplicate
-            { word: 'delicioso', translation: 'delicious' }
-          ])
-        }
+            { word: 'delicioso', translation: 'delicious' },
+          ]),
+        },
       });
     });
 
     it('should filter out duplicate words from generated results', async () => {
       const mockWords = ['hola', 'casa'];
 
-      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest.fn().mockResolvedValue(mockWords);
+      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest
+        .fn()
+        .mockResolvedValue(mockWords);
       mockDatabaseLayer.checkWordsExist = jest.fn().mockResolvedValue(new Set(['hola']));
       ollamaClient.setDatabaseLayer(mockDatabaseLayer);
 
@@ -178,15 +209,21 @@ describe('OllamaClient Duplicate Checking', () => {
 
       // Should filter out 'hola' as it exists in database
       expect(result).toHaveLength(2);
-      expect(result.map(w => w.word)).toEqual(['comida', 'delicioso']);
-      expect(result.map(w => w.word)).not.toContain('hola');
-      expect(mockDatabaseLayer.checkWordsExist).toHaveBeenCalledWith('Spanish', ['comida', 'hola', 'delicioso'], 'food');
+      expect(result.map((w) => w.word)).toEqual(['comida', 'delicioso']);
+      expect(result.map((w) => w.word)).not.toContain('hola');
+      expect(mockDatabaseLayer.checkWordsExist).toHaveBeenCalledWith(
+        'Spanish',
+        ['comida', 'hola', 'delicioso'],
+        'food'
+      );
     });
 
     it('should work when no duplicates are found', async () => {
       const mockWords = ['casa', 'perro'];
 
-      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest.fn().mockResolvedValue(mockWords);
+      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest
+        .fn()
+        .mockResolvedValue(mockWords);
       mockDatabaseLayer.checkWordsExist = jest.fn().mockResolvedValue(new Set());
       ollamaClient.setDatabaseLayer(mockDatabaseLayer);
 
@@ -194,13 +231,15 @@ describe('OllamaClient Duplicate Checking', () => {
 
       // No duplicates, should return all generated words
       expect(result).toHaveLength(3);
-      expect(result.map(w => w.word)).toEqual(['comida', 'hola', 'delicioso']);
+      expect(result.map((w) => w.word)).toEqual(['comida', 'hola', 'delicioso']);
     });
 
     it('should handle case-insensitive duplicate checking', async () => {
       const mockWords = ['HOLA'];
 
-      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest.fn().mockResolvedValue(mockWords);
+      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest
+        .fn()
+        .mockResolvedValue(mockWords);
       mockDatabaseLayer.checkWordsExist = jest.fn().mockResolvedValue(new Set(['hola']));
       ollamaClient.setDatabaseLayer(mockDatabaseLayer);
 
@@ -208,7 +247,7 @@ describe('OllamaClient Duplicate Checking', () => {
 
       // Should filter out 'hola' even though database has 'HOLA'
       expect(result).toHaveLength(2);
-      expect(result.map(w => w.word)).not.toContain('hola');
+      expect(result.map((w) => w.word)).not.toContain('hola');
     });
 
     it('should throw error when insufficient new words are generated', async () => {
@@ -218,19 +257,24 @@ describe('OllamaClient Duplicate Checking', () => {
           response: JSON.stringify([
             { word: 'hola', translation: 'hello' },
             { word: 'casa', translation: 'house' },
-            { word: 'perro', translation: 'dog' }
-          ])
-        }
+            { word: 'perro', translation: 'dog' },
+          ]),
+        },
       });
 
       const mockWords = ['hola', 'casa', 'perro'];
 
-      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest.fn().mockResolvedValue(mockWords);
-      mockDatabaseLayer.checkWordsExist = jest.fn().mockResolvedValue(new Set(['hola', 'casa', 'perro']));
+      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest
+        .fn()
+        .mockResolvedValue(mockWords);
+      mockDatabaseLayer.checkWordsExist = jest
+        .fn()
+        .mockResolvedValue(new Set(['hola', 'casa', 'perro']));
       ollamaClient.setDatabaseLayer(mockDatabaseLayer);
 
-      await expect(ollamaClient.generateTopicWords('food', 'Spanish', 3))
-        .rejects.toThrow('Insufficient new words generated');
+      await expect(ollamaClient.generateTopicWords('food', 'Spanish', 3)).rejects.toThrow(
+        'Insufficient new words generated'
+      );
     });
 
     it('should work without database layer (fallback behavior)', async () => {
@@ -241,7 +285,9 @@ describe('OllamaClient Duplicate Checking', () => {
 
       // Should return all generated words since no duplicate checking
       expect(result).toHaveLength(3);
-      expect(loggerSpy.warn).toHaveBeenCalledWith('Database layer not set, cannot check for duplicates');
+      expect(loggerSpy.warn).toHaveBeenCalledWith(
+        'Database layer not set, cannot check for duplicates'
+      );
     });
   });
 
@@ -252,9 +298,9 @@ describe('OllamaClient Duplicate Checking', () => {
           response: JSON.stringify([
             { word: 'test1', translation: 'test1' },
             { word: 'test2', translation: 'test2' },
-            { word: 'test3', translation: 'test3' }
-          ])
-        }
+            { word: 'test3', translation: 'test3' },
+          ]),
+        },
       });
     });
 
@@ -266,19 +312,28 @@ describe('OllamaClient Duplicate Checking', () => {
       const result = await ollamaClient.generateTopicWords('food', 'Spanish', 3);
 
       expect(result).toHaveLength(3);
-      expect(mockDatabaseLayer.getExistingWordsForDuplicateChecking).toHaveBeenCalledWith('Spanish', 'food', 50);
+      expect(mockDatabaseLayer.getExistingWordsForDuplicateChecking).toHaveBeenCalledWith(
+        'Spanish',
+        'food',
+        50
+      );
     });
 
     it('should filter words from different states (known, ignored, learning)', async () => {
       const mockWords = ['test1', 'test2', 'test3'];
 
-      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest.fn().mockResolvedValue(mockWords);
-      mockDatabaseLayer.checkWordsExist = jest.fn().mockResolvedValue(new Set(['test1', 'test2', 'test3']));
+      mockDatabaseLayer.getExistingWordsForDuplicateChecking = jest
+        .fn()
+        .mockResolvedValue(mockWords);
+      mockDatabaseLayer.checkWordsExist = jest
+        .fn()
+        .mockResolvedValue(new Set(['test1', 'test2', 'test3']));
       ollamaClient.setDatabaseLayer(mockDatabaseLayer);
 
       // This should throw an error because all words are duplicates
-      await expect(ollamaClient.generateTopicWords('food', 'Spanish', 3))
-        .rejects.toThrow('Insufficient new words generated');
+      await expect(ollamaClient.generateTopicWords('food', 'Spanish', 3)).rejects.toThrow(
+        'Insufficient new words generated'
+      );
     });
   });
 });

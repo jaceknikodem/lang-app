@@ -11,7 +11,11 @@ import { sessionManager } from '../utils/session-manager.js';
 import { router } from '../utils/router.js';
 import type { RecordingOptions, RecordingSession } from '../../shared/types/audio.js';
 import { checkProficiencyLevel } from '../utils/app-initializer.js';
-import { getSimilarityThresholds, getSimilarityClass, type ProficiencyLevel } from '../../shared/utils/similarity-threshold.js';
+import {
+  getSimilarityThresholds,
+  getSimilarityClass,
+  type ProficiencyLevel,
+} from '../../shared/utils/similarity-threshold.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
 import { BaseComponent } from './base-component.js';
 
@@ -107,23 +111,23 @@ export class DialogMode extends BaseComponent {
   protected override handleExternalLanguageChange = async (event: Event): Promise<void> => {
     // Call base class handler first
     await super.handleExternalLanguageChange(event);
-    
+
     const detail = (event as CustomEvent<{ language?: string }>).detail;
     const newLanguage = detail?.language;
 
     if (!newLanguage || newLanguage === this.currentLanguage) {
       return;
     }
-    
+
     // Load proficiency level for the new language
     const proficiency = await checkProficiencyLevel(newLanguage);
     this.currentProficiencyLevel = proficiency as ProficiencyLevel | null;
-    
+
     // Cancel any ongoing recording or transcription
     if (this.isRecording) {
       await this.cancelRecording();
     }
-    
+
     // Reset dialog state
     this.transcriptionResult = null;
     this.selectedOption = null;
@@ -136,37 +140,43 @@ export class DialogMode extends BaseComponent {
     this.streamingTranscriptionText = null;
     this.recordedAudioPath = null;
     this.dialogCount = 0; // Reset dialog count on language change
-    
+
     // Reload dialog session for the new language
     await this.loadDialogSession();
   };
 
   connectedCallback() {
     super.connectedCallback();
-    
+
     // Reset dialog count when component is connected
     this.dialogCount = 0;
-    
+
     // Load current language and proficiency level, and create dialog session for tracking
-    window.electronAPI.database.getCurrentLanguage().then(async language => {
-      this.currentLanguage = language;
-      const proficiency = await checkProficiencyLevel(language);
-      this.currentProficiencyLevel = proficiency as ProficiencyLevel | null;
-      
-      // Create dialog session for tracking
-      try {
-        this.currentSessionId = await window.electronAPI.tracking.createSession('dialog', language);
-      } catch (error) {
-        console.warn('Failed to create dialog session:', error);
-      }
-    }).catch(err => {
-      console.error('Failed to load current language:', err);
-    });
-    
+    window.electronAPI.database
+      .getCurrentLanguage()
+      .then(async (language) => {
+        this.currentLanguage = language;
+        const proficiency = await checkProficiencyLevel(language);
+        this.currentProficiencyLevel = proficiency as ProficiencyLevel | null;
+
+        // Create dialog session for tracking
+        try {
+          this.currentSessionId = await window.electronAPI.tracking.createSession(
+            'dialog',
+            language
+          );
+        } catch (error) {
+          console.warn('Failed to create dialog session:', error);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load current language:', err);
+      });
+
     this.loadDialogSession();
     this.checkSpeechRecognitionReady();
     this.loadAutoplaySetting();
-    
+
     // Set up periodic checks
     this.speechRecognitionCheckTimer = window.setInterval(() => {
       this.checkSpeechRecognitionReady();
@@ -192,13 +202,13 @@ export class DialogMode extends BaseComponent {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    
+
     // Clean up transcription progress listener
     if (this.transcriptionProgressUnsubscribe) {
       this.transcriptionProgressUnsubscribe();
       this.transcriptionProgressUnsubscribe = null;
     }
-    
+
     // Clean up recording timers
     this.clearRecordingTimer();
     this.clearRecordingStatusCheck();
@@ -206,20 +216,20 @@ export class DialogMode extends BaseComponent {
       clearInterval(this.speechRecognitionCheckTimer);
       this.speechRecognitionCheckTimer = null;
     }
-    
+
     // Cancel any ongoing recording
     if (this.isRecording) {
-      this.cancelRecording().catch(err => {
+      this.cancelRecording().catch((err) => {
         console.error('Error cancelling recording on disconnect:', err);
       });
     }
-    
+
     // Clean up keyboard bindings
     if (this.keyboardUnsubscribe) {
       this.keyboardUnsubscribe();
       this.keyboardUnsubscribe = undefined;
     }
-    
+
     // Clean up audio
     if (this.currentAudioElement) {
       this.currentAudioElement.pause();
@@ -247,56 +257,61 @@ export class DialogMode extends BaseComponent {
         console.log('[DialogMode] loadDialogSession - using cached session from session manager', {
           sessionId: cachedSession.id,
           sentenceId: cachedSession.sentenceId,
-          responseOptionsCount: cachedSession.responseOptions.length
+          responseOptionsCount: cachedSession.responseOptions.length,
         });
-        
+
         // Reload autoplay setting to ensure it's up-to-date
         await this.loadAutoplaySetting();
-        
+
         // Get current language to verify cached session is for the correct language
         const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
-        
+
         // Load from cache
         try {
-          const sentences = await window.electronAPI.database.getSentencesByIds([cachedSession.sentenceId]);
+          const sentences = await window.electronAPI.database.getSentencesByIds([
+            cachedSession.sentenceId,
+          ]);
           const sentence = sentences && sentences.length > 0 ? sentences[0] : null;
-          
+
           if (!sentence) {
-            console.log('[DialogMode] loadDialogSession - cached session sentence not found in DB, discarding session', {
-              sessionId: cachedSession.id,
-              cachedSentenceId: cachedSession.sentenceId
-            });
+            console.log(
+              '[DialogMode] loadDialogSession - cached session sentence not found in DB, discarding session',
+              {
+                sessionId: cachedSession.id,
+                cachedSentenceId: cachedSession.sentenceId,
+              }
+            );
             sessionManager.consumeCurrentDialogSession();
           } else if (sentence) {
             // Verify the sentence's language matches the current language
             const word = await window.electronAPI.database.getWordById(sentence.wordId);
-            
+
             if (word && word.language === currentLanguage) {
               console.log('[DialogMode] loadDialogSession - cached session validated and loaded', {
                 sessionId: cachedSession.id,
                 sentenceId: sentence.id,
                 wordId: sentence.wordId,
                 language: currentLanguage,
-                responseOptionsCount: cachedSession.responseOptions.length
+                responseOptionsCount: cachedSession.responseOptions.length,
               });
               this.currentSentence = sentence;
               this.beforeSentenceAudio = cachedSession.beforeSentenceAudio || null;
               this.afterSentenceAudio = cachedSession.afterSentenceAudio || null;
-              
+
               // Convert cached response options back to DialogueVariant format
-              this.responseOptions = cachedSession.responseOptions.map(v => ({
+              this.responseOptions = cachedSession.responseOptions.map((v) => ({
                 id: v.id,
                 sentenceId: v.sentenceId,
                 variantSentence: v.variantSentence,
                 variantTranslation: v.variantTranslation,
-                createdAt: new Date(v.createdAt)
+                createdAt: new Date(v.createdAt),
               }));
-              
+
               // Don't consume yet - will be consumed when user completes the dialog (in nextDialog)
               // This allows the session to persist if the user navigates away and comes back
-              
+
               this.isLoading = false;
-              
+
               // Auto-play trigger audio if available and autoplay is enabled
               if (this.beforeSentenceAudio && this.autoplayEnabled) {
                 requestAnimationFrame(() => {
@@ -308,12 +323,15 @@ export class DialogMode extends BaseComponent {
               return;
             } else {
               // Language mismatch - discard cached session
-              console.log('[DialogMode] loadDialogSession - language mismatch, discarding cached session', {
-                sessionId: cachedSession.id,
-                sentenceId: sentence.id,
-                wordLanguage: word?.language || 'NOT_FOUND',
-                currentLanguage: currentLanguage
-              });
+              console.log(
+                '[DialogMode] loadDialogSession - language mismatch, discarding cached session',
+                {
+                  sessionId: cachedSession.id,
+                  sentenceId: sentence.id,
+                  wordLanguage: word?.language || 'NOT_FOUND',
+                  currentLanguage: currentLanguage,
+                }
+              );
               sessionManager.consumeCurrentDialogSession();
             }
           }
@@ -321,7 +339,7 @@ export class DialogMode extends BaseComponent {
           console.error('[DialogMode] loadDialogSession - error during validation', {
             sessionId: cachedSession.id,
             cachedSentenceId: cachedSession.sentenceId,
-            error
+            error,
           });
           sessionManager.consumeCurrentDialogSession();
         }
@@ -329,13 +347,13 @@ export class DialogMode extends BaseComponent {
 
       // No cached session - generate new one
       console.log('[DialogMode] loadDialogSession - no cached session, generating new');
-      
+
       // Reload autoplay setting to ensure it's up-to-date
       await this.loadAutoplaySetting();
-      
+
       // Step 1: Select a sentence with high word strengths
       const sentence = await window.electronAPI.dialog.selectSentence();
-      
+
       if (!sentence) {
         console.log('[DialogMode] loadDialogSession - no sentence available');
         this.error = 'No sentences available for dialog practice. Please learn more words first.';
@@ -345,7 +363,7 @@ export class DialogMode extends BaseComponent {
 
       console.log('[DialogMode] loadDialogSession - selected new sentence', {
         sentenceId: sentence.id,
-        wordId: sentence.wordId
+        wordId: sentence.wordId,
       });
       this.currentSentence = sentence;
 
@@ -363,47 +381,49 @@ export class DialogMode extends BaseComponent {
       // Step 3: Generate response options (target + 2 variants)
       try {
         console.log('[DialogMode] loadDialogSession - generating variants', {
-          sentenceId: sentence.id
+          sentenceId: sentence.id,
         });
         const variants = await window.electronAPI.dialog.generateVariants(sentence.id);
-        
+
         console.log('[DialogMode] loadDialogSession - variants generated', {
           sentenceId: sentence.id,
           variantsCount: variants.length,
-          variantIds: variants.map(v => v.id)
+          variantIds: variants.map((v) => v.id),
         });
-        
+
         // Create a pseudo-variant for the original sentence (using negative ID to indicate it's the original)
         const originalVariant: DialogueVariant = {
           id: -sentence.id, // Negative ID to indicate it's the original sentence
           sentenceId: sentence.id,
           variantSentence: sentence.sentence,
           variantTranslation: sentence.translation,
-          createdAt: new Date()
+          createdAt: new Date(),
         };
-        
+
         // Combine target sentence with variants
         this.responseOptions = [
           originalVariant,
-          ...variants.slice(0, 2) // Take up to 2 variants
+          ...variants.slice(0, 2), // Take up to 2 variants
         ];
-        
+
         // Shuffle options so target isn't always first
         this.responseOptions.sort(() => Math.random() - 0.5);
       } catch (error) {
         console.error('Failed to generate variants:', error);
         // Fallback: use only the target sentence
-        this.responseOptions = [{
-          id: -sentence.id,
-          sentenceId: sentence.id,
-          variantSentence: sentence.sentence,
-          variantTranslation: sentence.translation,
-          createdAt: new Date()
-        }];
+        this.responseOptions = [
+          {
+            id: -sentence.id,
+            sentenceId: sentence.id,
+            variantSentence: sentence.sentence,
+            variantTranslation: sentence.translation,
+            createdAt: new Date(),
+          },
+        ];
       }
 
       this.isLoading = false;
-      
+
       // Save the generated session to cache so it persists across navigation
       // Only save if we have response options
       if (this.responseOptions && this.responseOptions.length > 0) {
@@ -419,23 +439,23 @@ export class DialogMode extends BaseComponent {
             contextAfterTranslation: sentence.contextAfterTranslation,
             beforeSentenceAudio: this.beforeSentenceAudio || undefined,
             afterSentenceAudio: this.afterSentenceAudio || undefined,
-            responseOptions: this.responseOptions.map(v => ({
+            responseOptions: this.responseOptions.map((v) => ({
               id: v.id,
               sentenceId: v.sentenceId,
               variantSentence: v.variantSentence,
               variantTranslation: v.variantTranslation,
-              createdAt: v.createdAt.toISOString()
+              createdAt: v.createdAt.toISOString(),
             })),
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
           };
-          
+
           // Add to cache (will set currentDialogIndex if it's the first session)
           sessionManager.addDialogSession(dialogSession);
         } catch (error) {
           console.error('[DialogMode] loadDialogSession - failed to save session to cache', error);
         }
       }
-      
+
       // Auto-play trigger audio if available and autoplay is enabled (after component updates)
       if (this.beforeSentenceAudio && this.autoplayEnabled) {
         // Use requestAnimationFrame to ensure component has rendered
@@ -484,9 +504,9 @@ export class DialogMode extends BaseComponent {
         // Stop multiple times to ensure any queued auto-play is cancelled
         try {
           await window.electronAPI.audio.stopAudio();
-          await new Promise(resolve => setTimeout(resolve, 200));
+          await new Promise((resolve) => setTimeout(resolve, 200));
           await window.electronAPI.audio.stopAudio(); // Stop again to catch any late-starting audio
-          await new Promise(resolve => setTimeout(resolve, 200));
+          await new Promise((resolve) => setTimeout(resolve, 200));
         } catch (stopError) {
           // Ignore errors when stopping (might not be playing)
         }
@@ -497,25 +517,29 @@ export class DialogMode extends BaseComponent {
             console.log('[DialogMode] Playing trigger audio:', this.beforeSentenceAudio);
             await window.electronAPI.audio.playAudio(this.beforeSentenceAudio);
             console.log('[DialogMode] Trigger audio finished');
-            
+
             // Track sentence play count
             if (this.currentSentence?.id) {
-              void window.electronAPI.database.incrementSentencePlayCount(this.currentSentence.id).catch(err => {
-                console.warn('Failed to increment sentence play count:', err);
-              });
+              void window.electronAPI.database
+                .incrementSentencePlayCount(this.currentSentence.id)
+                .catch((err) => {
+                  console.warn('Failed to increment sentence play count:', err);
+                });
             }
             // Track audio playback event
             if (this.currentSentence?.id && this.currentLanguage) {
-              void window.electronAPI.tracking.recordAudioPlayback({
-                sessionId: this.currentSessionId,
-                sentenceId: this.currentSentence.id,
-                audioPath: this.beforeSentenceAudio,
-                language: this.currentLanguage,
-                mode: 'dialog',
-                playbackSpeed: 1.0 // Dialog mode doesn't have playback speed control
-              }).catch((err: unknown) => {
-                console.warn('Failed to record audio playback:', err);
-              });
+              void window.electronAPI.tracking
+                .recordAudioPlayback({
+                  sessionId: this.currentSessionId,
+                  sentenceId: this.currentSentence.id,
+                  audioPath: this.beforeSentenceAudio,
+                  language: this.currentLanguage,
+                  mode: 'dialog',
+                  playbackSpeed: 1.0, // Dialog mode doesn't have playback speed control
+                })
+                .catch((err: unknown) => {
+                  console.warn('Failed to record audio playback:', err);
+                });
             }
           } catch (error) {
             console.error('Failed to play trigger audio:', error);
@@ -527,9 +551,12 @@ export class DialogMode extends BaseComponent {
         if (this.recordedAudioPath) {
           try {
             // Normalize/amplify the recording for better playback volume (5dB amplification)
-            const normalizedPath = await window.electronAPI.audio.normalizeAudioVolume(this.recordedAudioPath, 5);
+            const normalizedPath = await window.electronAPI.audio.normalizeAudioVolume(
+              this.recordedAudioPath,
+              5
+            );
             const audioPathToPlay = normalizedPath || this.recordedAudioPath;
-            
+
             console.log('[DialogMode] Playing user recording:', audioPathToPlay);
             await window.electronAPI.audio.playAudio(audioPathToPlay);
             console.log('[DialogMode] User recording finished');
@@ -581,25 +608,29 @@ export class DialogMode extends BaseComponent {
       // Play the trigger audio
       await window.electronAPI.audio.playAudio(this.beforeSentenceAudio);
       this.isAudioPlaying = false; // Reset when audio finishes
-      
+
       // Track sentence play count
       if (this.currentSentence?.id) {
-        void window.electronAPI.database.incrementSentencePlayCount(this.currentSentence.id).catch(err => {
-          console.warn('Failed to increment sentence play count:', err);
-        });
+        void window.electronAPI.database
+          .incrementSentencePlayCount(this.currentSentence.id)
+          .catch((err) => {
+            console.warn('Failed to increment sentence play count:', err);
+          });
       }
       // Track audio playback event
       if (this.currentSentence?.id && this.currentLanguage) {
-        void window.electronAPI.tracking.recordAudioPlayback({
-          sessionId: this.currentSessionId,
-          sentenceId: this.currentSentence.id,
-          audioPath: this.beforeSentenceAudio,
-          language: this.currentLanguage,
-          mode: 'dialog',
-          playbackSpeed: 1.0 // Dialog mode doesn't have playback speed control
-        }).catch((err: unknown) => {
-          console.warn('Failed to record audio playback:', err);
-        });
+        void window.electronAPI.tracking
+          .recordAudioPlayback({
+            sessionId: this.currentSessionId,
+            sentenceId: this.currentSentence.id,
+            audioPath: this.beforeSentenceAudio,
+            language: this.currentLanguage,
+            mode: 'dialog',
+            playbackSpeed: 1.0, // Dialog mode doesn't have playback speed control
+          })
+          .catch((err: unknown) => {
+            console.warn('Failed to record audio playback:', err);
+          });
       }
     } catch (error) {
       console.error('Failed to play before sentence audio:', error);
@@ -622,25 +653,29 @@ export class DialogMode extends BaseComponent {
       // Play the afterSentence audio
       await window.electronAPI.audio.playAudio(this.afterSentenceAudio);
       this.isAudioPlaying = false; // Reset when audio finishes
-      
+
       // Track sentence play count
       if (this.currentSentence?.id) {
-        void window.electronAPI.database.incrementSentencePlayCount(this.currentSentence.id).catch(err => {
-          console.warn('Failed to increment sentence play count:', err);
-        });
+        void window.electronAPI.database
+          .incrementSentencePlayCount(this.currentSentence.id)
+          .catch((err) => {
+            console.warn('Failed to increment sentence play count:', err);
+          });
       }
       // Track audio playback event
       if (this.currentSentence?.id && this.currentLanguage) {
-        void window.electronAPI.tracking.recordAudioPlayback({
-          sessionId: this.currentSessionId,
-          sentenceId: this.currentSentence.id,
-          audioPath: this.afterSentenceAudio,
-          language: this.currentLanguage,
-          mode: 'dialog',
-          playbackSpeed: 1.0 // Dialog mode doesn't have playback speed control
-        }).catch((err: unknown) => {
-          console.warn('Failed to record audio playback:', err);
-        });
+        void window.electronAPI.tracking
+          .recordAudioPlayback({
+            sessionId: this.currentSessionId,
+            sentenceId: this.currentSentence.id,
+            audioPath: this.afterSentenceAudio,
+            language: this.currentLanguage,
+            mode: 'dialog',
+            playbackSpeed: 1.0, // Dialog mode doesn't have playback speed control
+          })
+          .catch((err: unknown) => {
+            console.warn('Failed to record audio playback:', err);
+          });
       }
     } catch (error) {
       console.error('Failed to play after sentence audio:', error);
@@ -697,7 +732,7 @@ export class DialogMode extends BaseComponent {
       await this.playFollowUpAudio();
       return;
     }
-    
+
     // 2. Fallback to before sentence audio (initial trigger)
     if (this.beforeSentenceAudio) {
       await this.playBeforeSentence();
@@ -711,7 +746,7 @@ export class DialogMode extends BaseComponent {
         ...GlobalShortcuts.RECORD_PRONUNCIATION,
         action: () => this.toggleRecording(),
         context: 'dialog',
-        description: 'Toggle pronunciation recorder'
+        description: 'Toggle pronunciation recorder',
       },
       // Audio replay (speaker button)
       {
@@ -722,7 +757,7 @@ export class DialogMode extends BaseComponent {
           }
         },
         context: 'dialog',
-        description: 'Play trigger audio'
+        description: 'Play trigger audio',
       },
       // Toggle translation visibility
       {
@@ -731,7 +766,7 @@ export class DialogMode extends BaseComponent {
           this.showTranslations = !this.showTranslations;
         },
         context: 'dialog',
-        description: 'Toggle English translation visibility'
+        description: 'Toggle English translation visibility',
       },
       // Next dialog
       {
@@ -743,8 +778,8 @@ export class DialogMode extends BaseComponent {
           }
         },
         context: 'dialog',
-        description: 'Next dialog'
-      }
+        description: 'Next dialog',
+      },
     ];
 
     this.keyboardUnsubscribe = useKeyboardBindings(bindings);
@@ -754,7 +789,7 @@ export class DialogMode extends BaseComponent {
     if (!this.speechRecognitionReady || !this.responseOptions.length) {
       return;
     }
-    
+
     if (this.isRecording) {
       await this.stopRecording();
     } else {
@@ -781,7 +816,7 @@ export class DialogMode extends BaseComponent {
         channels: 1,
         threshold: 0.5,
         silence: '1.0',
-        endOnSilence: true
+        endOnSilence: true,
       };
 
       const session = await window.electronAPI.audio.startRecording(recordingOptions);
@@ -790,7 +825,7 @@ export class DialogMode extends BaseComponent {
       this.currentRecording = null;
       this.transcriptionResult = null;
       this.isTranscribing = false;
-      
+
       // Start recording timer
       this.recordingTimer = window.setInterval(() => {
         this.recordingTime += 1;
@@ -815,7 +850,7 @@ export class DialogMode extends BaseComponent {
       this.isRecording = false;
       this.clearRecordingTimer();
       this.clearRecordingStatusCheck();
-      
+
       // Hide transcribing box when stopping recording
       this.isTranscribing = false;
       this.streamingTranscriptionText = null;
@@ -823,14 +858,15 @@ export class DialogMode extends BaseComponent {
       if (completedSession && !completedSession.isRecording) {
         // Get the recording file path from the session
         const filePath = completedSession.filePath;
-        
+
         // Calculate duration if available
-        const duration = completedSession.duration || (Date.now() - completedSession.startTime) / 1000;
+        const duration =
+          completedSession.duration || (Date.now() - completedSession.startTime) / 1000;
 
         this.currentRecording = {
           session: completedSession,
           filePath,
-          duration
+          duration,
         };
 
         // Automatically perform speech recognition
@@ -915,15 +951,16 @@ export class DialogMode extends BaseComponent {
 
     try {
       const completedSession = await window.electronAPI.audio.getCurrentRecordingSession();
-      
+
       if (completedSession && !completedSession.isRecording) {
         const filePath = completedSession.filePath;
-        const duration = completedSession.duration || (Date.now() - completedSession.startTime) / 1000;
+        const duration =
+          completedSession.duration || (Date.now() - completedSession.startTime) / 1000;
 
         this.currentRecording = {
           session: completedSession,
           filePath,
-          duration
+          duration,
         };
 
         // Automatically perform speech recognition
@@ -952,7 +989,7 @@ export class DialogMode extends BaseComponent {
       const transcription = await window.electronAPI.audio.transcribeAudio(
         this.currentRecording.filePath,
         {
-          language: currentLanguage
+          language: currentLanguage,
         }
       );
 
@@ -967,7 +1004,7 @@ export class DialogMode extends BaseComponent {
           );
           return {
             option,
-            comparison
+            comparison,
           };
         })
       );
@@ -979,7 +1016,7 @@ export class DialogMode extends BaseComponent {
 
       this.transcriptionResult = {
         text: transcription.text,
-        ...bestMatch.comparison
+        ...bestMatch.comparison,
       };
       this.selectedOption = bestMatch.option;
 
@@ -1010,7 +1047,7 @@ export class DialogMode extends BaseComponent {
         // Mark transcription as complete first
         this.isTranscribing = false;
         this.streamingTranscriptionText = null;
-        
+
         // Then generate follow-up continuation
         await this.generateFollowUp();
       } else {
@@ -1027,7 +1064,7 @@ export class DialogMode extends BaseComponent {
         normalizedTranscribed: '',
         normalizedExpected: '',
         expectedWords: [],
-        transcribedWords: []
+        transcribedWords: [],
       };
       // Mark transcription as complete on error
       this.isTranscribing = false;
@@ -1038,9 +1075,12 @@ export class DialogMode extends BaseComponent {
   /**
    * Parse sentence text into words while preserving punctuation and whitespace
    */
-  private parseSentenceWords(text: string): Array<{ word: string; normalized: string; trailing: string; leading: string }> {
+  private parseSentenceWords(
+    text: string
+  ): Array<{ word: string; normalized: string; trailing: string; leading: string }> {
     // Match words (Unicode letters and numbers) and capture surrounding whitespace/punctuation
-    const words: Array<{ word: string; normalized: string; trailing: string; leading: string }> = [];
+    const words: Array<{ word: string; normalized: string; trailing: string; leading: string }> =
+      [];
     const wordRegex = /[\p{L}\p{N}]+/gu;
     let lastIndex = 0;
     let match;
@@ -1054,7 +1094,7 @@ export class DialogMode extends BaseComponent {
         word: match[0],
         normalized,
         trailing: '',
-        leading
+        leading,
       });
 
       lastIndex = match.index + match[0].length;
@@ -1097,7 +1137,7 @@ export class DialogMode extends BaseComponent {
     let bubbleTextContent: TemplateResult;
     if (expectedWords && expectedWords.length > 0) {
       const parsedWords = this.parseSentenceWords(userText);
-      
+
       // Match parsed words to expectedWords by position and normalized comparison
       const wordElements: TemplateResult[] = [];
       let expectedWordIndex = 0;
@@ -1110,17 +1150,21 @@ export class DialogMode extends BaseComponent {
           const expectedWord = expectedWords[expectedWordIndex];
           // Normalize expected word for comparison (it's already normalized but may have slight differences)
           const expectedNormalized = expectedWord.word.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
-          
-          if (parsedWord.normalized === expectedNormalized || 
-              parsedWord.normalized.startsWith(expectedNormalized) ||
-              expectedNormalized.startsWith(parsedWord.normalized)) {
+
+          if (
+            parsedWord.normalized === expectedNormalized ||
+            parsedWord.normalized.startsWith(expectedNormalized) ||
+            expectedNormalized.startsWith(parsedWord.normalized)
+          ) {
             wordInfo = expectedWord;
             expectedWordIndex++;
           } else {
             // Try to find a match later in the array (in case of word order differences)
             for (let i = expectedWordIndex + 1; i < expectedWords.length; i++) {
               const otherExpected = expectedWords[i];
-              const otherNormalized = otherExpected.word.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+              const otherNormalized = otherExpected.word
+                .toLowerCase()
+                .replace(/[^\p{L}\p{N}]/gu, '');
               if (parsedWord.normalized === otherNormalized) {
                 wordInfo = otherExpected;
                 expectedWordIndex = i + 1;
@@ -1132,9 +1176,13 @@ export class DialogMode extends BaseComponent {
 
         const color = wordInfo ? this.getWordColor(wordInfo) : 'white'; // Default to white if no match
         wordElements.push(html`
-          ${parsedWord.leading}<span style="color: ${color}; font-weight: ${wordInfo && !wordInfo.matched ? 'bold' : 'normal'};">
-            ${parsedWord.word}
-          </span>${parsedWord.trailing}
+          ${parsedWord.leading}<span
+            style="color: ${color}; font-weight: ${wordInfo && !wordInfo.matched
+              ? 'bold'
+              : 'normal'};"
+          >
+            ${parsedWord.word} </span
+          >${parsedWord.trailing}
         `);
       }
 
@@ -1149,27 +1197,32 @@ export class DialogMode extends BaseComponent {
         <div class="bubble-content">
           <div class="bubble-text-container">
             <p class="bubble-text">${bubbleTextContent}</p>
-            ${similarity !== undefined ? html`
-              <span class="similarity-badge ${this.getSimilarityClass(similarity)}">
-                ${Math.round(similarity * 100)}%
-              </span>
-            ` : nothing}
+            ${similarity !== undefined
+              ? html`
+                  <span class="similarity-badge ${this.getSimilarityClass(similarity)}">
+                    ${Math.round(similarity * 100)}%
+                  </span>
+                `
+              : nothing}
           </div>
-          ${this.showTranslations && userTranslation ? html`
-            <p class="bubble-translation">${userTranslation}</p>
-          ` : nothing}
-          ${similarity !== undefined && (() => {
+          ${this.showTranslations && userTranslation
+            ? html` <p class="bubble-translation">${userTranslation}</p> `
+            : nothing}
+          ${similarity !== undefined &&
+          (() => {
             const thresholds = getSimilarityThresholds(this.currentProficiencyLevel);
             return similarity < thresholds.successThreshold;
-          })() ? html`
-            <button 
-              class="btn btn-primary try-again-button"
-              @click=${this.startRecording}
-              style="margin-top: var(--spacing-sm); width: 100%;"
-            >
-              Try Again
-            </button>
-          ` : nothing}
+          })()
+            ? html`
+                <button
+                  class="btn btn-primary try-again-button"
+                  @click=${this.startRecording}
+                  style="margin-top: var(--spacing-sm); width: 100%;"
+                >
+                  Try Again
+                </button>
+              `
+            : nothing}
         </div>
       </div>
     `;
@@ -1188,7 +1241,7 @@ export class DialogMode extends BaseComponent {
       this.followUpTranslation = followUp.translation || '';
       this.followUpAudio = followUp.audio || null;
       this.showFollowUp = true;
-      
+
       // Auto-play continuation audio if available and autoplay is enabled
       if (this.followUpAudio && this.autoplayEnabled) {
         requestAnimationFrame(() => {
@@ -1208,7 +1261,7 @@ export class DialogMode extends BaseComponent {
 
   private async nextDialog() {
     console.log('[DialogMode] nextDialog - user clicked next, consuming current session');
-    
+
     this.transcriptionResult = null;
     this.selectedOption = null;
     this.followUpText = '';
@@ -1216,20 +1269,20 @@ export class DialogMode extends BaseComponent {
     this.followUpAudio = null;
     this.showFollowUp = false;
     this.recordedAudioPath = null;
-    
+
     // Consume the current dialog session (mark it as used and advance to next)
     const currentSession = sessionManager.getCurrentDialogSession();
     if (currentSession) {
       console.log('[DialogMode] nextDialog - consuming session', {
         sessionId: currentSession.id,
-        sentenceId: currentSession.sentenceId
+        sentenceId: currentSession.sentenceId,
       });
     }
     sessionManager.consumeCurrentDialogSession();
-    
+
     // Increment dialog count
     this.dialogCount++;
-    
+
     // Check if we've completed 5 dialogs
     if (this.dialogCount >= 5) {
       // Dispatch event for autopilot to check scores after 5 dialogs are done
@@ -1237,13 +1290,13 @@ export class DialogMode extends BaseComponent {
       // Reset counter for next batch
       this.dialogCount = 0;
     }
-    
+
     // Load the next session from the queue
     await this.loadDialogSession();
-    
+
     // Schedule a new dialog session to be generated asynchronously and added to the end of the queue
     setImmediate(() => {
-      this.scheduleNewDialogSession().catch(error => {
+      this.scheduleNewDialogSession().catch((error) => {
         console.error('Failed to schedule new dialog session:', error);
         // Non-critical error - continue without new session
       });
@@ -1262,19 +1315,21 @@ export class DialogMode extends BaseComponent {
       }
 
       // Convert response options dates from ISO strings back to Date objects
-      const responseOptions = sessionData.responseOptions.map((v: {
-        id: number;
-        sentenceId: number;
-        variantSentence: string;
-        variantTranslation: string;
-        createdAt: string;
-      }) => ({
-        id: v.id,
-        sentenceId: v.sentenceId,
-        variantSentence: v.variantSentence,
-        variantTranslation: v.variantTranslation,
-        createdAt: new Date(v.createdAt)
-      }));
+      const responseOptions = sessionData.responseOptions.map(
+        (v: {
+          id: number;
+          sentenceId: number;
+          variantSentence: string;
+          variantTranslation: string;
+          createdAt: string;
+        }) => ({
+          id: v.id,
+          sentenceId: v.sentenceId,
+          variantSentence: v.variantSentence,
+          variantTranslation: v.variantTranslation,
+          createdAt: new Date(v.createdAt),
+        })
+      );
 
       // Create dialog session state
       const dialogSession: import('../utils/session-manager.js').DialogSessionState = {
@@ -1285,20 +1340,22 @@ export class DialogMode extends BaseComponent {
         contextBefore: sessionData.contextBefore,
         contextBeforeTranslation: sessionData.contextBeforeTranslation,
         beforeSentenceAudio: sessionData.beforeSentenceAudio,
-        responseOptions: responseOptions.map((v: {
-          id: number;
-          sentenceId: number;
-          variantSentence: string;
-          variantTranslation: string;
-          createdAt: Date;
-        }) => ({
-          id: v.id,
-          sentenceId: v.sentenceId,
-          variantSentence: v.variantSentence,
-          variantTranslation: v.variantTranslation,
-          createdAt: v.createdAt.toISOString()
-        })),
-        createdAt: new Date().toISOString()
+        responseOptions: responseOptions.map(
+          (v: {
+            id: number;
+            sentenceId: number;
+            variantSentence: string;
+            variantTranslation: string;
+            createdAt: Date;
+          }) => ({
+            id: v.id,
+            sentenceId: v.sentenceId,
+            variantSentence: v.variantSentence,
+            variantTranslation: v.variantTranslation,
+            createdAt: v.createdAt.toISOString(),
+          })
+        ),
+        createdAt: new Date().toISOString(),
       };
 
       // Add to the end of the queue (FIFO - removes oldest if queue is full)
@@ -1306,7 +1363,7 @@ export class DialogMode extends BaseComponent {
       console.log('New dialog session generated and added to queue:', {
         sessionId: dialogSession.id,
         sentenceId: dialogSession.sentenceId,
-        variantsCount: dialogSession.responseOptions.length
+        variantsCount: dialogSession.responseOptions.length,
       });
     } catch (error) {
       console.error('Failed to schedule new dialog session:', error);
@@ -1332,9 +1389,7 @@ export class DialogMode extends BaseComponent {
     }
 
     return html`
-      <div class="recording-section">
-        ${this.isRecording ? this.renderRecordingStatus() : ''}
-      </div>
+      <div class="recording-section">${this.isRecording ? this.renderRecordingStatus() : ''}</div>
     `;
   }
 
@@ -1350,7 +1405,7 @@ export class DialogMode extends BaseComponent {
           <span class="recording-time">${formattedTime}</span>
           <span class="recording-indicator">Recording…</span>
         </div>
-        <button 
+        <button
           class="cancel-recording-button"
           @click=${this.cancelRecording}
           title="Cancel recording"
@@ -1567,7 +1622,9 @@ export class DialogMode extends BaseComponent {
       }
 
       @keyframes typing-bounce {
-        0%, 60%, 100% {
+        0%,
+        60%,
+        100% {
           transform: translateY(0);
           opacity: 0.7;
         }
@@ -1646,7 +1703,8 @@ export class DialogMode extends BaseComponent {
       }
 
       @keyframes recording-pulse {
-        0%, 100% {
+        0%,
+        100% {
           opacity: 1;
           transform: scale(1);
         }
@@ -1870,7 +1928,8 @@ export class DialogMode extends BaseComponent {
       }
 
       @keyframes pulse-glow {
-        0%, 100% {
+        0%,
+        100% {
           box-shadow: 0 0 12px rgba(0, 123, 255, 0.5);
         }
         50% {
@@ -2008,7 +2067,7 @@ export class DialogMode extends BaseComponent {
         text-align: center;
         padding: var(--spacing-xl);
       }
-    `
+    `,
   ];
 
   render() {
@@ -2042,121 +2101,149 @@ export class DialogMode extends BaseComponent {
           <div class="control-buttons">
             <div class="translations-toggle">
               <span class="translations-label">Hide English</span>
-              <div 
+              <div
                 class="translations-switch ${!this.showTranslations ? 'active' : ''}"
-                @click=${() => { this.showTranslations = !this.showTranslations; }}
+                @click=${() => {
+                  this.showTranslations = !this.showTranslations;
+                }}
                 title="Hide English translations"
                 aria-label="Hide English translations"
               >
                 <div class="translations-slider"></div>
               </div>
             </div>
-            ${(this.beforeSentenceAudio || this.followUpAudio) ? html`
-              <button 
-                class="audio-replay-button" 
-                @click=${this.playLatestAssistantAudio}
-                ?disabled=${this.isRecording}
-                title="Replay latest assistant audio"
-                aria-label="Replay latest assistant audio"
-              >
-                <span aria-hidden="true">🔊</span>
-              </button>
-            ` : nothing}
-            ${(this.responseOptions.length > 0 && !this.transcriptionResult) ? html`
-              ${this.isRecording ? html`
-                <button 
-                  class="record-button recording"
-                  @click=${this.stopRecording}
-                  title="Stop recording"
-                  aria-label="Stop recording"
-                >
-                  <span aria-hidden="true">⏹</span>
-                </button>
-              ` : html`
-                <button 
-                  class="record-button"
-                  @click=${this.startRecording}
-                  ?disabled=${!this.speechRecognitionReady}
-                  title=${this.speechRecognitionReady ? 'Start recording' : 'Speech recognition not ready'}
-                  aria-label="Start recording"
-                >
-                  <span aria-hidden="true">🎤</span>
-                </button>
-              `}
-            ` : nothing}
+            ${this.beforeSentenceAudio || this.followUpAudio
+              ? html`
+                  <button
+                    class="audio-replay-button"
+                    @click=${this.playLatestAssistantAudio}
+                    ?disabled=${this.isRecording}
+                    title="Replay latest assistant audio"
+                    aria-label="Replay latest assistant audio"
+                  >
+                    <span aria-hidden="true">🔊</span>
+                  </button>
+                `
+              : nothing}
+            ${this.responseOptions.length > 0 && !this.transcriptionResult
+              ? html`
+                  ${this.isRecording
+                    ? html`
+                        <button
+                          class="record-button recording"
+                          @click=${this.stopRecording}
+                          title="Stop recording"
+                          aria-label="Stop recording"
+                        >
+                          <span aria-hidden="true">⏹</span>
+                        </button>
+                      `
+                    : html`
+                        <button
+                          class="record-button"
+                          @click=${this.startRecording}
+                          ?disabled=${!this.speechRecognitionReady}
+                          title=${this.speechRecognitionReady
+                            ? 'Start recording'
+                            : 'Speech recognition not ready'}
+                          aria-label="Start recording"
+                        >
+                          <span aria-hidden="true">🎤</span>
+                        </button>
+                      `}
+                `
+              : nothing}
           </div>
         </div>
 
         <div class="dialog-bubbles">
-          ${this.currentSentence.contextBefore ? html`
-            <div class="dialog-bubble bubble-left">
-              <div class="bubble-content">
-                <p class="bubble-text">${this.currentSentence.contextBefore}</p>
-                ${this.showTranslations && this.currentSentence.contextBeforeTranslation ? html`
-                  <p class="bubble-translation">${this.currentSentence.contextBeforeTranslation}</p>
-                ` : nothing}
-              </div>
-            </div>
-          ` : nothing}
-
-          ${this.transcriptionResult && this.selectedOption ? html`
-            ${this.renderUserBubble(
-              this.selectedOption.variantSentence,
-              this.selectedOption.variantTranslation || '',
-              this.transcriptionResult.similarity,
-              this.transcriptionResult.expectedWords
-            )}
-          ` : this.responseOptions.length > 0 && !this.transcriptionResult ? html`
-            <div class="response-options">
-              ${this.responseOptions.map((option, index) => html`
-                <div class="response-option">
-                  <p class="sentence">${option.variantSentence}</p>
-                  ${this.showTranslations ? html`
-                    <p class="translation">${option.variantTranslation}</p>
-                  ` : nothing}
+          ${this.currentSentence.contextBefore
+            ? html`
+                <div class="dialog-bubble bubble-left">
+                  <div class="bubble-content">
+                    <p class="bubble-text">${this.currentSentence.contextBefore}</p>
+                    ${this.showTranslations && this.currentSentence.contextBeforeTranslation
+                      ? html`
+                          <p class="bubble-translation">
+                            ${this.currentSentence.contextBeforeTranslation}
+                          </p>
+                        `
+                      : nothing}
+                  </div>
                 </div>
-            `)}
-          </div>
-        ` : nothing}
-
-          ${this.isGeneratingFollowUp && !this.isTranscribing ? html`
-            <div class="dialog-bubble bubble-left">
-              <div class="bubble-content">
-                <p class="bubble-text typing-indicator">
-                  <span class="typing-dot"></span>
-                  <span class="typing-dot"></span>
-                  <span class="typing-dot"></span>
-                </p>
-              </div>
-            </div>
-          ` : nothing}
-
-          ${this.showFollowUp && this.followUpText ? html`
-            <div class="dialog-bubble bubble-left">
-              <div class="bubble-content">
-                <p class="bubble-text">${this.followUpText}</p>
-                ${this.showTranslations && this.followUpTranslation ? html`
-                  <p class="bubble-translation">${this.followUpTranslation}</p>
-                ` : nothing}
-              </div>
-            </div>
-          ` : nothing}
+              `
+            : nothing}
+          ${this.transcriptionResult && this.selectedOption
+            ? html`
+                ${this.renderUserBubble(
+                  this.selectedOption.variantSentence,
+                  this.selectedOption.variantTranslation || '',
+                  this.transcriptionResult.similarity,
+                  this.transcriptionResult.expectedWords
+                )}
+              `
+            : this.responseOptions.length > 0 && !this.transcriptionResult
+              ? html`
+                  <div class="response-options">
+                    ${this.responseOptions.map(
+                      (option, index) => html`
+                        <div class="response-option">
+                          <p class="sentence">${option.variantSentence}</p>
+                          ${this.showTranslations
+                            ? html` <p class="translation">${option.variantTranslation}</p> `
+                            : nothing}
+                        </div>
+                      `
+                    )}
+                  </div>
+                `
+              : nothing}
+          ${this.isGeneratingFollowUp && !this.isTranscribing
+            ? html`
+                <div class="dialog-bubble bubble-left">
+                  <div class="bubble-content">
+                    <p class="bubble-text typing-indicator">
+                      <span class="typing-dot"></span>
+                      <span class="typing-dot"></span>
+                      <span class="typing-dot"></span>
+                    </p>
+                  </div>
+                </div>
+              `
+            : nothing}
+          ${this.showFollowUp && this.followUpText
+            ? html`
+                <div class="dialog-bubble bubble-left">
+                  <div class="bubble-content">
+                    <p class="bubble-text">${this.followUpText}</p>
+                    ${this.showTranslations && this.followUpTranslation
+                      ? html` <p class="bubble-translation">${this.followUpTranslation}</p> `
+                      : nothing}
+                  </div>
+                </div>
+              `
+            : nothing}
         </div>
 
         ${this.renderRecordingSection()}
-        ${!this.isGeneratingFollowUp ? html`
-          <button 
-            class="btn ${this.showFollowUp && this.followUpText ? 'btn-primary' : 'btn-secondary'}"
-            @click=${this.nextDialog}
-            ?disabled=${this.isRecording || this.isTranscribing}
-            style="margin-top: var(--spacing-md);"
-            title=${this.isRecording || this.isTranscribing ? 'Wait for recording/transcription to finish' : 'Skip to next dialog'}
-          >
-            Next Dialog
-          </button>
-        ` : nothing}
+        ${!this.isGeneratingFollowUp
+          ? html`
+              <button
+                class="btn ${this.showFollowUp && this.followUpText
+                  ? 'btn-primary'
+                  : 'btn-secondary'}"
+                @click=${this.nextDialog}
+                ?disabled=${this.isRecording || this.isTranscribing}
+                style="margin-top: var(--spacing-md);"
+                title=${this.isRecording || this.isTranscribing
+                  ? 'Wait for recording/transcription to finish'
+                  : 'Skip to next dialog'}
+              >
+                Next Dialog
+              </button>
+            `
+          : nothing}
       </div>
     `;
   }
 }
-

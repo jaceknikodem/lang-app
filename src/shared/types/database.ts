@@ -2,7 +2,14 @@
  * Database layer interfaces and types
  */
 
-import { Word, Sentence, StudyStats, CreateWordRequest, DictionaryEntry, DialogueVariant } from './core.js';
+import {
+  Word,
+  Sentence,
+  StudyStats,
+  CreateWordRequest,
+  DictionaryEntry,
+  DialogueVariant,
+} from './core.js';
 
 export type WordProcessingStatus = 'queued' | 'processing' | 'ready' | 'failed';
 export type WordGenerationJobStatus = 'queued' | 'processing' | 'completed' | 'failed';
@@ -36,18 +43,40 @@ export interface DatabaseLayer {
   markWordKnown(wordId: number, known: boolean): Promise<void>;
   markWordIgnored(wordId: number, ignored: boolean): Promise<void>;
   getWordsToStudy(limit: number, language: string): Promise<Word[]>;
-  getWordsByStrength(minStrength: number, maxStrength: number, language: string, limit?: number): Promise<Word[]>;
-  getAllWords(language: string, includeKnown?: boolean, includeIgnored?: boolean, maxWords?: number): Promise<Word[]>;
-  getWordsWithSentences(language: string, includeKnown?: boolean, includeIgnored?: boolean): Promise<Word[]>;
-  getWordsWithSentencesOrderedByStrength(language: string, includeKnown?: boolean, includeIgnored?: boolean): Promise<Word[]>;
+  getWordsByStrength(
+    minStrength: number,
+    maxStrength: number,
+    language: string,
+    limit?: number
+  ): Promise<Word[]>;
+  getAllWords(
+    language: string,
+    includeKnown?: boolean,
+    includeIgnored?: boolean,
+    maxWords?: number
+  ): Promise<Word[]>;
+  getWordsWithSentences(
+    language: string,
+    includeKnown?: boolean,
+    includeIgnored?: boolean
+  ): Promise<Word[]>;
+  getWordsWithSentencesOrderedByStrength(
+    language: string,
+    includeKnown?: boolean,
+    includeIgnored?: boolean
+  ): Promise<Word[]>;
   getWordById(wordId: number): Promise<Word | null>;
   getWordsByIds(wordIds: number[]): Promise<Word[]>;
   getKnownWordsForSentenceGeneration(language: string, limit?: number): Promise<string[]>;
   getKnownWords(language: string, minWordStrength: number, maxWords: number): Promise<string[]>;
-  getExistingWordsForDuplicateChecking(language: string, topic?: string, limit?: number): Promise<string[]>;
+  getExistingWordsForDuplicateChecking(
+    language: string,
+    topic?: string,
+    limit?: number
+  ): Promise<string[]>;
   getIgnoredWords(language: string, topic?: string): Promise<string[]>;
   checkWordsExist(language: string, words: string[], topic?: string): Promise<Set<string>>;
-  
+
   // SRS-specific operations
   updateWordSRS(
     wordId: number,
@@ -72,7 +101,7 @@ export interface DatabaseLayer {
     averageInterval: number;
     averageEaseFactor: number;
   }>;
-  
+
   // Sentence management
   insertSentence(
     wordId: number,
@@ -95,53 +124,89 @@ export interface DatabaseLayer {
   getSentenceById(sentenceId: number): Promise<Sentence | null>;
   deleteSentence(sentenceId: number): Promise<void>;
   updateSentenceLastShown(sentenceId: number): Promise<void>;
-  updateSentenceAudioPath(sentenceId: number, audioPath: string, audioGenerationVoiceId?: string): Promise<void>;
+  updateSentenceAudioPath(
+    sentenceId: number,
+    audioPath: string,
+    audioGenerationVoiceId?: string
+  ): Promise<void>;
   updateBeforeSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void>;
   updateAfterSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void>;
   updateSentenceTokens(sentenceId: number, tokens: any[]): Promise<void>;
   incrementSentencePlayCount(sentenceId: number): Promise<void>;
-  recordPronunciationAttempt(sentenceId: number, similarityScore: number, expectedText: string, transcribedText: string, audioPath?: string | null): Promise<void>;
-  getPronunciationHistory(sentenceId: number, limit?: number): Promise<Array<{
-    id: number;
-    sentenceId: number;
-    similarityScore: number;
-    expectedText: string;
-    transcribedText: string;
-    audioPath: string | null;
-    createdAt: Date;
-  }>>;
-  
+  recordPronunciationAttempt(
+    sentenceId: number,
+    similarityScore: number,
+    expectedText: string,
+    transcribedText: string,
+    audioPath?: string | null
+  ): Promise<void>;
+  getPronunciationHistory(
+    sentenceId: number,
+    limit?: number
+  ): Promise<
+    Array<{
+      id: number;
+      sentenceId: number;
+      similarityScore: number;
+      expectedText: string;
+      transcribedText: string;
+      audioPath: string | null;
+      createdAt: Date;
+    }>
+  >;
+
   // Dialogue variants management
-  insertDialogueVariant(sentenceId: number, variantSentence: string, variantTranslation: string): Promise<number>;
+  insertDialogueVariant(
+    sentenceId: number,
+    variantSentence: string,
+    variantTranslation: string
+  ): Promise<number>;
   getDialogueVariantsBySentenceId(sentenceId: number, limit?: number): Promise<DialogueVariant[]>;
   getDialogueVariantCount(sentenceId: number): Promise<number>;
   getDialogueVariantById(variantId: number): Promise<DialogueVariant | null>;
-  updateDialogueVariantContinuation(variantId: number, continuationText: string, continuationTranslation: string, continuationAudio?: string): Promise<void>;
-  
+  updateDialogueVariantContinuation(
+    variantId: number,
+    continuationText: string,
+    continuationTranslation: string,
+    continuationAudio?: string
+  ): Promise<void>;
+
   // Progress tracking
   updateLastStudied(wordId: number): Promise<void>;
   getStudyStats(language: string): Promise<StudyStats>;
   recordStudySession(wordsStudied: number): Promise<void>;
-  getRecentStudySessions(limit?: number): Promise<Array<{id: number, wordsStudied: number, whenStudied: Date}>>;
-  
+  getRecentStudySessions(
+    limit?: number
+  ): Promise<Array<{ id: number; wordsStudied: number; whenStudied: Date }>>;
+
   // Quiz-specific operations
   getWeakestWords(limit: number, language: string): Promise<Word[]>;
   getRandomSentenceForWord(wordId: number): Promise<Sentence | null>;
-  
+
   // Dialog-specific operations
   getRandomDialogSentence(language: string): Promise<Sentence | null>;
   getRandomDialogSentences(count: number, language: string): Promise<Sentence[]>;
-  
+
   // Settings management
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string): Promise<void>;
   getCurrentLanguage(): Promise<string>;
   setCurrentLanguage(language: string): Promise<void>;
   getAvailableLanguages(): Promise<string[]>;
-  getLanguageStats(): Promise<Array<{language: string, totalWords: number, studiedWords: number, averagePronunciationScore: number | null, pronunciationAttemptCount: number}>>;
+  getLanguageStats(): Promise<
+    Array<{
+      language: string;
+      totalWords: number;
+      studiedWords: number;
+      averagePronunciationScore: number | null;
+      pronunciationAttemptCount: number;
+    }>
+  >;
   lookupDictionary(word: string, language: string): Promise<DictionaryEntry[]>;
   updateWordProcessingStatus(wordId: number, status: WordProcessingStatus): Promise<void>;
-  getWordProcessingInfo(wordId: number): Promise<{ processingStatus: WordProcessingStatus; sentenceCount: number } | null>;
+  getWordProcessingInfo(
+    wordId: number
+  ): Promise<{ processingStatus: WordProcessingStatus; sentenceCount: number } | null>;
   getWordGenerationQueueSummary(language?: string): Promise<{
     queued: number;
     processing: number;
@@ -151,7 +216,12 @@ export interface DatabaseLayer {
   }>;
 
   // Word generation queue
-  enqueueWordGeneration(wordId: number, language: string, topic?: string, desiredSentenceCount?: number): Promise<void>;
+  enqueueWordGeneration(
+    wordId: number,
+    language: string,
+    topic?: string,
+    desiredSentenceCount?: number
+  ): Promise<void>;
   getNextWordGenerationJob(): Promise<WordGenerationJob | null>;
   markWordGenerationJobProcessing(jobId: number): Promise<void>;
   rescheduleWordGenerationJob(jobId: number, delayMs: number, lastError?: string): Promise<void>;
@@ -159,13 +229,15 @@ export interface DatabaseLayer {
   failWordGenerationJob(jobId: number, error: string): Promise<void>;
 
   // Flow feature operations
-  getFlowSentences(language: string): Promise<Array<{
-    sentence: Sentence;
-    words: Word[];
-    beforeSentenceAudio?: string;
-    afterSentenceAudio?: string;
-    continuationAudios: string[];
-  }>>;
+  getFlowSentences(language: string): Promise<
+    Array<{
+      sentence: Sentence;
+      words: Word[];
+      beforeSentenceAudio?: string;
+      afterSentenceAudio?: string;
+      continuationAudios: string[];
+    }>
+  >;
 
   // Scoring-specific operations
   getNewWordCount(language: string): Promise<number>;
@@ -193,25 +265,28 @@ export interface DatabaseLayer {
     strengthDelta: number;
     language: string;
   }): Promise<number>;
-  
+
   createLearningSession(data: {
     mode: 'learning' | 'quiz' | 'dialog' | 'flow';
     language: string;
   }): Promise<number>;
-  
-  updateLearningSession(sessionId: number, data: {
-    wordCount?: number;
-    sentenceCount?: number;
-    audioPlayedCount?: number;
-  }): Promise<void>;
-  
+
+  updateLearningSession(
+    sessionId: number,
+    data: {
+      wordCount?: number;
+      sentenceCount?: number;
+      audioPlayedCount?: number;
+    }
+  ): Promise<void>;
+
   getLearningSession(sessionId: number): Promise<{
     id: number;
     mode: string;
     language: string;
     startedAt: Date;
   } | null>;
-  
+
   recordAudioPlayback(data: {
     sessionId?: number;
     sentenceId?: number;
@@ -221,14 +296,16 @@ export interface DatabaseLayer {
     playbackSpeed?: number;
   }): Promise<number>;
 
-  recordNeglectedWords(data: Array<{
-    word: string;
-    language: string;
-    topic?: string;
-    translation?: string;
-    sessionId?: number;
-    frequencyPosition?: number;
-  }>): Promise<number>;
+  recordNeglectedWords(
+    data: Array<{
+      word: string;
+      language: string;
+      topic?: string;
+      translation?: string;
+      sessionId?: number;
+      frequencyPosition?: number;
+    }>
+  ): Promise<number>;
 
   recordDictionaryHover(data: {
     word: string;
@@ -241,7 +318,11 @@ export interface DatabaseLayer {
   }): Promise<number>;
 
   // Process frequently looked-up words from dictionary hovers
-  processFrequentlyLookedUpWords(language: string, minHoverCount?: number, lookbackDays?: number): Promise<number>;
+  processFrequentlyLookedUpWords(
+    language: string,
+    minHoverCount?: number,
+    lookbackDays?: number
+  ): Promise<number>;
 }
 
 export interface DatabaseConfig {

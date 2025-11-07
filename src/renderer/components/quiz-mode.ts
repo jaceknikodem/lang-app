@@ -17,12 +17,14 @@ import type { SessionSummary } from './session-complete.js';
 import type { RecordingResult } from './audio-recorder.js';
 import type { RecordingOptions } from '../../shared/types/audio.js';
 import { checkProficiencyLevel } from '../utils/app-initializer.js';
-import { getSimilarityClass, type ProficiencyLevel } from '../../shared/utils/similarity-threshold.js';
+import {
+  getSimilarityClass,
+  type ProficiencyLevel,
+} from '../../shared/utils/similarity-threshold.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
 
 @customElement('quiz-mode')
 export class QuizMode extends BaseComponent {
-
   @state()
   private quizSession: QuizSession | null = null;
 
@@ -96,20 +98,20 @@ export class QuizMode extends BaseComponent {
   private recordingTimer: number | null = null;
   private recordingStatusCheckTimer: number | null = null;
   private speechRecognitionCheckTimer: number | null = null;
-  
+
   // Audio cache: Map of audioPath -> blob URL
   // Using Blob URLs instead of data URLs for better performance (no base64 encoding/decoding)
   private audioCache: Map<string, string> = new Map(); // audioPath -> blob URL
   private blobUrlCache: Map<string, string> = new Map(); // audioPath -> blob URL (for cleanup)
   // HTML5 Audio instances for playing cached audio
   private currentAudioElement: HTMLAudioElement | null = null;
-  
+
   private currentProficiencyLevel: ProficiencyLevel | null = null;
 
   protected override handleExternalLanguageChange = async (event: Event): Promise<void> => {
     // Call base class handler first
     await super.handleExternalLanguageChange(event);
-    
+
     const detail = (event as CustomEvent<{ language?: string }>).detail;
     const newLanguage = detail?.language;
 
@@ -121,11 +123,11 @@ export class QuizMode extends BaseComponent {
     try {
       this.isLoading = true;
       this.error = null;
-      
+
       // Load proficiency level for the new language
       const proficiency = await checkProficiencyLevel(newLanguage);
       this.currentProficiencyLevel = proficiency as ProficiencyLevel | null;
-      
+
       // Load words from database for the new language
       await this.loadSelectedWords();
 
@@ -310,7 +312,6 @@ export class QuizMode extends BaseComponent {
         margin-bottom: var(--spacing-sm);
         font-style: italic;
       }
-
 
       .answer-buttons {
         display: flex;
@@ -645,12 +646,6 @@ export class QuizMode extends BaseComponent {
         color: white;
       }
 
-
-
-
-
-
-
       .recording-section {
         margin-top: var(--spacing-md);
         margin-bottom: var(--spacing-lg);
@@ -691,7 +686,8 @@ export class QuizMode extends BaseComponent {
       }
 
       @keyframes recording-pulse {
-        0%, 100% {
+        0%,
+        100% {
           opacity: 1;
           transform: scale(1);
         }
@@ -1215,8 +1211,6 @@ export class QuizMode extends BaseComponent {
           max-width: 250px;
         }
 
-
-
         .recording-section {
           margin-top: var(--spacing-md);
           margin-bottom: var(--spacing-lg);
@@ -1229,7 +1223,7 @@ export class QuizMode extends BaseComponent {
           padding: var(--spacing-xs);
         }
       }
-    `
+    `,
   ];
 
   async connectedCallback() {
@@ -1254,30 +1248,33 @@ export class QuizMode extends BaseComponent {
 
     // Initialize speech recognition asynchronously (non-blocking, Whisper is optional)
     // Don't await - let it run in background so quiz can start even if Whisper is unavailable
-    this.initializeSpeechRecognition().catch(err => {
+    this.initializeSpeechRecognition().catch((err) => {
       console.warn('Speech recognition initialization failed (non-blocking):', err);
     });
-    
+
     // Start periodic check of speech recognition readiness (includes server availability)
     this.startSpeechRecognitionCheck();
-    
+
     // Also check immediately in case Whisper is already available
-    this.checkSpeechRecognitionReady().catch(err => {
+    this.checkSpeechRecognitionReady().catch((err) => {
       console.warn('Initial speech recognition check failed:', err);
     });
 
     // Load autoplay preference
     await this.loadAutoplaySetting();
-    
+
     // Load proficiency level and create quiz session for tracking
     try {
       this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
       const proficiency = await checkProficiencyLevel(this.currentLanguage);
       this.currentProficiencyLevel = proficiency as ProficiencyLevel | null;
-      
+
       // Create quiz session for tracking
       if (this.currentLanguage) {
-        this.currentSessionId = await window.electronAPI.tracking.createSession('quiz', this.currentLanguage);
+        this.currentSessionId = await window.electronAPI.tracking.createSession(
+          'quiz',
+          this.currentLanguage
+        );
       }
     } catch (error) {
       console.warn('Failed to load proficiency level or create session:', error);
@@ -1285,7 +1282,7 @@ export class QuizMode extends BaseComponent {
 
     // Check if there's an existing quiz session to restore
     const savedQuizSession = sessionManager.getQuizSession();
-    
+
     if (savedQuizSession && !savedQuizSession.isComplete) {
       // Restore existing quiz
       await this.restoreQuizFromSession(savedQuizSession);
@@ -1306,21 +1303,21 @@ export class QuizMode extends BaseComponent {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    
+
     // Clean up transcription progress listener
     if (this.transcriptionProgressUnsubscribe) {
       this.transcriptionProgressUnsubscribe();
       this.transcriptionProgressUnsubscribe = null;
     }
-    
+
     // Clean up recording timers
     this.clearRecordingTimer();
     this.clearRecordingStatusCheck();
     this.clearSpeechRecognitionCheck();
-    
+
     // Cancel any ongoing recording
     if (this.isRecording) {
-      this.cancelRecording().catch(err => {
+      this.cancelRecording().catch((err) => {
         console.error('Error cancelling recording on disconnect:', err);
       });
     }
@@ -1329,11 +1326,11 @@ export class QuizMode extends BaseComponent {
     if (this.keyboardUnsubscribe) {
       this.keyboardUnsubscribe();
     }
-    
+
     // Clean up audio cache and playing audio
     this.stopCachedAudio();
     // Revoke all blob URLs to free memory
-    this.blobUrlCache.forEach(blobUrl => URL.revokeObjectURL(blobUrl));
+    this.blobUrlCache.forEach((blobUrl) => URL.revokeObjectURL(blobUrl));
     this.audioCache.clear();
     this.blobUrlCache.clear();
   }
@@ -1345,7 +1342,7 @@ export class QuizMode extends BaseComponent {
     try {
       // Load words from the saved word IDs in the same order (preserves shuffle)
       const words = await window.electronAPI.database.getWordsByIds(savedSession.wordIds);
-      
+
       if (words.length === 0 || words.length !== savedSession.wordIds.length) {
         // Some words might have been deleted, clear the session and start fresh
         sessionManager.clearQuizSession();
@@ -1365,7 +1362,7 @@ export class QuizMode extends BaseComponent {
       const questions: QuizQuestion[] = [];
 
       for (const wordId of savedSession.wordIds) {
-        const word = words.find(w => w.id === wordId);
+        const word = words.find((w) => w.id === wordId);
         if (!word) continue;
 
         // Get a random sentence for this word
@@ -1374,7 +1371,7 @@ export class QuizMode extends BaseComponent {
         if (sentence) {
           questions.push({
             word,
-            sentence
+            sentence,
           });
         }
       }
@@ -1391,7 +1388,7 @@ export class QuizMode extends BaseComponent {
         currentQuestionIndex: savedSession.currentQuestionIndex,
         score: savedSession.score,
         totalQuestions: savedSession.totalQuestions,
-        isComplete: savedSession.isComplete
+        isComplete: savedSession.isComplete,
       };
 
       // Restore current question
@@ -1408,17 +1405,18 @@ export class QuizMode extends BaseComponent {
 
       // Prioritize: Load current question's audio first
       await this.ensureCurrentQuestionAudioLoaded();
-      
+
       // Load next question's audio right after current one is ready
       this.preloadNextQuestionAudio();
-      
+
       // Pre-load remaining audio files in background (non-blocking)
       void this.preloadQuizAudio(questions);
-      
+
       void this.maybeAutoplayCurrentQuestion(true);
 
-      console.log(`Restored quiz session: Question ${this.quizSession.currentQuestionIndex + 1}/${this.quizSession.totalQuestions}, Score: ${this.quizSession.score}`);
-
+      console.log(
+        `Restored quiz session: Question ${this.quizSession.currentQuestionIndex + 1}/${this.quizSession.totalQuestions}, Score: ${this.quizSession.score}`
+      );
     } catch (error) {
       console.error('Error restoring quiz session:', error);
       this.error = 'Failed to restore quiz session. Starting a new quiz.';
@@ -1443,7 +1441,7 @@ export class QuizMode extends BaseComponent {
 
     try {
       // Filter out known words - we don't want to quiz on words marked as known
-      const wordsToQuiz = this.selectedWords.filter(word => !word.known);
+      const wordsToQuiz = this.selectedWords.filter((word) => !word.known);
 
       if (wordsToQuiz.length === 0) {
         this.error = 'No words available for quiz. All selected words are marked as known.';
@@ -1460,45 +1458,45 @@ export class QuizMode extends BaseComponent {
         if (sentence) {
           questions.push({
             word,
-            sentence
+            sentence,
           });
         }
       }
 
       if (questions.length === 0) {
-        this.error = 'No sentences found for the selected words. Please review words in learning mode first.';
+        this.error =
+          'No sentences found for the selected words. Please review words in learning mode first.';
         return;
       }
 
       // Shuffle questions for variety
       const shuffledQuestions = this.shuffleArray(questions);
-      const wordIds = shuffledQuestions.map(q => q.word.id);
+      const wordIds = shuffledQuestions.map((q) => q.word.id);
 
       this.quizSession = {
         questions: shuffledQuestions,
         currentQuestionIndex: 0,
         score: 0,
         totalQuestions: shuffledQuestions.length,
-        isComplete: false
+        isComplete: false,
       };
 
       this.currentQuestion = shuffledQuestions[0];
-      
+
       // Save quiz session to session manager (creates new session)
       sessionManager.startNewQuizSession(wordIds, this.audioOnlyMode);
-      
+
       // Prioritize: Load current question's audio first, then autoplay
       // This ensures audio is ready before playback starts
       await this.ensureCurrentQuestionAudioLoaded();
-      
+
       // Load next question's audio right after current one is ready
       this.preloadNextQuestionAudio();
-      
+
       // Pre-load remaining audio files in background (non-blocking)
       void this.preloadQuizAudio(shuffledQuestions);
-      
-      void this.maybeAutoplayCurrentQuestion(true);
 
+      void this.maybeAutoplayCurrentQuestion(true);
     } catch (error) {
       console.error('Error starting quiz:', error);
       this.error = 'Failed to start quiz. Please try again.';
@@ -1530,20 +1528,18 @@ export class QuizMode extends BaseComponent {
     }
   }
 
-
-
   private saveQuizProgressToSession() {
     if (this.quizSession) {
       // Save word IDs in the order they appear (preserves shuffle)
-      const wordIds = this.quizSession.questions.map(q => q.word.id);
-      
+      const wordIds = this.quizSession.questions.map((q) => q.word.id);
+
       sessionManager.updateQuizSession({
         wordIds,
         currentQuestionIndex: this.quizSession.currentQuestionIndex,
         score: this.quizSession.score,
         totalQuestions: this.quizSession.totalQuestions,
         isComplete: this.quizSession.isComplete,
-        audioOnlyMode: this.audioOnlyMode
+        audioOnlyMode: this.audioOnlyMode,
       });
     }
   }
@@ -1572,9 +1568,11 @@ export class QuizMode extends BaseComponent {
 
     const word = this.currentQuestion.word;
     const recallLabels = ['Failed', 'Hard', 'Good', 'Easy'];
-    
+
     console.log(`[Quiz] ========== SUBMITTING REVIEW ==========`);
-    console.log(`[Quiz] Question ${this.quizSession.currentQuestionIndex + 1}/${this.quizSession.totalQuestions}`);
+    console.log(
+      `[Quiz] Question ${this.quizSession.currentQuestionIndex + 1}/${this.quizSession.totalQuestions}`
+    );
     console.log(`[Quiz] Word: "${word.word}" (ID: ${word.id})`);
     console.log(`[Quiz] User rating: ${recall} (${recallLabels[recall]})`);
     console.log(`[Quiz] Word state BEFORE update:`, {
@@ -1587,7 +1585,7 @@ export class QuizMode extends BaseComponent {
       fsrsLapses: word.fsrsLapses ?? 0,
       fsrsLastRating: word.fsrsLastRating ?? null,
       lastReview: word.lastReview?.toISOString() ?? 'never',
-      lastStudied: word.lastStudied?.toISOString() ?? 'never'
+      lastStudied: word.lastStudied?.toISOString() ?? 'never',
     });
 
     if (recall > 0) {
@@ -1614,9 +1612,9 @@ export class QuizMode extends BaseComponent {
           fsrsLapses: updatedWord.fsrsLapses ?? 0,
           fsrsLastRating: updatedWord.fsrsLastRating ?? null,
           lastReview: updatedWord.lastReview?.toISOString() ?? 'never',
-          lastStudied: updatedWord.lastStudied?.toISOString() ?? 'never'
+          lastStudied: updatedWord.lastStudied?.toISOString() ?? 'never',
         });
-        
+
         console.log(`[Quiz] Changes observed:`, {
           strength: `${word.strength ?? 20} → ${updatedWord.strength ?? 20}`,
           intervalDays: `${word.intervalDays ?? 1} → ${updatedWord.intervalDays ?? 1}`,
@@ -1624,16 +1622,15 @@ export class QuizMode extends BaseComponent {
           fsrsDifficulty: `${word.fsrsDifficulty ?? 5.0} → ${updatedWord.fsrsDifficulty ?? 5.0}`,
           fsrsStability: `${word.fsrsStability ?? 1.0} → ${updatedWord.fsrsStability ?? 1.0}`,
           fsrsLapses: `${word.fsrsLapses ?? 0} → ${updatedWord.fsrsLapses ?? 0}`,
-          nextDue: `${word.nextDue?.toISOString() ?? 'unknown'} → ${updatedWord.nextDue?.toISOString() ?? 'unknown'}`
+          nextDue: `${word.nextDue?.toISOString() ?? 'unknown'} → ${updatedWord.nextDue?.toISOString() ?? 'unknown'}`,
         });
-        
+
         // Update the word object before showing the result
         this.currentQuestion.word = updatedWord;
       }
 
       // Save progress immediately after each answer
       this.saveQuizProgressToSession();
-
     } catch (error) {
       console.error('[Quiz] Error updating word with SRS:', error);
     }
@@ -1643,11 +1640,11 @@ export class QuizMode extends BaseComponent {
     this.lastResult = {
       wordId: word.id,
       correct: recall > 0, // Any non-zero recall counts as correct
-      responseTime: Date.now()
+      responseTime: Date.now(),
     };
-    
+
     console.log(`[Quiz] ========== REVIEW COMPLETE ==========\n`);
-    
+
     // Automatically move to next question after a short delay
     setTimeout(() => {
       this.nextQuestion();
@@ -1667,33 +1664,33 @@ export class QuizMode extends BaseComponent {
     if (this.quizSession.currentQuestionIndex + 1 >= this.quizSession.totalQuestions) {
       // Quiz complete - save progress one last time before recording
       this.saveQuizProgressToSession();
-      
+
       // Mark as complete before recording
       this.quizSession.isComplete = true;
-      
+
       // Record the session
       await this.recordQuizSession();
-      
+
       this.currentQuestion = null;
     } else {
       // Move to next question
       this.quizSession.currentQuestionIndex++;
       this.currentQuestion = this.quizSession.questions[this.quizSession.currentQuestionIndex];
-      
+
       // Save progress immediately when moving to next question
       this.saveQuizProgressToSession();
-      
+
       // Reload autoplay setting to respect user toggles
       await this.loadAutoplaySetting();
-      
+
       // Start audio playback immediately (don't wait for loading)
       void this.maybeAutoplayCurrentQuestion();
-      
+
       // Load current question's audio into cache in background (non-blocking)
-      void this.ensureCurrentQuestionAudioLoaded().catch(err => {
+      void this.ensureCurrentQuestionAudioLoaded().catch((err) => {
         console.warn('Failed to load audio into cache:', err);
       });
-      
+
       // Immediately load next question's audio in background
       this.preloadNextQuestionAudio();
     }
@@ -1708,7 +1705,7 @@ export class QuizMode extends BaseComponent {
 
       // Mark quiz session as complete in session manager
       sessionManager.markQuizSessionComplete();
-      
+
       // Clear quiz session after completion
       sessionManager.clearQuizSession();
 
@@ -1717,7 +1714,6 @@ export class QuizMode extends BaseComponent {
 
       // Dispatch event for autopilot to check scores after quiz is done
       window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
-
     } catch (error) {
       console.error('Error recording quiz session:', error);
       // Don't block the UI for this error, but ensure session is cleared
@@ -1750,7 +1746,7 @@ export class QuizMode extends BaseComponent {
       quizScore: this.quizSession.score,
       quizTotal: this.quizSession.totalQuestions,
       completedWords: this.selectedWords,
-      nextRecommendation
+      nextRecommendation,
     };
 
     this.showCompletion = true;
@@ -1763,13 +1759,14 @@ export class QuizMode extends BaseComponent {
 
     const currentIndex = this.quizSession?.currentQuestionIndex ?? null;
     const sentenceId = this.currentQuestion.sentence?.id ?? null;
-    const autoplayKey = currentIndex !== null && sentenceId !== null
-      ? `${currentIndex}-${sentenceId}`
-      : currentIndex !== null
-        ? `${currentIndex}`
-        : sentenceId !== null
-          ? `sentence-${sentenceId}`
-          : null;
+    const autoplayKey =
+      currentIndex !== null && sentenceId !== null
+        ? `${currentIndex}-${sentenceId}`
+        : currentIndex !== null
+          ? `${currentIndex}`
+          : sentenceId !== null
+            ? `sentence-${sentenceId}`
+            : null;
 
     if (!force && autoplayKey && this.lastAutoplayKey === autoplayKey) {
       return;
@@ -1791,9 +1788,9 @@ export class QuizMode extends BaseComponent {
 
     // Play audio immediately (don't wait for loading)
     void this.playAudio();
-    
+
     // Load audio into cache in background for next time (non-blocking)
-    void this.ensureCurrentQuestionAudioLoaded().catch(err => {
+    void this.ensureCurrentQuestionAudioLoaded().catch((err) => {
       console.warn('Failed to load audio into cache:', err);
     });
   }
@@ -1808,7 +1805,7 @@ export class QuizMode extends BaseComponent {
     }
 
     const audioPath = this.currentQuestion.sentence.audioPath;
-    
+
     // If already cached, we're done
     if (this.audioCache.has(audioPath)) {
       return;
@@ -1842,14 +1839,14 @@ export class QuizMode extends BaseComponent {
     }
 
     const nextAudioPath = nextQuestion.sentence.audioPath;
-    
+
     // Skip if already cached
     if (this.audioCache.has(nextAudioPath)) {
       return;
     }
 
     // Load next question's audio in background (non-blocking)
-    void this.loadAudioIntoCache(nextAudioPath).catch(error => {
+    void this.loadAudioIntoCache(nextAudioPath).catch((error) => {
       console.warn(`Failed to preload next question audio:`, error);
       // Non-critical - will load on-demand if needed
     });
@@ -1887,16 +1884,16 @@ export class QuizMode extends BaseComponent {
   private async preloadQuizAudio(questions: QuizQuestion[]): Promise<void> {
     try {
       const audioPaths = questions
-        .map(q => q.sentence.audioPath)
+        .map((q) => q.sentence.audioPath)
         .filter((path): path is string => !!path)
-        .filter(path => !this.audioCache.has(path)); // Skip already cached
-      
+        .filter((path) => !this.audioCache.has(path)); // Skip already cached
+
       if (audioPaths.length === 0) {
         return;
       }
 
       console.log(`Pre-loading ${audioPaths.length} audio files into cache...`);
-      
+
       // Load all audio files in parallel (small files, so parallel loading is fine)
       const loadPromises = audioPaths.map(async (audioPath) => {
         try {
@@ -1906,7 +1903,7 @@ export class QuizMode extends BaseComponent {
           // Continue loading other files even if one fails
         }
       });
-      
+
       await Promise.all(loadPromises);
       console.log(`Audio cache ready: ${this.audioCache.size} files loaded`);
     } catch (error) {
@@ -1935,62 +1932,71 @@ export class QuizMode extends BaseComponent {
       if (cachedAudio) {
         // Use HTML5 Audio API to play from memory
         this.currentAudioElement = new Audio(cachedAudio);
-        
+
         // Handle errors and cleanup
         this.currentAudioElement.addEventListener('ended', () => {
           this.currentAudioElement = null;
           // Track sentence play count
           if (this.currentQuestion?.sentence.id) {
-            void window.electronAPI.database.incrementSentencePlayCount(this.currentQuestion.sentence.id).catch(err => {
-              console.warn('Failed to increment sentence play count:', err);
-            });
+            void window.electronAPI.database
+              .incrementSentencePlayCount(this.currentQuestion.sentence.id)
+              .catch((err) => {
+                console.warn('Failed to increment sentence play count:', err);
+              });
           }
           // Track audio playback event
           if (this.currentQuestion?.sentence.id && this.currentLanguage) {
-            void window.electronAPI.tracking.recordAudioPlayback({
-              sessionId: this.currentSessionId,
-              sentenceId: this.currentQuestion.sentence.id,
-              audioPath: audioPath,
-              language: this.currentLanguage,
-              mode: 'quiz',
-              playbackSpeed: 1.0 // Quiz mode doesn't have playback speed control
-            }).catch((err: unknown) => {
-              console.warn('Failed to record audio playback:', err);
-            });
+            void window.electronAPI.tracking
+              .recordAudioPlayback({
+                sessionId: this.currentSessionId,
+                sentenceId: this.currentQuestion.sentence.id,
+                audioPath: audioPath,
+                language: this.currentLanguage,
+                mode: 'quiz',
+                playbackSpeed: 1.0, // Quiz mode doesn't have playback speed control
+              })
+              .catch((err: unknown) => {
+                console.warn('Failed to record audio playback:', err);
+              });
           }
         });
-        
+
         this.currentAudioElement.addEventListener('error', (e) => {
           console.warn('Error playing cached audio, falling back to IPC:', e);
           this.currentAudioElement = null;
           // Fall back to IPC playback
-          void window.electronAPI.audio.playAudio(audioPath)
+          void window.electronAPI.audio
+            .playAudio(audioPath)
             .then(() => {
               // Track sentence play count
               if (this.currentQuestion?.sentence.id) {
-                void window.electronAPI.database.incrementSentencePlayCount(this.currentQuestion.sentence.id).catch(err => {
-                  console.warn('Failed to increment sentence play count:', err);
-                });
+                void window.electronAPI.database
+                  .incrementSentencePlayCount(this.currentQuestion.sentence.id)
+                  .catch((err) => {
+                    console.warn('Failed to increment sentence play count:', err);
+                  });
               }
               // Track audio playback event
               if (this.currentQuestion?.sentence.id && this.currentLanguage) {
-                void window.electronAPI.tracking.recordAudioPlayback({
-                  sessionId: this.currentSessionId,
-                  sentenceId: this.currentQuestion.sentence.id,
-                  audioPath: audioPath,
-                  language: this.currentLanguage,
-                  mode: 'quiz',
-                  playbackSpeed: 1.0 // Quiz mode doesn't have playback speed control
-                }).catch((err: unknown) => {
-                  console.warn('Failed to record audio playback:', err);
-                });
+                void window.electronAPI.tracking
+                  .recordAudioPlayback({
+                    sessionId: this.currentSessionId,
+                    sentenceId: this.currentQuestion.sentence.id,
+                    audioPath: audioPath,
+                    language: this.currentLanguage,
+                    mode: 'quiz',
+                    playbackSpeed: 1.0, // Quiz mode doesn't have playback speed control
+                  })
+                  .catch((err: unknown) => {
+                    console.warn('Failed to record audio playback:', err);
+                  });
               }
             })
-            .catch(err => {
+            .catch((err) => {
               console.error('Failed to play audio via IPC:', err);
             });
         });
-        
+
         try {
           await this.currentAudioElement.play();
           return; // Success - audio playing from cache
@@ -2003,29 +2009,34 @@ export class QuizMode extends BaseComponent {
 
       // Not cached: Start IPC playback immediately (non-blocking, returns quickly)
       // IPC playback starts immediately and plays in background
-      void window.electronAPI.audio.playAudio(audioPath)
+      void window.electronAPI.audio
+        .playAudio(audioPath)
         .then(() => {
           // Track sentence play count
           if (this.currentQuestion?.sentence.id) {
-            void window.electronAPI.database.incrementSentencePlayCount(this.currentQuestion.sentence.id).catch(err => {
-              console.warn('Failed to increment sentence play count:', err);
-            });
+            void window.electronAPI.database
+              .incrementSentencePlayCount(this.currentQuestion.sentence.id)
+              .catch((err) => {
+                console.warn('Failed to increment sentence play count:', err);
+              });
           }
           // Track audio playback event
           if (this.currentQuestion?.sentence.id && this.currentLanguage) {
-            void window.electronAPI.tracking.recordAudioPlayback({
-              sessionId: this.currentSessionId,
-              sentenceId: this.currentQuestion.sentence.id,
-              audioPath: audioPath,
-              language: this.currentLanguage,
-              mode: 'quiz',
-              playbackSpeed: 1.0 // Quiz mode doesn't have playback speed control
-            }).catch((err: unknown) => {
-              console.warn('Failed to record audio playback:', err);
-            });
+            void window.electronAPI.tracking
+              .recordAudioPlayback({
+                sessionId: this.currentSessionId,
+                sentenceId: this.currentQuestion.sentence.id,
+                audioPath: audioPath,
+                language: this.currentLanguage,
+                mode: 'quiz',
+                playbackSpeed: 1.0, // Quiz mode doesn't have playback speed control
+              })
+              .catch((err: unknown) => {
+                console.warn('Failed to record audio playback:', err);
+              });
           }
         })
-        .catch(err => {
+        .catch((err) => {
           console.error('Failed to play audio via IPC:', err);
         });
     } catch (error) {
@@ -2073,7 +2084,7 @@ export class QuizMode extends BaseComponent {
         key: CommonKeys.ENTER,
         action: () => this.handleEnterKey(),
         context: 'quiz',
-        description: 'Start quiz / Reveal answer / Continue'
+        description: 'Start quiz / Reveal answer / Continue',
       },
 
       // Audio only mode
@@ -2081,54 +2092,54 @@ export class QuizMode extends BaseComponent {
         ...GlobalShortcuts.TOGGLE_AUDIO_ONLY,
         action: () => this.toggleAudioOnlyMode(),
         context: 'quiz',
-        description: 'Toggle show/hide English'
+        description: 'Toggle show/hide English',
       },
       // Audio controls
       {
         ...GlobalShortcuts.PLAY_AUDIO,
         action: () => this.playAudio(),
         context: 'quiz',
-        description: 'Play sentence audio'
+        description: 'Play sentence audio',
       },
       // SRS difficulty ratings (when answer is revealed)
       {
         ...GlobalShortcuts.SRS_FAIL,
         action: () => this.handleSRSAnswer(0),
         context: 'quiz',
-        description: 'Rate as Failed (when answer revealed)'
+        description: 'Rate as Failed (when answer revealed)',
       },
       {
         ...GlobalShortcuts.SRS_HARD,
         action: () => this.handleSRSAnswer(1),
         context: 'quiz',
-        description: 'Rate as Hard (when answer revealed)'
+        description: 'Rate as Hard (when answer revealed)',
       },
       {
         ...GlobalShortcuts.SRS_GOOD,
         action: () => this.handleSRSAnswer(2),
         context: 'quiz',
-        description: 'Rate as Good (when answer revealed)'
+        description: 'Rate as Good (when answer revealed)',
       },
       {
         ...GlobalShortcuts.SRS_EASY,
         action: () => this.handleSRSAnswer(3),
         context: 'quiz',
-        description: 'Rate as Easy (when answer revealed)'
+        description: 'Rate as Easy (when answer revealed)',
       },
       // Pronunciation practice
       {
         ...GlobalShortcuts.RECORD_PRONUNCIATION,
         action: () => this.toggleRecording(),
         context: 'quiz',
-        description: 'Toggle pronunciation recorder'
+        description: 'Toggle pronunciation recorder',
       },
       // Navigation
       {
         ...GlobalShortcuts.ESCAPE,
         action: () => this.handleEscape(),
         context: 'quiz',
-        description: 'Cancel recording (if active)'
-      }
+        description: 'Cancel recording (if active)',
+      },
     ];
 
     this.keyboardUnsubscribe = useKeyboardBindings(bindings);
@@ -2166,11 +2177,9 @@ export class QuizMode extends BaseComponent {
     // ESC in quiz mode no longer navigates away - just cancel recording if active
   }
 
-
-
   private async toggleRecording() {
     if (!this.speechRecognitionReady || !this.currentQuestion) return;
-    
+
     if (this.isRecording) {
       await this.stopRecording();
     } else {
@@ -2193,7 +2202,7 @@ export class QuizMode extends BaseComponent {
         channels: 1,
         threshold: 0.5,
         silence: '1.0',
-        endOnSilence: true
+        endOnSilence: true,
       };
 
       const session = await window.electronAPI.audio.startRecording(recordingOptions);
@@ -2202,7 +2211,7 @@ export class QuizMode extends BaseComponent {
       this.currentRecording = null;
       this.transcriptionResult = null;
       this.isTranscribing = false;
-      
+
       // Start recording timer
       this.recordingTimer = window.setInterval(() => {
         this.recordingTime += 1;
@@ -2229,14 +2238,15 @@ export class QuizMode extends BaseComponent {
       if (completedSession && !completedSession.isRecording) {
         // Get the recording file path from the session
         const filePath = completedSession.filePath;
-        
+
         // Calculate duration if available
-        const duration = completedSession.duration || (Date.now() - completedSession.startTime) / 1000;
+        const duration =
+          completedSession.duration || (Date.now() - completedSession.startTime) / 1000;
 
         this.currentRecording = {
           session: completedSession,
           filePath,
-          duration
+          duration,
         };
 
         // Automatically perform speech recognition
@@ -2310,15 +2320,16 @@ export class QuizMode extends BaseComponent {
 
     try {
       const completedSession = await window.electronAPI.audio.getCurrentRecordingSession();
-      
+
       if (completedSession && !completedSession.isRecording) {
         const filePath = completedSession.filePath;
-        const duration = completedSession.duration || (Date.now() - completedSession.startTime) / 1000;
+        const duration =
+          completedSession.duration || (Date.now() - completedSession.startTime) / 1000;
 
         this.currentRecording = {
           session: completedSession,
           filePath,
-          duration
+          duration,
         };
 
         // Automatically perform speech recognition
@@ -2330,7 +2341,6 @@ export class QuizMode extends BaseComponent {
       this.isRecording = false;
     }
   }
-
 
   private handleTextInputSubmit() {
     if (!this.textInputValue.trim() || !this.currentQuestion) {
@@ -2364,9 +2374,8 @@ export class QuizMode extends BaseComponent {
 
       this.transcriptionResult = {
         text: typedText,
-        ...comparison
+        ...comparison,
       };
-
     } catch (error) {
       console.error('Text comparison failed:', error);
       this.transcriptionResult = {
@@ -2375,7 +2384,7 @@ export class QuizMode extends BaseComponent {
         normalizedTranscribed: typedText,
         normalizedExpected: '',
         expectedWords: [],
-        transcribedWords: []
+        transcribedWords: [],
       };
     } finally {
       this.isTranscribing = false;
@@ -2387,7 +2396,6 @@ export class QuizMode extends BaseComponent {
     // Save the audio-only mode setting to session
     this.saveQuizProgressToSession();
   }
-
 
   private async initializeSpeechRecognition() {
     try {
@@ -2415,7 +2423,7 @@ export class QuizMode extends BaseComponent {
   private startSpeechRecognitionCheck() {
     // Clear any existing timer
     this.clearSpeechRecognitionCheck();
-    
+
     // Check speech recognition readiness (includes server availability) every 5 seconds
     this.speechRecognitionCheckTimer = window.setInterval(async () => {
       await this.checkSpeechRecognitionReady();
@@ -2461,14 +2469,14 @@ export class QuizMode extends BaseComponent {
       console.log('Transcribing audio:', {
         filePath: this.currentRecording.filePath,
         expectedSentence,
-        transcriptionLanguage
+        transcriptionLanguage,
       });
 
       // Transcribe the recorded audio (streaming API)
       const transcriptionResult = await window.electronAPI.audio.transcribeAudio(
         this.currentRecording.filePath,
         {
-          language: transcriptionLanguage
+          language: transcriptionLanguage,
         }
       );
 
@@ -2485,7 +2493,7 @@ export class QuizMode extends BaseComponent {
 
       this.transcriptionResult = {
         text: transcriptionResult.text,
-        ...comparison
+        ...comparison,
       };
 
       // Record pronunciation attempt in database (tracks full history)
@@ -2507,16 +2515,18 @@ export class QuizMode extends BaseComponent {
       if (this.currentQuestion) {
         const word = this.currentQuestion.word;
         const boost = STRENGTH_BOOST_CONFIG.getPronunciationBoost(comparison.similarity);
-        
+
         if (boost > 0) {
           const currentStrength = word.strength ?? 20;
           const newStrength = Math.min(100, currentStrength + boost);
-          
+
           try {
-            console.log(`[Pronunciation] Good pronunciation detected (${Math.round(comparison.similarity * 100)}%). Increasing word strength: ${currentStrength} → ${newStrength} (+${boost})`);
+            console.log(
+              `[Pronunciation] Good pronunciation detected (${Math.round(comparison.similarity * 100)}%). Increasing word strength: ${currentStrength} → ${newStrength} (+${boost})`
+            );
             await window.electronAPI.database.updateWordStrength(word.id, newStrength);
             await window.electronAPI.database.updateLastStudied(word.id);
-            
+
             // Refresh the word data to get updated strength
             const updatedWord = await window.electronAPI.database.getWordById(word.id);
             if (updatedWord) {
@@ -2528,7 +2538,6 @@ export class QuizMode extends BaseComponent {
           }
         }
       }
-
     } catch (error) {
       console.error('Speech recognition failed:', error);
       this.transcriptionResult = {
@@ -2537,7 +2546,7 @@ export class QuizMode extends BaseComponent {
         normalizedTranscribed: '',
         normalizedExpected: '',
         expectedWords: [],
-        transcribedWords: []
+        transcribedWords: [],
       };
     } finally {
       this.isTranscribing = false;
@@ -2601,12 +2610,11 @@ export class QuizMode extends BaseComponent {
     return this.renderQuestion();
   }
 
-
-
   private renderQuestion() {
     if (!this.quizSession || !this.currentQuestion) return html``;
 
-    const progress = ((this.quizSession.currentQuestionIndex + 1) / this.quizSession.totalQuestions) * 100;
+    const progress =
+      ((this.quizSession.currentQuestionIndex + 1) / this.quizSession.totalQuestions) * 100;
     const question = this.currentQuestion;
 
     // Always show foreign language sentence
@@ -2619,21 +2627,23 @@ export class QuizMode extends BaseComponent {
       <div class="quiz-container">
         <div class="quiz-header">
           <div class="quiz-progress">
-            <span>${this.quizSession.currentQuestionIndex + 1} / ${this.quizSession.totalQuestions}</span>
-            <progress-bar 
-              .value=${progress} 
-              height="4px"
-              style="width: 150px;"
-            ></progress-bar>
+            <span
+              >${this.quizSession.currentQuestionIndex + 1} /
+              ${this.quizSession.totalQuestions}</span
+            >
+            <progress-bar .value=${progress} height="4px" style="width: 150px;"></progress-bar>
             <div class="audio-only-toggle" style="margin-bottom: 0;">
               <span class="audio-only-label" style="font-size: 12px;">Audio Only</span>
-              <div 
+              <div
                 class="audio-only-switch ${this.audioOnlyMode ? 'active' : ''}"
                 @click=${this.toggleAudioOnlyMode}
                 title="Toggle audio only mode"
                 style="width: 40px; height: 20px;"
               >
-                <div class="audio-only-slider" style="width: 16px; height: 16px; top: 2px; left: 2px;"></div>
+                <div
+                  class="audio-only-slider"
+                  style="width: 16px; height: 16px; top: 2px; left: 2px;"
+                ></div>
               </div>
             </div>
           </div>
@@ -2641,82 +2651,92 @@ export class QuizMode extends BaseComponent {
 
         <div class="quiz-content">
           <div class="question-container">
-            
-            ${this.audioOnlyMode ? html`
-              <div class="audio-only-controls">
-                <div class="question-actions">
-                  <button 
-                    class="audio-replay-button" 
-                    @click=${this.playAudio} 
-                    title="Replay audio"
-                    aria-label="Replay audio"
-                  >
-                    <span aria-hidden="true">🔊</span>
-                  </button>
-                  ${this.isRecording ? html`
-                    <button 
-                      class="record-button recording"
-                      @click=${this.stopRecording}
-                      title="Stop recording"
-                      aria-label="Stop recording"
-                    >
-                      <span aria-hidden="true">⏹</span>
-                    </button>
-                  ` : html`
-                    <button 
-                      class="record-button"
-                      @click=${this.startRecording}
-                      ?disabled=${!this.speechRecognitionReady}
-                      title=${this.speechRecognitionReady ? 'Start recording' : 'Speech recognition not ready'}
-                      aria-label="Start recording"
-                    >
-                      <span aria-hidden="true">🎤</span>
-                    </button>
-                  `}
-                </div>
-              </div>
-            ` : html`
-              <div class="question-text-container">
-                <div class="question-text">${displayText}</div>
-                <div class="question-actions">
-                  <button 
-                    class="audio-replay-button" 
-                    @click=${this.playAudio}
-                    title="Replay audio"
-                    aria-label="Replay audio"
-                  >
-                    <span aria-hidden="true">🔊</span>
-                  </button>
-                  ${this.isRecording ? html`
-                    <button 
-                      class="record-button recording"
-                      @click=${this.stopRecording}
-                      title="Stop recording"
-                      aria-label="Stop recording"
-                    >
-                      <span aria-hidden="true">⏹</span>
-                    </button>
-                  ` : html`
-                    <button 
-                      class="record-button"
-                      @click=${this.startRecording}
-                      ?disabled=${!this.speechRecognitionReady}
-                      title=${this.speechRecognitionReady ? 'Start recording' : 'Speech recognition not ready'}
-                      aria-label="Start recording"
-                    >
-                      <span aria-hidden="true">🎤</span>
-                    </button>
-                  `}
-                </div>
-              </div>
-            `}
+            ${this.audioOnlyMode
+              ? html`
+                  <div class="audio-only-controls">
+                    <div class="question-actions">
+                      <button
+                        class="audio-replay-button"
+                        @click=${this.playAudio}
+                        title="Replay audio"
+                        aria-label="Replay audio"
+                      >
+                        <span aria-hidden="true">🔊</span>
+                      </button>
+                      ${this.isRecording
+                        ? html`
+                            <button
+                              class="record-button recording"
+                              @click=${this.stopRecording}
+                              title="Stop recording"
+                              aria-label="Stop recording"
+                            >
+                              <span aria-hidden="true">⏹</span>
+                            </button>
+                          `
+                        : html`
+                            <button
+                              class="record-button"
+                              @click=${this.startRecording}
+                              ?disabled=${!this.speechRecognitionReady}
+                              title=${this.speechRecognitionReady
+                                ? 'Start recording'
+                                : 'Speech recognition not ready'}
+                              aria-label="Start recording"
+                            >
+                              <span aria-hidden="true">🎤</span>
+                            </button>
+                          `}
+                    </div>
+                  </div>
+                `
+              : html`
+                  <div class="question-text-container">
+                    <div class="question-text">${displayText}</div>
+                    <div class="question-actions">
+                      <button
+                        class="audio-replay-button"
+                        @click=${this.playAudio}
+                        title="Replay audio"
+                        aria-label="Replay audio"
+                      >
+                        <span aria-hidden="true">🔊</span>
+                      </button>
+                      ${this.isRecording
+                        ? html`
+                            <button
+                              class="record-button recording"
+                              @click=${this.stopRecording}
+                              title="Stop recording"
+                              aria-label="Stop recording"
+                            >
+                              <span aria-hidden="true">⏹</span>
+                            </button>
+                          `
+                        : html`
+                            <button
+                              class="record-button"
+                              @click=${this.startRecording}
+                              ?disabled=${!this.speechRecognitionReady}
+                              title=${this.speechRecognitionReady
+                                ? 'Start recording'
+                                : 'Speech recognition not ready'}
+                              aria-label="Start recording"
+                            >
+                              <span aria-hidden="true">🎤</span>
+                            </button>
+                          `}
+                    </div>
+                  </div>
+                `}
 
             <div class="question-translation">
               Do you know what ${questionWord} means in this context?
             </div>
 
-            ${(this.isRecording || this.currentRecording || this.transcriptionResult) ? this.renderRecordingSection() : ''}
-
+            ${this.isRecording || this.currentRecording || this.transcriptionResult
+              ? this.renderRecordingSection()
+              : ''}
             ${this.showResult ? this.renderResult() : this.renderQuizButtons()}
           </div>
         </div>
@@ -2729,28 +2749,16 @@ export class QuizMode extends BaseComponent {
     const difficultyButtons = html`
       <div class="answer-buttons">
         <div class="difficulty-buttons">
-          <button 
-            class="answer-button difficulty-fail"
-            @click=${() => this.handleSRSAnswer(0)}
-          >
+          <button class="answer-button difficulty-fail" @click=${() => this.handleSRSAnswer(0)}>
             Failed ✗ <span class="keyboard-hint">(1)</span>
           </button>
-          <button 
-            class="answer-button difficulty-hard"
-            @click=${() => this.handleSRSAnswer(1)}
-          >
+          <button class="answer-button difficulty-hard" @click=${() => this.handleSRSAnswer(1)}>
             Hard 😓 <span class="keyboard-hint">(2)</span>
           </button>
-          <button 
-            class="answer-button difficulty-good"
-            @click=${() => this.handleSRSAnswer(2)}
-          >
+          <button class="answer-button difficulty-good" @click=${() => this.handleSRSAnswer(2)}>
             Good ✓ <span class="keyboard-hint">(3)</span>
           </button>
-          <button 
-            class="answer-button difficulty-easy"
-            @click=${() => this.handleSRSAnswer(3)}
-          >
+          <button class="answer-button difficulty-easy" @click=${() => this.handleSRSAnswer(3)}>
             Easy 😊 <span class="keyboard-hint">(4)</span>
           </button>
         </div>
@@ -2761,10 +2769,7 @@ export class QuizMode extends BaseComponent {
       // Before revealing answer, show both reveal button and difficulty buttons
       return html`
         <div class="answer-buttons">
-          <button 
-            class="answer-button primary"
-            @click=${this.revealAnswer}
-          >
+          <button class="answer-button primary" @click=${this.revealAnswer}>
             Reveal Answer <span class="keyboard-hint">(Enter)</span>
           </button>
         </div>
@@ -2773,10 +2778,7 @@ export class QuizMode extends BaseComponent {
     }
 
     // After reveal, show the answer and self-assessment buttons
-    return html`
-      ${this.renderRevealedAnswer()}
-      ${difficultyButtons}
-    `;
+    return html` ${this.renderRevealedAnswer()} ${difficultyButtons} `;
   }
 
   private renderRevealedAnswer() {
@@ -2784,7 +2786,7 @@ export class QuizMode extends BaseComponent {
 
     const word = this.currentQuestion.word;
     const sentence = this.currentQuestion.sentence;
-    
+
     // Show the correct answer (English translation)
     const correctAnswer = word.translation;
 
@@ -2792,13 +2794,15 @@ export class QuizMode extends BaseComponent {
       <div class="revealed-answer">
         <div class="answer-container">
           <div class="answer-word">${correctAnswer}</div>
-          ${this.audioOnlyMode ? html`
-            <div class="sentence-pair">
-              <span class="sentence-label">Sentence:</span>
-              <div class="sentence-text">${sentence.sentence}</div>
-              <div class="sentence-translation">${sentence.translation}</div>
-            </div>
-          ` : ''}
+          ${this.audioOnlyMode
+            ? html`
+                <div class="sentence-pair">
+                  <span class="sentence-label">Sentence:</span>
+                  <div class="sentence-text">${sentence.sentence}</div>
+                  <div class="sentence-translation">${sentence.translation}</div>
+                </div>
+              `
+            : ''}
         </div>
       </div>
     `;
@@ -2809,8 +2813,7 @@ export class QuizMode extends BaseComponent {
 
     return html`
       <div class="recording-section">
-        ${this.isRecording ? this.renderRecordingStatus() : ''}
-        ${this.renderTranscriptionResults()}
+        ${this.isRecording ? this.renderRecordingStatus() : ''} ${this.renderTranscriptionResults()}
       </div>
     `;
   }
@@ -2827,7 +2830,7 @@ export class QuizMode extends BaseComponent {
           <span class="recording-time">${formattedTime}</span>
           <span class="recording-indicator">Recording…</span>
         </div>
-        <button 
+        <button
           class="cancel-recording-button"
           @click=${this.cancelRecording}
           title="Cancel recording"
@@ -2844,23 +2847,30 @@ export class QuizMode extends BaseComponent {
         <div class="transcription-results">
           <div class="transcription-loading">
             <div class="spinner"></div>
-            ${this.streamingTranscriptionText ? html`
-              <div class="streaming-transcription">
-                <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">
-                  Transcribing...
-                </div>
-                <div style="font-size: 16px; font-style: italic; color: var(--text-primary);">
-                  "${this.streamingTranscriptionText}"
-                </div>
-              </div>
-            ` : html`
-              Analyzing your pronunciation...
-              ${!this.speechRecognitionReady ? html`
-                <div style="margin-top: var(--spacing-sm); font-size: 14px; color: var(--text-secondary);">
-                  First-time setup: This may take 1-2 minutes while speech recognition compiles...
-                </div>
-              ` : ''}
-            `}
+            ${this.streamingTranscriptionText
+              ? html`
+                  <div class="streaming-transcription">
+                    <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">
+                      Transcribing...
+                    </div>
+                    <div style="font-size: 16px; font-style: italic; color: var(--text-primary);">
+                      "${this.streamingTranscriptionText}"
+                    </div>
+                  </div>
+                `
+              : html`
+                  Analyzing your pronunciation...
+                  ${!this.speechRecognitionReady
+                    ? html`
+                        <div
+                          style="margin-top: var(--spacing-sm); font-size: 14px; color: var(--text-secondary);"
+                        >
+                          First-time setup: This may take 1-2 minutes while speech recognition
+                          compiles...
+                        </div>
+                      `
+                    : ''}
+                `}
           </div>
         </div>
       `;
@@ -2879,7 +2889,6 @@ export class QuizMode extends BaseComponent {
 
     return html`
       <div class="transcription-results">
-
         <div class="transcription-text">
           <div class="label">Expected:</div>
           <div class="text color-coded-text">
@@ -2891,9 +2900,12 @@ export class QuizMode extends BaseComponent {
               } else if (wordInfo.similarity < 0.9) {
                 color = '#ffc107'; // yellow for partial match
               }
-              
+
               const isLast = index === result.expectedWords.length - 1;
-              return html`<span style="color: ${color}; font-weight: ${wordInfo.matched ? 'normal' : 'bold'};">${wordInfo.word}</span>${!isLast ? ' ' : ''}`;
+              return html`<span
+                  style="color: ${color}; font-weight: ${wordInfo.matched ? 'normal' : 'bold'};"
+                  >${wordInfo.word}</span
+                >${!isLast ? ' ' : ''}`;
             })}
           </div>
         </div>
@@ -2906,7 +2918,10 @@ export class QuizMode extends BaseComponent {
         <div class="similarity-score">
           <span>Similarity:</span>
           <div class="similarity-bar">
-            <div class="similarity-fill ${similarityClass}" style="width: ${similarityPercentage}%"></div>
+            <div
+              class="similarity-fill ${similarityClass}"
+              style="width: ${similarityPercentage}%"
+            ></div>
           </div>
           <span class="similarity-percentage">${similarityPercentage}%</span>
         </div>
@@ -2923,12 +2938,12 @@ export class QuizMode extends BaseComponent {
     return html`
       <div class="result-feedback ${isCorrect ? 'correct' : 'incorrect'}">
         <h3>${isCorrect ? 'Correct!' : 'Keep practicing!'}</h3>
-        <p>
-          <strong>${word.word}</strong> = <strong>${word.translation}</strong>
-        </p>
+        <p><strong>${word.word}</strong> = <strong>${word.translation}</strong></p>
         <p>Word strength: ${word.strength}/100</p>
         <p style="font-size: 14px; color: var(--text-secondary); margin-top: var(--spacing-sm);">
-          ${this.quizSession!.currentQuestionIndex + 1 >= this.quizSession!.totalQuestions ? 'Finishing quiz...' : 'Moving to next question...'}
+          ${this.quizSession!.currentQuestionIndex + 1 >= this.quizSession!.totalQuestions
+            ? 'Finishing quiz...'
+            : 'Moving to next question...'}
         </p>
       </div>
     `;
@@ -2964,11 +2979,14 @@ export class QuizMode extends BaseComponent {
         <div class="quiz-content">
           <div class="quiz-complete">
             <h2>Quiz Complete!</h2>
-            
+
             <div class="final-score">${percentage}%</div>
-            
+
             <div class="score-details">
-              <p>You got <strong>${correctAnswers}</strong> out of <strong>${this.quizSession.totalQuestions}</strong> questions correct.</p>
+              <p>
+                You got <strong>${correctAnswers}</strong> out of
+                <strong>${this.quizSession.totalQuestions}</strong> questions correct.
+              </p>
               <p class="performance-message ${performanceClass}">${performanceMessage}</p>
             </div>
 
@@ -2984,12 +3002,8 @@ export class QuizMode extends BaseComponent {
             </div>
 
             <div class="quiz-actions">
-              <button class="action-button" @click=${this.restartQuiz}>
-                Retake Quiz
-              </button>
-              <button class="action-button" @click=${this.goToLearning}>
-                Review Words
-              </button>
+              <button class="action-button" @click=${this.restartQuiz}>Retake Quiz</button>
+              <button class="action-button" @click=${this.goToLearning}>Review Words</button>
               <button class="action-button primary" @click=${this.goToTopicSelection}>
                 New Topic
               </button>

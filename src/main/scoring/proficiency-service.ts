@@ -29,11 +29,11 @@ export class ProficiencyService {
 
   // Weights for combining different metrics
   private readonly weights = {
-    pronunciation: 0.30,  // 30% - pronunciation is key indicator
-    audioSpeed: 0.20,     // 20% - speed indicates comprehension
-    engagement: 0.15,     // 15% - practice frequency matters
-    wordPosition: 0.15,   // 15% - vocabulary difficulty
-    strength: 0.20        // 20% - SRS strength is important
+    pronunciation: 0.3, // 30% - pronunciation is key indicator
+    audioSpeed: 0.2, // 20% - speed indicates comprehension
+    engagement: 0.15, // 15% - practice frequency matters
+    wordPosition: 0.15, // 15% - vocabulary difficulty
+    strength: 0.2, // 20% - SRS strength is important
   };
 
   constructor(database: DatabaseLayer) {
@@ -44,43 +44,36 @@ export class ProficiencyService {
    * Calculate proficiency score for a language
    * Returns overall proficiency (0-100) based on all tracked metrics
    */
-  async calculateLanguageProficiency(
-    language: string,
-    timeWindowDays?: number
-  ): Promise<number> {
+  async calculateLanguageProficiency(language: string, timeWindowDays?: number): Promise<number> {
     try {
       // Get all words for the language
       const words = await this.database.getAllWords(language, false, false);
-      
+
       if (words.length === 0) {
         return 0;
       }
 
       // Calculate proficiency for each word
       const proficiencies = await Promise.all(
-        words.map(word => this.calculateWordProficiency(word.id, language, timeWindowDays))
+        words.map((word) => this.calculateWordProficiency(word.id, language, timeWindowDays))
       );
 
       // Weight by word frequency (common words matter more)
       // Get frequency positions for all words
       const frequencyPositions = await Promise.all(
-        words.map(word => this.getWordFrequencyPosition(word.id, language))
+        words.map((word) => this.getWordFrequencyPosition(word.id, language))
       );
 
       const weightedSum = proficiencies.reduce((sum, p, i) => {
         const frequencyPosition = frequencyPositions[i];
         // Use frequency position if available, otherwise use strength as proxy
-        const frequencyWeight = frequencyPosition 
-          ? 1 / Math.log(frequencyPosition + 1) 
-          : 1;
-        return sum + (p.overallProficiency * frequencyWeight);
+        const frequencyWeight = frequencyPosition ? 1 / Math.log(frequencyPosition + 1) : 1;
+        return sum + p.overallProficiency * frequencyWeight;
       }, 0);
 
       const totalWeight = proficiencies.reduce((sum, p, i) => {
         const frequencyPosition = frequencyPositions[i];
-        return sum + (frequencyPosition 
-          ? 1 / Math.log(frequencyPosition + 1) 
-          : 1);
+        return sum + (frequencyPosition ? 1 / Math.log(frequencyPosition + 1) : 1);
       }, 0);
 
       return totalWeight > 0 ? weightedSum / totalWeight : 0;
@@ -125,7 +118,7 @@ export class ProficiencyService {
         audioSpeed: audioSpeedScore,
         engagement: engagementScore,
         wordPosition: wordPositionScore,
-        strength: strengthScore
+        strength: strengthScore,
       });
 
       return {
@@ -134,7 +127,7 @@ export class ProficiencyService {
         engagementScore,
         wordPositionScore,
         strengthScore,
-        overallProficiency
+        overallProficiency,
       };
     } catch (error) {
       console.error(`Error calculating proficiency for word ${wordId}:`, error);
@@ -144,7 +137,7 @@ export class ProficiencyService {
         engagementScore: 0,
         wordPositionScore: 50,
         strengthScore: 0,
-        overallProficiency: 0
+        overallProficiency: 0,
       };
     }
   }
@@ -162,16 +155,14 @@ export class ProficiencyService {
 
       for (const sentence of sentences) {
         const history = await this.database.getPronunciationHistory(sentence.id);
-        const cutoffTime = timeWindowDays 
-          ? Date.now() - (timeWindowDays * 24 * 60 * 60 * 1000)
-          : 0;
+        const cutoffTime = timeWindowDays ? Date.now() - timeWindowDays * 24 * 60 * 60 * 1000 : 0;
 
         for (const attempt of history) {
           const timestamp = attempt.createdAt.getTime();
           if (timestamp >= cutoffTime) {
             allAttempts.push({
               similarity: attempt.similarityScore,
-              timestamp
+              timestamp,
             });
           }
         }
@@ -199,13 +190,13 @@ export class ProficiencyService {
       const db = (this.database as any).getDb?.();
       if (!db) return [];
 
-      const sentenceIds = sentences.map(s => s.id);
+      const sentenceIds = sentences.map((s) => s.id);
       if (sentenceIds.length === 0) return [];
 
       const placeholders = sentenceIds.map(() => '?').join(',');
 
-      const cutoffTime = timeWindowDays 
-        ? new Date(Date.now() - (timeWindowDays * 24 * 60 * 60 * 1000)).toISOString()
+      const cutoffTime = timeWindowDays
+        ? new Date(Date.now() - timeWindowDays * 24 * 60 * 60 * 1000).toISOString()
         : null;
 
       const query = cutoffTime
@@ -218,13 +209,11 @@ export class ProficiencyService {
            WHERE sentence_id IN (${placeholders})`;
 
       const stmt = db.prepare(query);
-      const rows = cutoffTime
-        ? stmt.all(...sentenceIds, cutoffTime)
-        : stmt.all(...sentenceIds);
+      const rows = cutoffTime ? stmt.all(...sentenceIds, cutoffTime) : stmt.all(...sentenceIds);
 
       return rows.map((row: any) => ({
         playbackSpeed: row.playback_speed ?? 1.0,
-        timestamp: new Date(row.created_at).getTime()
+        timestamp: new Date(row.created_at).getTime(),
       }));
     } catch (error) {
       console.error('Error getting word playback data:', error);
@@ -248,10 +237,7 @@ export class ProficiencyService {
   /**
    * Get word frequency position
    */
-  private async getWordFrequencyPosition(
-    wordId: number,
-    language: string
-  ): Promise<number | null> {
+  private async getWordFrequencyPosition(wordId: number, language: string): Promise<number | null> {
     try {
       const word = await this.database.getWordById(wordId);
       if (!word) return null;
@@ -327,7 +313,7 @@ export class ProficiencyService {
     if (!position) return 50; // Unknown position = neutral
     // Invert: lower position = higher score
     // position 1 = 100, position 1000 = 0
-    return Math.max(0, Math.min(100, 100 - (position / 10)));
+    return Math.max(0, Math.min(100, 100 - position / 10));
   }
 
   /**
@@ -349,4 +335,3 @@ export class ProficiencyService {
     );
   }
 }
-

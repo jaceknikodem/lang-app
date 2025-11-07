@@ -37,7 +37,7 @@ export class ServiceManager {
 
   constructor(config: ServiceManagerConfig = {}) {
     this.enabled = config.enabled ?? serviceConfig.manageServices;
-    
+
     // Resolve model path - try multiple locations
     if (config.whisperModelPath) {
       this.whisperModelPath = config.whisperModelPath;
@@ -45,16 +45,16 @@ export class ServiceManager {
       // Use userData directory (consistent with other app data)
       // This works in both development and production
       const modelsDir = path.join(app.getPath('userData'), 'models');
-      
+
       // Ensure models directory exists
       if (!fs.existsSync(modelsDir)) {
         fs.mkdirSync(modelsDir, { recursive: true });
       }
-      
+
       // Auto-detect available Whisper model with preference for larger/better models
       this.whisperModelPath = this.findWhisperModel(modelsDir);
     }
-    
+
     this.whisperPort = config.whisperPort || serviceConfig.whisper.port;
     this.lemmatizationPort = config.lemmatizationPort || serviceConfig.lemmatization.port;
     this.maxRestarts = config.maxRestarts || serviceConfig.maxRestarts;
@@ -75,7 +75,7 @@ export class ServiceManager {
       'ggml-medium.bin',
       'ggml-base.bin',
       'ggml-small.bin',
-      'ggml-tiny.bin'
+      'ggml-tiny.bin',
     ];
 
     // First, try preferred models in order
@@ -113,7 +113,7 @@ export class ServiceManager {
   private async findAvailablePort(startPort: number): Promise<number> {
     return new Promise((resolve, reject) => {
       const server = net.createServer();
-      
+
       server.listen(startPort, () => {
         const port = (server.address() as net.AddressInfo)?.port;
         server.close(() => {
@@ -144,7 +144,7 @@ export class ServiceManager {
   private async isPortInUse(port: number): Promise<boolean> {
     return new Promise((resolve) => {
       const server = net.createServer();
-      
+
       server.listen(port, () => {
         server.close(() => {
           resolve(false); // Port is available
@@ -173,44 +173,50 @@ export class ServiceManager {
       // Check if port is already in use
       const portInUse = await this.isPortInUse(this.whisperPort);
       let actualPort = this.whisperPort;
-      
+
       if (portInUse) {
-        console.log(`[ServiceManager] Whisper port ${this.whisperPort} is in use, finding available port...`);
+        console.log(
+          `[ServiceManager] Whisper port ${this.whisperPort} is in use, finding available port...`
+        );
         actualPort = await this.findAvailablePort(this.whisperPort);
         console.log(`[ServiceManager] Using Whisper port ${actualPort} instead`);
       }
 
       const url = `http://127.0.0.1:${actualPort}`;
-      
+
       // Check if model file exists
       const modelPath = this.whisperModelPath;
       if (!fs.existsSync(modelPath)) {
         console.warn(`[ServiceManager] Whisper model not found at ${modelPath}`);
-        console.warn(`[ServiceManager] Please download a Whisper model to: ${path.dirname(modelPath)}`);
-        console.warn(`[ServiceManager] Supported models: ggml-*.bin files (e.g., ggml-small.bin, ggml-large-v3-turbo-q8_0.bin)`);
+        console.warn(
+          `[ServiceManager] Please download a Whisper model to: ${path.dirname(modelPath)}`
+        );
+        console.warn(
+          `[ServiceManager] Supported models: ggml-*.bin files (e.g., ggml-small.bin, ggml-large-v3-turbo-q8_0.bin)`
+        );
         console.warn(`[ServiceManager] Skipping Whisper server start`);
         return;
       }
-      
+
       console.log(`[ServiceManager] Using Whisper model: ${path.basename(modelPath)}`);
 
       // Spawn whisper-server
       console.log(`[ServiceManager] Starting whisper-server on port ${actualPort}...`);
-      const whisperProcess = spawn('whisper-server', [
-        '--model', modelPath,
-        '--threads', '8',
-        '--port', actualPort.toString()
-      ], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: process.env
-      });
+      const whisperProcess = spawn(
+        'whisper-server',
+        ['--model', modelPath, '--threads', '8', '--port', actualPort.toString()],
+        {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: process.env,
+        }
+      );
 
       this.whisperService = {
         name: 'whisper-server',
         port: actualPort,
         url,
         process: whisperProcess,
-        restartCount: 0
+        restartCount: 0,
       };
 
       // Set environment variable so other services can use it
@@ -231,20 +237,26 @@ export class ServiceManager {
           return;
         }
 
-        console.warn(`[ServiceManager] whisper-server exited with code ${code} and signal ${signal}`);
-        
+        console.warn(
+          `[ServiceManager] whisper-server exited with code ${code} and signal ${signal}`
+        );
+
         if (this.whisperService && this.whisperService.restartCount < this.maxRestarts) {
           this.whisperService.restartCount++;
-          console.log(`[ServiceManager] Restarting whisper-server (attempt ${this.whisperService.restartCount}/${this.maxRestarts})...`);
-          
+          console.log(
+            `[ServiceManager] Restarting whisper-server (attempt ${this.whisperService.restartCount}/${this.maxRestarts})...`
+          );
+
           // Wait a bit before restarting
           setTimeout(() => {
-            this.startWhisperService().catch(err => {
+            this.startWhisperService().catch((err) => {
               console.error('[ServiceManager] Failed to restart whisper-server:', err);
             });
           }, 2000);
         } else {
-          console.error('[ServiceManager] Max restart attempts reached for whisper-server, giving up');
+          console.error(
+            '[ServiceManager] Max restart attempts reached for whisper-server, giving up'
+          );
           this.whisperService = null;
         }
       });
@@ -276,9 +288,11 @@ export class ServiceManager {
       // Check if port is already in use
       const portInUse = await this.isPortInUse(this.lemmatizationPort);
       let actualPort = this.lemmatizationPort;
-      
+
       if (portInUse) {
-        console.log(`[ServiceManager] Lemmatization port ${this.lemmatizationPort} is in use, finding available port...`);
+        console.log(
+          `[ServiceManager] Lemmatization port ${this.lemmatizationPort} is in use, finding available port...`
+        );
         actualPort = await this.findAvailablePort(this.lemmatizationPort);
         console.log(`[ServiceManager] Using Lemmatization port ${actualPort} instead`);
       }
@@ -290,14 +304,14 @@ export class ServiceManager {
       const appPath = app.getAppPath();
       let lemmatizationDir = path.join(appPath, 'src', 'main', 'lemmatization');
       let stanzaServicePath = path.join(lemmatizationDir, 'stanza-service.py');
-      
+
       // If not found, try relative to __dirname (for compiled code)
       // From dist/main/main/services/, go to src/main/lemmatization/
       if (!fs.existsSync(stanzaServicePath)) {
         lemmatizationDir = path.resolve(__dirname, '../../src/main/lemmatization');
         stanzaServicePath = path.join(lemmatizationDir, 'stanza-service.py');
       }
-      
+
       // If still not found, try relative to project root (development mode where __dirname might be different)
       if (!fs.existsSync(stanzaServicePath)) {
         lemmatizationDir = path.resolve(__dirname, '../../../../src/main/lemmatization');
@@ -305,7 +319,9 @@ export class ServiceManager {
       }
 
       if (!fs.existsSync(stanzaServicePath)) {
-        console.warn(`[ServiceManager] stanza-service.py not found at ${stanzaServicePath}, skipping lemmatization service start`);
+        console.warn(
+          `[ServiceManager] stanza-service.py not found at ${stanzaServicePath}, skipping lemmatization service start`
+        );
         return;
       }
 
@@ -317,7 +333,7 @@ export class ServiceManager {
         // Check if uv is available
         const { execSync } = require('child_process');
         execSync('which uv', { stdio: 'ignore' });
-        
+
         // Use uv to run the service
         pythonCommand = 'uv';
         args = ['run', 'python', stanzaServicePath];
@@ -332,7 +348,7 @@ export class ServiceManager {
       // Set port via environment variable (stanza-service.py uses uvicorn)
       const env = {
         ...process.env,
-        STANZA_PORT: actualPort.toString()
+        STANZA_PORT: actualPort.toString(),
       };
 
       // Spawn stanza-service
@@ -340,7 +356,7 @@ export class ServiceManager {
       const lemmatizationProcess = spawn(pythonCommand, args, {
         cwd: lemmatizationDir,
         stdio: ['ignore', 'pipe', 'pipe'],
-        env
+        env,
       });
 
       this.lemmatizationService = {
@@ -348,7 +364,7 @@ export class ServiceManager {
         port: actualPort,
         url,
         process: lemmatizationProcess,
-        restartCount: 0
+        restartCount: 0,
       };
 
       // Set environment variable so other services can use it
@@ -369,20 +385,29 @@ export class ServiceManager {
           return;
         }
 
-        console.warn(`[ServiceManager] stanza-service exited with code ${code} and signal ${signal}`);
-        
-        if (this.lemmatizationService && this.lemmatizationService.restartCount < this.maxRestarts) {
+        console.warn(
+          `[ServiceManager] stanza-service exited with code ${code} and signal ${signal}`
+        );
+
+        if (
+          this.lemmatizationService &&
+          this.lemmatizationService.restartCount < this.maxRestarts
+        ) {
           this.lemmatizationService.restartCount++;
-          console.log(`[ServiceManager] Restarting stanza-service (attempt ${this.lemmatizationService.restartCount}/${this.maxRestarts})...`);
-          
+          console.log(
+            `[ServiceManager] Restarting stanza-service (attempt ${this.lemmatizationService.restartCount}/${this.maxRestarts})...`
+          );
+
           // Wait a bit before restarting
           setTimeout(() => {
-            this.startLemmatizationService().catch(err => {
+            this.startLemmatizationService().catch((err) => {
               console.error('[ServiceManager] Failed to restart stanza-service:', err);
             });
           }, 2000);
         } else {
-          console.error('[ServiceManager] Max restart attempts reached for stanza-service, giving up');
+          console.error(
+            '[ServiceManager] Max restart attempts reached for stanza-service, giving up'
+          );
           this.lemmatizationService = null;
         }
       });
@@ -404,7 +429,7 @@ export class ServiceManager {
 
   /**
    * Start all managed services
-   * 
+   *
    * This method sets process.env.WHISPER_SERVER_URL and process.env.LEMMATIZATION_SERVER_URL
    * with the actual ports (which may differ from defaults if ports are taken).
    * Other services should read these environment variables to connect to the managed services.
@@ -421,10 +446,7 @@ export class ServiceManager {
     // Start services in parallel
     // Environment variables are set synchronously during service startup,
     // so they're available immediately for other services to read
-    await Promise.all([
-      this.startWhisperService(),
-      this.startLemmatizationService()
-    ]);
+    await Promise.all([this.startWhisperService(), this.startLemmatizationService()]);
   }
 
   /**
@@ -442,7 +464,7 @@ export class ServiceManager {
           const proc = this.whisperService!.process!;
           proc.on('exit', () => resolve());
           proc.kill('SIGTERM');
-          
+
           // Force kill after 5 seconds
           setTimeout(() => {
             if (!proc.killed) {
@@ -460,7 +482,7 @@ export class ServiceManager {
           const proc = this.lemmatizationService!.process!;
           proc.on('exit', () => resolve());
           proc.kill('SIGTERM');
-          
+
           // Force kill after 5 seconds
           setTimeout(() => {
             if (!proc.killed) {
@@ -490,17 +512,22 @@ export class ServiceManager {
   } {
     return {
       enabled: this.enabled,
-      whisper: this.whisperService ? {
-        running: this.whisperService.process !== null && !this.whisperService.process.killed,
-        port: this.whisperService.port,
-        url: this.whisperService.url
-      } : null,
-      lemmatization: this.lemmatizationService ? {
-        running: this.lemmatizationService.process !== null && !this.lemmatizationService.process.killed,
-        port: this.lemmatizationService.port,
-        url: this.lemmatizationService.url
-      } : null
+      whisper: this.whisperService
+        ? {
+            running: this.whisperService.process !== null && !this.whisperService.process.killed,
+            port: this.whisperService.port,
+            url: this.whisperService.url,
+          }
+        : null,
+      lemmatization: this.lemmatizationService
+        ? {
+            running:
+              this.lemmatizationService.process !== null &&
+              !this.lemmatizationService.process.killed,
+            port: this.lemmatizationService.port,
+            url: this.lemmatizationService.url,
+          }
+        : null,
     };
   }
 }
-

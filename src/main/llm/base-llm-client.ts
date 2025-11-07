@@ -12,7 +12,7 @@ import {
   SentenceGenerationResponseSchema,
   ContextSentenceResponseSchema,
   DialogueVariantResponseSchema,
-  FollowUpResponseSchema
+  FollowUpResponseSchema,
 } from './schemas.js';
 import { z } from 'zod';
 
@@ -30,7 +30,7 @@ export abstract class BaseLLMClient {
       wordGenerationModel: config.wordGenerationModel,
       sentenceGenerationModel: config.sentenceGenerationModel,
       timeout: config.timeout || LLM_CONFIG.DEFAULT_TIMEOUT,
-      maxRetries: config.maxRetries || LLM_CONFIG.MAX_RETRIES
+      maxRetries: config.maxRetries || LLM_CONFIG.MAX_RETRIES,
     };
   }
 
@@ -74,11 +74,26 @@ export abstract class BaseLLMClient {
   /**
    * Generate topic words - shared implementation
    */
-  async generateTopicWords(topic: string, language: string, count: number, proficiencyLevel?: string): Promise<GeneratedWord[]> {
+  async generateTopicWords(
+    topic: string,
+    language: string,
+    count: number,
+    proficiencyLevel?: string
+  ): Promise<GeneratedWord[]> {
     // Get a small sample of existing words for the prompt (to help LLM avoid obvious duplicates)
     // We only need a sample, not all words - this is just for prompt context
-    const existingWords = await this.getExistingWords(language, topic, LLM_CONFIG.MAX_EXISTING_WORDS_IN_PROMPT);
-    const prompt = this.createTopicWordsPrompt(topic, language, count, existingWords, proficiencyLevel);
+    const existingWords = await this.getExistingWords(
+      language,
+      topic,
+      LLM_CONFIG.MAX_EXISTING_WORDS_IN_PROMPT
+    );
+    const prompt = this.createTopicWordsPrompt(
+      topic,
+      language,
+      count,
+      existingWords,
+      proficiencyLevel
+    );
 
     try {
       const response = await this.makeRequest(prompt, this.getWordGenerationModel());
@@ -88,35 +103,51 @@ export abstract class BaseLLMClient {
 
       if (!parseResult.success) {
         const logger = getLogger();
-        logger.error({ issues: parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) }, 'Validation failed');
-        throw new Error(`Invalid response format: ${parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')}`);
+        logger.error(
+          { issues: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) },
+          'Validation failed'
+        );
+        throw new Error(
+          `Invalid response format: ${parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(', ')}`
+        );
       }
 
       const words = parseResult.data;
 
       // Remove duplicates within generated words (case-insensitive)
-      const uniqueWords = words.filter((word, index, arr) =>
-        arr.findIndex(w => w.word.toLowerCase() === word.word.toLowerCase()) === index
+      const uniqueWords = words.filter(
+        (word, index, arr) =>
+          arr.findIndex((w) => w.word.toLowerCase() === word.word.toLowerCase()) === index
       );
 
       // Efficiently check which generated words already exist in database using batch lookup
       // This is much more efficient than fetching all words and doing in-memory comparison
-      const generatedWordStrings = uniqueWords.map(w => w.word);
+      const generatedWordStrings = uniqueWords.map((w) => w.word);
       const existingWordsSet = await this.checkWordsExist(language, generatedWordStrings, topic);
 
       // Filter out words that already exist in database (learning, known, or ignored)
-      const newWords = uniqueWords.filter(word => {
+      const newWords = uniqueWords.filter((word) => {
         const wordLower = word.word.toLowerCase();
         return !existingWordsSet.has(wordLower);
       });
 
       const logger = getLogger();
-      logger.info({ uniqueWords: uniqueWords.length, newWords: newWords.length, duplicates: uniqueWords.length - newWords.length, checkedCount: generatedWordStrings.length }, `Generated ${uniqueWords.length} unique words, ${newWords.length} are new (${uniqueWords.length - newWords.length} duplicates filtered via efficient batch lookup)`);
+      logger.info(
+        {
+          uniqueWords: uniqueWords.length,
+          newWords: newWords.length,
+          duplicates: uniqueWords.length - newWords.length,
+          checkedCount: generatedWordStrings.length,
+        },
+        `Generated ${uniqueWords.length} unique words, ${newWords.length} are new (${uniqueWords.length - newWords.length} duplicates filtered via efficient batch lookup)`
+      );
 
       // If we got significantly fewer new words than requested, throw an error to trigger retry.
       const minWords = Math.max(1, Math.floor(count * LLM_CONFIG.MIN_WORD_COUNT_THRESHOLD));
       if (newWords.length < minWords) {
-        throw new Error(`Insufficient new words generated: got ${newWords.length}, expected at least ${minWords}`);
+        throw new Error(
+          `Insufficient new words generated: got ${newWords.length}, expected at least ${minWords}`
+        );
       }
 
       return newWords;
@@ -124,13 +155,13 @@ export abstract class BaseLLMClient {
       if (error instanceof z.ZodError) {
         throw this.createLLMError(error, 'Response validation failed', 'INVALID_RESPONSE', false);
       }
-      
+
       // Preserve the original error if it's already a meaningful Error with a specific message
       // (e.g., "Insufficient new words generated")
       if (error instanceof Error && error.message.includes('Insufficient new words generated')) {
         throw this.createLLMError(error, error.message, 'MODEL_ERROR', false);
       }
-      
+
       const err = ensureError(error);
       throw this.createLLMError(err, `Failed to generate words`);
     }
@@ -139,10 +170,23 @@ export abstract class BaseLLMClient {
   /**
    * Generate sentences - shared implementation
    */
-  async generateSentences(word: string, language: string, count: number, topic?: string, proficiencyLevel?: string): Promise<GeneratedSentence[]> {
+  async generateSentences(
+    word: string,
+    language: string,
+    count: number,
+    topic?: string,
+    proficiencyLevel?: string
+  ): Promise<GeneratedSentence[]> {
     // Get known words to include in sentences when possible
     const knownWords = await this.getKnownWords(language);
-    const prompt = this.createSentencesPrompt(word, language, count, knownWords, topic, proficiencyLevel);
+    const prompt = this.createSentencesPrompt(
+      word,
+      language,
+      count,
+      knownWords,
+      topic,
+      proficiencyLevel
+    );
 
     try {
       const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
@@ -152,8 +196,13 @@ export abstract class BaseLLMClient {
 
       if (!parseResult.success) {
         const logger = getLogger();
-        logger.error({ issues: parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) }, 'Sentence validation failed');
-        throw new Error(`Invalid response format: ${parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')}`);
+        logger.error(
+          { issues: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) },
+          'Sentence validation failed'
+        );
+        throw new Error(
+          `Invalid response format: ${parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(', ')}`
+        );
       }
 
       const sentences = parseResult.data;
@@ -161,7 +210,9 @@ export abstract class BaseLLMClient {
       // If we got significantly fewer sentences than requested, throw an error to trigger retry
       const minSentences = Math.max(1, Math.floor(count * LLM_CONFIG.MIN_SENTENCE_COUNT_THRESHOLD));
       if (sentences.length < minSentences) {
-        throw new Error(`Insufficient sentences generated: got ${sentences.length}, expected at least ${minSentences}`);
+        throw new Error(
+          `Insufficient sentences generated: got ${sentences.length}, expected at least ${minSentences}`
+        );
       }
 
       return sentences;
@@ -169,15 +220,33 @@ export abstract class BaseLLMClient {
       if (error instanceof z.ZodError) {
         throw this.createLLMError(error, 'Response validation failed', 'INVALID_RESPONSE', false);
       }
-      throw this.createLLMError(error instanceof Error ? error : new Error(String(error)), 'Failed to generate sentences');
+      throw this.createLLMError(
+        error instanceof Error ? error : new Error(String(error)),
+        'Failed to generate sentences'
+      );
     }
   }
 
   /**
    * Generate context sentences - shared implementation
    */
-  async generateContextSentences(sentence: string, translation: string, language: string, proficiencyLevel?: string): Promise<{ contextBefore?: string; contextAfter?: string; contextBeforeTranslation?: string; contextAfterTranslation?: string }> {
-    const prompt = this.createContextSentencesPrompt(sentence, translation, language, proficiencyLevel);
+  async generateContextSentences(
+    sentence: string,
+    translation: string,
+    language: string,
+    proficiencyLevel?: string
+  ): Promise<{
+    contextBefore?: string;
+    contextAfter?: string;
+    contextBeforeTranslation?: string;
+    contextAfterTranslation?: string;
+  }> {
+    const prompt = this.createContextSentencesPrompt(
+      sentence,
+      translation,
+      language,
+      proficiencyLevel
+    );
 
     try {
       const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
@@ -187,7 +256,10 @@ export abstract class BaseLLMClient {
 
       if (!parseResult.success) {
         const logger = getLogger();
-        logger.warn({ issues: parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) }, 'Context sentence validation failed');
+        logger.warn(
+          { issues: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) },
+          'Context sentence validation failed'
+        );
         return {};
       }
 
@@ -195,15 +267,30 @@ export abstract class BaseLLMClient {
 
       // Filter out empty strings
       return {
-        contextBefore: context.contextBefore && context.contextBefore.trim() ? context.contextBefore.trim() : undefined,
-        contextAfter: context.contextAfter && context.contextAfter.trim() ? context.contextAfter.trim() : undefined,
-        contextBeforeTranslation: context.contextBeforeTranslation && context.contextBeforeTranslation.trim() ? context.contextBeforeTranslation.trim() : undefined,
-        contextAfterTranslation: context.contextAfterTranslation && context.contextAfterTranslation.trim() ? context.contextAfterTranslation.trim() : undefined
+        contextBefore:
+          context.contextBefore && context.contextBefore.trim()
+            ? context.contextBefore.trim()
+            : undefined,
+        contextAfter:
+          context.contextAfter && context.contextAfter.trim()
+            ? context.contextAfter.trim()
+            : undefined,
+        contextBeforeTranslation:
+          context.contextBeforeTranslation && context.contextBeforeTranslation.trim()
+            ? context.contextBeforeTranslation.trim()
+            : undefined,
+        contextAfterTranslation:
+          context.contextAfterTranslation && context.contextAfterTranslation.trim()
+            ? context.contextAfterTranslation.trim()
+            : undefined,
       };
     } catch (error) {
       if (error instanceof z.ZodError) {
         const logger = getLogger();
-        logger.warn({ error }, 'Context sentence generation validation failed, returning empty context');
+        logger.warn(
+          { error },
+          'Context sentence generation validation failed, returning empty context'
+        );
         return {};
       }
       // On any error, return empty context instead of throwing
@@ -216,7 +303,11 @@ export abstract class BaseLLMClient {
   /**
    * Get existing words from database to avoid duplicates
    */
-  protected async getExistingWords(language: string, topic?: string, limit?: number): Promise<string[]> {
+  protected async getExistingWords(
+    language: string,
+    topic?: string,
+    limit?: number
+  ): Promise<string[]> {
     if (!this.databaseLayer) {
       const logger = getLogger();
       logger.warn('Database layer not set, cannot check for duplicates');
@@ -255,7 +346,11 @@ export abstract class BaseLLMClient {
    * Check which of the provided words already exist in the database (efficient batch lookup)
    * This is more efficient than fetching all words and doing in-memory comparison
    */
-  protected async checkWordsExist(language: string, words: string[], topic?: string): Promise<Set<string>> {
+  protected async checkWordsExist(
+    language: string,
+    words: string[],
+    topic?: string
+  ): Promise<Set<string>> {
     if (!this.databaseLayer) {
       const logger = getLogger();
       logger.warn('Database layer not set, cannot check words existence');
@@ -274,7 +369,10 @@ export abstract class BaseLLMClient {
   /**
    * Create proficiency level guidance text
    */
-  private createProficiencyGuidance(proficiencyLevel: string | undefined, guidanceType: 'vocabulary' | 'sentence'): string {
+  private createProficiencyGuidance(
+    proficiencyLevel: string | undefined,
+    guidanceType: 'vocabulary' | 'sentence'
+  ): string {
     if (!proficiencyLevel) {
       return '';
     }
@@ -282,28 +380,33 @@ export abstract class BaseLLMClient {
     let levelGuidance = '';
     switch (proficiencyLevel) {
       case 'newbie':
-        levelGuidance = guidanceType === 'vocabulary'
-          ? 'Use very simple, basic words that beginners can understand'
-          : 'Use very simple sentence structures, basic grammar, and common words';
+        levelGuidance =
+          guidanceType === 'vocabulary'
+            ? 'Use very simple, basic words that beginners can understand'
+            : 'Use very simple sentence structures, basic grammar, and common words';
         break;
       case 'a1':
-        levelGuidance = guidanceType === 'vocabulary'
-          ? 'Use simple, everyday words appropriate for A1 beginners'
-          : 'Use simple sentence structures appropriate for A1 beginners';
+        levelGuidance =
+          guidanceType === 'vocabulary'
+            ? 'Use simple, everyday words appropriate for A1 beginners'
+            : 'Use simple sentence structures appropriate for A1 beginners';
         break;
       case 'a2':
-        levelGuidance = guidanceType === 'vocabulary'
-          ? 'Use common words appropriate for A2 elementary learners'
-          : 'Use common sentence structures appropriate for A2 elementary learners';
+        levelGuidance =
+          guidanceType === 'vocabulary'
+            ? 'Use common words appropriate for A2 elementary learners'
+            : 'Use common sentence structures appropriate for A2 elementary learners';
         break;
       case 'b1':
-        levelGuidance = guidanceType === 'vocabulary'
-          ? 'Use intermediate vocabulary appropriate for B1 learners'
-          : 'Use intermediate sentence structures appropriate for B1 learners';
+        levelGuidance =
+          guidanceType === 'vocabulary'
+            ? 'Use intermediate vocabulary appropriate for B1 learners'
+            : 'Use intermediate sentence structures appropriate for B1 learners';
         break;
     }
 
-    const adjustmentType = guidanceType === 'vocabulary' ? 'vocabulary complexity' : 'sentence complexity';
+    const adjustmentType =
+      guidanceType === 'vocabulary' ? 'vocabulary complexity' : 'sentence complexity';
     return `\nIMPORTANT: The user's proficiency level is ${proficiencyLevel.toUpperCase()}. Adjust ${adjustmentType} accordingly: ${levelGuidance}`;
   }
 
@@ -328,7 +431,13 @@ export abstract class BaseLLMClient {
   /**
    * Create prompt for topic word generation
    */
-  protected createTopicWordsPrompt(topic: string, language: string, count: number, existingWords: string[] = [], proficiencyLevel?: string): string {
+  protected createTopicWordsPrompt(
+    topic: string,
+    language: string,
+    count: number,
+    existingWords: string[] = [],
+    proficiencyLevel?: string
+  ): string {
     const example = `  {"word": "${language.toLowerCase()}_word1", "translation": "english_translation1"}`;
 
     // Create exclusion list for prompt
@@ -336,9 +445,10 @@ export abstract class BaseLLMClient {
     // (normally this is handled at the database layer, but this protects against edge cases)
     const wordsToInclude = existingWords.slice(0, LLM_CONFIG.MAX_EXISTING_WORDS_IN_PROMPT);
     const hasMore = existingWords.length > LLM_CONFIG.MAX_EXISTING_WORDS_IN_PROMPT;
-    const exclusionText = wordsToInclude.length > 0
-      ? `\nIMPORTANT: Do NOT include any of these existing words: ${wordsToInclude.join(', ')}${hasMore ? '...' : ''}`
-      : '';
+    const exclusionText =
+      wordsToInclude.length > 0
+        ? `\nIMPORTANT: Do NOT include any of these existing words: ${wordsToInclude.join(', ')}${hasMore ? '...' : ''}`
+        : '';
 
     // Create proficiency level guidance
     const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'vocabulary');
@@ -372,7 +482,14 @@ Rules:
   /**
    * Create prompt for sentence generation
    */
-  protected createSentencesPrompt(word: string, language: string, count: number, knownWords: string[] = [], topic?: string, proficiencyLevel?: string): string {
+  protected createSentencesPrompt(
+    word: string,
+    language: string,
+    count: number,
+    knownWords: string[] = [],
+    topic?: string,
+    proficiencyLevel?: string
+  ): string {
     const example = `  {
     "sentence": "${language.toLowerCase()}_sentence1_with_${word}",
     "translation": "english_translation1",
@@ -383,14 +500,16 @@ Rules:
   }`;
 
     // Create known words guidance
-    const knownWordsText = knownWords.length > 0
-      ? `\nWhen possible, try to include some of these known words in your sentences (when it makes sense naturally): ${knownWords.join(', ')}`
-      : '';
+    const knownWordsText =
+      knownWords.length > 0
+        ? `\nWhen possible, try to include some of these known words in your sentences (when it makes sense naturally): ${knownWords.join(', ')}`
+        : '';
 
     // Create topic guidance
-    const topicText = topic && topic.trim()
-      ? `\nIMPORTANT: All sentences should relate to or be contextually relevant to the topic: "${topic.trim()}"`
-      : '';
+    const topicText =
+      topic && topic.trim()
+        ? `\nIMPORTANT: All sentences should relate to or be contextually relevant to the topic: "${topic.trim()}"`
+        : '';
 
     // Create proficiency level guidance
     const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence');
@@ -426,10 +545,15 @@ Rules:
   /**
    * Create prompt for context sentence generation
    */
-  protected createContextSentencesPrompt(sentence: string, translation: string, language: string, proficiencyLevel?: string): string {
+  protected createContextSentencesPrompt(
+    sentence: string,
+    translation: string,
+    language: string,
+    proficiencyLevel?: string
+  ): string {
     // Create proficiency level guidance
     const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence');
-    
+
     return `CRITICAL: Return ONLY a JSON object, no explanations or extra text.
 
 Task: Given this sentence in ${language} and its English translation, suggest what sentence would make sense BEFORE and AFTER it to provide context for language learning.
@@ -483,8 +607,13 @@ Rules:
 
       if (!parseResult.success) {
         const logger = getLogger();
-        logger.error({ issues: parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) }, 'Dialogue variant validation failed');
-        throw new Error(`Invalid response format: ${parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')}`);
+        logger.error(
+          { issues: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) },
+          'Dialogue variant validation failed'
+        );
+        throw new Error(
+          `Invalid response format: ${parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(', ')}`
+        );
       }
 
       const variants = parseResult.data;
@@ -495,7 +624,9 @@ Rules:
       // If we got significantly fewer variants than requested, throw an error to trigger retry
       const minVariants = Math.max(1, Math.floor(count * LLM_CONFIG.MIN_SENTENCE_COUNT_THRESHOLD));
       if (variantArray.length < minVariants) {
-        throw new Error(`Insufficient variants generated: got ${variantArray.length}, expected at least ${minVariants}`);
+        throw new Error(
+          `Insufficient variants generated: got ${variantArray.length}, expected at least ${minVariants}`
+        );
       }
 
       return variantArray;
@@ -503,7 +634,10 @@ Rules:
       if (error instanceof z.ZodError) {
         throw this.createLLMError(error, 'Response validation failed', 'INVALID_RESPONSE', false);
       }
-      throw this.createLLMError(error instanceof Error ? error : new Error(String(error)), 'Failed to generate dialogue variants');
+      throw this.createLLMError(
+        error instanceof Error ? error : new Error(String(error)),
+        'Failed to generate dialogue variants'
+      );
     }
   }
 
@@ -519,20 +653,23 @@ Rules:
     proficiencyLevel?: string
   ): string {
     const languageName = language.charAt(0).toUpperCase() + language.slice(1);
-    const examples = Array.from({ length: count }, (_, i) =>
-      `  {
+    const examples = Array.from(
+      { length: count },
+      (_, i) =>
+        `  {
     "sentence": "${languageName.toLowerCase()}_response_${i + 1}",
     "translation": "english_translation_${i + 1}"
   }`
     ).join(',\n');
-    
-    const knownWordsText = knownWords.length > 0
-      ? `\nIMPORTANT: Use words from this list when possible: ${knownWords.slice(0, 20).join(', ')}`
-      : '';
-    
+
+    const knownWordsText =
+      knownWords.length > 0
+        ? `\nIMPORTANT: Use words from this list when possible: ${knownWords.slice(0, 20).join(', ')}`
+        : '';
+
     // Create proficiency level guidance
     const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence');
-    
+
     return `CRITICAL: You must return exactly ${count} ${languageName} response sentence(s) in a JSON array. No more, no less.
 CRITICAL: Return ONLY the JSON array, no explanations or extra text.
 
@@ -560,7 +697,12 @@ ${knownWords.length > 0 ? '7. Prefer using words from the provided list when pos
   /**
    * Generate follow-up continuation - shared implementation
    */
-  async generateFollowUp(sentence: string, translation: string, language: string, proficiencyLevel?: string): Promise<{ text: string; translation: string }> {
+  async generateFollowUp(
+    sentence: string,
+    translation: string,
+    language: string,
+    proficiencyLevel?: string
+  ): Promise<{ text: string; translation: string }> {
     const prompt = this.createFollowUpPrompt(sentence, translation, language, proficiencyLevel);
 
     try {
@@ -571,7 +713,10 @@ ${knownWords.length > 0 ? '7. Prefer using words from the provided list when pos
 
       if (!parseResult.success) {
         const logger = getLogger();
-        logger.warn({ issues: parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) }, 'Follow-up validation failed');
+        logger.warn(
+          { issues: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) },
+          'Follow-up validation failed'
+        );
         // Return empty object on validation failure instead of throwing
         return { text: '', translation: '' };
       }
@@ -594,16 +739,21 @@ ${knownWords.length > 0 ? '7. Prefer using words from the provided list when pos
   /**
    * Create prompt for follow-up continuation generation
    */
-  protected createFollowUpPrompt(sentence: string, translation: string, language: string, proficiencyLevel?: string): string {
+  protected createFollowUpPrompt(
+    sentence: string,
+    translation: string,
+    language: string,
+    proficiencyLevel?: string
+  ): string {
     const languageName = language.charAt(0).toUpperCase() + language.slice(1);
-    
+
     // Get sentence count based on proficiency level
     const sentenceCount = this.getFollowUpSentenceCount(proficiencyLevel);
     const sentenceText = sentenceCount === 1 ? 'sentence' : 'sentences';
-    
+
     // Create proficiency level guidance
     const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence');
-    
+
     return `Given this ${languageName} sentence and its English translation:
 
 "${sentence}"
@@ -628,13 +778,16 @@ Preferred JSON format:
   /**
    * Create LLM error with proper typing and cause chaining
    */
-  protected createLLMError(originalError: Error, message: string, code: LLMError['code'] = 'MODEL_ERROR', retryable: boolean = true): LLMError {
+  protected createLLMError(
+    originalError: Error,
+    message: string,
+    code: LLMError['code'] = 'MODEL_ERROR',
+    retryable: boolean = true
+  ): LLMError {
     // @ts-expect-error - Error constructor with cause is supported in Node.js 16.9.0+ but TypeScript types may not include it
     const error = new Error(message, { cause: originalError }) as LLMError;
     error.code = code;
     error.retryable = retryable;
     return error;
   }
-
 }
-

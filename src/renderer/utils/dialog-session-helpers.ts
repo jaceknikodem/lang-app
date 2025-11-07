@@ -37,7 +37,7 @@ export function transformDialogSessionData(
       sentenceId: v.sentenceId,
       variantSentence: v.variantSentence,
       variantTranslation: v.variantTranslation,
-      createdAt: new Date(v.createdAt)
+      createdAt: new Date(v.createdAt),
     }));
 
     // Create dialog session state
@@ -57,9 +57,9 @@ export function transformDialogSessionData(
         sentenceId: v.sentenceId,
         variantSentence: v.variantSentence,
         variantTranslation: v.variantTranslation,
-        createdAt: v.createdAt.toISOString()
+        createdAt: v.createdAt.toISOString(),
       })),
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     };
 
     return dialogSession;
@@ -93,4 +93,3 @@ export function queueDialogSessions(
     }
   }
 }
-

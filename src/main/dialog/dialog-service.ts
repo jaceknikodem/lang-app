@@ -5,7 +5,12 @@
 
 import { DatabaseLayer } from '../../shared/types/database.js';
 import { LLMClient } from '../../shared/types/llm.js';
-import { Sentence, DialogueVariant, DialogSession, DialogResponseOption } from '../../shared/types/core.js';
+import {
+  Sentence,
+  DialogueVariant,
+  DialogSession,
+  DialogResponseOption,
+} from '../../shared/types/core.js';
 
 export interface DialogServiceConfig {
   minWordStrength?: number;
@@ -22,7 +27,7 @@ function toDialogResponseOption(variant: DialogueVariant): DialogResponseOption 
     sentenceId: variant.sentenceId,
     variantSentence: variant.variantSentence,
     variantTranslation: variant.variantTranslation,
-    createdAt: variant.createdAt
+    createdAt: variant.createdAt,
   };
 }
 
@@ -44,7 +49,7 @@ export class DialogService {
     this.config = {
       minWordStrength: config?.minWordStrength ?? 40,
       maxVariantsPerSentence: config?.maxVariantsPerSentence ?? 6,
-      maxKnownWordsForVariants: config?.maxKnownWordsForVariants ?? 50
+      maxKnownWordsForVariants: config?.maxKnownWordsForVariants ?? 50,
     };
   }
 
@@ -54,7 +59,7 @@ export class DialogService {
    */
   async selectSentence(language: string): Promise<Sentence | null> {
     const sentence = await this.database.getRandomDialogSentence(language);
-    
+
     return sentence;
   }
 
@@ -74,23 +79,23 @@ export class DialogService {
       // We have enough variants cached in DB (2+), use them - avoid expensive LLM generation
       return shuffleAndTake(existingVariants, 2);
     }
-    
+
     // Generate enough variants to have at least 2 options
     const generateCount = Math.max(neededCount, this.config.maxVariantsPerSentence!);
-    
+
     // Use contextBefore (trigger sentence) instead of the sentence itself
     const triggerSentence = sentence.contextBefore || sentence.sentence;
     const triggerTranslation = sentence.contextBeforeTranslation || sentence.translation;
-    
+
     // Get proficiency level for the language
     let proficiencyLevel: string | undefined;
     try {
       const proficiencyKey = `language_proficiency_${language.toLowerCase()}`;
-      proficiencyLevel = await this.database.getSetting(proficiencyKey) || undefined;
+      proficiencyLevel = (await this.database.getSetting(proficiencyKey)) || undefined;
     } catch (error) {
       console.warn('Failed to retrieve proficiency level for dialogue variant generation:', error);
     }
-    
+
     // Use LLM client method which handles prompt creation, JSON parsing, and validation
     const variantArray = await this.llmClient.generateDialogueVariants(
       triggerSentence,
@@ -100,10 +105,10 @@ export class DialogService {
       generateCount,
       proficiencyLevel
     );
-    
+
     // Store all generated variants to cache them for future use
     const storedVariants: DialogueVariant[] = [];
-    
+
     // Store all variants that were generated
     for (const variant of variantArray) {
       try {
@@ -112,14 +117,14 @@ export class DialogService {
           variant.sentence,
           variant.translation
         );
-        
+
         // Track stored variant
         storedVariants.push({
           id: variantId,
           sentenceId: sentence.id,
           variantSentence: variant.sentence,
           variantTranslation: variant.translation,
-          createdAt: new Date()
+          createdAt: new Date(),
         });
       } catch (error) {
         // Continue storing other variants even if one fails
@@ -128,10 +133,11 @@ export class DialogService {
 
     // Fetch all variants (existing + newly stored) to get accurate count
     const allStoredVariants = await this.database.getDialogueVariantsBySentenceId(sentence.id);
-    
+
     // Combine existing and new variants, return 2 random ones
-    const allVariants = allStoredVariants.length > 0 ? allStoredVariants : [...existingVariants, ...storedVariants];
-    
+    const allVariants =
+      allStoredVariants.length > 0 ? allStoredVariants : [...existingVariants, ...storedVariants];
+
     // Return full DialogueVariant objects with IDs
     return shuffleAndTake(allVariants, 2);
   }
@@ -139,11 +145,14 @@ export class DialogService {
   /**
    * Generate follow-up continuation text with translation (cached per variant)
    */
-  async generateFollowUp(variantId: number, language: string): Promise<{ text: string; translation: string }> {
+  async generateFollowUp(
+    variantId: number,
+    language: string
+  ): Promise<{ text: string; translation: string }> {
     // Handle negative IDs (original sentence pseudo-variants)
     const isOriginalSentence = variantId < 0;
     let variant: DialogueVariant | null = null;
-    
+
     if (isOriginalSentence) {
       // For original sentence, create a variant entry if it doesn't exist
       const sentenceId = Math.abs(variantId);
@@ -151,13 +160,14 @@ export class DialogService {
       if (!sentence) {
         return { text: '', translation: '' };
       }
-      
+
       // Check if a variant already exists for the original sentence
       const existingVariants = await this.database.getDialogueVariantsBySentenceId(sentenceId);
       const originalVariant = existingVariants.find(
-        v => v.variantSentence === sentence.sentence && v.variantTranslation === sentence.translation
+        (v) =>
+          v.variantSentence === sentence.sentence && v.variantTranslation === sentence.translation
       );
-      
+
       if (originalVariant) {
         variant = originalVariant;
       } else {
@@ -184,7 +194,7 @@ export class DialogService {
     if (variant.continuationText && variant.continuationTranslation) {
       return {
         text: variant.continuationText,
-        translation: variant.continuationTranslation
+        translation: variant.continuationTranslation,
       };
     }
 
@@ -192,7 +202,7 @@ export class DialogService {
     let proficiencyLevel: string | undefined;
     try {
       const proficiencyKey = `language_proficiency_${language.toLowerCase()}`;
-      proficiencyLevel = await this.database.getSetting(proficiencyKey) || undefined;
+      proficiencyLevel = (await this.database.getSetting(proficiencyKey)) || undefined;
     } catch (error) {
       console.warn('Failed to retrieve proficiency level for follow-up generation:', error);
     }
@@ -247,14 +257,16 @@ export class DialogService {
     );
 
     // Step 3: Batch query - get existing variants for all sentences at once
-    const sentenceIds = sentences.map(s => s.id);
+    const sentenceIds = sentences.map((s) => s.id);
     const allExistingVariantsMap = new Map<number, DialogueVariant[]>();
-    
+
     // Fetch existing variants for all sentences (can be done in parallel or batched)
-    await Promise.all(sentenceIds.map(async (sentenceId) => {
-      const variants = await this.database.getDialogueVariantsBySentenceId(sentenceId);
-      allExistingVariantsMap.set(sentenceId, variants);
-    }));
+    await Promise.all(
+      sentenceIds.map(async (sentenceId) => {
+        const variants = await this.database.getDialogueVariantsBySentenceId(sentenceId);
+        allExistingVariantsMap.set(sentenceId, variants);
+      })
+    );
 
     // Step 4: Process each sentence with controlled concurrency for LLM-dependent operations
     // Limit to 1 concurrent LLM request to avoid flooding the service
@@ -267,48 +279,53 @@ export class DialogService {
     };
     const sessions: DialogSession[] = [];
 
-    await Promise.all(sentences.map(sentence =>
-      queueLlmRequest(async () => {
-        try {
-          // Generate variants (LLM call)
-          const existingVariants = allExistingVariantsMap.get(sentence.id) || [];
-          const variants = await this.generateDialogueVariants(sentence, existingVariants, knownWords, language);
+    await Promise.all(
+      sentences.map((sentence) =>
+        queueLlmRequest(async () => {
+          try {
+            // Generate variants (LLM call)
+            const existingVariants = allExistingVariantsMap.get(sentence.id) || [];
+            const variants = await this.generateDialogueVariants(
+              sentence,
+              existingVariants,
+              knownWords,
+              language
+            );
 
-          // Create pseudo-variant for original sentence
-          const originalVariant = {
-            id: -sentence.id,
-            sentenceId: sentence.id,
-            variantSentence: sentence.sentence,
-            variantTranslation: sentence.translation,
-            createdAt: new Date()
-          };
+            // Create pseudo-variant for original sentence
+            const originalVariant = {
+              id: -sentence.id,
+              sentenceId: sentence.id,
+              variantSentence: sentence.sentence,
+              variantTranslation: sentence.translation,
+              createdAt: new Date(),
+            };
 
-          // Combine response options
-          const responseOptions: DialogueVariant[] = shuffleAndTake(
-            [originalVariant, ...variants],
-            3  // original + up to 2 variants = 3 total
-          );
+            // Combine response options
+            const responseOptions: DialogueVariant[] = shuffleAndTake(
+              [originalVariant, ...variants],
+              3 // original + up to 2 variants = 3 total
+            );
 
-          sessions.push({
-            sentenceId: sentence.id,
-            sentence: sentence.sentence,
-            translation: sentence.translation,
-            contextBefore: sentence.contextBefore,
-            contextBeforeTranslation: sentence.contextBeforeTranslation,
-            contextAfter: sentence.contextAfter,
-            contextAfterTranslation: sentence.contextAfterTranslation,
-            beforeSentenceAudio: undefined, // Will be set by IPC handler
-            afterSentenceAudio: undefined, // Will be set by IPC handler
-            responseOptions: responseOptions.map(toDialogResponseOption)
-          });
-        } catch (error) {
-          // Continue with other sentences even if one fails
-        }
-      })
-    ));
+            sessions.push({
+              sentenceId: sentence.id,
+              sentence: sentence.sentence,
+              translation: sentence.translation,
+              contextBefore: sentence.contextBefore,
+              contextBeforeTranslation: sentence.contextBeforeTranslation,
+              contextAfter: sentence.contextAfter,
+              contextAfterTranslation: sentence.contextAfterTranslation,
+              beforeSentenceAudio: undefined, // Will be set by IPC handler
+              afterSentenceAudio: undefined, // Will be set by IPC handler
+              responseOptions: responseOptions.map(toDialogResponseOption),
+            });
+          } catch (error) {
+            // Continue with other sentences even if one fails
+          }
+        })
+      )
+    );
 
     return sessions;
   }
-
 }
-

@@ -14,7 +14,6 @@ export interface SRSUpdateResult {
 }
 
 export class SRSAlgorithm {
-
   /**
    * Convert traditional quiz performance to SRS recall rating
    */
@@ -30,18 +29,20 @@ export class SRSAlgorithm {
     // If difficulty is explicitly provided, use it
     if (difficulty) {
       const difficultyMap = {
-        'hard': 1,
-        'medium': 2,
-        'easy': 3
+        hard: 1,
+        medium: 2,
+        easy: 3,
       } as const;
       return { recall: difficultyMap[difficulty] };
     }
 
     // If response time is available, use it to infer difficulty
     if (responseTime !== undefined) {
-      if (responseTime < 3000) { // Less than 3 seconds
+      if (responseTime < 3000) {
+        // Less than 3 seconds
         return { recall: 3 }; // Easy
-      } else if (responseTime < 8000) { // Less than 8 seconds
+      } else if (responseTime < 8000) {
+        // Less than 8 seconds
         return { recall: 2 }; // OK
       } else {
         return { recall: 1 }; // Hard

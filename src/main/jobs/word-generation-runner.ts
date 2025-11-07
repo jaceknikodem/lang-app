@@ -1,4 +1,8 @@
-import { DatabaseLayer, WordGenerationJob, WordProcessingStatus } from '../../shared/types/database.js';
+import {
+  DatabaseLayer,
+  WordGenerationJob,
+  WordProcessingStatus,
+} from '../../shared/types/database.js';
 import { ContentGenerator } from '../llm/content-generator.js';
 import { AudioService } from '../audio/audio-service.js';
 import { splitSentenceIntoParts } from '../../shared/utils/sentence.js';
@@ -83,20 +87,23 @@ export class WordGenerationRunner {
           jobId: job.id,
           wordId: job.wordId,
           attempts: job.attempts,
-          desiredSentenceCount: job.desiredSentenceCount
+          desiredSentenceCount: job.desiredSentenceCount,
         });
 
         await this.handleJob(job);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        
+
         // If database is closed/not connected, exit gracefully
-        if (errorMessage.includes('Database not connected') || errorMessage.includes('not connected')) {
+        if (
+          errorMessage.includes('Database not connected') ||
+          errorMessage.includes('not connected')
+        ) {
           console.log('[WordGenerationRunner] Database closed, stopping runner');
           this.running = false;
           break;
         }
-        
+
         console.error('WordGenerationRunner loop error:', error);
         await this.delay(this.pollIntervalMs);
       }
@@ -113,7 +120,10 @@ export class WordGenerationRunner {
 
       const word = await this.database.getWordById(job.wordId);
       if (!word) {
-        console.warn('[WordGenerationRunner] Word not found for job', { jobId: job.id, wordId: job.wordId });
+        console.warn('[WordGenerationRunner] Word not found for job', {
+          jobId: job.id,
+          wordId: job.wordId,
+        });
         await this.database.completeWordGenerationJob(job.id);
         await this.database.updateWordProcessingStatus(job.wordId, 'ready');
         await this.emitWordUpdate(job.wordId);
@@ -126,20 +136,22 @@ export class WordGenerationRunner {
         wordId: word.id,
         word: word.word,
         language,
-        attemptNumber
+        attemptNumber,
       });
 
       await this.ensureSentenceAudio(word.id, language, word.word);
 
       const desiredCount = job.desiredSentenceCount ?? this.defaultSentenceCount;
       const existingSentences = await this.database.getSentencesByWord(word.id);
-      const normalizedExisting = new Set(existingSentences.map(sentence => this.normalizeSentence(sentence.sentence)));
+      const normalizedExisting = new Set(
+        existingSentences.map((sentence) => this.normalizeSentence(sentence.sentence))
+      );
       let totalSentences = existingSentences.length;
 
       console.log('[WordGenerationRunner] Sentence status', {
         wordId: word.id,
         existingSentences: totalSentences,
-        desiredCount
+        desiredCount,
       });
 
       if (totalSentences < desiredCount) {
@@ -147,7 +159,7 @@ export class WordGenerationRunner {
         console.log('[WordGenerationRunner] Requesting additional sentences', {
           word: word.word,
           language,
-          needed
+          needed,
         });
         const generatedSentences = await this.contentGenerator.generateWordSentences(
           word.word,
@@ -169,7 +181,7 @@ export class WordGenerationRunner {
           let audioService: string | undefined;
           let audioModel: string | undefined;
           let audioVoiceId: string | undefined;
-          
+
           const sentenceParts = splitSentenceIntoParts(sentence.sentence);
           const sentenceId = await this.database.insertSentence(
             word.id,
@@ -183,7 +195,7 @@ export class WordGenerationRunner {
             sentenceParts,
             undefined, // Will be set after audio generation
             undefined, // Will be set after audio generation
-            undefined  // Will be set after audio generation
+            undefined // Will be set after audio generation
           );
 
           // Generate audio now that we have sentenceId
@@ -195,7 +207,7 @@ export class WordGenerationRunner {
               language,
               audioUrl: sentence.audioUrl,
               isTatoeba: isTatoebaAudio,
-              sentenceId
+              sentenceId,
             });
             try {
               audioPath = await this.audioService.downloadSentenceAudioFromUrl(
@@ -212,7 +224,9 @@ export class WordGenerationRunner {
                 audioService = 'tatoeba';
                 audioModel = undefined;
               } else {
-                sentenceModel = this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
+                sentenceModel = this.contentGenerator
+                  .getCurrentClient()
+                  .getSentenceGenerationModel();
                 audioService = 'external';
                 audioModel = undefined;
               }
@@ -224,7 +238,9 @@ export class WordGenerationRunner {
                 audioService = 'tatoeba';
                 audioModel = undefined;
               } else {
-                sentenceModel = this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
+                sentenceModel = this.contentGenerator
+                  .getCurrentClient()
+                  .getSentenceGenerationModel();
                 audioService = 'external';
                 audioModel = undefined;
               }
@@ -277,7 +293,11 @@ export class WordGenerationRunner {
             await this.database.updateSentenceAudioPath(sentenceId, audioPath, audioVoiceId);
           }
           // Update sentence metadata (model info) if available
-          if (sentenceModel !== undefined || audioService !== undefined || audioModel !== undefined) {
+          if (
+            sentenceModel !== undefined ||
+            audioService !== undefined ||
+            audioModel !== undefined
+          ) {
             const db = (this.database as any).getDb();
             if (db) {
               const updateStmt = db.prepare(`
@@ -305,21 +325,22 @@ export class WordGenerationRunner {
               sentence: sentence.sentence,
               targetWord: word,
               allWords,
-              lookupDictionary: (word: string, lang?: string) => this.database.lookupDictionary(word, lang || language),
+              lookupDictionary: (word: string, lang?: string) =>
+                this.database.lookupDictionary(word, lang || language),
               language,
               maxPhraseWords: 3,
-              lemmatizationService: this.lemmatizationService
+              lemmatizationService: this.lemmatizationService,
             });
-            
+
             await this.database.updateSentenceTokens(sentenceId, tokenizedTokens);
             console.log('[WordGenerationRunner] Precomputed tokens for sentence', {
               sentenceId,
-              tokenCount: tokenizedTokens.length
+              tokenCount: tokenizedTokens.length,
             });
           } catch (tokenError) {
             console.warn('[WordGenerationRunner] Failed to precompute tokens for sentence', {
               sentenceId,
-              error: tokenError
+              error: tokenError,
             });
             // Non-fatal - sentence will work without precomputed tokens
           }
@@ -329,7 +350,7 @@ export class WordGenerationRunner {
           console.log('[WordGenerationRunner] Stored sentence for word', {
             wordId: word.id,
             sentencePreview: sentence.sentence.slice(0, 80),
-            totalSentences
+            totalSentences,
           });
 
           if (totalSentences >= desiredCount) {
@@ -341,12 +362,14 @@ export class WordGenerationRunner {
       const processingInfo = await this.database.getWordProcessingInfo(word.id);
       if (!processingInfo || processingInfo.sentenceCount < desiredCount) {
         const sentenceTotal = processingInfo?.sentenceCount ?? 0;
-        throw new Error(`Sentence generation incomplete. Have ${sentenceTotal}, wanted ${desiredCount}.`);
+        throw new Error(
+          `Sentence generation incomplete. Have ${sentenceTotal}, wanted ${desiredCount}.`
+        );
       }
 
       console.log('[WordGenerationRunner] Sentence generation complete', {
         wordId: word.id,
-        sentenceCount: processingInfo.sentenceCount
+        sentenceCount: processingInfo.sentenceCount,
       });
 
       await this.database.updateWordProcessingStatus(word.id, 'ready');
@@ -354,12 +377,19 @@ export class WordGenerationRunner {
       await this.emitWordUpdate(word.id);
       console.log('[WordGenerationRunner] Job completed', { jobId: job.id, wordId: word.id });
     } catch (error) {
-      console.error(`WordGenerationRunner failed for job ${job.id} (attempt ${attemptNumber}):`, error);
+      console.error(
+        `WordGenerationRunner failed for job ${job.id} (attempt ${attemptNumber}):`,
+        error
+      );
       await this.handleJobFailure(job, attemptNumber, error as Error);
     }
   }
 
-  private async handleJobFailure(job: WordGenerationJob, attemptNumber: number, error: Error): Promise<void> {
+  private async handleJobFailure(
+    job: WordGenerationJob,
+    attemptNumber: number,
+    error: Error
+  ): Promise<void> {
     const message = error instanceof Error ? error.message : 'Unknown error';
 
     if (attemptNumber < this.maxAttempts) {
@@ -374,7 +404,11 @@ export class WordGenerationRunner {
     await this.emitWordUpdate(job.wordId);
   }
 
-  private async ensureSentenceAudio(wordId: number, language: string, wordText: string): Promise<void> {
+  private async ensureSentenceAudio(
+    wordId: number,
+    language: string,
+    wordText: string
+  ): Promise<void> {
     const sentences = await this.database.getSentencesByWord(wordId);
 
     for (const sentence of sentences) {
@@ -385,7 +419,7 @@ export class WordGenerationRunner {
       console.log('[WordGenerationRunner] Backfilling audio for existing sentence', {
         sentenceId: sentence.id,
         wordId,
-        language
+        language,
       });
 
       try {
@@ -416,7 +450,7 @@ export class WordGenerationRunner {
         this.onWordUpdated({
           wordId,
           processingStatus: info.processingStatus,
-          sentenceCount: info.sentenceCount
+          sentenceCount: info.sentenceCount,
         });
       }
     } catch (error) {
@@ -425,13 +459,10 @@ export class WordGenerationRunner {
   }
 
   private normalizeSentence(sentence: string): string {
-    return sentence
-      .trim()
-      .replace(/\s+/g, ' ')
-      .toLowerCase();
+    return sentence.trim().replace(/\s+/g, ' ').toLowerCase();
   }
 
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

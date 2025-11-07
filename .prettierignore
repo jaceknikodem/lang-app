@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+release/
+build/
+
+# Coverage reports
+coverage/
+*.lcov
+
+# Logs
+*.log
+logs/
+
+# Database files
+*.db
+*.db-*
+
+# Audio files
+audio/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test results
+test-results/
+
+# Lock files
+package-lock.json
+*.lock
+

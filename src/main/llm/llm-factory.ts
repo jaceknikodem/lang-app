@@ -25,11 +25,11 @@ export class LLMFactory {
     switch (config.provider) {
       case 'ollama':
         return new OllamaClient(config.ollamaConfig);
-      
+
       case 'gemini':
         const apiKey = config.geminiConfig?.apiKey || '';
         return new GeminiClient(apiKey, config.geminiConfig?.config);
-      
+
       default:
         throw new Error(`Unsupported LLM provider: ${config.provider}`);
     }
@@ -57,11 +57,11 @@ export class LLMFactory {
       case 'ollama':
         // Ollama doesn't require additional validation
         return { valid: true };
-      
+
       case 'gemini':
         // Allow Gemini without API key, but it won't be functional
         return { valid: true };
-      
+
       default:
         return { valid: false, error: `Unsupported LLM provider: ${config.provider}` };
     }

@@ -1,6 +1,6 @@
 /**
  * Main process logger initialization
- * 
+ *
  * Sets up pino logger with file rotation and console output.
  * Logs are written to both console (with pretty formatting in dev) and rotated log files.
  */
@@ -24,20 +24,25 @@ export async function initializeLogger(): Promise<Logger> {
 
   // In test environments, use a simple console logger
   // Check for test environment by looking for jest or if electron is not available
-  const isTestEnv = env === 'test' || 
-                    process.env.JEST_WORKER_ID !== undefined ||
-                    typeof process.env.npm_lifecycle_event === 'string' && process.env.npm_lifecycle_event.includes('test');
-  
+  const isTestEnv =
+    env === 'test' ||
+    process.env.JEST_WORKER_ID !== undefined ||
+    (typeof process.env.npm_lifecycle_event === 'string' &&
+      process.env.npm_lifecycle_event.includes('test'));
+
   if (isTestEnv) {
-    const testLogger = pino({
-      level: 'debug',
-      base: {
-        pid: process.pid,
-        process: 'main'
+    const testLogger = pino(
+      {
+        level: 'debug',
+        base: {
+          pid: process.pid,
+          process: 'main',
+        },
+        timestamp: pino.stdTimeFunctions.isoTime,
       },
-      timestamp: pino.stdTimeFunctions.isoTime
-    }, pino.destination(1)); // stdout
-    
+      pino.destination(1)
+    ); // stdout
+
     loggerInstance = testLogger as unknown as Logger;
     return loggerInstance;
   }
@@ -45,7 +50,7 @@ export async function initializeLogger(): Promise<Logger> {
   // For Electron app, use full logger with file rotation
   // Lazy import electron to avoid issues in test environments
   const { app } = await import('electron');
-  
+
   // Ensure logs directory exists
   const userDataPath = app.getPath('userData');
   const logsDir = path.join(userDataPath, 'logs');
@@ -67,9 +72,9 @@ export async function initializeLogger(): Promise<Logger> {
         frequency: 'daily', // Also rotate daily
         limit: { count: 5 }, // Keep the last 5 log files
         mkdir: true,
-        dateFormat: 'yyyy-MM-dd'
-      }
-    }
+        dateFormat: 'yyyy-MM-dd',
+      },
+    },
   ];
 
   // Add console transport with pretty formatting in development
@@ -79,16 +84,16 @@ export async function initializeLogger(): Promise<Logger> {
       options: {
         colorize: true,
         translateTime: 'HH:MM:ss.l',
-        ignore: 'pid,hostname'
-      }
+        ignore: 'pid,hostname',
+      },
     });
   } else {
     // In production, use raw console output (JSON)
     targets.push({
       target: 'pino/file',
       options: {
-        destination: 1 // stdout
-      }
+        destination: 1, // stdout
+      },
     });
   }
 
@@ -98,12 +103,12 @@ export async function initializeLogger(): Promise<Logger> {
       level: 'debug', // Same level for dev and production
       base: {
         pid: process.pid,
-        process: 'main'
+        process: 'main',
       },
-      timestamp: pino.stdTimeFunctions.isoTime
+      timestamp: pino.stdTimeFunctions.isoTime,
     },
     pino.transport({
-      targets
+      targets,
     })
   );
 
@@ -119,24 +124,29 @@ export async function initializeLogger(): Promise<Logger> {
 export function getLogger(): Logger {
   if (!loggerInstance) {
     // In test environments, auto-initialize a simple logger
-    const isTestEnv = env === 'test' || 
-                      process.env.JEST_WORKER_ID !== undefined ||
-                      (typeof process.env.npm_lifecycle_event === 'string' && process.env.npm_lifecycle_event.includes('test'));
-    
+    const isTestEnv =
+      env === 'test' ||
+      process.env.JEST_WORKER_ID !== undefined ||
+      (typeof process.env.npm_lifecycle_event === 'string' &&
+        process.env.npm_lifecycle_event.includes('test'));
+
     if (isTestEnv) {
-      const testLogger = pino({
-        level: 'debug',
-        base: {
-          pid: process.pid,
-          process: 'main'
+      const testLogger = pino(
+        {
+          level: 'debug',
+          base: {
+            pid: process.pid,
+            process: 'main',
+          },
+          timestamp: pino.stdTimeFunctions.isoTime,
         },
-        timestamp: pino.stdTimeFunctions.isoTime
-      }, pino.destination(1)); // stdout
-      
+        pino.destination(1)
+      ); // stdout
+
       loggerInstance = testLogger as unknown as Logger;
       return loggerInstance;
     }
-    
+
     // Return a no-op logger that won't crash if used before initialization
     return {
       trace: () => {},
@@ -145,9 +155,8 @@ export function getLogger(): Logger {
       warn: () => {},
       error: () => {},
       fatal: () => {},
-      child: () => getLogger()
+      child: () => getLogger(),
     } as Logger;
   }
   return loggerInstance;
 }
-

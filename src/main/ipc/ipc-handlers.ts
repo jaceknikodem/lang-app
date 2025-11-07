@@ -25,16 +25,19 @@ const CreateWordSchema = z.object({
   word: z.string().min(1).max(100),
   translation: z.string().min(1).max(200),
   language: z.string().min(2).max(10),
-  audioPath: z.string().optional()
+  audioPath: z.string().optional(),
 });
 
 const WordIdSchema = z.number().int().positive();
 const WordIdsSchema = z.array(z.number().int().positive());
 const SentenceIdSchema = z.number().int().positive();
 const SentenceIdsSchema = z.array(z.number().int().positive());
-const VariantIdSchema = z.number().int().refine((val) => val !== 0, {
-  message: "Variant ID must be non-zero"
-}); // Allows positive and negative integers (for pseudo-variants with negative IDs)
+const VariantIdSchema = z
+  .number()
+  .int()
+  .refine((val) => val !== 0, {
+    message: 'Variant ID must be non-zero',
+  }); // Allows positive and negative integers (for pseudo-variants with negative IDs)
 const StrengthSchema = z.number().int().min(0);
 const BooleanSchema = z.boolean();
 const LimitSchema = z.number().int().positive().max(1000);
@@ -115,39 +118,59 @@ export function setupIPCHandlers(
 function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.INSERT_WORD,
-    createIPCHandler(CreateWordSchema, (wordData) => databaseLayer.insertWord(wordData), 'insert word')
+    createIPCHandler(
+      CreateWordSchema,
+      (wordData) => databaseLayer.insertWord(wordData),
+      'insert word'
+    )
   );
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.UPDATE_WORD_STRENGTH,
-    createIPCHandler([WordIdSchema, StrengthSchema], async (wordId, strength) => {
-      await databaseLayer.updateWordStrength(wordId, strength);
-      console.log(`[Tracking] Word progress: wordId=${wordId}, strength=${strength}`);
-    }, 'update word strength')
+    createIPCHandler(
+      [WordIdSchema, StrengthSchema],
+      async (wordId, strength) => {
+        await databaseLayer.updateWordStrength(wordId, strength);
+        console.log(`[Tracking] Word progress: wordId=${wordId}, strength=${strength}`);
+      },
+      'update word strength'
+    )
   );
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.MARK_WORD_KNOWN,
-    createIPCHandler([WordIdSchema, BooleanSchema], async (wordId, known) => {
-      await databaseLayer.markWordKnown(wordId, known);
-      console.log(`[Tracking] Word progress: wordId=${wordId}, known=${known}`);
-    }, 'mark word known')
+    createIPCHandler(
+      [WordIdSchema, BooleanSchema],
+      async (wordId, known) => {
+        await databaseLayer.markWordKnown(wordId, known);
+        console.log(`[Tracking] Word progress: wordId=${wordId}, known=${known}`);
+      },
+      'mark word known'
+    )
   );
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.MARK_WORD_IGNORED,
-    createIPCHandler([WordIdSchema, BooleanSchema], async (wordId, ignored) => {
-      await databaseLayer.markWordIgnored(wordId, ignored);
-      console.log(`[Tracking] Word progress: wordId=${wordId}, ignored=${ignored}`);
-    }, 'mark word ignored')
+    createIPCHandler(
+      [WordIdSchema, BooleanSchema],
+      async (wordId, ignored) => {
+        await databaseLayer.markWordIgnored(wordId, ignored);
+        console.log(`[Tracking] Word progress: wordId=${wordId}, ignored=${ignored}`);
+      },
+      'mark word ignored'
+    )
   );
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.GET_WORDS_TO_STUDY,
-    createIPCHandler(LimitSchema, async (limit) => {
-      const language = await databaseLayer.getCurrentLanguage();
-      return databaseLayer.getWordsToStudy(limit, language);
-    }, 'get words to study')
+    createIPCHandler(
+      LimitSchema,
+      async (limit) => {
+        const language = await databaseLayer.getCurrentLanguage();
+        return databaseLayer.getWordsToStudy(limit, language);
+      },
+      'get words to study'
+    )
   );
 
   ipcMain.handle(
@@ -157,7 +180,11 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.GET_WORDS_BY_IDS,
-    createIPCHandler(WordIdsSchema, (wordIds) => databaseLayer.getWordsByIds(wordIds), 'get words by IDs')
+    createIPCHandler(
+      WordIdsSchema,
+      (wordIds) => databaseLayer.getWordsByIds(wordIds),
+      'get words by IDs'
+    )
   );
 
   ipcMain.handle(
@@ -176,9 +203,23 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
         z.string().optional(),
         z.string().optional(),
         z.string().optional(),
-        z.string().optional()
+        z.string().optional(),
       ],
-      (wordId, sentence, translation, audioPath, contextBefore, contextAfter, contextBeforeTranslation, contextAfterTranslation, sentenceParts, sentenceGenerationModel, audioGenerationService, audioGenerationModel, audioGenerationVoiceId) =>
+      (
+        wordId,
+        sentence,
+        translation,
+        audioPath,
+        contextBefore,
+        contextAfter,
+        contextBeforeTranslation,
+        contextAfterTranslation,
+        sentenceParts,
+        sentenceGenerationModel,
+        audioGenerationService,
+        audioGenerationModel,
+        audioGenerationVoiceId
+      ) =>
         databaseLayer.insertSentence(
           wordId,
           sentence,
@@ -200,36 +241,70 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.GET_SENTENCES_BY_WORD,
-    createIPCHandler(WordIdSchema, (wordId) => databaseLayer.getSentencesByWord(wordId), 'get sentences by word')
+    createIPCHandler(
+      WordIdSchema,
+      (wordId) => databaseLayer.getSentencesByWord(wordId),
+      'get sentences by word'
+    )
   );
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.GET_SENTENCES_BY_IDS,
-    createIPCHandler(SentenceIdsSchema, (sentenceIds) => databaseLayer.getSentencesByIds(sentenceIds), 'get sentences by IDs')
+    createIPCHandler(
+      SentenceIdsSchema,
+      (sentenceIds) => databaseLayer.getSentencesByIds(sentenceIds),
+      'get sentences by IDs'
+    )
   );
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.DELETE_SENTENCE,
-    createIPCHandler(SentenceIdSchema, (sentenceId) => databaseLayer.deleteSentence(sentenceId), 'delete sentence')
+    createIPCHandler(
+      SentenceIdSchema,
+      (sentenceId) => databaseLayer.deleteSentence(sentenceId),
+      'delete sentence'
+    )
   );
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_LAST_SHOWN,
-    createIPCHandler(SentenceIdSchema, (sentenceId) => databaseLayer.updateSentenceLastShown(sentenceId), 'update sentence last shown')
+    createIPCHandler(
+      SentenceIdSchema,
+      (sentenceId) => databaseLayer.updateSentenceLastShown(sentenceId),
+      'update sentence last shown'
+    )
   );
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.INCREMENT_SENTENCE_PLAY_COUNT,
-    createIPCHandler(SentenceIdSchema, (sentenceId) => databaseLayer.incrementSentencePlayCount(sentenceId), 'increment sentence play count')
+    createIPCHandler(
+      SentenceIdSchema,
+      (sentenceId) => databaseLayer.incrementSentencePlayCount(sentenceId),
+      'increment sentence play count'
+    )
   );
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.RECORD_PRONUNCIATION_ATTEMPT,
     createIPCHandler(
-      [SentenceIdSchema, z.number().min(0).max(1), z.string(), z.string(), z.string().optional().nullable()],
+      [
+        SentenceIdSchema,
+        z.number().min(0).max(1),
+        z.string(),
+        z.string(),
+        z.string().optional().nullable(),
+      ],
       (sentenceId, similarityScore, expectedText, transcribedText, audioPath) => {
-        console.log(`[Pronunciation] Recording attempt: sentenceId=${sentenceId}, similarity=${similarityScore.toFixed(2)}, audioPath=${audioPath || 'none'}`);
-        return databaseLayer.recordPronunciationAttempt(sentenceId, similarityScore, expectedText, transcribedText, audioPath || null);
+        console.log(
+          `[Pronunciation] Recording attempt: sentenceId=${sentenceId}, similarity=${similarityScore.toFixed(2)}, audioPath=${audioPath || 'none'}`
+        );
+        return databaseLayer.recordPronunciationAttempt(
+          sentenceId,
+          similarityScore,
+          expectedText,
+          transcribedText,
+          audioPath || null
+        );
       },
       'record pronunciation attempt'
     )
@@ -239,10 +314,11 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     IPC_CHANNELS.DATABASE.GET_PRONUNCIATION_HISTORY,
     createIPCHandler(
       [SentenceIdSchema, z.number().int().positive().optional()],
-      (sentenceId, limit) => databaseLayer.getPronunciationHistory(
-        sentenceId,
-        limit !== undefined ? Math.max(1, Math.floor(limit)) : undefined
-      ),
+      (sentenceId, limit) =>
+        databaseLayer.getPronunciationHistory(
+          sentenceId,
+          limit !== undefined ? Math.max(1, Math.floor(limit)) : undefined
+        ),
       'get pronunciation history'
     )
   );
@@ -251,30 +327,43 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_AUDIO_PATH,
     createIPCHandler(
       [SentenceIdSchema, AudioPathSchema, z.string().optional()],
-      (sentenceId, audioPath, audioGenerationVoiceId) => databaseLayer.updateSentenceAudioPath(sentenceId, audioPath, audioGenerationVoiceId),
+      (sentenceId, audioPath, audioGenerationVoiceId) =>
+        databaseLayer.updateSentenceAudioPath(sentenceId, audioPath, audioGenerationVoiceId),
       'update sentence audio path'
     )
   );
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.UPDATE_LAST_STUDIED,
-    createIPCHandler(WordIdSchema, async (wordId) => {
-      await databaseLayer.updateLastStudied(wordId);
-      console.log(`[Tracking] Word progress: wordId=${wordId}, lastStudied=now`);
-    }, 'update last studied')
+    createIPCHandler(
+      WordIdSchema,
+      async (wordId) => {
+        await databaseLayer.updateLastStudied(wordId);
+        console.log(`[Tracking] Word progress: wordId=${wordId}, lastStudied=now`);
+      },
+      'update last studied'
+    )
   );
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.GET_STUDY_STATS,
-    createIPCHandler(undefined, async () => {
-      const language = await databaseLayer.getCurrentLanguage();
-      return databaseLayer.getStudyStats(language);
-    }, 'get study stats')
+    createIPCHandler(
+      undefined,
+      async () => {
+        const language = await databaseLayer.getCurrentLanguage();
+        return databaseLayer.getStudyStats(language);
+      },
+      'get study stats'
+    )
   );
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.RECORD_STUDY_SESSION,
-    createIPCHandler(z.number().int().min(0), (wordsStudied) => databaseLayer.recordStudySession(wordsStudied), 'record study session')
+    createIPCHandler(
+      z.number().int().min(0),
+      (wordsStudied) => databaseLayer.recordStudySession(wordsStudied),
+      'record study session'
+    )
   );
 
   ipcMain.handle(
@@ -333,7 +422,11 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.GET_SETTING,
-    createIPCHandler(z.string().min(1).max(100), (key) => databaseLayer.getSetting(key), 'get setting')
+    createIPCHandler(
+      z.string().min(1).max(100),
+      (key) => databaseLayer.getSetting(key),
+      'get setting'
+    )
   );
 
   ipcMain.handle(
@@ -352,12 +445,20 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.SET_CURRENT_LANGUAGE,
-    createIPCHandler(LanguageSchema, (language) => databaseLayer.setCurrentLanguage(language), 'set current language')
+    createIPCHandler(
+      LanguageSchema,
+      (language) => databaseLayer.setCurrentLanguage(language),
+      'set current language'
+    )
   );
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.GET_AVAILABLE_LANGUAGES,
-    createIPCHandler(undefined, () => databaseLayer.getAvailableLanguages(), 'get available languages')
+    createIPCHandler(
+      undefined,
+      () => databaseLayer.getAvailableLanguages(),
+      'get available languages'
+    )
   );
 
   ipcMain.handle(
@@ -370,7 +471,7 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     createIPCHandler(
       [DictionaryWordSchema, LanguageSchema.optional()],
       async (word, language) => {
-        const currentLanguage = language || await databaseLayer.getCurrentLanguage();
+        const currentLanguage = language || (await databaseLayer.getCurrentLanguage());
         return databaseLayer.lookupDictionary(word, currentLanguage);
       },
       'lookup dictionary entry'
@@ -382,7 +483,7 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     createIPCHandler(
       LanguageSchema.optional(),
       async (language) => {
-        const currentLanguage = language || await databaseLayer.getCurrentLanguage();
+        const currentLanguage = language || (await databaseLayer.getCurrentLanguage());
         return databaseLayer.getNewWordCount(currentLanguage);
       },
       'get new word count'
@@ -411,7 +512,11 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
 /**
  * Set up LLM-related IPC handlers
  */
-function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerator, databaseLayer?: SQLiteDatabaseLayer): void {
+function setupLLMHandlers(
+  llmClient: LLMClient,
+  contentGenerator: ContentGenerator,
+  databaseLayer?: SQLiteDatabaseLayer
+): void {
   ipcMain.handle(
     IPC_CHANNELS.LLM.GENERATE_WORDS,
     createIPCHandler(
@@ -435,7 +540,13 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
       [TextSchema, LanguageSchema, TopicSchema.optional()],
       async (word, language, topic) => {
         // Use ContentGenerator for better error handling and validation
-        return await contentGenerator.generateWordSentences(word, language, 3, databaseLayer, topic && topic.trim() ? topic.trim() : undefined);
+        return await contentGenerator.generateWordSentences(
+          word,
+          language,
+          3,
+          databaseLayer,
+          topic && topic.trim() ? topic.trim() : undefined
+        );
       },
       'generate sentences'
     )
@@ -486,11 +597,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
 
   ipcMain.handle(
     IPC_CHANNELS.LLM.GET_CURRENT_MODEL,
-    createIPCHandler(
-      undefined,
-      () => llmClient.getCurrentModel(),
-      'get current model'
-    )
+    createIPCHandler(undefined, () => llmClient.getCurrentModel(), 'get current model')
   );
 
   ipcMain.handle(
@@ -560,11 +667,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
   // Provider management handlers
   ipcMain.handle(
     IPC_CHANNELS.LLM.GET_CURRENT_PROVIDER,
-    createIPCHandler(
-      undefined,
-      () => contentGenerator.getCurrentProvider(),
-      'get current provider'
-    )
+    createIPCHandler(undefined, () => contentGenerator.getCurrentProvider(), 'get current provider')
   );
 
   ipcMain.handle(
@@ -626,11 +729,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
 
   ipcMain.handle(
     IPC_CHANNELS.LLM.GET_AVAILABLE_PROVIDERS,
-    createIPCHandler(
-      undefined,
-      () => LLMFactory.getAvailableProviders(),
-      'get available providers'
-    )
+    createIPCHandler(undefined, () => LLMFactory.getAvailableProviders(), 'get available providers')
   );
 
   ipcMain.handle(
@@ -652,7 +751,7 @@ function setupLLMHandlers(llmClient: LLMClient, contentGenerator: ContentGenerat
           const geminiClient = LLMFactory.createGeminiClient(apiKey);
           return await geminiClient.getAvailableModels();
         }
-        
+
         return [];
       },
       'get models for provider'
@@ -673,11 +772,19 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
         TextSchema.optional(),
         z.number().int().optional(),
         z.number().int().positive().optional(),
-        z.number().int().optional()
+        z.number().int().optional(),
       ],
       async (text, language, word, wordId, sentenceId, variantId) => {
-        const validatedLanguage = language || (databaseLayer ? await databaseLayer.getCurrentLanguage() : 'spanish');
-        return await audioService.generateAudio(text, validatedLanguage, word, wordId, sentenceId, variantId);
+        const validatedLanguage =
+          language || (databaseLayer ? await databaseLayer.getCurrentLanguage() : 'spanish');
+        return await audioService.generateAudio(
+          text,
+          validatedLanguage,
+          word,
+          wordId,
+          sentenceId,
+          variantId
+        );
       },
       'generate audio'
     )
@@ -773,18 +880,22 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
   ipcMain.handle(
     IPC_CHANNELS.AUDIO.REGENERATE_AUDIO,
     createIPCHandler(
-      z.object({
-        text: TextSchema,
-        language: LanguageSchema.optional(),
-        word: TextSchema.optional(),
-        wordId: z.number().int().optional(),
-        sentenceId: z.number().int().positive().optional(),
-        variantId: z.number().int().optional(),
-        existingPath: AudioPathSchema.optional()
-      }).optional(),
+      z
+        .object({
+          text: TextSchema,
+          language: LanguageSchema.optional(),
+          word: TextSchema.optional(),
+          wordId: z.number().int().optional(),
+          sentenceId: z.number().int().positive().optional(),
+          variantId: z.number().int().optional(),
+          existingPath: AudioPathSchema.optional(),
+        })
+        .optional(),
       async (payload) => {
         const validatedPayload = payload ?? {};
-        const language = validatedPayload.language || (databaseLayer ? await databaseLayer.getCurrentLanguage() : 'spanish');
+        const language =
+          validatedPayload.language ||
+          (databaseLayer ? await databaseLayer.getCurrentLanguage() : 'spanish');
 
         const audioPath = await audioService.regenerateAudio(
           validatedPayload.text,
@@ -803,7 +914,11 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
             const audioInfo = audioService.getAudioGenerationInfo();
             voiceId = audioInfo.voiceId;
             if (voiceId) {
-              await databaseLayer.updateSentenceAudioPath(validatedPayload.sentenceId, audioPath, voiceId);
+              await databaseLayer.updateSentenceAudioPath(
+                validatedPayload.sentenceId,
+                audioPath,
+                voiceId
+              );
             }
           } catch (error) {
             console.warn('Failed to update voiceID after regeneration:', error);
@@ -819,14 +934,16 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
   ipcMain.handle(
     IPC_CHANNELS.AUDIO.START_RECORDING,
     createIPCHandler(
-      z.object({
-        sampleRate: z.number().optional(),
-        channels: z.number().optional(),
-        threshold: z.number().optional(),
-        silence: z.string().optional(),
-        endOnSilence: z.boolean().optional(),
-        device: z.string().optional()
-      }).optional(),
+      z
+        .object({
+          sampleRate: z.number().optional(),
+          channels: z.number().optional(),
+          threshold: z.number().optional(),
+          silence: z.string().optional(),
+          endOnSilence: z.boolean().optional(),
+          device: z.string().optional(),
+        })
+        .optional(),
       async (options) => {
         return await audioService.startRecording(options || undefined);
       },
@@ -952,11 +1069,13 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       if (!options || !options.language) {
         throw new Error('Language is required for transcription');
       }
-      
-      const validatedOptions = z.object({
-        language: z.string(),
-        temperature: z.number().optional()
-      }).parse(options);
+
+      const validatedOptions = z
+        .object({
+          language: z.string(),
+          temperature: z.number().optional(),
+        })
+        .parse(options);
 
       // Create progress callback that sends IPC events
       const transcriptionOptions = {
@@ -965,11 +1084,11 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
           // Send progress updates via IPC event
           event.sender.send(IPC_CHANNELS.AUDIO.TRANSCRIBE_AUDIO_PROGRESS, {
             text,
-            isFinal
+            isFinal,
           });
-        }
+        },
       };
-      
+
       return await audioService.transcribeAudio(validatedFilePath, transcriptionOptions);
     } catch (error) {
       console.error('Error transcribing audio:', error);
@@ -1049,7 +1168,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
         for (const [lang, voices] of Object.entries(mappings)) {
           validatedMappings[lang] = (voices as string[]).map((v: string) => v.trim());
         }
-        
+
         await audioService.saveVoiceMappings(validatedMappings);
       },
       'save voice mappings'
@@ -1115,14 +1234,16 @@ function setupSRSHandlers(srsService: SRSService, databaseLayer: SQLiteDatabaseL
     IPC_CHANNELS.SRS.PROCESS_QUIZ_RESULTS,
     createIPCHandler(
       [
-        z.array(z.object({
-          wordId: WordIdSchema,
-          correct: BooleanSchema,
-          responseTime: z.number().optional(),
-          difficulty: z.enum(['easy', 'medium', 'hard']).optional()
-        })),
+        z.array(
+          z.object({
+            wordId: WordIdSchema,
+            correct: BooleanSchema,
+            responseTime: z.number().optional(),
+            difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
+          })
+        ),
         z.string().min(1),
-        z.number().int().positive().optional()
+        z.number().int().positive().optional(),
       ],
       async (results, language, sessionId) => {
         return await srsService.processQuizResults(results, language, sessionId);
@@ -1136,7 +1257,7 @@ function setupSRSHandlers(srsService: SRSService, databaseLayer: SQLiteDatabaseL
     createIPCHandler(
       [LimitSchema.optional(), LanguageSchema.optional()],
       async (maxWords, language) => {
-        const validatedLanguage = language || await databaseLayer.getCurrentLanguage();
+        const validatedLanguage = language || (await databaseLayer.getCurrentLanguage());
         return await srsService.getTodaysStudyWords(validatedLanguage, maxWords);
       },
       'get todays study words'
@@ -1148,7 +1269,7 @@ function setupSRSHandlers(srsService: SRSService, databaseLayer: SQLiteDatabaseL
     createIPCHandler(
       LanguageSchema.optional(),
       async (language) => {
-        const validatedLanguage = language || await databaseLayer.getCurrentLanguage();
+        const validatedLanguage = language || (await databaseLayer.getCurrentLanguage());
         return await srsService.getDashboardStats(validatedLanguage);
       },
       'get dashboard stats'
@@ -1182,7 +1303,7 @@ function setupSRSHandlers(srsService: SRSService, databaseLayer: SQLiteDatabaseL
     createIPCHandler(
       LanguageSchema.optional(),
       async (language) => {
-        const validatedLanguage = language || await databaseLayer.getCurrentLanguage();
+        const validatedLanguage = language || (await databaseLayer.getCurrentLanguage());
         return await srsService.getOverdueWords(validatedLanguage);
       },
       'get overdue words'
@@ -1194,7 +1315,7 @@ function setupSRSHandlers(srsService: SRSService, databaseLayer: SQLiteDatabaseL
     createIPCHandler(
       LanguageSchema.optional(),
       async (language) => {
-        const validatedLanguage = language || await databaseLayer.getCurrentLanguage();
+        const validatedLanguage = language || (await databaseLayer.getCurrentLanguage());
         return await srsService.initializeExistingWords(validatedLanguage);
       },
       'initialize existing words'
@@ -1206,11 +1327,13 @@ function setupSRSHandlers(srsService: SRSService, databaseLayer: SQLiteDatabaseL
  * Set up word generation job queue handlers
  */
 function setupJobHandlers(databaseLayer: SQLiteDatabaseLayer): void {
-  const EnqueueOptionsSchema = z.object({
-    topic: TopicSchema.optional(),
-    language: LanguageSchema.optional(),
-    desiredSentenceCount: z.number().int().min(1).max(10).optional()
-  }).optional();
+  const EnqueueOptionsSchema = z
+    .object({
+      topic: TopicSchema.optional(),
+      language: LanguageSchema.optional(),
+      desiredSentenceCount: z.number().int().min(1).max(10).optional(),
+    })
+    .optional();
 
   ipcMain.handle(
     IPC_CHANNELS.JOBS.ENQUEUE_WORD_GENERATION,
@@ -1338,13 +1461,13 @@ function setupLifecycleHandlers(
         const result = await dialog.showOpenDialog({
           title: 'Select Backup Directory',
           properties: ['openDirectory'],
-          message: 'Select a backup directory to restore from'
+          message: 'Select a backup directory to restore from',
         });
-        
+
         if (result.canceled || result.filePaths.length === 0) {
           return null;
         }
-        
+
         return result.filePaths[0];
       },
       'open backup dialog'
@@ -1368,7 +1491,7 @@ function setupLifecycleHandlers(
       undefined,
       async () => {
         console.log('Close app requested via IPC');
-        
+
         // Stop word generation runner FIRST (before database is closed)
         if (wordGenerationRunner) {
           await wordGenerationRunner.stop();
@@ -1409,47 +1532,47 @@ function setupLifecycleHandlers(
  */
 export function cleanupIPCHandlers(): void {
   // Remove all IPC handlers
-  Object.values(IPC_CHANNELS.DATABASE).forEach(channel => {
+  Object.values(IPC_CHANNELS.DATABASE).forEach((channel) => {
     ipcMain.removeAllListeners(channel);
   });
 
-  Object.values(IPC_CHANNELS.LLM).forEach(channel => {
+  Object.values(IPC_CHANNELS.LLM).forEach((channel) => {
     ipcMain.removeAllListeners(channel);
   });
 
-  Object.values(IPC_CHANNELS.AUDIO).forEach(channel => {
+  Object.values(IPC_CHANNELS.AUDIO).forEach((channel) => {
     ipcMain.removeAllListeners(channel);
   });
 
-  Object.values(IPC_CHANNELS.QUIZ).forEach(channel => {
+  Object.values(IPC_CHANNELS.QUIZ).forEach((channel) => {
     ipcMain.removeAllListeners(channel);
   });
 
-  Object.values(IPC_CHANNELS.LIFECYCLE).forEach(channel => {
+  Object.values(IPC_CHANNELS.LIFECYCLE).forEach((channel) => {
     ipcMain.removeAllListeners(channel);
   });
 
-  Object.values(IPC_CHANNELS.FREQUENCY).forEach(channel => {
+  Object.values(IPC_CHANNELS.FREQUENCY).forEach((channel) => {
     ipcMain.removeAllListeners(channel);
   });
 
-  Object.values(IPC_CHANNELS.SRS).forEach(channel => {
+  Object.values(IPC_CHANNELS.SRS).forEach((channel) => {
     ipcMain.removeAllListeners(channel);
   });
 
-  Object.values(IPC_CHANNELS.JOBS).forEach(channel => {
+  Object.values(IPC_CHANNELS.JOBS).forEach((channel) => {
     ipcMain.removeAllListeners(channel);
   });
 
-  Object.values(IPC_CHANNELS.LEMMATIZATION).forEach(channel => {
+  Object.values(IPC_CHANNELS.LEMMATIZATION).forEach((channel) => {
     ipcMain.removeAllListeners(channel);
   });
 
-  Object.values(IPC_CHANNELS.DIALOG).forEach(channel => {
+  Object.values(IPC_CHANNELS.DIALOG).forEach((channel) => {
     ipcMain.removeAllListeners(channel);
   });
 
-  Object.values(IPC_CHANNELS.FLOW).forEach(channel => {
+  Object.values(IPC_CHANNELS.FLOW).forEach((channel) => {
     ipcMain.removeAllListeners(channel);
   });
 
@@ -1549,7 +1672,7 @@ function setupDialogHandlers(
 
         // Get existing variants
         const existingVariants = await databaseLayer.getDialogueVariantsBySentenceId(sentenceId);
-        
+
         // Get known words for variant generation
         const language = await databaseLayer.getCurrentLanguage();
         const allWords = await databaseLayer.getAllWords(language, true, false);
@@ -1557,12 +1680,17 @@ function setupDialogHandlers(
         const minWordStrength = dialogServiceConfig.config?.minWordStrength ?? 40;
         const maxKnownWords = dialogServiceConfig.config?.maxKnownWordsForVariants ?? 50;
         const knownWords = allWords
-          .filter(w => w.known || (w.strength ?? 0) >= minWordStrength)
+          .filter((w) => w.known || (w.strength ?? 0) >= minWordStrength)
           .slice(0, maxKnownWords)
-          .map(w => w.word);
-        
+          .map((w) => w.word);
+
         // Generate variants
-        return await dialogService.generateDialogueVariants(sentence, existingVariants, knownWords, language);
+        return await dialogService.generateDialogueVariants(
+          sentence,
+          existingVariants,
+          knownWords,
+          language
+        );
       },
       'generate dialogue variants'
     )
@@ -1574,10 +1702,10 @@ function setupDialogHandlers(
       VariantIdSchema, // Use VariantIdSchema to allow negative IDs
       async (variantId) => {
         const language = await databaseLayer.getCurrentLanguage();
-        
+
         // Generate follow-up (will check cache and generate if needed)
         const followUp = await dialogService.generateFollowUp(variantId, language);
-        
+
         // Generate audio on-demand if continuation text exists and no audio is cached yet
         // Only cache audio for actual variants (positive IDs), not pseudo-variants (negative IDs)
         let continuationAudio: string | undefined;
@@ -1599,10 +1727,10 @@ function setupDialogHandlers(
                 undefined,
                 variantId
               );
-              
+
               if (audioPath) {
                 continuationAudio = audioPath;
-                
+
                 // Update database with audio path (update continuation with audio path)
                 // This also ensures the continuation text/translation are cached
                 await databaseLayer.updateDialogueVariantContinuation(
@@ -1631,21 +1759,27 @@ function setupDialogHandlers(
               undefined,
               variantId
             );
-            
+
             if (audioPath) {
               continuationAudio = audioPath;
-              console.log('[IPC] Generated continuation audio for pseudo-variant (not cached in DB):', audioPath);
+              console.log(
+                '[IPC] Generated continuation audio for pseudo-variant (not cached in DB):',
+                audioPath
+              );
             }
           } catch (audioError) {
-            console.error('[IPC] Failed to generate continuation audio for pseudo-variant:', audioError);
+            console.error(
+              '[IPC] Failed to generate continuation audio for pseudo-variant:',
+              audioError
+            );
             // Continue without audio - non-critical
           }
         }
-        
+
         return {
           text: followUp.text,
           translation: followUp.translation,
-          audio: continuationAudio
+          audio: continuationAudio,
         };
       },
       'generate follow-up'
@@ -1666,7 +1800,7 @@ function setupDialogHandlers(
           }
 
           const session = sessions[0];
-          
+
           // Generate audio if needed (non-blocking - don't fail if audio generation fails)
           let beforeSentenceAudio: string | undefined;
           let afterSentenceAudio: string | undefined;
@@ -1688,15 +1822,21 @@ function setupDialogHandlers(
                   sentence.wordId,
                   session.sentenceId
                 );
-                
+
                 // Check if audio was generated successfully
-                if (audioPath && await audioService.audioExists(audioPath)) {
+                if (audioPath && (await audioService.audioExists(audioPath))) {
                   beforeSentenceAudio = audioPath;
                   // Save the path to database
                   try {
-                    await databaseLayer.updateBeforeSentenceAudioPath(session.sentenceId, audioPath);
+                    await databaseLayer.updateBeforeSentenceAudioPath(
+                      session.sentenceId,
+                      audioPath
+                    );
                   } catch (dbError) {
-                    console.warn('[IPC] Failed to save beforeSentence audio path to database:', dbError);
+                    console.warn(
+                      '[IPC] Failed to save beforeSentence audio path to database:',
+                      dbError
+                    );
                     // Continue - audio exists even if DB update fails
                   }
                 }
@@ -1711,21 +1851,27 @@ function setupDialogHandlers(
                   sentence.wordId,
                   session.sentenceId
                 );
-                
+
                 // Check if audio was generated successfully
-                if (audioPath && await audioService.audioExists(audioPath)) {
+                if (audioPath && (await audioService.audioExists(audioPath))) {
                   afterSentenceAudio = audioPath;
                   // Save the path to database
                   try {
                     await databaseLayer.updateAfterSentenceAudioPath(session.sentenceId, audioPath);
                   } catch (dbError) {
-                    console.warn('[IPC] Failed to save afterSentence audio path to database:', dbError);
+                    console.warn(
+                      '[IPC] Failed to save afterSentence audio path to database:',
+                      dbError
+                    );
                     // Continue - audio exists even if DB update fails
                   }
                 }
               }
             } catch (error) {
-              console.warn('[IPC] Failed to generate context sentences audio during pre-generation:', error);
+              console.warn(
+                '[IPC] Failed to generate context sentences audio during pre-generation:',
+                error
+              );
               // Continue without audio
             }
           }
@@ -1735,10 +1881,10 @@ function setupDialogHandlers(
             ...session,
             beforeSentenceAudio,
             afterSentenceAudio,
-            responseOptions: session.responseOptions.map(v => ({
+            responseOptions: session.responseOptions.map((v) => ({
               ...v,
-              createdAt: v.createdAt.toISOString()
-            }))
+              createdAt: v.createdAt.toISOString(),
+            })),
           };
         } catch (error) {
           console.error('Error pre-generating dialog session:', error);
@@ -1761,80 +1907,97 @@ function setupDialogHandlers(
           if (sessions.length === 0) {
             return [];
           }
-          const sessionsWithAudio = await Promise.all(sessions.map(async (session) => {
-            // Generate audio if needed (non-blocking - don't fail if audio generation fails)
-            let beforeSentenceAudio: string | undefined;
-            let afterSentenceAudio: string | undefined;
-            if (session.sentenceId) {
-              try {
-                // Get word ID from sentence
-                const sentence = await databaseLayer.getSentenceById(session.sentenceId);
-                if (!sentence) {
-                  throw new Error(`Sentence with ID ${session.sentenceId} not found`);
-                }
+          const sessionsWithAudio = await Promise.all(
+            sessions.map(async (session) => {
+              // Generate audio if needed (non-blocking - don't fail if audio generation fails)
+              let beforeSentenceAudio: string | undefined;
+              let afterSentenceAudio: string | undefined;
+              if (session.sentenceId) {
+                try {
+                  // Get word ID from sentence
+                  const sentence = await databaseLayer.getSentenceById(session.sentenceId);
+                  if (!sentence) {
+                    throw new Error(`Sentence with ID ${session.sentenceId} not found`);
+                  }
 
-                // Generate beforeSentence audio if contextBefore exists
-                if (session.contextBefore) {
-                  const audioPath = await audioService.generateAudio(
-                    session.contextBefore,
-                    language,
-                    '_before_sentence',
-                    sentence.wordId,
-                    session.sentenceId
-                  );
-                  
-                  // Check if audio was generated successfully
-                  if (audioPath && await audioService.audioExists(audioPath)) {
-                    beforeSentenceAudio = audioPath;
-                    // Save the path to database
-                    try {
-                      await databaseLayer.updateBeforeSentenceAudioPath(session.sentenceId, audioPath);
-                    } catch (dbError) {
-                      console.warn(`[IPC] Failed to save beforeSentence audio path to database for session ${session.sentenceId}:`, dbError);
-                      // Continue - audio exists even if DB update fails
+                  // Generate beforeSentence audio if contextBefore exists
+                  if (session.contextBefore) {
+                    const audioPath = await audioService.generateAudio(
+                      session.contextBefore,
+                      language,
+                      '_before_sentence',
+                      sentence.wordId,
+                      session.sentenceId
+                    );
+
+                    // Check if audio was generated successfully
+                    if (audioPath && (await audioService.audioExists(audioPath))) {
+                      beforeSentenceAudio = audioPath;
+                      // Save the path to database
+                      try {
+                        await databaseLayer.updateBeforeSentenceAudioPath(
+                          session.sentenceId,
+                          audioPath
+                        );
+                      } catch (dbError) {
+                        console.warn(
+                          `[IPC] Failed to save beforeSentence audio path to database for session ${session.sentenceId}:`,
+                          dbError
+                        );
+                        // Continue - audio exists even if DB update fails
+                      }
                     }
                   }
-                }
 
-                // Generate afterSentence audio if contextAfter exists
-                if (session.contextAfter) {
-                  const audioPath = await audioService.generateAudio(
-                    session.contextAfter,
-                    language,
-                    '_after_sentence',
-                    sentence.wordId,
-                    session.sentenceId
-                  );
-                  
-                  // Check if audio was generated successfully
-                  if (audioPath && await audioService.audioExists(audioPath)) {
-                    afterSentenceAudio = audioPath;
-                    // Save the path to database
-                    try {
-                      await databaseLayer.updateAfterSentenceAudioPath(session.sentenceId, audioPath);
-                    } catch (dbError) {
-                      console.warn(`[IPC] Failed to save afterSentence audio path to database for session ${session.sentenceId}:`, dbError);
-                      // Continue - audio exists even if DB update fails
+                  // Generate afterSentence audio if contextAfter exists
+                  if (session.contextAfter) {
+                    const audioPath = await audioService.generateAudio(
+                      session.contextAfter,
+                      language,
+                      '_after_sentence',
+                      sentence.wordId,
+                      session.sentenceId
+                    );
+
+                    // Check if audio was generated successfully
+                    if (audioPath && (await audioService.audioExists(audioPath))) {
+                      afterSentenceAudio = audioPath;
+                      // Save the path to database
+                      try {
+                        await databaseLayer.updateAfterSentenceAudioPath(
+                          session.sentenceId,
+                          audioPath
+                        );
+                      } catch (dbError) {
+                        console.warn(
+                          `[IPC] Failed to save afterSentence audio path to database for session ${session.sentenceId}:`,
+                          dbError
+                        );
+                        // Continue - audio exists even if DB update fails
+                      }
                     }
                   }
+                } catch (error) {
+                  console.warn(
+                    `[IPC] Failed to generate context sentences audio for session ${session.sentenceId}:`,
+                    error
+                  );
+                  // Continue without audio
                 }
-              } catch (error) {
-                console.warn(`[IPC] Failed to generate context sentences audio for session ${session.sentenceId}:`, error);
-                // Continue without audio
               }
-            }
 
-            // Convert Date objects to ISO strings for IPC transfer
-            return {
-              ...session,
-              beforeSentenceAudio,
-              afterSentenceAudio,
-              responseOptions: session.responseOptions.map(v => ({
-                ...v,
-                createdAt: v.createdAt.toISOString()
-              }))
-            };
-          }));
+              // Convert Date objects to ISO strings for IPC transfer
+              return {
+                ...session,
+                beforeSentenceAudio,
+                afterSentenceAudio,
+                responseOptions: session.responseOptions.map((v) => ({
+                  ...v,
+                  createdAt: v.createdAt.toISOString(),
+                })),
+              };
+            })
+          );
 
           return sessionsWithAudio;
         } catch (error) {
@@ -1869,7 +2032,7 @@ function setupDialogHandlers(
 
         // Get word ID from sentence
         const language = await databaseLayer.getCurrentLanguage();
-        
+
         // Generate audio with wordId and sentenceId
         const audioPath = await audioService.generateAudio(
           sentence.contextBefore,
@@ -1910,7 +2073,7 @@ function setupDialogHandlers(
         let contextVoiceId: string | undefined = undefined;
         const needsBeforeGeneration = sentence.contextBefore && !sentence.beforeSentenceAudioPath;
         const needsAfterGeneration = sentence.contextAfter && !sentence.afterSentenceAudioPath;
-        
+
         if (needsBeforeGeneration || needsAfterGeneration) {
           // Check if audioService is using ElevenLabs
           const audioInfo = audioService.getAudioGenerationInfo();
@@ -1975,7 +2138,7 @@ function setupDialogHandlers(
 
         return {
           beforeSentenceAudio,
-          afterSentenceAudio
+          afterSentenceAudio,
         };
       },
       'ensure context sentences audio'
@@ -1986,19 +2149,16 @@ function setupDialogHandlers(
 /**
  * Set up Flow-related IPC handlers
  */
-function setupFlowHandlers(
-  databaseLayer: SQLiteDatabaseLayer,
-  audioService: AudioService
-): void {
+function setupFlowHandlers(databaseLayer: SQLiteDatabaseLayer, audioService: AudioService): void {
   ipcMain.handle(
     IPC_CHANNELS.FLOW.GET_FLOW_SENTENCES,
     createIPCHandler(
       LanguageSchema.optional(),
       async (language) => {
         // Validate and use provided language, or get current language if not provided
-        const validatedLanguage = language || await databaseLayer.getCurrentLanguage();
+        const validatedLanguage = language || (await databaseLayer.getCurrentLanguage());
         const flowSentences = await databaseLayer.getFlowSentences(validatedLanguage);
-        
+
         // Check which audio files actually exist and filter accordingly
         const result = await Promise.all(
           flowSentences.map(async (item) => {
@@ -2024,7 +2184,7 @@ function setupFlowHandlers(
               sentence: item.sentence,
               words: item.words,
               beforeSentenceAudio,
-              continuationAudios: existingContinuationAudios
+              continuationAudios: existingContinuationAudios,
             };
           })
         );
@@ -2042,11 +2202,11 @@ function setupFlowHandlers(
       async (audioPaths, language) => {
         // Don't log here - audioService.stitchAudio() will check cache first and log appropriately
         const stitchedPath = await audioService.stitchAudio(audioPaths, language);
-        
+
         if (!stitchedPath) {
           throw new Error('Failed to stitch audio files');
         }
-        
+
         return stitchedPath;
       },
       'stitch audio'
@@ -2060,11 +2220,11 @@ function setupFlowHandlers(
       async (audioPathPairs, language) => {
         // Don't log here - audioService.stitchAudioWithEnglish() will check cache first and log appropriately
         const stitchedPath = await audioService.stitchAudioWithEnglish(audioPathPairs, language);
-        
+
         if (!stitchedPath) {
           throw new Error('Failed to stitch audio files with English pattern');
         }
-        
+
         return stitchedPath;
       },
       'stitch audio with English pattern'
@@ -2079,12 +2239,12 @@ function setupFlowHandlers(
         try {
           // Resolve relative paths to absolute paths
           const absolutePath = AudioService.resolveAudioPath(filePath);
-          
+
           const { stat } = require('fs').promises;
           const stats = await stat(absolutePath);
-          
+
           return {
-            mtime: stats.mtime
+            mtime: stats.mtime,
           };
         } catch (error) {
           // File doesn't exist or other error
@@ -2106,7 +2266,9 @@ function setupTrackingHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       [z.enum(['learning', 'quiz', 'dialog', 'flow']), LanguageSchema],
       async (mode, language) => {
         const sessionId = await databaseLayer.createLearningSession({ mode, language });
-        console.log(`[Tracking] Learning session created: id=${sessionId}, mode=${mode}, language=${language}`);
+        console.log(
+          `[Tracking] Learning session created: id=${sessionId}, mode=${mode}, language=${language}`
+        );
         return sessionId;
       },
       'create learning session'
@@ -2121,17 +2283,21 @@ function setupTrackingHandlers(databaseLayer: SQLiteDatabaseLayer): void {
         z.object({
           wordCount: z.number().int().nonnegative().optional(),
           sentenceCount: z.number().int().nonnegative().optional(),
-          audioPlayedCount: z.number().int().nonnegative().optional()
-        })
+          audioPlayedCount: z.number().int().nonnegative().optional(),
+        }),
       ],
       async (sessionId, data) => {
         await databaseLayer.updateLearningSession(sessionId, data);
         const counts = [
           data.wordCount !== undefined ? `words=${data.wordCount}` : null,
           data.sentenceCount !== undefined ? `sentences=${data.sentenceCount}` : null,
-          data.audioPlayedCount !== undefined ? `audio=${data.audioPlayedCount}` : null
-        ].filter(Boolean).join(', ');
-        console.log(`[Tracking] Learning session updated: id=${sessionId}${counts ? ', ' + counts : ''}`);
+          data.audioPlayedCount !== undefined ? `audio=${data.audioPlayedCount}` : null,
+        ]
+          .filter(Boolean)
+          .join(', ');
+        console.log(
+          `[Tracking] Learning session updated: id=${sessionId}${counts ? ', ' + counts : ''}`
+        );
       },
       'update learning session'
     )
@@ -2146,11 +2312,13 @@ function setupTrackingHandlers(databaseLayer: SQLiteDatabaseLayer): void {
         audioPath: AudioPathSchema,
         language: LanguageSchema,
         mode: z.enum(['learning', 'quiz', 'dialog', 'flow']),
-        playbackSpeed: z.number().min(0.1).max(3.0).optional()
+        playbackSpeed: z.number().min(0.1).max(3.0).optional(),
       }),
       async (data) => {
         const id = await databaseLayer.recordAudioPlayback(data);
-        console.log(`[Tracking] Audio playback: mode=${data.mode}, language=${data.language}, speed=${data.playbackSpeed?.toFixed(1) || '1.0'}x, sentenceId=${data.sentenceId || 'none'}, sessionId=${data.sessionId || 'none'}`);
+        console.log(
+          `[Tracking] Audio playback: mode=${data.mode}, language=${data.language}, speed=${data.playbackSpeed?.toFixed(1) || '1.0'}x, sentenceId=${data.sentenceId || 'none'}, sessionId=${data.sessionId || 'none'}`
+        );
         return id;
       },
       'record audio playback'
@@ -2160,18 +2328,22 @@ function setupTrackingHandlers(databaseLayer: SQLiteDatabaseLayer): void {
   ipcMain.handle(
     IPC_CHANNELS.TRACKING.RECORD_NEGLECTED_WORDS,
     createIPCHandler(
-      z.array(z.object({
-        word: z.string().min(1),
-        language: LanguageSchema,
-        topic: z.string().optional(),
-        translation: z.string().optional(),
-        sessionId: z.number().int().positive().optional(),
-        frequencyPosition: z.number().int().nonnegative().optional()
-      })),
+      z.array(
+        z.object({
+          word: z.string().min(1),
+          language: LanguageSchema,
+          topic: z.string().optional(),
+          translation: z.string().optional(),
+          sessionId: z.number().int().positive().optional(),
+          frequencyPosition: z.number().int().nonnegative().optional(),
+        })
+      ),
       async (data) => {
         const count = await databaseLayer.recordNeglectedWords(data);
         if (count > 0) {
-          console.log(`[Tracking] Neglected words (batch): count=${count}, language=${data[0]?.language || 'unknown'}, topic=${data[0]?.topic || 'none'}`);
+          console.log(
+            `[Tracking] Neglected words (batch): count=${count}, language=${data[0]?.language || 'unknown'}, topic=${data[0]?.topic || 'none'}`
+          );
         }
         return count;
       },
@@ -2189,11 +2361,13 @@ function setupTrackingHandlers(databaseLayer: SQLiteDatabaseLayer): void {
         sessionId: z.number().int().positive().optional(),
         hoverDurationMs: z.number().int().positive().min(1000), // Must be >= 1000ms
         dictionaryKey: z.string().optional(),
-        foundInDict: z.boolean()
+        foundInDict: z.boolean(),
       }),
       async (data) => {
         const id = await databaseLayer.recordDictionaryHover(data);
-        console.log(`[Tracking] Dictionary hover: word="${data.word}", language=${data.language}, duration=${data.hoverDurationMs}ms, foundInDict=${data.foundInDict}, sentenceId=${data.sentenceId || 'none'}, sessionId=${data.sessionId || 'none'}`);
+        console.log(
+          `[Tracking] Dictionary hover: word="${data.word}", language=${data.language}, duration=${data.hoverDurationMs}ms, foundInDict=${data.foundInDict}, sentenceId=${data.sentenceId || 'none'}, sessionId=${data.sessionId || 'none'}`
+        );
         return id;
       },
       'record dictionary hover'
@@ -2208,7 +2382,11 @@ function setupLogHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.LOG.LOG,
     createIPCHandler(
-      [z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']), z.string(), z.any().optional()],
+      [
+        z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']),
+        z.string(),
+        z.any().optional(),
+      ],
       (level, message, data) => {
         try {
           // Log with appropriate level
@@ -2245,8 +2423,8 @@ function setupTopicsHandlers(): void {
       const content = await fsPromises.readFile(topicsPath, 'utf-8');
       const topics = content
         .split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0);
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
       // Cache the topics
       cachedTopics = topics;
       return topics;
@@ -2274,28 +2452,36 @@ function setupTopicsHandlers(): void {
 /**
  * Set up Scoring-related IPC handlers
  */
-export function setupScoringHandlers(scoringService: import('../scoring/scoring-service.js').ScoringService): void {
+export function setupScoringHandlers(
+  scoringService: import('../scoring/scoring-service.js').ScoringService
+): void {
   ipcMain.handle(
     IPC_CHANNELS.SCORING.GET_NEXT_MODE,
     createIPCHandler(
       z.object({
         currentMode: z.enum(['topic-selection', 'learning', 'quiz', 'dialog', 'flow']).nullable(),
         language: z.string().min(1).max(50).nullable(),
-        initialTakeover: z.boolean()
+        initialTakeover: z.boolean(),
       }),
       async (options) => {
         const result = await scoringService.getNextMode({
-          currentMode: options.currentMode as 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null,
+          currentMode: options.currentMode as
+            | 'topic-selection'
+            | 'learning'
+            | 'quiz'
+            | 'dialog'
+            | 'flow'
+            | null,
           language: options.language,
-          initialTakeover: options.initialTakeover
+          initialTakeover: options.initialTakeover,
         });
-        
+
         return result;
       },
       'get next mode'
     )
   );
-  
+
   const { getLogger } = require('../utils/logger.js');
   const logger = getLogger();
   logger.info({ channel: IPC_CHANNELS.SCORING.GET_NEXT_MODE }, 'Scoring IPC handler registered');
@@ -2304,7 +2490,9 @@ export function setupScoringHandlers(scoringService: import('../scoring/scoring-
 /**
  * Set up Proficiency-related IPC handlers
  */
-export function setupProficiencyHandlers(proficiencyService: import('../scoring/proficiency-service.js').ProficiencyService): void {
+export function setupProficiencyHandlers(
+  proficiencyService: import('../scoring/proficiency-service.js').ProficiencyService
+): void {
   ipcMain.handle(
     IPC_CHANNELS.SCORING.GET_LANGUAGE_PROFICIENCY,
     createIPCHandler(
@@ -2314,14 +2502,17 @@ export function setupProficiencyHandlers(proficiencyService: import('../scoring/
           language || '',
           timeWindowDays
         );
-        
+
         return proficiency;
       },
       'get language proficiency'
     )
   );
-  
+
   const { getLogger } = require('../utils/logger.js');
   const logger = getLogger();
-  logger.info({ channel: IPC_CHANNELS.SCORING.GET_LANGUAGE_PROFICIENCY }, 'Proficiency IPC handler registered');
+  logger.info(
+    { channel: IPC_CHANNELS.SCORING.GET_LANGUAGE_PROFICIENCY },
+    'Proficiency IPC handler registered'
+  );
 }

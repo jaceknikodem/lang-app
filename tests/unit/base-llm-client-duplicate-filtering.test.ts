@@ -40,7 +40,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
     client = new TestLLMClient({ model: 'test-model' });
     mockDatabase = {
       getExistingWordsForDuplicateChecking: jest.fn().mockResolvedValue([]),
-      checkWordsExist: jest.fn().mockResolvedValue(new Set())
+      checkWordsExist: jest.fn().mockResolvedValue(new Set()),
     };
     client.setDatabaseLayer(mockDatabase);
     jest.clearAllMocks();
@@ -52,7 +52,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
         { word: 'hola', translation: 'hello' },
         { word: 'HOLA', translation: 'hello' }, // Duplicate (case-insensitive)
         { word: 'casa', translation: 'house' },
-        { word: 'Casa', translation: 'house' } // Duplicate (case-insensitive)
+        { word: 'Casa', translation: 'house' }, // Duplicate (case-insensitive)
       ];
 
       client.setMockResponse(mockWords);
@@ -62,7 +62,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
 
       // Should only have 2 unique words (hola and casa)
       expect(result).toHaveLength(2);
-      const words = result.map(w => w.word.toLowerCase());
+      const words = result.map((w) => w.word.toLowerCase());
       expect(words).toHaveLength(2);
       expect(words).toContain('hola');
       expect(words).toContain('casa');
@@ -72,7 +72,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
       const mockWords = [
         { word: 'hola', translation: 'hello' },
         { word: 'casa', translation: 'house' },
-        { word: 'perro', translation: 'dog' }
+        { word: 'perro', translation: 'dog' },
       ];
 
       client.setMockResponse(mockWords);
@@ -84,15 +84,15 @@ describe('BaseLLMClient Duplicate Filtering', () => {
       // Should filter out hola and casa, only return perro
       expect(result).toHaveLength(1);
       expect(result[0].word).toBe('perro');
-      expect(result.map(w => w.word.toLowerCase())).not.toContain('hola');
-      expect(result.map(w => w.word.toLowerCase())).not.toContain('casa');
+      expect(result.map((w) => w.word.toLowerCase())).not.toContain('hola');
+      expect(result.map((w) => w.word.toLowerCase())).not.toContain('casa');
     });
 
     it('should handle case-insensitive duplicate checking with database', async () => {
       const mockWords = [
         { word: 'hola', translation: 'hello' },
         { word: 'casa', translation: 'house' },
-        { word: 'perro', translation: 'dog' }
+        { word: 'perro', translation: 'dog' },
       ];
 
       client.setMockResponse(mockWords);
@@ -113,7 +113,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
         { word: 'HOLA', translation: 'hello' }, // Duplicate in generated
         { word: 'casa', translation: 'house' }, // Exists in database
         { word: 'perro', translation: 'dog' },
-        { word: 'gato', translation: 'cat' }
+        { word: 'gato', translation: 'cat' },
       ];
 
       client.setMockResponse(mockWords);
@@ -125,19 +125,19 @@ describe('BaseLLMClient Duplicate Filtering', () => {
       // Should remove HOLA (duplicate, case-insensitive) and casa (database)
       // The first occurrence 'hola' should be kept (preserves original case)
       expect(result.length).toBeGreaterThanOrEqual(2);
-      const wordLowercases = result.map(w => w.word.toLowerCase()).sort();
+      const wordLowercases = result.map((w) => w.word.toLowerCase()).sort();
       expect(wordLowercases).toContain('hola'); // First occurrence kept
       expect(wordLowercases).toContain('perro');
       expect(wordLowercases).toContain('gato');
       expect(wordLowercases).not.toContain('casa');
       // HOLA should be removed as duplicate
-      expect(result.filter(w => w.word === 'HOLA')).toHaveLength(0);
+      expect(result.filter((w) => w.word === 'HOLA')).toHaveLength(0);
     });
 
     it('should handle empty database existing words', async () => {
       const mockWords = [
         { word: 'hola', translation: 'hello' },
-        { word: 'casa', translation: 'house' }
+        { word: 'casa', translation: 'house' },
       ];
 
       client.setMockResponse(mockWords);
@@ -147,7 +147,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
 
       // Should return all words since none exist in database
       expect(result).toHaveLength(2);
-      const words = result.map(w => w.word);
+      const words = result.map((w) => w.word);
       expect(words).toHaveLength(2);
       expect(words).toContain('hola');
       expect(words).toContain('casa');
@@ -156,7 +156,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
     it('should throw error when insufficient new words generated', async () => {
       const mockWords = [
         { word: 'hola', translation: 'hello' },
-        { word: 'casa', translation: 'house' }
+        { word: 'casa', translation: 'house' },
       ];
 
       client.setMockResponse(mockWords);
@@ -164,14 +164,15 @@ describe('BaseLLMClient Duplicate Filtering', () => {
       mockDatabase.getExistingWordsForDuplicateChecking.mockResolvedValue(['hola', 'casa']);
       mockDatabase.checkWordsExist.mockResolvedValue(new Set(['hola', 'casa']));
 
-      await expect(client.testGenerateTopicWords('test', 'Spanish', 3))
-        .rejects.toThrow('Insufficient new words generated');
+      await expect(client.testGenerateTopicWords('test', 'Spanish', 3)).rejects.toThrow(
+        'Insufficient new words generated'
+      );
     });
 
     it('should handle minimum threshold calculation', async () => {
       const mockWords = [
         { word: 'hola', translation: 'hello' },
-        { word: 'casa', translation: 'house' }
+        { word: 'casa', translation: 'house' },
       ];
 
       client.setMockResponse(mockWords);
@@ -180,15 +181,16 @@ describe('BaseLLMClient Duplicate Filtering', () => {
 
       // Request 10 words, but only get 1 new word
       // With default MIN_WORD_COUNT_THRESHOLD, should fail
-      await expect(client.testGenerateTopicWords('test', 'Spanish', 10))
-        .rejects.toThrow('Insufficient new words generated');
+      await expect(client.testGenerateTopicWords('test', 'Spanish', 10)).rejects.toThrow(
+        'Insufficient new words generated'
+      );
     });
 
     it('should pass when minimum threshold is met', async () => {
       const mockWords = [
         { word: 'hola', translation: 'hello' },
         { word: 'casa', translation: 'house' },
-        { word: 'perro', translation: 'dog' }
+        { word: 'perro', translation: 'dog' },
       ];
 
       client.setMockResponse(mockWords);
@@ -204,11 +206,13 @@ describe('BaseLLMClient Duplicate Filtering', () => {
     it('should handle database errors gracefully', async () => {
       const mockWords = [
         { word: 'hola', translation: 'hello' },
-        { word: 'casa', translation: 'house' }
+        { word: 'casa', translation: 'house' },
       ];
 
       client.setMockResponse(mockWords);
-      mockDatabase.getExistingWordsForDuplicateChecking.mockRejectedValue(new Error('Database error'));
+      mockDatabase.getExistingWordsForDuplicateChecking.mockRejectedValue(
+        new Error('Database error')
+      );
       mockDatabase.checkWordsExist.mockRejectedValue(new Error('Database error'));
 
       // Should still work, just treat as empty existing words
@@ -221,7 +225,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
       const clientWithoutDb = new TestLLMClient({ model: 'test-model' });
       const mockWords = [
         { word: 'hola', translation: 'hello' },
-        { word: 'casa', translation: 'house' }
+        { word: 'casa', translation: 'house' },
       ];
 
       clientWithoutDb.setMockResponse(mockWords);
@@ -236,7 +240,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
       const mockWords = [
         { word: 'HOLA', translation: 'hello' },
         { word: 'hola', translation: 'hello' }, // Duplicate with different case
-        { word: 'casa', translation: 'house' }
+        { word: 'casa', translation: 'house' },
       ];
 
       client.setMockResponse(mockWords);
@@ -246,7 +250,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
 
       // Should preserve first occurrence's case (HOLA)
       expect(result).toHaveLength(2);
-      const holaWord = result.find(w => w.word.toLowerCase() === 'hola');
+      const holaWord = result.find((w) => w.word.toLowerCase() === 'hola');
       expect(holaWord?.word).toBe('HOLA'); // Should preserve original case
     });
 
@@ -255,7 +259,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
         { word: 'hola', translation: 'hello' },
         { word: 'hola', translation: 'hello' }, // Duplicate 1
         { word: 'hola', translation: 'hello' }, // Duplicate 2
-        { word: 'casa', translation: 'house' }
+        { word: 'casa', translation: 'house' },
       ];
 
       client.setMockResponse(mockWords);
@@ -265,14 +269,14 @@ describe('BaseLLMClient Duplicate Filtering', () => {
 
       // Should only have 2 unique words
       expect(result).toHaveLength(2);
-      const holaCount = result.filter(w => w.word.toLowerCase() === 'hola').length;
+      const holaCount = result.filter((w) => w.word.toLowerCase() === 'hola').length;
       expect(holaCount).toBe(1);
     });
 
     it('should work with existing words from different languages', async () => {
       const mockWords = [
         { word: 'hola', translation: 'hello' },
-        { word: 'casa', translation: 'house' }
+        { word: 'casa', translation: 'house' },
       ];
 
       client.setMockResponse(mockWords);
@@ -292,11 +296,13 @@ describe('BaseLLMClient Duplicate Filtering', () => {
     it('should generate sentences without duplicate checking', async () => {
       const mockSentences = [
         { sentence: 'Hola mundo', translation: 'Hello world' },
-        { sentence: 'Buenos días', translation: 'Good morning' }
+        { sentence: 'Buenos días', translation: 'Good morning' },
       ];
 
       client.setMockResponse(mockSentences);
-      mockDatabase.getKnownWordsForSentenceGeneration = jest.fn().mockResolvedValue(['hola', 'casa']);
+      mockDatabase.getKnownWordsForSentenceGeneration = jest
+        .fn()
+        .mockResolvedValue(['hola', 'casa']);
 
       const result = await (client as any).generateSentences('hola', 'Spanish', 2);
 
@@ -310,8 +316,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
       mockDatabase.getExistingWordsForDuplicateChecking.mockResolvedValue([]);
 
       // The error should mention validation or invalid response format
-      await expect(client.testGenerateTopicWords('test', 'Spanish', 3))
-        .rejects.toThrow();
+      await expect(client.testGenerateTopicWords('test', 'Spanish', 3)).rejects.toThrow();
     });
 
     it('should handle non-Zod errors', async () => {
@@ -322,8 +327,9 @@ describe('BaseLLMClient Duplicate Filtering', () => {
       client.setMockResponse(null);
       (client as any).makeRequest = jest.fn().mockRejectedValue(new Error('Network error'));
 
-      await expect(client.testGenerateTopicWords('test', 'Spanish', 3))
-        .rejects.toThrow('Failed to generate words');
+      await expect(client.testGenerateTopicWords('test', 'Spanish', 3)).rejects.toThrow(
+        'Failed to generate words'
+      );
     });
 
     it('should handle ZodError instance with detailed error message', async () => {
@@ -333,41 +339,42 @@ describe('BaseLLMClient Duplicate Filtering', () => {
           expected: 'array',
           received: 'string',
           path: [],
-          message: 'Expected array, received string'
-        }
+          message: 'Expected array, received string',
+        },
       ]);
 
       // Simulate Zod validation error by having parse throw
       client.setMockResponse('not an array');
       mockDatabase.getExistingWordsForDuplicateChecking.mockResolvedValue([]);
 
-      await expect(client.testGenerateTopicWords('test', 'Spanish', 3))
-        .rejects.toThrow();
+      await expect(client.testGenerateTopicWords('test', 'Spanish', 3)).rejects.toThrow();
     });
 
     it('should handle makeRequest throwing non-Error objects', async () => {
       (client as any).makeRequest = jest.fn().mockRejectedValue('String error');
       mockDatabase.getExistingWordsForDuplicateChecking.mockResolvedValue([]);
 
-      await expect(client.testGenerateTopicWords('test', 'Spanish', 3))
-        .rejects.toThrow('Failed to generate words');
+      await expect(client.testGenerateTopicWords('test', 'Spanish', 3)).rejects.toThrow(
+        'Failed to generate words'
+      );
     });
 
     it('should handle null/undefined errors from makeRequest', async () => {
       (client as any).makeRequest = jest.fn().mockRejectedValue(null);
       mockDatabase.getExistingWordsForDuplicateChecking.mockResolvedValue([]);
 
-      await expect(client.testGenerateTopicWords('test', 'Spanish', 3))
-        .rejects.toThrow();
+      await expect(client.testGenerateTopicWords('test', 'Spanish', 3)).rejects.toThrow();
     });
 
     it('should handle database errors when getting existing words', async () => {
       const mockWords = [
         { word: 'hola', translation: 'hello' },
-        { word: 'casa', translation: 'house' }
+        { word: 'casa', translation: 'house' },
       ];
       client.setMockResponse(mockWords);
-      mockDatabase.getExistingWordsForDuplicateChecking.mockRejectedValue(new Error('Database connection failed'));
+      mockDatabase.getExistingWordsForDuplicateChecking.mockRejectedValue(
+        new Error('Database connection failed')
+      );
       mockDatabase.checkWordsExist.mockRejectedValue(new Error('Database connection failed'));
 
       // Should handle gracefully and treat as empty existing words

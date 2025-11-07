@@ -17,23 +17,23 @@ test.describe('Word Selection Bug Fix', () => {
 
   test.beforeEach(async () => {
     testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'language-learning-test-'));
-    
+
     electronApp = await electron.launch({
       args: [path.join(__dirname, '../../dist/main/main/main.js')],
       env: {
         ...process.env,
         NODE_ENV: 'test',
-        TEST_DATA_DIR: testDataDir
-      }
+        TEST_DATA_DIR: testDataDir,
+      },
     });
-    
+
     page = await electronApp.firstWindow();
     await page.waitForLoadState('domcontentloaded');
-    
+
     // Insert a test word early to prevent proficiency selector from showing
     // This ensures the word is in the database before the app checks for existing words
     await insertTestWord(page);
-    
+
     await page.waitForTimeout(3000); // Allow services to initialize
   });
 
@@ -51,12 +51,12 @@ test.describe('Word Selection Bug Fix', () => {
     const quizButton = page.locator('nav button:has-text("Quiz")');
     await expect(quizButton).toBeVisible();
     await expect(quizButton).toBeEnabled();
-    
+
     // Should navigate to quiz mode even with no words
     await quizButton.click();
     await page.waitForSelector('quiz-mode', { timeout: 30000 });
     await expect(page.locator('quiz-mode')).toBeVisible();
-    
+
     console.log('✅ Quiz tab availability fix verified');
   });
 });

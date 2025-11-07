@@ -29,9 +29,10 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
       baseUrl: config.baseUrl || LLM_CONFIG.DEFAULT_BASE_URL,
       model: config.model || LLM_CONFIG.DEFAULT_MODEL,
       wordGenerationModel: config.wordGenerationModel || LLM_CONFIG.DEFAULT_WORD_GENERATION_MODEL,
-      sentenceGenerationModel: config.sentenceGenerationModel || LLM_CONFIG.DEFAULT_SENTENCE_GENERATION_MODEL,
+      sentenceGenerationModel:
+        config.sentenceGenerationModel || LLM_CONFIG.DEFAULT_SENTENCE_GENERATION_MODEL,
       timeout: config.timeout || LLM_CONFIG.DEFAULT_TIMEOUT,
-      maxRetries: config.maxRetries || LLM_CONFIG.MAX_RETRIES
+      maxRetries: config.maxRetries || LLM_CONFIG.MAX_RETRIES,
     });
   }
 
@@ -39,7 +40,7 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
     try {
       const response = await axios.get(`${this.config.baseUrl}/api/tags`, {
         timeout: 5000,
-        validateStatus: () => true // Don't throw on any status
+        validateStatus: () => true, // Don't throw on any status
       });
       return response.status === 200;
     } catch (error) {
@@ -50,7 +51,7 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
   async getAvailableModels(): Promise<string[]> {
     try {
       const response = await axios.get(`${this.config.baseUrl}/api/tags`, {
-        timeout: 5000
+        timeout: 5000,
       });
 
       const data = response.data;
@@ -72,7 +73,7 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
       const requestBody: OllamaRequest = {
         model: model || this.config.model,
         prompt,
-        stream: false
+        stream: false,
       };
 
       const response = await axios.post<OllamaResponse>(
@@ -81,8 +82,8 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
         {
           timeout: this.config.timeout || 60000,
           headers: {
-            'Content-Type': 'application/json'
-          }
+            'Content-Type': 'application/json',
+          },
         }
       );
 
@@ -94,7 +95,10 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
 
       return data.response.trim();
     } catch (error) {
-      if (axios.isAxiosError(error) && (error.code === 'ECONNABORTED' || error.message.includes('timeout'))) {
+      if (
+        axios.isAxiosError(error) &&
+        (error.code === 'ECONNABORTED' || error.message.includes('timeout'))
+      ) {
         throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
       }
       throw super.createLLMError(ensureError(error), 'Failed to generate response');
@@ -106,7 +110,7 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
     const requestBody: OllamaRequest = {
       model: selectedModel,
       prompt,
-      stream: false
+      stream: false,
       // Removed format: 'json' as it forces single objects instead of arrays
     };
 
@@ -116,7 +120,7 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
     const factor = 2; // Exponential backoff factor
 
     let lastError: unknown;
-    
+
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
       try {
         const response = await axios.post<OllamaResponse>(
@@ -125,8 +129,8 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
           {
             timeout: this.config.timeout || 60000,
             headers: {
-              'Content-Type': 'application/json'
-            }
+              'Content-Type': 'application/json',
+            },
           }
         );
 
@@ -150,14 +154,17 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
         return parsed;
       } catch (error: unknown) {
         lastError = error;
-        
+
         // Don't retry on certain errors
         if (error instanceof Error) {
           // Timeout errors - don't retry
-          if (axios.isAxiosError(error) && (error.code === 'ECONNABORTED' || error.message.includes('timeout'))) {
+          if (
+            axios.isAxiosError(error) &&
+            (error.code === 'ECONNABORTED' || error.message.includes('timeout'))
+          ) {
             throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
           }
-          
+
           // JSON parsing errors - don't retry (unless it's "Insufficient" which might be retryable)
           if (error.message.includes('JSON') && !error.message.includes('Insufficient')) {
             throw super.createLLMError(error, 'Invalid response format', 'INVALID_RESPONSE', false);
@@ -165,33 +172,63 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
 
           // If we've exhausted retries, throw the error
           if (attempt > maxRetries) {
-            if (axios.isAxiosError(error) && (error.code === 'ECONNABORTED' || error.message.includes('timeout'))) {
+            if (
+              axios.isAxiosError(error) &&
+              (error.code === 'ECONNABORTED' || error.message.includes('timeout'))
+            ) {
               throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
             }
-            throw super.createLLMError(ensureError(error), 'Max retries exceeded', 'CONNECTION_ERROR', false);
+            throw super.createLLMError(
+              ensureError(error),
+              'Max retries exceeded',
+              'CONNECTION_ERROR',
+              false
+            );
           }
 
           // Use exponential backoff for other errors
-          const backoffSeconds = Math.min(Math.max(Math.pow(factor, attempt - 1), minTimeout / 1000), maxTimeout / 1000);
+          const backoffSeconds = Math.min(
+            Math.max(Math.pow(factor, attempt - 1), minTimeout / 1000),
+            maxTimeout / 1000
+          );
           const logger = getLogger();
-          logger.info({ attemptNumber: attempt, retryDelay: backoffSeconds }, `Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`);
-          await new Promise(resolve => setTimeout(resolve, backoffSeconds * 1000));
+          logger.info(
+            { attemptNumber: attempt, retryDelay: backoffSeconds },
+            `Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`
+          );
+          await new Promise((resolve) => setTimeout(resolve, backoffSeconds * 1000));
         } else {
           // If we've exhausted retries, throw the error
           if (attempt > maxRetries) {
-            throw super.createLLMError(ensureError(error), 'Max retries exceeded', 'CONNECTION_ERROR', false);
+            throw super.createLLMError(
+              ensureError(error),
+              'Max retries exceeded',
+              'CONNECTION_ERROR',
+              false
+            );
           }
-          
+
           // Use exponential backoff for unknown errors
-          const backoffSeconds = Math.min(Math.max(Math.pow(factor, attempt - 1), minTimeout / 1000), maxTimeout / 1000);
+          const backoffSeconds = Math.min(
+            Math.max(Math.pow(factor, attempt - 1), minTimeout / 1000),
+            maxTimeout / 1000
+          );
           const logger = getLogger();
-          logger.info({ attemptNumber: attempt, retryDelay: backoffSeconds }, `Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`);
-          await new Promise(resolve => setTimeout(resolve, backoffSeconds * 1000));
+          logger.info(
+            { attemptNumber: attempt, retryDelay: backoffSeconds },
+            `Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`
+          );
+          await new Promise((resolve) => setTimeout(resolve, backoffSeconds * 1000));
         }
       }
     }
 
     // Should never reach here, but TypeScript needs it
-    throw super.createLLMError(ensureError(lastError), 'Max retries exceeded', 'CONNECTION_ERROR', false);
+    throw super.createLLMError(
+      ensureError(lastError),
+      'Max retries exceeded',
+      'CONNECTION_ERROR',
+      false
+    );
   }
 }

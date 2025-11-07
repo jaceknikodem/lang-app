@@ -2,7 +2,14 @@
  * Simple routing utility for managing application navigation
  */
 
-export type AppMode = 'topic-selection' | 'word-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | 'settings';
+export type AppMode =
+  | 'topic-selection'
+  | 'word-selection'
+  | 'learning'
+  | 'quiz'
+  | 'dialog'
+  | 'flow'
+  | 'settings';
 
 export interface RouteState {
   mode: AppMode;
@@ -25,7 +32,7 @@ export class Router {
 
   subscribe(listener: (route: RouteState) => void): () => void {
     this.listeners.add(listener);
-    
+
     // Return unsubscribe function
     return () => {
       this.listeners.delete(listener);
@@ -33,7 +40,7 @@ export class Router {
   }
 
   private notifyListeners(): void {
-    this.listeners.forEach(listener => {
+    this.listeners.forEach((listener) => {
       try {
         listener(this.getCurrentRoute());
       } catch (error) {

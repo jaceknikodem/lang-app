@@ -70,7 +70,7 @@ export class VoiceBubble extends LitElement {
       .bubble:hover .remove-button:hover {
         background: rgba(255, 255, 255, 0.2);
       }
-    `
+    `,
   ];
 
   @property({ type: String })
@@ -81,11 +81,13 @@ export class VoiceBubble extends LitElement {
 
   private handleRemove() {
     if (this.removable) {
-      this.dispatchEvent(new CustomEvent('remove', {
-        detail: { voiceId: this.voiceId },
-        bubbles: true,
-        composed: true
-      }));
+      this.dispatchEvent(
+        new CustomEvent('remove', {
+          detail: { voiceId: this.voiceId },
+          bubbles: true,
+          composed: true,
+        })
+      );
     }
   }
 
@@ -93,18 +95,19 @@ export class VoiceBubble extends LitElement {
     return html`
       <div class="bubble ${this.removable ? 'removable' : ''}">
         <span class="bubble-text">${this.voiceId}</span>
-        ${this.removable ? html`
-          <button 
-            class="remove-button"
-            @click=${this.handleRemove}
-            type="button"
-            title="Remove voice ID"
-          >
-            ×
-          </button>
-        ` : ''}
+        ${this.removable
+          ? html`
+              <button
+                class="remove-button"
+                @click=${this.handleRemove}
+                type="button"
+                title="Remove voice ID"
+              >
+                ×
+              </button>
+            `
+          : ''}
       </div>
     `;
   }
 }
-

@@ -41,7 +41,7 @@ const forceLocalServices = testingConfig.e2eForceLocalServices;
 async function initializeServices(): Promise<void> {
   // Initialize logger first - must be done before any other services that might log
   logger = await initializeLogger();
-  
+
   try {
     // Initialize database layer first
     databaseLayer = createDatabase();
@@ -53,7 +53,7 @@ async function initializeServices(): Promise<void> {
     // Initialize and start ServiceManager (manages external services like whisper-server and stanza-service)
     // This must be done before LemmatizationService initialization, as it sets environment variables
     serviceManager = new ServiceManager({
-      enabled: serviceConfig.manageServices
+      enabled: serviceConfig.manageServices,
     });
     await serviceManager.start();
     logger.info('ServiceManager initialized successfully');
@@ -62,7 +62,7 @@ async function initializeServices(): Promise<void> {
     lifecycleManager = new LifecycleManager({
       databaseLayer: databaseLayer,
       userDataPath: app.getPath('userData'),
-      backupRetentionDays: 30
+      backupRetentionDays: 30,
     });
 
     // Defer lifecycle startup procedures to background - don't block app startup
@@ -80,7 +80,7 @@ async function initializeServices(): Promise<void> {
     updateManager = new UpdateManager({
       checkOnStartup: true,
       checkIntervalHours: 24,
-      autoDownload: false
+      autoDownload: false,
     });
 
     // Initialize update manager in background (non-blocking)
@@ -144,11 +144,13 @@ async function initializeServices(): Promise<void> {
       llmClient = LLMFactory.createGeminiClient(geminiApiKey);
     } else {
       llmClient = LLMFactory.createOllamaClient(
-        forceLocalServices ? {
-          model: LLM_CONFIG.DEFAULT_MODEL,
-          wordGenerationModel: LLM_CONFIG.DEFAULT_WORD_GENERATION_MODEL,
-          sentenceGenerationModel: LLM_CONFIG.DEFAULT_SENTENCE_GENERATION_MODEL
-        } : undefined
+        forceLocalServices
+          ? {
+              model: LLM_CONFIG.DEFAULT_MODEL,
+              wordGenerationModel: LLM_CONFIG.DEFAULT_WORD_GENERATION_MODEL,
+              sentenceGenerationModel: LLM_CONFIG.DEFAULT_SENTENCE_GENERATION_MODEL,
+            }
+          : undefined
       );
 
       if (forceLocalServices) {
@@ -157,29 +159,29 @@ async function initializeServices(): Promise<void> {
         llmClient.setSentenceGenerationModel(LLM_CONFIG.DEFAULT_SENTENCE_GENERATION_MODEL);
       }
     }
-    
+
     // Inject database layer into LLM client for duplicate checking
     llmClient.setDatabaseLayer(databaseLayer);
-    
+
     // Initialize lemmatization service (needed for ContentGenerator)
     lemmatizationService = new LemmatizationService({
-      serverUrl: serviceConfig.lemmatization.serverUrl
+      serverUrl: serviceConfig.lemmatization.serverUrl,
     });
     logger.info('Lemmatization service initialized successfully');
-    
+
     // Initialize content generator with LLM client and provider config
     contentGenerator = new ContentGenerator(llmClient, {
       llmProvider: forceLocalServices ? 'ollama' : initialProvider,
       geminiApiKey: forceLocalServices ? '' : geminiApiKey,
-      lemmatizationService: lemmatizationService
+      lemmatizationService: lemmatizationService,
     });
-    
+
     // Initialize the content generator (including frequency word manager)
     await contentGenerator.initialize();
 
     // Initialize audio service with database reference
     audioService = new AudioService(undefined, databaseLayer);
-    
+
     // Speech recognition is only initialized in quiz mode, not at app startup
 
     // Initialize SRS service
@@ -192,16 +194,16 @@ async function initializeServices(): Promise<void> {
       audioService,
       lemmatizationService,
       desiredSentenceCount: 3,
-      onWordUpdated: update => {
-        BrowserWindow.getAllWindows().forEach(window => {
+      onWordUpdated: (update) => {
+        BrowserWindow.getAllWindows().forEach((window) => {
           window.webContents.send(IPC_CHANNELS.JOBS.WORD_UPDATED, update);
         });
-      }
+      },
     });
 
     // Initialize scoring service
     scoringService = new ScoringService(databaseLayer);
-    
+
     // Initialize proficiency service
     proficiencyService = new ProficiencyService(databaseLayer);
 
@@ -251,7 +253,7 @@ async function setupSecurity(): Promise<void> {
   if (process.platform === 'darwin') {
     try {
       const microphoneAccess = systemPreferences.getMediaAccessStatus('microphone');
-      
+
       const logger = getLogger();
       if (microphoneAccess === 'not-determined') {
         logger.info('Requesting microphone access...');
@@ -276,8 +278,11 @@ async function setupSecurity(): Promise<void> {
 function createWindow(): void {
   const logger = getLogger();
   const preloadPath = path.join(__dirname, '../preload/preload.js');
-  logger.debug({ preloadPath, exists: require('fs').existsSync(preloadPath) }, 'Preload script path');
-  
+  logger.debug(
+    { preloadPath, exists: require('fs').existsSync(preloadPath) },
+    'Preload script path'
+  );
+
   // Create the browser window with enhanced security
   mainWindow = new BrowserWindow({
     height: 700,
@@ -290,11 +295,11 @@ function createWindow(): void {
       sandbox: false,
       webSecurity: true,
       allowRunningInsecureContent: false,
-      experimentalFeatures: false
+      experimentalFeatures: false,
     },
     // titleBarStyle: 'hiddenInset', // Commented out to allow window dragging
     show: env !== 'test', // Don't show window in test mode
-    icon: path.join(__dirname, '../../build/icon.png') // Add app icon if available
+    icon: path.join(__dirname, '../../build/icon.png'), // Add app icon if available
   });
 
   // Load the app
@@ -338,7 +343,17 @@ app.whenReady().then(async () => {
 
     // Set up IPC handlers with initialized services BEFORE creating window
     // This ensures handlers are registered before renderer process tries to use them
-    setupIPCHandlers(databaseLayer!, llmClient!, contentGenerator!, audioService!, srsService!, lifecycleManager!, updateManager!, wordGenerationRunner, lemmatizationService);
+    setupIPCHandlers(
+      databaseLayer!,
+      llmClient!,
+      contentGenerator!,
+      audioService!,
+      srsService!,
+      lifecycleManager!,
+      updateManager!,
+      wordGenerationRunner,
+      lemmatizationService
+    );
 
     // Create the main window after services and handlers are initialized
     // This prevents "No handler registered" errors
@@ -352,7 +367,7 @@ app.whenReady().then(async () => {
     } else {
       logger!.warn('Warning: scoringService is undefined, scoring handlers not registered');
     }
-    
+
     // Set up proficiency handlers
     if (proficiencyService) {
       logger!.info('Setting up proficiency handlers...');
@@ -368,7 +383,7 @@ app.whenReady().then(async () => {
     if (scoringService) {
       scoringService.start();
     }
-    
+
     // Keep llmClient reference updated when provider switches
     const originalSwitchProvider = contentGenerator!.switchProvider.bind(contentGenerator!);
     contentGenerator!.switchProvider = (provider: LLMProvider, geminiApiKey?: string) => {

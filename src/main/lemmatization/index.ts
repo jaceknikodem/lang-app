@@ -3,5 +3,3 @@
  */
 
 export * from './lemmatization-service.js';
-
-

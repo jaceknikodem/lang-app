@@ -13,12 +13,12 @@ import { DatabaseConfig } from '../../shared/types/database.js';
 export function createDatabase(customConfig?: Partial<DatabaseConfig>): SQLiteDatabaseLayer {
   // Default database path in user data directory
   const defaultPath = path.join(app.getPath('userData'), 'language_learning.db');
-  
+
   const config: DatabaseConfig = {
     databasePath: defaultPath,
     enableWAL: true,
     timeout: 5000,
-    ...customConfig
+    ...customConfig,
   };
 
   return new SQLiteDatabaseLayer(config);
@@ -31,7 +31,7 @@ export function createTestDatabase(): SQLiteDatabaseLayer {
   const config: DatabaseConfig = {
     databasePath: ':memory:',
     enableWAL: false,
-    timeout: 1000
+    timeout: 1000,
   };
 
   return new SQLiteDatabaseLayer(config);

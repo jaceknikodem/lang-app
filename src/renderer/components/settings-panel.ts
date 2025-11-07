@@ -29,8 +29,7 @@ export class SettingsPanel extends BaseComponent {
       .settings-section {
         margin-bottom: var(--spacing-lg);
         padding: var(--spacing-lg);
-        border: 1px solid var(--borde
-        r-color);
+        border: 1px solid var(--borde r-color);
         border-radius: var(--border-radius);
         background: var(--background-secondary);
       }
@@ -172,7 +171,7 @@ export class SettingsPanel extends BaseComponent {
         margin-bottom: 0;
       }
 
-      .checkbox-row input[type="checkbox"] {
+      .checkbox-row input[type='checkbox'] {
         margin-right: 0.5rem;
         transform: scale(1.2);
       }
@@ -261,7 +260,7 @@ export class SettingsPanel extends BaseComponent {
         cursor: not-allowed;
       }
 
-      .text-input[type="password"] {
+      .text-input[type='password'] {
         letter-spacing: 0.1em;
       }
 
@@ -378,8 +377,7 @@ export class SettingsPanel extends BaseComponent {
         margin-top: var(--spacing-xs);
         font-style: italic;
       }
-
-    `
+    `,
   ];
 
   @state()
@@ -460,12 +458,6 @@ export class SettingsPanel extends BaseComponent {
   @state()
   private voiceMappingStatus = '';
 
-
-
-
-
-
-
   async connectedCallback() {
     super.connectedCallback();
     await this.loadSettings();
@@ -497,8 +489,6 @@ export class SettingsPanel extends BaseComponent {
     }
   }
 
-
-
   private async loadLLMSettings() {
     this.isLoadingLLMModels = true;
     this.isLoadingProviders = true;
@@ -515,12 +505,15 @@ export class SettingsPanel extends BaseComponent {
       this.geminiApiKey = geminiKey || '';
 
       // Get available LLM models for the current provider
-      this.availableLLMModels = await window.electronAPI.llm.getModelsForProvider(this.currentLLMProvider);
+      this.availableLLMModels = await window.electronAPI.llm.getModelsForProvider(
+        this.currentLLMProvider
+      );
 
       // Get current LLM models
       this.currentLLMModel = await window.electronAPI.llm.getCurrentModel();
       this.currentWordGenerationModel = await window.electronAPI.llm.getWordGenerationModel();
-      this.currentSentenceGenerationModel = await window.electronAPI.llm.getSentenceGenerationModel();
+      this.currentSentenceGenerationModel =
+        await window.electronAPI.llm.getSentenceGenerationModel();
 
       console.log('LLM settings loaded:', {
         providers: this.availableLLMProviders,
@@ -529,7 +522,7 @@ export class SettingsPanel extends BaseComponent {
         models: this.availableLLMModels,
         current: this.currentLLMModel,
         wordGeneration: this.currentWordGenerationModel,
-        sentenceGeneration: this.currentSentenceGenerationModel
+        sentenceGeneration: this.currentSentenceGenerationModel,
       });
     } catch (error) {
       console.error('Failed to load LLM settings:', error);
@@ -549,10 +542,10 @@ export class SettingsPanel extends BaseComponent {
   private async loadLanguageSettings() {
     try {
       // Get current language
-      this.currentLanguage = await window.electronAPI.database.getCurrentLanguage() || null;
+      this.currentLanguage = (await window.electronAPI.database.getCurrentLanguage()) || null;
 
       console.log('Language settings loaded:', {
-        current: this.currentLanguage
+        current: this.currentLanguage,
       });
     } catch (error) {
       console.error('Failed to load language settings:', error);
@@ -571,12 +564,16 @@ export class SettingsPanel extends BaseComponent {
       this.elevenLabsModel = model || 'eleven_flash_v2_5';
 
       // Check if ElevenLabs is enabled (has API key and model is not disabled)
-      this.isElevenLabsEnabled = !!(this.elevenLabsApiKey && this.elevenLabsApiKey.trim() && this.elevenLabsModel !== 'disabled');
+      this.isElevenLabsEnabled = !!(
+        this.elevenLabsApiKey &&
+        this.elevenLabsApiKey.trim() &&
+        this.elevenLabsModel !== 'disabled'
+      );
 
       console.log('ElevenLabs settings loaded:', {
         hasApiKey: !!this.elevenLabsApiKey,
         model: this.elevenLabsModel,
-        enabled: this.isElevenLabsEnabled
+        enabled: this.isElevenLabsEnabled,
       });
     } catch (error) {
       console.error('Failed to load ElevenLabs settings:', error);
@@ -646,8 +643,8 @@ export class SettingsPanel extends BaseComponent {
     // Parse comma-separated voice IDs
     const voiceIds = value
       .split(',')
-      .map(id => id.trim())
-      .filter(id => id.length > 0);
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
 
     if (voiceIds.length > 0) {
       this.voiceMappings[language] = voiceIds;
@@ -688,25 +685,25 @@ export class SettingsPanel extends BaseComponent {
 
   private handleRemoveVoiceId(language: string, voiceId: string) {
     const currentIds = this.getVoiceIdsForLanguage(language);
-    this.voiceMappings[language] = currentIds.filter(id => id !== voiceId);
-    
+    this.voiceMappings[language] = currentIds.filter((id) => id !== voiceId);
+
     // Remove language entry if no voice IDs left
     if (this.voiceMappings[language].length === 0) {
       delete this.voiceMappings[language];
     }
-    
+
     this.saveVoiceMappings();
   }
 
   private handleVoiceIdKeyDown(language: string, event: KeyboardEvent) {
     const input = event.target as HTMLInputElement;
-    
+
     // Add voice ID on Enter or comma
     if (event.key === 'Enter' || event.key === ',') {
       event.preventDefault();
       this.handleAddVoiceId(language, event);
     }
-    
+
     // Remove last voice ID on Backspace if input is empty
     if (event.key === 'Backspace' && input.value === '') {
       const currentIds = this.getVoiceIdsForLanguage(language);
@@ -722,17 +719,14 @@ export class SettingsPanel extends BaseComponent {
 
   private getLanguageDisplayName(language: string): string {
     const names: Record<string, string> = {
-      'portuguese': 'Portuguese',
-      'italian': 'Italian',
-      'polish': 'Polish',
-      'spanish': 'Spanish',
-      'indonesian': 'Indonesian'
+      portuguese: 'Portuguese',
+      italian: 'Italian',
+      polish: 'Polish',
+      spanish: 'Spanish',
+      indonesian: 'Indonesian',
     };
     return names[language] || language;
   }
-
-
-
 
   private async createBackup() {
     this.isCreatingBackup = true;
@@ -816,7 +810,8 @@ export class SettingsPanel extends BaseComponent {
     this.resetProgressStatus = '';
 
     try {
-      const language = this.currentLanguage || await window.electronAPI.database.getCurrentLanguage();
+      const language =
+        this.currentLanguage || (await window.electronAPI.database.getCurrentLanguage());
       await window.electronAPI.database.resetLanguageProgress(language);
       this.resetProgressStatus = `Progress for ${this.capitalizeLanguage(language)} has been reset successfully.`;
     } catch (error) {
@@ -834,7 +829,8 @@ export class SettingsPanel extends BaseComponent {
 
     try {
       await window.electronAPI.lifecycle.restartAll();
-      this.restartStatus = 'All data has been cleared successfully. The application will restart with a fresh database.';
+      this.restartStatus =
+        'All data has been cleared successfully. The application will restart with a fresh database.';
 
       // Clear any local state/cache if needed
       // The app will automatically reinitialize with empty database
@@ -850,8 +846,6 @@ export class SettingsPanel extends BaseComponent {
       this.isRestarting = false;
     }
   }
-
-
 
   private async openBackupDirectory() {
     try {
@@ -888,7 +882,6 @@ export class SettingsPanel extends BaseComponent {
 
     return '';
   }
-
 
   private async changeLLMModel(event: Event) {
     const select = event.target as HTMLSelectElement;
@@ -944,14 +937,9 @@ export class SettingsPanel extends BaseComponent {
     }
   }
 
-
-
   private capitalizeLanguage(language: string): string {
     return language.charAt(0).toUpperCase() + language.slice(1);
   }
-
-
-
 
   private async updateElevenLabsApiKey(event: Event) {
     const input = event.target as HTMLInputElement;
@@ -960,7 +948,11 @@ export class SettingsPanel extends BaseComponent {
     try {
       await window.electronAPI.database.setSetting('elevenlabs_api_key', apiKey);
       this.elevenLabsApiKey = apiKey;
-      this.isElevenLabsEnabled = !!(apiKey && apiKey.length > 0 && this.elevenLabsModel !== 'disabled');
+      this.isElevenLabsEnabled = !!(
+        apiKey &&
+        apiKey.length > 0 &&
+        this.elevenLabsModel !== 'disabled'
+      );
 
       // Switch TTS based on current settings
       await this.switchTTSBasedOnSettings();
@@ -986,7 +978,11 @@ export class SettingsPanel extends BaseComponent {
       // Update ElevenLabs settings
       await window.electronAPI.database.setSetting('elevenlabs_model', model);
       this.elevenLabsModel = model;
-      this.isElevenLabsEnabled = !!(this.elevenLabsApiKey && this.elevenLabsApiKey.trim() && model !== 'disabled');
+      this.isElevenLabsEnabled = !!(
+        this.elevenLabsApiKey &&
+        this.elevenLabsApiKey.trim() &&
+        model !== 'disabled'
+      );
 
       // Switch TTS based on current settings
       await this.switchTTSBasedOnSettings();
@@ -1012,7 +1008,6 @@ export class SettingsPanel extends BaseComponent {
     return 'disabled';
   }
 
-
   private async switchTTSBasedOnSettings() {
     // Check ElevenLabs, then fall back to system TTS
     if (this.isElevenLabsEnabled) {
@@ -1037,10 +1032,10 @@ export class SettingsPanel extends BaseComponent {
       // Update the UI immediately to show the new provider's models
       this.currentLLMProvider = selectedProvider;
       this.isLoadingLLMModels = true;
-      
+
       // Get models for the new provider immediately
       this.availableLLMModels = await window.electronAPI.llm.getModelsForProvider(selectedProvider);
-      
+
       // Switch the actual provider
       await window.electronAPI.llm.switchProvider(selectedProvider, this.geminiApiKey || undefined);
 
@@ -1101,7 +1096,7 @@ export class SettingsPanel extends BaseComponent {
       case 'ollama':
         return 'Run models locally on your machine. Requires Ollama to be installed and running.';
       case 'gemini':
-        return 'Use Google\'s Gemini API for cloud-based generation. Requires API key and internet connection.';
+        return "Use Google's Gemini API for cloud-based generation. Requires API key and internet connection.";
       default:
         return '';
     }
@@ -1141,213 +1136,273 @@ export class SettingsPanel extends BaseComponent {
       <div class="settings-container">
         <div class="settings-section">
           <h3>Language Model (LLM)</h3>
-          
-          ${this.isLoadingProviders ? html`
-            <status-message type="info" message="Loading available providers..."></status-message>
-          ` : html`
-            <div class="dropdown-row">
-              <div class="dropdown-description">
-                <strong>LLM Provider</strong>
-                <p>${this.getProviderDescription(this.currentLLMProvider)}</p>
-              </div>
-              <select 
-                class="model-select"
-                .value=${this.currentLLMProvider}
-                @change=${this.changeLLMProvider}
-                ?disabled=${this.isLoadingProviders}
-              >
-                ${this.availableLLMProviders.map(provider => html`
-                  <option value=${provider} ?selected=${provider === this.currentLLMProvider}>
-                    ${this.getProviderDisplayName(provider)}
-                  </option>
-                `)}
-              </select>
-            </div>
 
-            ${this.llmError ? html`
-              <div class="error-message">
-                ${this.llmError}
-              </div>
-            ` : ''}
+          ${this.isLoadingProviders
+            ? html`
+                <status-message
+                  type="info"
+                  message="Loading available providers..."
+                ></status-message>
+              `
+            : html`
+                <div class="dropdown-row">
+                  <div class="dropdown-description">
+                    <strong>LLM Provider</strong>
+                    <p>${this.getProviderDescription(this.currentLLMProvider)}</p>
+                  </div>
+                  <select
+                    class="model-select"
+                    .value=${this.currentLLMProvider}
+                    @change=${this.changeLLMProvider}
+                    ?disabled=${this.isLoadingProviders}
+                  >
+                    ${this.availableLLMProviders.map(
+                      (provider) => html`
+                        <option value=${provider} ?selected=${provider === this.currentLLMProvider}>
+                          ${this.getProviderDisplayName(provider)}
+                        </option>
+                      `
+                    )}
+                  </select>
+                </div>
 
-            <div class="settings-row">
-              <div class="settings-description">
-                <strong>Gemini API Key</strong>
-                <p>Enter your Google Gemini API key to enable cloud-based generation</p>
-              </div>
-              <input 
-                type="password" 
-                class="text-input"
-                .value=${this.geminiApiKey}
-                @blur=${this.updateGeminiApiKey}
-                placeholder="Enter Gemini API key..."
-              />
-            </div>
-          `}
-          
-          ${this.isLoadingLLMModels ? html`
-            <status-message type="info" message="Loading available models..."></status-message>
-          ` : this.availableLLMModels.length > 0 ? html`
-            <div class="dropdown-row">
-              <div class="dropdown-description">
-                <strong>Word Generation Model (Small)</strong>
-                <p>Choose a small, fast model for generating vocabulary words and translations</p>
-              </div>
-              <select 
-                class="model-select"
-                .value=${this.currentWordGenerationModel}
-                @change=${this.changeWordGenerationModel}
-                ?disabled=${this.isLoadingLLMModels}
-              >
-                ${this.availableLLMModels.map(model => html`
-                  <option value=${model} ?selected=${model === this.currentWordGenerationModel}>
-                    ${model}
-                  </option>
-                `)}
-              </select>
-            </div>
-            
-            <div class="dropdown-row">
-              <div class="dropdown-description">
-                <strong>Sentence Generation Model (Big)</strong>
-                <p>Choose a larger, more capable model for generating complex sentences and context</p>
-              </div>
-              <select 
-                class="model-select"
-                .value=${this.currentSentenceGenerationModel}
-                @change=${this.changeSentenceGenerationModel}
-                ?disabled=${this.isLoadingLLMModels}
-              >
-                ${this.availableLLMModels.map(model => html`
-                  <option value=${model} ?selected=${model === this.currentSentenceGenerationModel}>
-                    ${model}
-                  </option>
-                `)}
-              </select>
-            </div>
-            
-            <div class="model-info">
-              Provider: ${this.getProviderDisplayName(this.currentLLMProvider)}
-              ${this.currentLLMProvider === 'gemini' && !this.geminiApiKey.trim() ? html`
-                <span style="color: #dc3545;"> (⚠️ API key required)</span>
-              ` : html`
-                <span style="color: #28a745;"> (✓ Ready)</span>
-              `}<br>
-              Word generation: ${this.currentWordGenerationModel || 'None selected'} ${this.getLLMModelDescription(this.currentWordGenerationModel)}<br>
-              Sentence generation: ${this.currentSentenceGenerationModel || 'None selected'} ${this.getLLMModelDescription(this.currentSentenceGenerationModel)}
-            </div>
-          ` : html`
-            <status-message type="error" message="No LLM models available. Please ensure Ollama is running and has models installed."></status-message>
-          `}
+                ${this.llmError ? html` <div class="error-message">${this.llmError}</div> ` : ''}
+
+                <div class="settings-row">
+                  <div class="settings-description">
+                    <strong>Gemini API Key</strong>
+                    <p>Enter your Google Gemini API key to enable cloud-based generation</p>
+                  </div>
+                  <input
+                    type="password"
+                    class="text-input"
+                    .value=${this.geminiApiKey}
+                    @blur=${this.updateGeminiApiKey}
+                    placeholder="Enter Gemini API key..."
+                  />
+                </div>
+              `}
+          ${this.isLoadingLLMModels
+            ? html`
+                <status-message type="info" message="Loading available models..."></status-message>
+              `
+            : this.availableLLMModels.length > 0
+              ? html`
+                  <div class="dropdown-row">
+                    <div class="dropdown-description">
+                      <strong>Word Generation Model (Small)</strong>
+                      <p>
+                        Choose a small, fast model for generating vocabulary words and translations
+                      </p>
+                    </div>
+                    <select
+                      class="model-select"
+                      .value=${this.currentWordGenerationModel}
+                      @change=${this.changeWordGenerationModel}
+                      ?disabled=${this.isLoadingLLMModels}
+                    >
+                      ${this.availableLLMModels.map(
+                        (model) => html`
+                          <option
+                            value=${model}
+                            ?selected=${model === this.currentWordGenerationModel}
+                          >
+                            ${model}
+                          </option>
+                        `
+                      )}
+                    </select>
+                  </div>
+
+                  <div class="dropdown-row">
+                    <div class="dropdown-description">
+                      <strong>Sentence Generation Model (Big)</strong>
+                      <p>
+                        Choose a larger, more capable model for generating complex sentences and
+                        context
+                      </p>
+                    </div>
+                    <select
+                      class="model-select"
+                      .value=${this.currentSentenceGenerationModel}
+                      @change=${this.changeSentenceGenerationModel}
+                      ?disabled=${this.isLoadingLLMModels}
+                    >
+                      ${this.availableLLMModels.map(
+                        (model) => html`
+                          <option
+                            value=${model}
+                            ?selected=${model === this.currentSentenceGenerationModel}
+                          >
+                            ${model}
+                          </option>
+                        `
+                      )}
+                    </select>
+                  </div>
+
+                  <div class="model-info">
+                    Provider: ${this.getProviderDisplayName(this.currentLLMProvider)}
+                    ${this.currentLLMProvider === 'gemini' && !this.geminiApiKey.trim()
+                      ? html` <span style="color: #dc3545;"> (⚠️ API key required)</span> `
+                      : html` <span style="color: #28a745;"> (✓ Ready)</span> `}<br />
+                    Word generation: ${this.currentWordGenerationModel || 'None selected'}
+                    ${this.getLLMModelDescription(this.currentWordGenerationModel)}<br />
+                    Sentence generation: ${this.currentSentenceGenerationModel || 'None selected'}
+                    ${this.getLLMModelDescription(this.currentSentenceGenerationModel)}
+                  </div>
+                `
+              : html`
+                  <status-message
+                    type="error"
+                    message="No LLM models available. Please ensure Ollama is running and has models installed."
+                  ></status-message>
+                `}
         </div>
 
         <div class="settings-section">
           <h3>🎙️ Text-to-Speech</h3>
-          
+
           <div class="dropdown-row">
             <div class="dropdown-description">
               <strong>TTS Engine</strong>
             </div>
-            <select 
+            <select
               class="model-select"
               .value=${this.getCurrentTTSModel()}
               @change=${this.updateElevenLabsModel}
             >
               <option value="disabled">System TTS (macOS say command)</option>
               <optgroup label="ElevenLabs">
-                <option value="eleven_flash_v2_5">ElevenLabs Flash v2.5 (Fastest, most cost-effective)</option>
-                <option value="eleven_multilingual_v2">ElevenLabs Multilingual v2 (High quality, slower)</option>
+                <option value="eleven_flash_v2_5">
+                  ElevenLabs Flash v2.5 (Fastest, most cost-effective)
+                </option>
+                <option value="eleven_multilingual_v2">
+                  ElevenLabs Multilingual v2 (High quality, slower)
+                </option>
               </optgroup>
             </select>
           </div>
 
-          ${this.elevenLabsModel !== 'disabled' ? html`
-            <div class="settings-row">
-              <div class="settings-description">
-                <strong>ElevenLabs API Key</strong>
-                <p>Enter your ElevenLabs API key to use AI voices</p>
-              </div>
-              <input 
-                type="password" 
-                class="text-input"
-                .value=${this.elevenLabsApiKey}
-                @blur=${this.updateElevenLabsApiKey}
-                placeholder="Enter ElevenLabs API key..."
-              />
-            </div>
-
-            ${this.isElevenLabsEnabled ? html`
-              <div class="advanced-settings">
-                <h4 style="margin-top: 0; margin-bottom: var(--spacing-md); font-size: 14px; font-weight: 600;">Voice IDs (Advanced)</h4>
-                <p style="margin: 0 0 var(--spacing-md) 0; font-size: 12px; color: var(--text-secondary);">
-                  Customize voice IDs for each language. Enter comma-separated voice IDs from your ElevenLabs account. 
-                  Multiple voices per language will be randomly selected for variety.
-                </p>
-
-                ${this.isLoadingVoiceMappings ? html`
-                  <status-message type="info" message="Loading voice mappings..."></status-message>
-                ` : html`
-                  ${this.getSupportedLanguages().map(language => html`
-                    <div class="settings-row">
-                      <div class="settings-description">
-                        ${this.getLanguageDisplayName(language)}
-                      </div>
-                      <div class="voice-ids-container">
-                        <div class="voice-ids-input-container">
-                          <div class="voice-ids-bubbles">
-                            ${this.getVoiceIdsForLanguage(language).map(voiceId => html`
-                              <voice-bubble
-                                .voiceId=${voiceId}
-                                .removable=${true}
-                                @remove=${() => this.handleRemoveVoiceId(language, voiceId)}
-                              ></voice-bubble>
-                            `)}
-                          </div>
-                          <input
-                            type="text"
-                            class="voice-ids-input"
-                            placeholder="Add voice ID..."
-                            @keydown=${(e: KeyboardEvent) => this.handleVoiceIdKeyDown(language, e)}
-                            @blur=${(e: Event) => this.handleAddVoiceId(language, e)}
-                          />
-                        </div>
-                        <div class="voice-ids-hint">
-                          ${this.getVoiceIdsForLanguage(language).length === 0 
-                            ? 'No voice IDs set. Default will be used.' 
-                            : `${this.getVoiceIdsForLanguage(language).length} voice ID${this.getVoiceIdsForLanguage(language).length === 1 ? '' : 's'} configured.`}
-                        </div>
-                      </div>
-                    </div>
-                  `)}
-
-                  <div style="margin-top: var(--spacing-md); display: flex; gap: var(--spacing-md); align-items: center;">
-                    <app-button
-                      variant="primary"
-                      @click=${this.resetVoiceMappingsToDefaults}
-                    >
-                      Reset to Defaults
-                    </app-button>
-                    ${this.voiceMappingStatus ? html`
-                      <status-message 
-                        type=${this.voiceMappingStatus.includes('Failed') ? 'error' : 'success'} 
-                        message=${this.voiceMappingStatus}
-                        style="margin: 0;"
-                      ></status-message>
-                    ` : ''}
+          ${this.elevenLabsModel !== 'disabled'
+            ? html`
+                <div class="settings-row">
+                  <div class="settings-description">
+                    <strong>ElevenLabs API Key</strong>
+                    <p>Enter your ElevenLabs API key to use AI voices</p>
                   </div>
-                `}
-              </div>
-            ` : ''}
-          ` : ''}
-          
+                  <input
+                    type="password"
+                    class="text-input"
+                    .value=${this.elevenLabsApiKey}
+                    @blur=${this.updateElevenLabsApiKey}
+                    placeholder="Enter ElevenLabs API key..."
+                  />
+                </div>
+
+                ${this.isElevenLabsEnabled
+                  ? html`
+                      <div class="advanced-settings">
+                        <h4
+                          style="margin-top: 0; margin-bottom: var(--spacing-md); font-size: 14px; font-weight: 600;"
+                        >
+                          Voice IDs (Advanced)
+                        </h4>
+                        <p
+                          style="margin: 0 0 var(--spacing-md) 0; font-size: 12px; color: var(--text-secondary);"
+                        >
+                          Customize voice IDs for each language. Enter comma-separated voice IDs
+                          from your ElevenLabs account. Multiple voices per language will be
+                          randomly selected for variety.
+                        </p>
+
+                        ${this.isLoadingVoiceMappings
+                          ? html`
+                              <status-message
+                                type="info"
+                                message="Loading voice mappings..."
+                              ></status-message>
+                            `
+                          : html`
+                              ${this.getSupportedLanguages().map(
+                                (language) => html`
+                                  <div class="settings-row">
+                                    <div class="settings-description">
+                                      ${this.getLanguageDisplayName(language)}
+                                    </div>
+                                    <div class="voice-ids-container">
+                                      <div class="voice-ids-input-container">
+                                        <div class="voice-ids-bubbles">
+                                          ${this.getVoiceIdsForLanguage(language).map(
+                                            (voiceId) => html`
+                                              <voice-bubble
+                                                .voiceId=${voiceId}
+                                                .removable=${true}
+                                                @remove=${() =>
+                                                  this.handleRemoveVoiceId(language, voiceId)}
+                                              ></voice-bubble>
+                                            `
+                                          )}
+                                        </div>
+                                        <input
+                                          type="text"
+                                          class="voice-ids-input"
+                                          placeholder="Add voice ID..."
+                                          @keydown=${(e: KeyboardEvent) =>
+                                            this.handleVoiceIdKeyDown(language, e)}
+                                          @blur=${(e: Event) => this.handleAddVoiceId(language, e)}
+                                        />
+                                      </div>
+                                      <div class="voice-ids-hint">
+                                        ${this.getVoiceIdsForLanguage(language).length === 0
+                                          ? 'No voice IDs set. Default will be used.'
+                                          : `${this.getVoiceIdsForLanguage(language).length} voice ID${this.getVoiceIdsForLanguage(language).length === 1 ? '' : 's'} configured.`}
+                                      </div>
+                                    </div>
+                                  </div>
+                                `
+                              )}
+
+                              <div
+                                style="margin-top: var(--spacing-md); display: flex; gap: var(--spacing-md); align-items: center;"
+                              >
+                                <app-button
+                                  variant="primary"
+                                  @click=${this.resetVoiceMappingsToDefaults}
+                                >
+                                  Reset to Defaults
+                                </app-button>
+                                ${this.voiceMappingStatus
+                                  ? html`
+                                      <status-message
+                                        type=${this.voiceMappingStatus.includes('Failed')
+                                          ? 'error'
+                                          : 'success'}
+                                        message=${this.voiceMappingStatus}
+                                        style="margin: 0;"
+                                      ></status-message>
+                                    `
+                                  : ''}
+                              </div>
+                            `}
+                      </div>
+                    `
+                  : ''}
+              `
+            : ''}
+
           <div class="model-info">
-            Status: ${this.isElevenLabsEnabled ? 
-              html`<span style="color: #28a745;">✓ ElevenLabs TTS Active (${this.elevenLabsModel})</span>` : 
-              html`<span style="color: #6c757d;">System TTS Active</span>`
-            }
-            ${this.elevenLabsModel !== 'disabled' && !this.elevenLabsApiKey ? html`
-              <br><span style="color: #dc3545;">⚠️ API key required for ElevenLabs TTS</span>
-            ` : ''}
+            Status:
+            ${this.isElevenLabsEnabled
+              ? html`<span style="color: #28a745;"
+                  >✓ ElevenLabs TTS Active (${this.elevenLabsModel})</span
+                >`
+              : html`<span style="color: #6c757d;">System TTS Active</span>`}
+            ${this.elevenLabsModel !== 'disabled' && !this.elevenLabsApiKey
+              ? html`
+                  <br /><span style="color: #dc3545;">⚠️ API key required for ElevenLabs TTS</span>
+                `
+              : ''}
           </div>
         </div>
 
@@ -1367,22 +1422,21 @@ export class SettingsPanel extends BaseComponent {
               >
                 ${this.isCreatingBackup ? 'Creating...' : 'Create Backup'}
               </app-button>
-              ${this.backupStatus && !this.backupStatus.includes('Restore') ? html`
-                <status-message 
-                  type=${this.backupStatus.includes('Failed') ? 'error' : 'success'} 
-                  message=${this.backupStatus}
-                ></status-message>
-              ` : ''}
+              ${this.backupStatus && !this.backupStatus.includes('Restore')
+                ? html`
+                    <status-message
+                      type=${this.backupStatus.includes('Failed') ? 'error' : 'success'}
+                      message=${this.backupStatus}
+                    ></status-message>
+                  `
+                : ''}
             </div>
             <div class="backup-action">
               <div class="settings-description">
                 <strong>Restore Backup</strong>
                 <p>Open the backup directory to browse and restore from your backups</p>
               </div>
-              <app-button
-                variant="primary"
-                @click=${this.openBackupDirectory}
-              >
+              <app-button variant="primary" @click=${this.openBackupDirectory}>
                 Restore Backup
               </app-button>
             </div>
@@ -1391,18 +1445,17 @@ export class SettingsPanel extends BaseComponent {
                 <strong>Clear Session Data</strong>
                 <p>Clear all cached session data (learning progress, quiz sessions, etc.)</p>
               </div>
-              <app-button
-                variant="primary"
-                @click=${this.showClearSessionConfirmationDialog}
-              >
+              <app-button variant="primary" @click=${this.showClearSessionConfirmationDialog}>
                 Clear Session
               </app-button>
-              ${this.clearSessionStatus ? html`
-                <status-message 
-                  type=${this.clearSessionStatus.includes('Failed') ? 'error' : 'success'} 
-                  message=${this.clearSessionStatus}
-                ></status-message>
-              ` : ''}
+              ${this.clearSessionStatus
+                ? html`
+                    <status-message
+                      type=${this.clearSessionStatus.includes('Failed') ? 'error' : 'success'}
+                      message=${this.clearSessionStatus}
+                    ></status-message>
+                  `
+                : ''}
             </div>
           </div>
         </div>
@@ -1412,7 +1465,10 @@ export class SettingsPanel extends BaseComponent {
           <div class="settings-row">
             <div class="settings-description">
               <strong>Restart All</strong>
-              <p>Permanently delete all words, sentences, progress, and audio files. Backups will be preserved. This cannot be undone!</p>
+              <p>
+                Permanently delete all words, sentences, progress, and audio files. Backups will be
+                preserved. This cannot be undone!
+              </p>
             </div>
             <app-button
               variant="danger"
@@ -1423,16 +1479,23 @@ export class SettingsPanel extends BaseComponent {
               ${this.isRestarting ? 'Clearing...' : 'Restart All'}
             </app-button>
           </div>
-          ${this.restartStatus ? html`
-            <status-message 
-              type=${this.restartStatus.includes('Failed') ? 'error' : 'success'} 
-              message=${this.restartStatus}
-            ></status-message>
-          ` : ''}
+          ${this.restartStatus
+            ? html`
+                <status-message
+                  type=${this.restartStatus.includes('Failed') ? 'error' : 'success'}
+                  message=${this.restartStatus}
+                ></status-message>
+              `
+            : ''}
           <div class="settings-row">
             <div class="settings-description">
               <strong>Reset Progress</strong>
-              <p>Reset all learning progress for ${this.capitalizeLanguage(this.currentLanguage || 'the active language')}: pronunciation history, FSRS values, sentence counts, and last seen timestamps. Words marked as known/ignored will be deleted entirely. This cannot be undone!</p>
+              <p>
+                Reset all learning progress for
+                ${this.capitalizeLanguage(this.currentLanguage || 'the active language')}:
+                pronunciation history, FSRS values, sentence counts, and last seen timestamps. Words
+                marked as known/ignored will be deleted entirely. This cannot be undone!
+              </p>
             </div>
             <app-button
               variant="danger"
@@ -1443,12 +1506,14 @@ export class SettingsPanel extends BaseComponent {
               ${this.isResettingProgress ? 'Resetting...' : 'Reset Progress'}
             </app-button>
           </div>
-          ${this.resetProgressStatus ? html`
-            <status-message 
-              type=${this.resetProgressStatus.includes('Failed') ? 'error' : 'success'} 
-              message=${this.resetProgressStatus}
-            ></status-message>
-          ` : ''}
+          ${this.resetProgressStatus
+            ? html`
+                <status-message
+                  type=${this.resetProgressStatus.includes('Failed') ? 'error' : 'success'}
+                  message=${this.resetProgressStatus}
+                ></status-message>
+              `
+            : ''}
         </div>
 
         <confirmation-dialog
@@ -1465,7 +1530,9 @@ export class SettingsPanel extends BaseComponent {
               <li>All progress and statistics</li>
               <li>All audio files</li>
             </ul>
-            <p style="color: #28a745; font-size: 0.9rem;"><strong>Note:</strong> Backup files will be preserved.</p>
+            <p style="color: #28a745; font-size: 0.9rem;">
+              <strong>Note:</strong> Backup files will be preserved.
+            </p>
             <p><strong>This action cannot be undone!</strong></p>
           `}
           @confirm=${this.handleRestartConfirm}
@@ -1479,7 +1546,12 @@ export class SettingsPanel extends BaseComponent {
           confirmText="Yes, Reset Progress"
           cancelText="Cancel"
           .message=${html`
-            <p>This will reset all learning progress for <strong>${this.capitalizeLanguage(this.currentLanguage || 'the active language')}</strong>:</p>
+            <p>
+              This will reset all learning progress for
+              <strong
+                >${this.capitalizeLanguage(this.currentLanguage || 'the active language')}</strong
+              >:
+            </p>
             <ul>
               <li>All historical pronunciation attempts</li>
               <li>All sentence counts</li>
@@ -1508,7 +1580,10 @@ export class SettingsPanel extends BaseComponent {
               <li>Dialog session data</li>
               <li>Current mode state</li>
             </ul>
-            <p><strong>Note:</strong> This will not delete your words, sentences, or progress from the database. Only cached session state will be cleared.</p>
+            <p>
+              <strong>Note:</strong> This will not delete your words, sentences, or progress from
+              the database. Only cached session state will be cleared.
+            </p>
           `}
           @confirm=${this.handleClearSessionConfirm}
           @cancel=${this.handleClearSessionCancel}

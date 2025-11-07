@@ -7,27 +7,27 @@ import { css } from 'lit';
 export const sharedStyles = css`
   /* Color palette */
   :host {
-    --primary-color: #007AFF;
-    --primary-hover: #0056CC;
-    --primary-dark: #0056CC;
+    --primary-color: #007aff;
+    --primary-hover: #0056cc;
+    --primary-dark: #0056cc;
     --primary-light: #f0f8ff;
-    --success-color: #34C759;
+    --success-color: #34c759;
     --success-light: #e8f5e8;
-    --success-dark: #28A745;
-    --warning-color: #FF9500;
+    --success-dark: #28a745;
+    --warning-color: #ff9500;
     --warning-light: #fff3e0;
-    --warning-dark: #E6850E;
-    --error-color: #FF3B30;
+    --warning-dark: #e6850e;
+    --error-color: #ff3b30;
     --error-light: #ffebee;
-    --error-dark: #D32F2F;
+    --error-dark: #d32f2f;
     --text-primary: #000000;
     --text-secondary: #666666;
     --text-tertiary: #999999;
     --background-primary: #ffffff;
     --background-secondary: #f5f5f5;
     --border-color: #e0e0e0;
-    --shadow-light: 0 1px 4px rgba(0,0,0,0.1);
-    --shadow-medium: 0 2px 8px rgba(0,0,0,0.15);
+    --shadow-light: 0 1px 4px rgba(0, 0, 0, 0.1);
+    --shadow-medium: 0 2px 8px rgba(0, 0, 0, 0.15);
     --border-radius: 6px;
     --border-radius-small: 3px;
     --spacing-xs: 2px;
@@ -89,23 +89,53 @@ export const sharedStyles = css`
     align-items: center;
   }
 
-  .gap-xs { gap: var(--spacing-xs); }
-  .gap-sm { gap: var(--spacing-sm); }
-  .gap-md { gap: var(--spacing-md); }
-  .gap-lg { gap: var(--spacing-lg); }
-  .gap-xl { gap: var(--spacing-xl); }
+  .gap-xs {
+    gap: var(--spacing-xs);
+  }
+  .gap-sm {
+    gap: var(--spacing-sm);
+  }
+  .gap-md {
+    gap: var(--spacing-md);
+  }
+  .gap-lg {
+    gap: var(--spacing-lg);
+  }
+  .gap-xl {
+    gap: var(--spacing-xl);
+  }
 
-  .p-xs { padding: var(--spacing-xs); }
-  .p-sm { padding: var(--spacing-sm); }
-  .p-md { padding: var(--spacing-md); }
-  .p-lg { padding: var(--spacing-lg); }
-  .p-xl { padding: var(--spacing-xl); }
+  .p-xs {
+    padding: var(--spacing-xs);
+  }
+  .p-sm {
+    padding: var(--spacing-sm);
+  }
+  .p-md {
+    padding: var(--spacing-md);
+  }
+  .p-lg {
+    padding: var(--spacing-lg);
+  }
+  .p-xl {
+    padding: var(--spacing-xl);
+  }
 
-  .m-xs { margin: var(--spacing-xs); }
-  .m-sm { margin: var(--spacing-sm); }
-  .m-md { margin: var(--spacing-md); }
-  .m-lg { margin: var(--spacing-lg); }
-  .m-xl { margin: var(--spacing-xl); }
+  .m-xs {
+    margin: var(--spacing-xs);
+  }
+  .m-sm {
+    margin: var(--spacing-sm);
+  }
+  .m-md {
+    margin: var(--spacing-md);
+  }
+  .m-lg {
+    margin: var(--spacing-lg);
+  }
+  .m-xl {
+    margin: var(--spacing-xl);
+  }
 
   /* Button styles */
   .btn {
@@ -154,7 +184,7 @@ export const sharedStyles = css`
   }
 
   .btn-success:hover:not(:disabled) {
-    background: #28A745;
+    background: #28a745;
   }
 
   .btn-warning {
@@ -163,7 +193,7 @@ export const sharedStyles = css`
   }
 
   .btn-warning:hover:not(:disabled) {
-    background: #E6850E;
+    background: #e6850e;
   }
 
   .btn-danger {
@@ -252,18 +282,37 @@ export const sharedStyles = css`
   }
 
   @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
   }
 
   /* Word strength colors */
-  .word-strength-0 { background-color: #ffebee; } /* Very weak - light red */
-  .word-strength-1 { background-color: #fff3e0; } /* Weak - light orange */
-  .word-strength-2 { background-color: #fffde7; } /* Learning - light yellow */
-  .word-strength-3 { background-color: #f3e5f5; } /* Good - light purple */
-  .word-strength-4 { background-color: #e8f5e8; } /* Strong - light green */
-  .word-known { background-color: #c8e6c9; } /* Known - green */
-  .word-ignored { background-color: #f5f5f5; color: #999; } /* Ignored - grey */
+  .word-strength-0 {
+    background-color: #ffebee;
+  } /* Very weak - light red */
+  .word-strength-1 {
+    background-color: #fff3e0;
+  } /* Weak - light orange */
+  .word-strength-2 {
+    background-color: #fffde7;
+  } /* Learning - light yellow */
+  .word-strength-3 {
+    background-color: #f3e5f5;
+  } /* Good - light purple */
+  .word-strength-4 {
+    background-color: #e8f5e8;
+  } /* Strong - light green */
+  .word-known {
+    background-color: #c8e6c9;
+  } /* Known - green */
+  .word-ignored {
+    background-color: #f5f5f5;
+    color: #999;
+  } /* Ignored - grey */
 
   /* Window drag region for hidden title bar */
   .drag-region {
@@ -287,7 +336,7 @@ export const sharedStyles = css`
       padding: var(--spacing-md);
       font-size: 12px;
     }
-    
+
     .card {
       padding: var(--spacing-md);
     }

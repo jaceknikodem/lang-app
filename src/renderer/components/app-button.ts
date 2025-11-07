@@ -106,15 +106,19 @@ export class AppButton extends LitElement {
       }
 
       @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
       }
 
       .button-icon {
         font-size: 14px;
         line-height: 1;
       }
-    `
+    `,
   ];
 
   @property({ type: String })
@@ -143,12 +147,8 @@ export class AppButton extends LitElement {
         type=${this.type}
         @click=${this.handleClick}
       >
-        ${this.loading ? html`
-          <span class="loading-spinner"></span>
-        ` : ''}
-        ${this.icon && !this.loading ? html`
-          <span class="button-icon">${this.icon}</span>
-        ` : ''}
+        ${this.loading ? html` <span class="loading-spinner"></span> ` : ''}
+        ${this.icon && !this.loading ? html` <span class="button-icon">${this.icon}</span> ` : ''}
         <slot></slot>
       </button>
     `;
@@ -163,4 +163,3 @@ export class AppButton extends LitElement {
     // Let the event bubble up naturally
   }
 }
-

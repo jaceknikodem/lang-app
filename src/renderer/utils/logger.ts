@@ -1,6 +1,6 @@
 /**
  * Renderer process logger
- * 
+ *
  * Sends logs to the main process via IPC for centralized logging.
  */
 
@@ -13,7 +13,11 @@ const electronAPI = typeof window !== 'undefined' ? (window as any).electronAPI 
  * Create a logger that sends logs to main process via IPC
  */
 function createIPCLogger(): Logger {
-  const log = (level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal', message: string, data?: any) => {
+  const log = (
+    level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal',
+    message: string,
+    data?: any
+  ) => {
     if (electronAPI?.log) {
       // Send to main process via IPC
       electronAPI.log.log(level, message, data).catch(() => {
@@ -77,7 +81,11 @@ function createIPCLogger(): Logger {
       // Create a child logger with bindings
       const childLogger = createIPCLogger();
       // Apply bindings to all log calls
-      const originalLog = (level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal', message: string, data?: any) => {
+      const originalLog = (
+        level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal',
+        message: string,
+        data?: any
+      ) => {
         const dataWithBindings = { ...bindings, ...(data || {}) };
         log(level, message, dataWithBindings);
       };
@@ -124,12 +132,12 @@ function createIPCLogger(): Logger {
             originalLog('fatal', msg || '', msgOrObj);
           }
         },
-        child: (newBindings: Record<string, any>) => childLogger.child({ ...bindings, ...newBindings })
+        child: (newBindings: Record<string, any>) =>
+          childLogger.child({ ...bindings, ...newBindings }),
       } as Logger;
-    }
+    },
   } as Logger;
 }
 
 // Export singleton logger instance
 export const logger = createIPCLogger();
-

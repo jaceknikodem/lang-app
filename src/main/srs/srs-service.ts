@@ -27,12 +27,16 @@ export class SRSService {
   /**
    * Process quiz results and update multiple words
    */
-  async processQuizResults(results: Array<{
-    wordId: number;
-    correct: boolean;
-    responseTime?: number;
-    difficulty?: 'easy' | 'medium' | 'hard';
-  }>, language: string, sessionId?: number): Promise<void> {
+  async processQuizResults(
+    results: Array<{
+      wordId: number;
+      correct: boolean;
+      responseTime?: number;
+      difficulty?: 'easy' | 'medium' | 'hard';
+    }>,
+    language: string,
+    sessionId?: number
+  ): Promise<void> {
     if (results.length === 0) {
       return;
     }
@@ -44,7 +48,15 @@ export class SRSService {
         result.difficulty
       );
 
-      await this.processReviewWithEngine(result.wordId, reviewResult, this.engine, new Date(), true, language, sessionId);
+      await this.processReviewWithEngine(
+        result.wordId,
+        reviewResult,
+        this.engine,
+        new Date(),
+        true,
+        language,
+        sessionId
+      );
     }
   }
 
@@ -78,7 +90,7 @@ export class SRSService {
 
     return {
       ...stats,
-      recommendedStudySize
+      recommendedStudySize,
     };
   }
 
@@ -87,7 +99,7 @@ export class SRSService {
    */
   async markWordDifficulty(wordId: number, difficulty: 'easy' | 'hard'): Promise<void> {
     const reviewResult: SRSReviewResult = {
-      recall: difficulty === 'easy' ? 3 : 1
+      recall: difficulty === 'easy' ? 3 : 1,
     };
 
     await this.processReview(wordId, reviewResult);
@@ -116,7 +128,7 @@ export class SRSService {
     const allDue = await this.database.getWordsDueForReview(language);
     const now = new Date();
 
-    return allDue.filter(word => this.engine.isDue(word, now));
+    return allDue.filter((word) => this.engine.isDue(word, now));
   }
 
   /**
@@ -172,12 +184,14 @@ export class SRSService {
 
     console.log(`[SRS Service] Processing review for word "${word.word}" (ID: ${wordId})`);
     console.log(`[SRS Service] Using engine: ${this.engine.name}`);
-    console.log(`[SRS Service] Review result: recall=${reviewResult.recall} (${reviewResult.recall === 0 ? 'Failed' : reviewResult.recall === 1 ? 'Hard' : reviewResult.recall === 2 ? 'Good' : 'Easy'})`);
+    console.log(
+      `[SRS Service] Review result: recall=${reviewResult.recall} (${reviewResult.recall === 0 ? 'Failed' : reviewResult.recall === 1 ? 'Hard' : reviewResult.recall === 2 ? 'Good' : 'Easy'})`
+    );
 
     const update = this.engine.update(word, reviewResult, now);
 
     console.log(`[SRS Service] Saving update to database for word "${word.word}" (ID: ${wordId})`);
-    
+
     await this.database.updateWordSRS(
       wordId,
       update.strength,
@@ -196,26 +210,31 @@ export class SRSService {
           sessionId,
           recallRating: reviewResult.recall,
           strengthDelta,
-          language
+          language,
         });
-        const ratingText = reviewResult.recall === 0 ? 'failed' : reviewResult.recall === 1 ? 'hard' : reviewResult.recall === 2 ? 'good' : 'easy';
-        console.log(`[Tracking] Quiz performance: wordId=${wordId}, recall=${ratingText}, strengthDelta=${strengthDelta > 0 ? '+' : ''}${strengthDelta}, sessionId=${sessionId || 'none'}`);
+        const ratingText =
+          reviewResult.recall === 0
+            ? 'failed'
+            : reviewResult.recall === 1
+              ? 'hard'
+              : reviewResult.recall === 2
+                ? 'good'
+                : 'easy';
+        console.log(
+          `[Tracking] Quiz performance: wordId=${wordId}, recall=${ratingText}, strengthDelta=${strengthDelta > 0 ? '+' : ''}${strengthDelta}, sessionId=${sessionId || 'none'}`
+        );
       } catch (error) {
         console.warn(`[SRS Service] Failed to record SRS adjustment:`, error);
       }
     }
 
-    console.log(`[SRS Service] Successfully saved SRS update for word "${word.word}" (ID: ${wordId})\n`);
+    console.log(
+      `[SRS Service] Successfully saved SRS update for word "${word.word}" (ID: ${wordId})\n`
+    );
   }
 
-
   private extractFsrsOptions(update: SchedulerEngineUpdate): UpdateWordSRSOptions {
-    const {
-      fsrsDifficulty,
-      fsrsStability,
-      fsrsLapses,
-      fsrsLastRating
-    } = update;
+    const { fsrsDifficulty, fsrsStability, fsrsLapses, fsrsLastRating } = update;
 
     const hasFsrsValues =
       fsrsDifficulty !== undefined ||
@@ -231,7 +250,7 @@ export class SRSService {
       fsrsDifficulty,
       fsrsStability,
       fsrsLapses,
-      fsrsLastRating: fsrsLastRating ?? null
+      fsrsLastRating: fsrsLastRating ?? null,
     };
   }
 }

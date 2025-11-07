@@ -2,13 +2,16 @@ import { AudioService } from '../../src/main/audio/audio-service';
 import { TTSAudioGenerator } from '../../src/main/audio/audio-generator';
 import { ElevenLabsAudioGenerator } from '../../src/main/audio/elevenlabs-generator';
 import type { RecordingSession, RecordingOptions } from '../../src/main/audio/audio-recorder';
-import type { TranscriptionOptions, TranscriptionResult } from '../../src/main/audio/speech-recognition';
+import type {
+  TranscriptionOptions,
+  TranscriptionResult,
+} from '../../src/main/audio/speech-recognition';
 
 // Mock Electron app
 jest.mock('electron', () => ({
   app: {
-    getPath: jest.fn().mockReturnValue('/tmp/test-app-data')
-  }
+    getPath: jest.fn().mockReturnValue('/tmp/test-app-data'),
+  },
 }));
 
 // Mock AudioRecorder
@@ -22,8 +25,8 @@ jest.mock('../../src/main/audio/audio-recorder', () => {
       isRecording: jest.fn(),
       getAvailableDevices: jest.fn(),
       deleteRecording: jest.fn(),
-      getRecordingInfo: jest.fn()
-    }))
+      getRecordingInfo: jest.fn(),
+    })),
   };
 });
 
@@ -34,8 +37,8 @@ jest.mock('../../src/main/audio/speech-recognition', () => {
       initialize: jest.fn(),
       transcribeAudio: jest.fn(),
       compareTranscription: jest.fn(),
-      isServerAvailable: jest.fn()
-    }))
+      isServerAvailable: jest.fn(),
+    })),
   };
 });
 
@@ -48,7 +51,9 @@ describe('Audio Service', () => {
 
   describe('generateAudio', () => {
     it('should validate input parameters', async () => {
-      await expect(audioService.generateAudio('', 'english')).rejects.toThrow('Audio generation failed');
+      await expect(audioService.generateAudio('', 'english')).rejects.toThrow(
+        'Audio generation failed'
+      );
     });
 
     it('should require a valid language', async () => {
@@ -56,7 +61,7 @@ describe('Audio Service', () => {
         generateAudio: jest.fn().mockResolvedValue('/tmp/test-app-data/audio/hello.aiff'),
         playAudio: jest.fn().mockResolvedValue(undefined),
         stopAudio: jest.fn(),
-        audioExists: jest.fn().mockResolvedValue(true)
+        audioExists: jest.fn().mockResolvedValue(true),
       };
 
       const service = new AudioService(mockGenerator);
@@ -67,19 +72,27 @@ describe('Audio Service', () => {
       // This test verifies the service trims whitespace
       const text = '  hello world  ';
       const language = 'english';
-      
+
       // Mock the audio generator to avoid actual TTS calls in tests
       const mockGenerator = {
         generateAudio: jest.fn().mockResolvedValue('/tmp/test-app-data/audio/hello_world.aiff'),
         playAudio: jest.fn().mockResolvedValue(undefined),
         stopAudio: jest.fn(),
-        audioExists: jest.fn().mockResolvedValue(true)
+        audioExists: jest.fn().mockResolvedValue(true),
       };
-      
+
       const service = new AudioService(mockGenerator);
       await service.generateAudio(text, language);
-      
-      expect(mockGenerator.generateAudio).toHaveBeenCalledWith('hello world', 'english', undefined, undefined, undefined, undefined, undefined);
+
+      expect(mockGenerator.generateAudio).toHaveBeenCalledWith(
+        'hello world',
+        'english',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined
+      );
     });
   });
 
@@ -93,35 +106,37 @@ describe('Audio Service', () => {
   describe('batch operations', () => {
     it('should generate audio for multiple texts', async () => {
       const mockGenerator = {
-        generateAudio: jest.fn()
+        generateAudio: jest
+          .fn()
           .mockResolvedValueOnce('/tmp/test-app-data/audio/hello.aiff')
           .mockResolvedValueOnce('/tmp/test-app-data/audio/world.aiff'),
         playAudio: jest.fn().mockResolvedValue(undefined),
         stopAudio: jest.fn(),
-        audioExists: jest.fn().mockResolvedValue(true)
+        audioExists: jest.fn().mockResolvedValue(true),
       };
-      
+
       const service = new AudioService(mockGenerator);
       const results = await service.generateBatchAudio(['hello', 'world'], 'english');
-      
+
       expect(results).toEqual(['hello.aiff', 'world.aiff']);
       expect(mockGenerator.generateAudio).toHaveBeenCalledTimes(2);
     });
 
     it('should handle partial failures in batch generation', async () => {
       const mockGenerator = {
-        generateAudio: jest.fn()
+        generateAudio: jest
+          .fn()
           .mockResolvedValueOnce('/tmp/test-app-data/audio/hello.aiff')
           .mockRejectedValueOnce(new Error('Generation failed'))
           .mockResolvedValueOnce('/tmp/test-app-data/audio/world.aiff'),
         playAudio: jest.fn().mockResolvedValue(undefined),
         stopAudio: jest.fn(),
-        audioExists: jest.fn().mockResolvedValue(true)
+        audioExists: jest.fn().mockResolvedValue(true),
       };
-      
+
       const service = new AudioService(mockGenerator);
       const results = await service.generateBatchAudio(['hello', 'fail', 'world'], 'english');
-      
+
       expect(results).toEqual(['hello.aiff', '', 'world.aiff']);
       expect(mockGenerator.generateAudio).toHaveBeenCalledTimes(3);
     });
@@ -144,7 +159,7 @@ describe('Audio Service', () => {
           id: 'test-session-1',
           filePath: '/tmp/test-app-data/recordings/test.wav',
           isRecording: true,
-          startTime: Date.now()
+          startTime: Date.now(),
         };
 
         mockRecorder.startRecording.mockResolvedValue(mockSession);
@@ -159,13 +174,13 @@ describe('Audio Service', () => {
         const options: RecordingOptions = {
           sampleRate: 44100,
           channels: 2,
-          threshold: 0.3
+          threshold: 0.3,
         };
         const mockSession: RecordingSession = {
           id: 'test-session-2',
           filePath: '/tmp/test-app-data/recordings/test2.wav',
           isRecording: true,
-          startTime: Date.now()
+          startTime: Date.now(),
         };
 
         mockRecorder.startRecording.mockResolvedValue(mockSession);
@@ -198,7 +213,7 @@ describe('Audio Service', () => {
           filePath: '/tmp/test-app-data/recordings/test.wav',
           isRecording: false,
           startTime: Date.now(),
-          duration: 5000
+          duration: 5000,
         };
 
         mockRecorder.stopRecording.mockResolvedValue(mockSession);
@@ -248,7 +263,7 @@ describe('Audio Service', () => {
           id: 'test-session-1',
           filePath: '/tmp/test-app-data/recordings/test.wav',
           isRecording: true,
-          startTime: Date.now()
+          startTime: Date.now(),
         };
 
         mockRecorder.getCurrentSession.mockReturnValue(mockSession);
@@ -321,7 +336,9 @@ describe('Audio Service', () => {
         const error = new Error('Delete failed');
         mockRecorder.deleteRecording.mockRejectedValue(error);
 
-        await expect(audioService.deleteRecording('/tmp/test.wav')).rejects.toThrow('Failed to delete recording');
+        await expect(audioService.deleteRecording('/tmp/test.wav')).rejects.toThrow(
+          'Failed to delete recording'
+        );
       });
     });
 
@@ -379,10 +396,10 @@ describe('Audio Service', () => {
         const mockResult: TranscriptionResult = {
           text: 'Hello world',
           language: 'en',
-          confidence: 0.95
+          confidence: 0.95,
         };
         const options: TranscriptionOptions = {
-          language: 'english'
+          language: 'english',
         };
 
         mockSpeechRecognition.transcribeAudio.mockResolvedValue(mockResult);
@@ -390,14 +407,19 @@ describe('Audio Service', () => {
         const result = await audioService.transcribeAudio('/tmp/test.wav', options);
 
         expect(result).toEqual(mockResult);
-        expect(mockSpeechRecognition.transcribeAudio).toHaveBeenCalledWith('/tmp/test.wav', options);
+        expect(mockSpeechRecognition.transcribeAudio).toHaveBeenCalledWith(
+          '/tmp/test.wav',
+          options
+        );
       });
 
       it('should handle transcription errors', async () => {
         const error = new Error('Transcription failed');
         mockSpeechRecognition.transcribeAudio.mockRejectedValue(error);
 
-        await expect(audioService.transcribeAudio('/tmp/test.wav', { language: 'english' })).rejects.toThrow('Failed to transcribe audio');
+        await expect(
+          audioService.transcribeAudio('/tmp/test.wav', { language: 'english' })
+        ).rejects.toThrow('Failed to transcribe audio');
       });
     });
 
@@ -408,7 +430,7 @@ describe('Audio Service', () => {
           normalizedTranscribed: 'hello world',
           normalizedExpected: 'hello world',
           expectedWords: [{ word: 'hello', similarity: 0.9, matched: true }],
-          transcribedWords: ['hello', 'world']
+          transcribedWords: ['hello', 'world'],
         };
 
         mockSpeechRecognition.compareTranscription.mockResolvedValue(mockResult);
@@ -416,7 +438,11 @@ describe('Audio Service', () => {
         const result = await audioService.compareTranscription('hello world', 'hello world', 'A1');
 
         expect(result).toEqual(mockResult);
-        expect(mockSpeechRecognition.compareTranscription).toHaveBeenCalledWith('hello world', 'hello world', 'A1');
+        expect(mockSpeechRecognition.compareTranscription).toHaveBeenCalledWith(
+          'hello world',
+          'hello world',
+          'A1'
+        );
       });
 
       it('should handle null proficiency level', async () => {
@@ -425,7 +451,7 @@ describe('Audio Service', () => {
           normalizedTranscribed: 'hello',
           normalizedExpected: 'hello',
           expectedWords: [],
-          transcribedWords: ['hello']
+          transcribedWords: ['hello'],
         };
 
         mockSpeechRecognition.compareTranscription.mockResolvedValue(mockResult);
@@ -433,7 +459,11 @@ describe('Audio Service', () => {
         const result = await audioService.compareTranscription('hello', 'hello', null);
 
         expect(result).toEqual(mockResult);
-        expect(mockSpeechRecognition.compareTranscription).toHaveBeenCalledWith('hello', 'hello', null);
+        expect(mockSpeechRecognition.compareTranscription).toHaveBeenCalledWith(
+          'hello',
+          'hello',
+          null
+        );
       });
     });
 
@@ -477,11 +507,11 @@ describe('Audio Service', () => {
         saveVoiceMappings: jest.fn(),
         resetVoiceMappingsToDefaults: jest.fn(),
         config: { elevenLabsModel: 'eleven_flash_v2_5' },
-        getLastUsedVoiceId: jest.fn().mockReturnValue('voice-123')
+        getLastUsedVoiceId: jest.fn().mockReturnValue('voice-123'),
       };
 
       mockTTSGenerator = {
-        constructor: { name: 'TTSAudioGenerator' }
+        constructor: { name: 'TTSAudioGenerator' },
       };
     });
 
@@ -500,7 +530,9 @@ describe('Audio Service', () => {
       it('should throw error when system TTS is active', async () => {
         const service = new AudioService(mockTTSGenerator);
 
-        await expect(service.getVoiceMappings()).rejects.toThrow('Voice mappings are only available when ElevenLabs TTS is active');
+        await expect(service.getVoiceMappings()).rejects.toThrow(
+          'Voice mappings are only available when ElevenLabs TTS is active'
+        );
       });
     });
 
@@ -518,7 +550,9 @@ describe('Audio Service', () => {
       it('should throw error when system TTS is active', async () => {
         const service = new AudioService(mockTTSGenerator);
 
-        await expect(service.saveVoiceMappings({ spanish: ['voice1'] })).rejects.toThrow('Voice mappings can only be saved when ElevenLabs TTS is active');
+        await expect(service.saveVoiceMappings({ spanish: ['voice1'] })).rejects.toThrow(
+          'Voice mappings can only be saved when ElevenLabs TTS is active'
+        );
       });
     });
 
@@ -535,7 +569,9 @@ describe('Audio Service', () => {
       it('should throw error when system TTS is active', async () => {
         const service = new AudioService(mockTTSGenerator);
 
-        await expect(service.resetVoiceMappingsToDefaults()).rejects.toThrow('Voice mappings can only be reset when ElevenLabs TTS is active');
+        await expect(service.resetVoiceMappingsToDefaults()).rejects.toThrow(
+          'Voice mappings can only be reset when ElevenLabs TTS is active'
+        );
       });
     });
 
@@ -547,7 +583,7 @@ describe('Audio Service', () => {
         expect(info).toEqual({
           service: 'elevenlabs',
           model: 'eleven_flash_v2_5',
-          voiceId: 'voice-123'
+          voiceId: 'voice-123',
         });
       });
 
@@ -556,7 +592,7 @@ describe('Audio Service', () => {
         const info = service.getAudioGenerationInfo();
 
         expect(info).toEqual({
-          service: 'system-tts'
+          service: 'system-tts',
         });
       });
     });
@@ -573,7 +609,7 @@ describe('Audio Service', () => {
         stopAudio: jest.fn(),
         audioExists: jest.fn().mockResolvedValue(true),
         normalizeAudioVolume: jest.fn(),
-        stitchAudio: jest.fn()
+        stitchAudio: jest.fn(),
       };
       mockFs = require('fs').promises;
     });
@@ -588,7 +624,15 @@ describe('Audio Service', () => {
         mockFs.rename = jest.fn().mockResolvedValue(undefined);
 
         const service = new AudioService(mockGenerator);
-        const result = await service.regenerateAudio('Hello', 'spanish', 'hola', 1, 1, undefined, existingPath);
+        const result = await service.regenerateAudio(
+          'Hello',
+          'spanish',
+          'hola',
+          1,
+          1,
+          undefined,
+          existingPath
+        );
 
         expect(result).toBe(newPath);
         expect(mockGenerator.generateAudio).toHaveBeenCalled();
@@ -600,14 +644,17 @@ describe('Audio Service', () => {
         const backupPath = '/tmp/test-app-data/audio/spanish/word_1/sentence_1.bak.aiff';
         mockGenerator.audioExists.mockResolvedValueOnce(true); // existing file exists
         mockFs.unlink = jest.fn().mockResolvedValue(undefined);
-        mockFs.rename = jest.fn()
+        mockFs.rename = jest
+          .fn()
           .mockResolvedValueOnce(undefined) // rename to backup
           .mockResolvedValueOnce(undefined); // restore from backup
         mockGenerator.generateAudio.mockRejectedValue(new Error('Generation failed'));
         mockGenerator.audioExists.mockResolvedValueOnce(false); // new file doesn't exist
 
         const service = new AudioService(mockGenerator);
-        await expect(service.regenerateAudio('Hello', 'spanish', 'hola', 1, 1, undefined, existingPath)).rejects.toThrow();
+        await expect(
+          service.regenerateAudio('Hello', 'spanish', 'hola', 1, 1, undefined, existingPath)
+        ).rejects.toThrow();
 
         // Should restore backup
         expect(mockFs.rename).toHaveBeenCalledWith(backupPath, absolutePath);
@@ -651,7 +698,9 @@ describe('Audio Service', () => {
         const { execFile } = require('child_process');
         const { promisify } = require('util');
         const execFileAsync = promisify(execFile);
-        jest.spyOn(require('util'), 'promisify').mockReturnValueOnce(() => Promise.reject(new Error('ffmpeg failed')));
+        jest
+          .spyOn(require('util'), 'promisify')
+          .mockReturnValueOnce(() => Promise.reject(new Error('ffmpeg failed')));
 
         const service = new AudioService(mockGenerator);
         const result = await service.normalizeAudioVolume('test.aiff', 5);
@@ -728,7 +777,9 @@ describe('Audio Service', () => {
         mockGenerator.audioExists.mockResolvedValue(true);
 
         // Mock execFileAsync to fail
-        jest.spyOn(require('util'), 'promisify').mockReturnValueOnce(() => Promise.reject(new Error('ffmpeg failed')));
+        jest
+          .spyOn(require('util'), 'promisify')
+          .mockReturnValueOnce(() => Promise.reject(new Error('ffmpeg failed')));
 
         const service = new AudioService(mockGenerator);
         const result = await service.stitchAudio(['audio1.mp3'], 'spanish');
@@ -746,7 +797,7 @@ describe('Audio Service', () => {
         generateAudio: jest.fn(),
         playAudio: jest.fn(),
         stopAudio: jest.fn(),
-        audioExists: jest.fn().mockResolvedValue(true)
+        audioExists: jest.fn().mockResolvedValue(true),
       };
     });
 
@@ -759,7 +810,7 @@ describe('Audio Service', () => {
 
         const service = new AudioService(mockGenerator);
         await expect(service.playAudio('test.aiff')).rejects.toThrow();
-        expect((await service.playAudio('test.aiff').catch(e => e)).code).toBe('FILE_NOT_FOUND');
+        expect((await service.playAudio('test.aiff').catch((e) => e)).code).toBe('FILE_NOT_FOUND');
       });
 
       it('should handle PLAYBACK_STOPPED error', async () => {

@@ -8,8 +8,8 @@ import { join } from 'path';
 // Mock Electron app
 jest.mock('electron', () => ({
   app: {
-    getPath: jest.fn().mockReturnValue('/tmp/test-app-data')
-  }
+    getPath: jest.fn().mockReturnValue('/tmp/test-app-data'),
+  },
 }));
 
 describe('TTSAudioGenerator Path Generation', () => {
@@ -18,7 +18,7 @@ describe('TTSAudioGenerator Path Generation', () => {
 
   beforeEach(() => {
     generator = new TTSAudioGenerator({
-      audioDirectory: audioDir
+      audioDirectory: audioDir,
     });
     jest.clearAllMocks();
   });
@@ -35,7 +35,13 @@ describe('TTSAudioGenerator Path Generation', () => {
     });
 
     it('should generate path for english sentence audio', () => {
-      const path = (generator as any).getAudioPath('Hello world', 'spanish', 'english_sentence', 1, 5);
+      const path = (generator as any).getAudioPath(
+        'Hello world',
+        'spanish',
+        'english_sentence',
+        1,
+        5
+      );
       expect(path).toBe(join(audioDir, 'spanish', 'word_1', 'english_sentence_5.aiff'));
     });
 
@@ -45,7 +51,14 @@ describe('TTSAudioGenerator Path Generation', () => {
     });
 
     it('should generate path for continuation audio (variant)', () => {
-      const path = (generator as any).getAudioPath('Continuation', 'spanish', undefined, undefined, undefined, 10);
+      const path = (generator as any).getAudioPath(
+        'Continuation',
+        'spanish',
+        undefined,
+        undefined,
+        undefined,
+        10
+      );
       expect(path).toBe(join(audioDir, 'spanish', 'variant_10.aiff'));
     });
 
@@ -63,8 +76,8 @@ describe('TTSAudioGenerator Path Generation', () => {
 
     it('should handle different languages', () => {
       const languages = ['spanish', 'italian', 'portuguese', 'polish', 'indonesian'];
-      
-      languages.forEach(lang => {
+
+      languages.forEach((lang) => {
         const path = (generator as any).getAudioPath('test', lang, undefined, 1);
         expect(path).toContain(lang);
       });
@@ -76,12 +89,26 @@ describe('TTSAudioGenerator Path Generation', () => {
     });
 
     it('should handle variantId correctly', () => {
-      const path = (generator as any).getAudioPath('Continuation', 'spanish', undefined, undefined, undefined, 999);
+      const path = (generator as any).getAudioPath(
+        'Continuation',
+        'spanish',
+        undefined,
+        undefined,
+        undefined,
+        999
+      );
       expect(path).toBe(join(audioDir, 'spanish', 'variant_999.aiff'));
     });
 
     it('should prioritize variantId over wordId', () => {
-      const path = (generator as any).getAudioPath('Continuation', 'spanish', undefined, 1, undefined, 5);
+      const path = (generator as any).getAudioPath(
+        'Continuation',
+        'spanish',
+        undefined,
+        1,
+        undefined,
+        5
+      );
       expect(path).toBe(join(audioDir, 'spanish', 'variant_5.aiff'));
     });
   });

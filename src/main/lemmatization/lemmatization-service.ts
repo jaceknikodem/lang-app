@@ -29,17 +29,17 @@ export class LemmatizationService {
   private mapLanguageToCode(language: string): string {
     const normalized = language.toLowerCase().trim();
     const languageMap: Record<string, string> = {
-      'spanish': 'es',
-      'italian': 'it',
-      'portuguese': 'pt',
-      'polish': 'pl',
-      'indonesian': 'id',
+      spanish: 'es',
+      italian: 'it',
+      portuguese: 'pt',
+      polish: 'pl',
+      indonesian: 'id',
       // Also handle ISO codes directly
-      'es': 'es',
-      'it': 'it',
-      'pt': 'pt',
-      'pl': 'pl',
-      'id': 'id'
+      es: 'es',
+      it: 'it',
+      pt: 'pt',
+      pl: 'pl',
+      id: 'id',
     };
     return languageMap[normalized] || 'es'; // Default to Spanish
   }
@@ -53,9 +53,9 @@ export class LemmatizationService {
       const response = await fetch(`${this.serverUrl}/status`, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
-        signal: AbortSignal.timeout(5000) // 5 second timeout
+        signal: AbortSignal.timeout(5000), // 5 second timeout
       });
 
       if (!response.ok) {
@@ -66,11 +66,14 @@ export class LemmatizationService {
       return {
         status: data.status,
         loadedModels: data.loaded_models || [],
-        service: data.service
+        service: data.service,
       };
     } catch (error) {
       // Service is optional - don't throw, just log and return null
-      if (error instanceof Error && (error.message.includes('ECONNREFUSED') || error.message.includes('fetch failed'))) {
+      if (
+        error instanceof Error &&
+        (error.message.includes('ECONNREFUSED') || error.message.includes('fetch failed'))
+      ) {
         console.warn('[Lemmatization] Service unavailable (optional):', error.message);
       } else {
         console.warn('[Lemmatization] Failed to get service status (non-critical):', error);
@@ -86,33 +89,46 @@ export class LemmatizationService {
   async loadModel(language: string): Promise<void> {
     try {
       const languageCode = this.mapLanguageToCode(language);
-      
+
       const response = await fetch(`${this.serverUrl}/load_model`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({ language: languageCode }),
-        signal: AbortSignal.timeout(10000) // 10 second timeout
+        signal: AbortSignal.timeout(10000), // 10 second timeout
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: `HTTP error! status: ${response.status}` }));
+        const errorData = await response
+          .json()
+          .catch(() => ({ detail: `HTTP error! status: ${response.status}` }));
         throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      
+
       // This shows up multiple times in logs, that's OK, we don't actually loaded twice on the server.
       if (data.status === 'already_loaded') {
-        console.log(`[Lemmatization] Stanza model for ${languageCode} (${language}) already loaded`);
+        console.log(
+          `[Lemmatization] Stanza model for ${languageCode} (${language}) already loaded`
+        );
       } else {
-        console.log(`[Lemmatization] Stanza model for ${languageCode} (${language}) loaded successfully`);
+        console.log(
+          `[Lemmatization] Stanza model for ${languageCode} (${language}) loaded successfully`
+        );
       }
     } catch (error) {
       // Service is optional - don't throw, just log warning
-      if (error instanceof Error && (error.message.includes('ECONNREFUSED') || error.message.includes('fetch failed') || error.message.includes('timeout'))) {
-        console.warn(`[Lemmatization] Service unavailable, skipping model load for ${language} (non-critical)`);
+      if (
+        error instanceof Error &&
+        (error.message.includes('ECONNREFUSED') ||
+          error.message.includes('fetch failed') ||
+          error.message.includes('timeout'))
+      ) {
+        console.warn(
+          `[Lemmatization] Service unavailable, skipping model load for ${language} (non-critical)`
+        );
       } else {
         console.warn(`[Lemmatization] Failed to load model for ${language} (non-critical):`, error);
       }
@@ -128,25 +144,29 @@ export class LemmatizationService {
   async lemmatizeWords(words: string[], language: string): Promise<Record<string, string>> {
     try {
       const languageCode = this.mapLanguageToCode(language);
-      
-      console.log(`[Lemmatization] Calling lemmatize_words API: ${words.length} words for ${languageCode} (${language})`);
-      
+
+      console.log(
+        `[Lemmatization] Calling lemmatize_words API: ${words.length} words for ${languageCode} (${language})`
+      );
+
       const response = await fetch(`${this.serverUrl}/lemmatize_words`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           words: words,
-          language: languageCode
+          language: languageCode,
         }),
-        signal: AbortSignal.timeout(10000) // 10 second timeout (lemmatization can take a moment)
+        signal: AbortSignal.timeout(10000), // 10 second timeout (lemmatization can take a moment)
       });
-      
+
       console.log(`[Lemmatization] lemmatize_words API response status: ${response.status}`);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: `HTTP error! status: ${response.status}` }));
+        const errorData = await response
+          .json()
+          .catch(() => ({ detail: `HTTP error! status: ${response.status}` }));
         throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
       }
 
@@ -154,7 +174,12 @@ export class LemmatizationService {
       return data.lemmas || {};
     } catch (error) {
       // Service is optional - return empty object so app can continue
-      if (error instanceof Error && (error.message.includes('ECONNREFUSED') || error.message.includes('fetch failed') || error.message.includes('timeout'))) {
+      if (
+        error instanceof Error &&
+        (error.message.includes('ECONNREFUSED') ||
+          error.message.includes('fetch failed') ||
+          error.message.includes('timeout'))
+      ) {
         // Silently fail - words will be used as their own lemmas
         return {};
       }
@@ -164,5 +189,3 @@ export class LemmatizationService {
     }
   }
 }
-
-

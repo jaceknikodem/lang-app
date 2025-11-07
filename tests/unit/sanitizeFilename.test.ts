@@ -10,7 +10,7 @@ describe('sanitizeFilename', () => {
     ['piñata divertida', 'pinata_divertida'],
     ['être sûr', 'etre_sur'],
     ['são paulo', 'sao_paulo'],
-    ['bermain di bäli', 'bermain_di_bali']
+    ['bermain di bäli', 'bermain_di_bali'],
   ])('transliterates %s -> %s', (input, expected) => {
     expect(sanitizeFilename(input)).toBe(expected);
   });

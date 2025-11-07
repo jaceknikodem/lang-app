@@ -122,7 +122,7 @@ export class ConfirmationDialog extends LitElement {
       .action-button.secondary:hover {
         background: var(--background-secondary);
       }
-    `
+    `,
   ];
 
   @property({ type: Boolean })
@@ -166,17 +166,21 @@ export class ConfirmationDialog extends LitElement {
   }
 
   private handleConfirm() {
-    this.dispatchEvent(new CustomEvent('confirm', {
-      bubbles: true,
-      composed: true
-    }));
+    this.dispatchEvent(
+      new CustomEvent('confirm', {
+        bubbles: true,
+        composed: true,
+      })
+    );
   }
 
   private handleCancel() {
-    this.dispatchEvent(new CustomEvent('cancel', {
-      bubbles: true,
-      composed: true
-    }));
+    this.dispatchEvent(
+      new CustomEvent('cancel', {
+        bubbles: true,
+        composed: true,
+      })
+    );
   }
 
   render() {
@@ -185,26 +189,20 @@ export class ConfirmationDialog extends LitElement {
     }
 
     return html`
-      <div 
-        class="confirmation-dialog" 
-        @click=${this.handleBackdropClick}
-      >
+      <div class="confirmation-dialog" @click=${this.handleBackdropClick}>
         <div class="confirmation-content variant-${this.variant}">
           <h3>${this.title}</h3>
           <div class="confirmation-message">
             ${typeof this.message === 'string' ? html`<p>${this.message}</p>` : this.message}
           </div>
           <div class="confirmation-actions">
-            <button 
-              class="action-button ${this.variant === 'danger' ? 'danger' : ''}" 
+            <button
+              class="action-button ${this.variant === 'danger' ? 'danger' : ''}"
               @click=${this.handleConfirm}
             >
               ${this.confirmText}
             </button>
-            <button 
-              class="action-button secondary" 
-              @click=${this.handleCancel}
-            >
+            <button class="action-button secondary" @click=${this.handleCancel}>
               ${this.cancelText}
             </button>
           </div>
@@ -213,4 +211,3 @@ export class ConfirmationDialog extends LitElement {
     `;
   }
 }
-

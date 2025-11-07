@@ -7,7 +7,9 @@ import { IpcMainInvokeEvent } from 'electron';
 import { getErrorMessage, wrapError } from '../../shared/utils/error.js';
 import { getLogger } from '../utils/logger.js';
 
-type HandlerFunction<TInput extends any[], TOutput> = (...args: TInput) => Promise<TOutput> | TOutput;
+type HandlerFunction<TInput extends any[], TOutput> = (
+  ...args: TInput
+) => Promise<TOutput> | TOutput;
 
 /**
  * Creates an IPC handler with automatic validation and error handling
@@ -19,10 +21,7 @@ type HandlerFunction<TInput extends any[], TOutput> = (...args: TInput) => Promi
  * @param errorContext Optional context string for error messages (e.g., "insert word", "update sentence")
  * @returns IPC handler function
  */
-export function createIPCHandler<
-  TInput extends any[],
-  TOutput
->(
+export function createIPCHandler<TInput extends any[], TOutput>(
   schema: z.ZodTypeAny | z.ZodTypeAny[] | undefined | null,
   handler: HandlerFunction<TInput, TOutput>,
   errorContext?: string
@@ -44,7 +43,7 @@ export function createIPCHandler<
           // Single parameter - validate with schema
           validatedArgs = [schema.parse(args[0])];
         }
-      } 
+      }
       // Handle array of schemas
       else {
         if (schema.length === 0) {
@@ -67,16 +66,15 @@ export function createIPCHandler<
       const errorMessage = errorContext || 'operation';
       const logger = getLogger();
       logger.error({ error }, `Error ${errorMessage}`);
-      
+
       // For Zod validation errors, provide more detail
       if (error instanceof z.ZodError) {
-        const issues = error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ');
+        const issues = error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(', ');
         throw wrapError(error, `Failed to ${errorMessage}: Validation failed - ${issues}`);
       }
-      
+
       // The original error is preserved in error.cause, so we don't need to duplicate the message
       throw wrapError(error, `Failed to ${errorMessage}`);
     }
   };
 }
-

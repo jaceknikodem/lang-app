@@ -24,14 +24,10 @@ export function cleanLLMResponse(rawResponse: string): string {
   }
 
   // Remove any text after the last ] or }
-  const jsonEnd = Math.max(
-    cleanResponse.lastIndexOf(']'),
-    cleanResponse.lastIndexOf('}')
-  );
+  const jsonEnd = Math.max(cleanResponse.lastIndexOf(']'), cleanResponse.lastIndexOf('}'));
   if (jsonEnd >= 0 && jsonEnd < cleanResponse.length - 1) {
     cleanResponse = cleanResponse.substring(0, jsonEnd + 1);
   }
 
   return cleanResponse;
 }
-

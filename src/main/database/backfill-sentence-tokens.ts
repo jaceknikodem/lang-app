@@ -38,7 +38,9 @@ export async function backfillSentenceTokens(options: BackfillOptions): Promise<
   }
 
   console.log('[BackfillSentenceTokens] Starting backfill process...');
-  console.log(`[BackfillSentenceTokens] Processing ${sentencesNeedingTokens.length} of ${totalSentences} sentences...`);
+  console.log(
+    `[BackfillSentenceTokens] Processing ${sentencesNeedingTokens.length} of ${totalSentences} sentences...`
+  );
 
   let processed = 0;
   let successCount = 0;
@@ -53,7 +55,9 @@ export async function backfillSentenceTokens(options: BackfillOptions): Promise<
         // Get the primary word for this sentence
         const primaryWord = await database.getWordById(sentence.wordId);
         if (!primaryWord) {
-          console.warn(`[BackfillSentenceTokens] Primary word not found for sentence ${sentence.id}, skipping`);
+          console.warn(
+            `[BackfillSentenceTokens] Primary word not found for sentence ${sentence.id}, skipping`
+          );
           errorCount++;
           processed++;
           continue;
@@ -73,10 +77,10 @@ export async function backfillSentenceTokens(options: BackfillOptions): Promise<
           sentence: sentence.sentence,
           targetWord: primaryWord,
           allWords,
-          lookupDictionary: (word: string, lang?: string) => 
+          lookupDictionary: (word: string, lang?: string) =>
             database.lookupDictionary(word, lang || primaryWord.language),
           language: primaryWord.language,
-          maxPhraseWords: 3
+          maxPhraseWords: 3,
         });
 
         // Update sentence with precomputed tokens
@@ -86,7 +90,9 @@ export async function backfillSentenceTokens(options: BackfillOptions): Promise<
         processed++;
 
         if (processed % 10 === 0) {
-          console.log(`[BackfillSentenceTokens] Progress: ${processed}/${sentencesNeedingTokens.length} sentences processed`);
+          console.log(
+            `[BackfillSentenceTokens] Progress: ${processed}/${sentencesNeedingTokens.length} sentences processed`
+          );
         }
       } catch (error) {
         console.error(`[BackfillSentenceTokens] Failed to process sentence ${sentence.id}:`, error);
@@ -105,7 +111,6 @@ export async function backfillSentenceTokens(options: BackfillOptions): Promise<
     total: sentencesNeedingTokens.length,
     processed,
     success: successCount,
-    errors: errorCount
+    errors: errorCount,
   });
 }
-

@@ -55,7 +55,7 @@ describe('GeneratedSentenceSchema', () => {
       contextBefore: '¿Cómo estás?',
       contextAfter: 'Bien, gracias',
       contextBeforeTranslation: 'How are you?',
-      contextAfterTranslation: 'Good, thanks'
+      contextAfterTranslation: 'Good, thanks',
     };
     expect(GeneratedSentenceSchema.parse(valid)).toEqual(valid);
   });
@@ -63,11 +63,11 @@ describe('GeneratedSentenceSchema', () => {
   it('should trim whitespace from fields', () => {
     const valid = {
       sentence: '  Hola mundo  ',
-      translation: '  Hello world  '
+      translation: '  Hello world  ',
     };
     expect(GeneratedSentenceSchema.parse(valid)).toEqual({
       sentence: 'Hola mundo',
-      translation: 'Hello world'
+      translation: 'Hello world',
     });
   });
 
@@ -97,7 +97,7 @@ describe('LooseSentenceSchema', () => {
       sentence: '  Hola mundo  ',
       translation: '  Hello world  ',
       contextBefore: '  ¿Cómo estás?  ',
-      contextAfter: '  Bien  '
+      contextAfter: '  Bien  ',
     };
     const result = LooseSentenceSchema.parse(input);
     expect(result.sentence).toBe('Hola mundo');
@@ -118,7 +118,7 @@ describe('WordGenerationResponseSchema', () => {
   it('should accept array of GeneratedWordSchema objects', () => {
     const input = [
       { word: 'hola', translation: 'hello' },
-      { word: 'casa', translation: 'house' }
+      { word: 'casa', translation: 'house' },
     ];
     const result = WordGenerationResponseSchema.parse(input);
     expect(result).toHaveLength(2);
@@ -128,7 +128,7 @@ describe('WordGenerationResponseSchema', () => {
   it('should accept array of LooseWordSchema objects', () => {
     const input = [
       { word: '  hola  ', translation: '  hello  ' },
-      { word: 'casa', translation: 'house' }
+      { word: 'casa', translation: 'house' },
     ];
     const result = WordGenerationResponseSchema.parse(input);
     expect(result).toHaveLength(2);
@@ -146,8 +146,8 @@ describe('WordGenerationResponseSchema', () => {
     const input = {
       words: [
         { word: 'hola', translation: 'hello' },
-        { word: 'casa', translation: 'house' }
-      ]
+        { word: 'casa', translation: 'house' },
+      ],
     };
     const result = WordGenerationResponseSchema.parse(input);
     expect(result).toHaveLength(2);
@@ -156,9 +156,7 @@ describe('WordGenerationResponseSchema', () => {
 
   it('should extract words from response property', () => {
     const input = {
-      response: [
-        { word: 'hola', translation: 'hello' }
-      ]
+      response: [{ word: 'hola', translation: 'hello' }],
     };
     const result = WordGenerationResponseSchema.parse(input);
     expect(result).toHaveLength(1);
@@ -168,7 +166,7 @@ describe('WordGenerationResponseSchema', () => {
   it('should handle generic record arrays with word/translation', () => {
     const input = [
       { word: 'hola', translation: 'hello', extra: 'field' },
-      { word: 'casa', translation: 'house' }
+      { word: 'casa', translation: 'house' },
     ];
     const result = WordGenerationResponseSchema.parse(input);
     expect(result).toHaveLength(2);
@@ -180,17 +178,15 @@ describe('WordGenerationResponseSchema', () => {
       { word: 'hola', translation: 'hello' },
       { sentence: 'test', translation: 'test' }, // Missing word
       { word: 'casa' }, // Missing translation
-      { word: 'perro', translation: 'dog' }
+      { word: 'perro', translation: 'dog' },
     ];
     const result = WordGenerationResponseSchema.parse(input);
     expect(result).toHaveLength(2); // Only hola and perro should be included
-    expect(result.map(w => w.word)).toEqual(['hola', 'perro']);
+    expect(result.map((w) => w.word)).toEqual(['hola', 'perro']);
   });
 
   it('should trim strings in generic record arrays', () => {
-    const input = [
-      { word: '  hola  ', translation: '  hello  ' }
-    ];
+    const input = [{ word: '  hola  ', translation: '  hello  ' }];
     const result = WordGenerationResponseSchema.parse(input);
     expect(result[0]).toEqual({ word: 'hola', translation: 'hello' });
   });
@@ -200,7 +196,7 @@ describe('SentenceGenerationResponseSchema', () => {
   it('should accept array of GeneratedSentenceSchema objects', () => {
     const input = [
       { sentence: 'Hola mundo', translation: 'Hello world' },
-      { sentence: 'Buenos días', translation: 'Good morning' }
+      { sentence: 'Buenos días', translation: 'Good morning' },
     ];
     const result = SentenceGenerationResponseSchema.parse(input);
     expect(result).toHaveLength(2);
@@ -216,9 +212,7 @@ describe('SentenceGenerationResponseSchema', () => {
 
   it('should extract sentences from sentences property', () => {
     const input = {
-      sentences: [
-        { sentence: 'Hola mundo', translation: 'Hello world' }
-      ]
+      sentences: [{ sentence: 'Hola mundo', translation: 'Hello world' }],
     };
     const result = SentenceGenerationResponseSchema.parse(input);
     expect(result).toHaveLength(1);
@@ -227,9 +221,7 @@ describe('SentenceGenerationResponseSchema', () => {
 
   it('should extract sentences from response property', () => {
     const input = {
-      response: [
-        { sentence: 'Hola mundo', translation: 'Hello world' }
-      ]
+      response: [{ sentence: 'Hola mundo', translation: 'Hello world' }],
     };
     const result = SentenceGenerationResponseSchema.parse(input);
     expect(result).toHaveLength(1);
@@ -239,7 +231,7 @@ describe('SentenceGenerationResponseSchema', () => {
   it('should handle generic record arrays with sentence/translation', () => {
     const input = [
       { sentence: 'Hola mundo', translation: 'Hello world', extra: 'field' },
-      { sentence: 'Buenos días', translation: 'Good morning' }
+      { sentence: 'Buenos días', translation: 'Good morning' },
     ];
     const result = SentenceGenerationResponseSchema.parse(input);
     expect(result).toHaveLength(2);
@@ -251,11 +243,11 @@ describe('SentenceGenerationResponseSchema', () => {
       { sentence: 'Hola mundo', translation: 'Hello world' },
       { word: 'test', translation: 'test' }, // Missing sentence
       { sentence: 'Buenos días' }, // Missing translation
-      { sentence: 'Adiós', translation: 'Goodbye' }
+      { sentence: 'Adiós', translation: 'Goodbye' },
     ];
     const result = SentenceGenerationResponseSchema.parse(input);
     expect(result).toHaveLength(2); // Only first and last should be included
-    expect(result.map(s => s.sentence)).toEqual(['Hola mundo', 'Adiós']);
+    expect(result.map((s) => s.sentence)).toEqual(['Hola mundo', 'Adiós']);
   });
 });
 
@@ -265,7 +257,7 @@ describe('ContextSentenceResponseSchema', () => {
       contextBefore: '¿Cómo estás?',
       contextAfter: 'Bien, gracias',
       contextBeforeTranslation: 'How are you?',
-      contextAfterTranslation: 'Good, thanks'
+      contextAfterTranslation: 'Good, thanks',
     };
     const result = ContextSentenceResponseSchema.parse(input);
     expect(result).toEqual(input);
@@ -275,8 +267,8 @@ describe('ContextSentenceResponseSchema', () => {
     const input = {
       response: {
         contextBefore: '¿Cómo estás?',
-        contextAfter: 'Bien, gracias'
-      }
+        contextAfter: 'Bien, gracias',
+      },
     };
     const result = ContextSentenceResponseSchema.parse(input);
     // The response wrapper schema (line 102-104) matches first and extracts the nested object
@@ -294,7 +286,7 @@ describe('ContextSentenceResponseSchema', () => {
     const input = {
       contextBefore: '  ¿Cómo estás?  ',
       contextAfter: '  Bien  ',
-      extra: 'field'
+      extra: 'field',
     };
     const result = ContextSentenceResponseSchema.parse(input);
     // Generic record transform doesn't trim, just converts to strings
@@ -316,7 +308,7 @@ describe('ContextSentenceResponseSchema', () => {
       contextBefore: '  ¿Cómo estás?  ',
       contextAfter: '  Bien  ',
       contextBeforeTranslation: '  How are you?  ',
-      contextAfterTranslation: '  Good  '
+      contextAfterTranslation: '  Good  ',
     };
     // Direct ContextSentenceSchema should accept and keep values as-is (optional strings don't auto-trim)
     // But when passed through generic record transform, it converts to strings
@@ -334,8 +326,8 @@ describe('DialogueVariantResponseSchema', () => {
     const input = {
       variants: [
         { sentence: 'Hola', translation: 'Hello' },
-        { sentence: 'Buenos días', translation: 'Good morning' }
-      ]
+        { sentence: 'Buenos días', translation: 'Good morning' },
+      ],
     };
     const result = DialogueVariantResponseSchema.parse(input);
     expect(result).toHaveLength(2);
@@ -343,9 +335,7 @@ describe('DialogueVariantResponseSchema', () => {
   });
 
   it('should accept direct array of variants', () => {
-    const input = [
-      { sentence: 'Hola', translation: 'Hello' }
-    ];
+    const input = [{ sentence: 'Hola', translation: 'Hello' }];
     const result = DialogueVariantResponseSchema.parse(input);
     expect(result).toHaveLength(1);
     expect(result[0]).toEqual({ sentence: 'Hola', translation: 'Hello' });
@@ -360,10 +350,8 @@ describe('DialogueVariantResponseSchema', () => {
 
   it('should handle generic record with variants array', () => {
     const input = {
-      variants: [
-        { sentence: '  Hola  ', translation: '  Hello  ' }
-      ],
-      extra: 'field'
+      variants: [{ sentence: '  Hola  ', translation: '  Hello  ' }],
+      extra: 'field',
     };
     const result = DialogueVariantResponseSchema.parse(input);
     expect(result).toHaveLength(1);
@@ -380,18 +368,18 @@ describe('DialogueVariantResponseSchema', () => {
         { sentence: 'Hola', translation: 'Hello' },
         { word: 'test', translation: 'test' }, // Missing sentence
         { sentence: 'Buenos días' }, // Missing translation
-        { sentence: 'Adiós', translation: 'Goodbye' }
-      ]
+        { sentence: 'Adiós', translation: 'Goodbye' },
+      ],
     };
     const result = DialogueVariantResponseSchema.parse(input);
     expect(result).toHaveLength(2); // Only first and last
-    expect(result.map(v => v.sentence)).toEqual(['Hola', 'Adiós']);
+    expect(result.map((v) => v.sentence)).toEqual(['Hola', 'Adiós']);
   });
 
   it('should handle array format in generic record', () => {
     const input = [
       { sentence: 'Hola', translation: 'Hello' },
-      { sentence: 'Buenos días', translation: 'Good morning' }
+      { sentence: 'Buenos días', translation: 'Good morning' },
     ];
     const result = DialogueVariantResponseSchema.parse(input);
     expect(result).toHaveLength(2);

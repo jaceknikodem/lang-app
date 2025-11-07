@@ -26,13 +26,12 @@ export const createInitialLanguageDataState = (): LanguageDataState => ({
   currentProficiencyLevel: null,
   hasExistingWords: null,
   hasFlowSentences: false,
-  wordCategoryStats: null
+  wordCategoryStats: null,
 });
 
 export const createInitialUIState = (): UIState => ({
   isLoading: true,
   transitionMessage: null,
   autopilotEnabled: false,
-  autoplayAudioEnabled: false
+  autoplayAudioEnabled: false,
 });
-
