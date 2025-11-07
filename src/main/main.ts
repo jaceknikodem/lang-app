@@ -19,8 +19,10 @@ import { ScoringService, ProficiencyService } from './scoring/index.js';
 import { setupScoringHandlers, setupProficiencyHandlers } from './ipc/ipc-handlers.js';
 import { ServiceManager } from './services/index.js';
 import { initializeLogger, getLogger } from './utils/logger.js';
+import { Logger } from '../shared/utils/logger.js';
 
 let mainWindow: BrowserWindow;
+let logger: Logger | undefined;
 let databaseLayer: SQLiteDatabaseLayer | undefined;
 let llmClient: LLMClient | undefined;
 let contentGenerator: ContentGenerator | undefined;
@@ -37,7 +39,9 @@ let serviceManager: ServiceManager | undefined;
 const forceLocalServices = testingConfig.e2eForceLocalServices;
 
 async function initializeServices(): Promise<void> {
-  const logger = getLogger();
+  // Initialize logger first - must be done before any other services that might log
+  logger = await initializeLogger();
+  
   try {
     // Initialize database layer first
     databaseLayer = createDatabase();
@@ -64,12 +68,11 @@ async function initializeServices(): Promise<void> {
     // Defer lifecycle startup procedures to background - don't block app startup
     // These checks (backup recovery, cleanup) can run after the UI is shown
     setImmediate(async () => {
-      const logger = getLogger();
       try {
         await lifecycleManager!.handleStartup();
-        logger.info('Lifecycle manager initialized successfully');
+        logger!.info('Lifecycle manager initialized successfully');
       } catch (error) {
-        logger.warn({ error }, 'Lifecycle manager initialization failed (non-critical)');
+        logger!.warn({ error }, 'Lifecycle manager initialization failed (non-critical)');
       }
     });
 
@@ -82,29 +85,27 @@ async function initializeServices(): Promise<void> {
 
     // Initialize update manager in background (non-blocking)
     setImmediate(async () => {
-      const logger = getLogger();
       try {
         await updateManager!.initialize();
         await updateManager!.checkUpdateReminders();
       } catch (error) {
-        logger.warn({ error }, 'Update manager initialization failed (non-critical)');
+        logger!.warn({ error }, 'Update manager initialization failed (non-critical)');
       }
     });
 
     // Process frequently looked-up words from dictionary hovers (async, non-blocking)
     setImmediate(async () => {
-      const logger = getLogger();
       try {
         const currentLanguage = await databaseLayer!.getCurrentLanguage();
-        logger.info('Processing frequently looked-up words from dictionary hovers...');
+        logger!.info('Processing frequently looked-up words from dictionary hovers...');
         const wordsAdded = await databaseLayer!.processFrequentlyLookedUpWords(currentLanguage);
         if (wordsAdded > 0) {
-          logger.info(`Added ${wordsAdded} words from dictionary hovers`);
+          logger!.info(`Added ${wordsAdded} words from dictionary hovers`);
         } else {
-          logger.info('No new words to add from dictionary hovers');
+          logger!.info('No new words to add from dictionary hovers');
         }
       } catch (error) {
-        logger.warn({ error }, 'Failed to process dictionary hovers (non-critical)');
+        logger!.warn({ error }, 'Failed to process dictionary hovers (non-critical)');
       }
     });
 
@@ -328,10 +329,6 @@ if (process.platform === 'darwin') {
 // This method will be called when Electron has finished initialization
 app.whenReady().then(async () => {
   try {
-    // Initialize logger first - must be done before any other services that might log
-    await initializeLogger();
-    const logger = getLogger();
-    
     // Set up security policies
     await setupSecurity();
 
@@ -340,6 +337,7 @@ app.whenReady().then(async () => {
     createWindow();
 
     // Initialize all services (some operations deferred to background)
+    // Logger is initialized first within initializeServices()
     await initializeServices();
 
     // Set up IPC handlers with initialized services
@@ -347,20 +345,20 @@ app.whenReady().then(async () => {
 
     // Set up scoring handlers (called separately since scoring service is optional during IPC setup)
     if (scoringService) {
-      logger.info('Setting up scoring handlers...');
+      logger!.info('Setting up scoring handlers...');
       setupScoringHandlers(scoringService);
-      logger.info('Scoring handlers setup complete');
+      logger!.info('Scoring handlers setup complete');
     } else {
-      logger.warn('Warning: scoringService is undefined, scoring handlers not registered');
+      logger!.warn('Warning: scoringService is undefined, scoring handlers not registered');
     }
     
     // Set up proficiency handlers
     if (proficiencyService) {
-      logger.info('Setting up proficiency handlers...');
+      logger!.info('Setting up proficiency handlers...');
       setupProficiencyHandlers(proficiencyService);
-      logger.info('Proficiency handlers setup complete');
+      logger!.info('Proficiency handlers setup complete');
     } else {
-      logger.warn('Warning: proficiencyService is undefined, proficiency handlers not registered');
+      logger!.warn('Warning: proficiencyService is undefined, proficiency handlers not registered');
     }
 
     wordGenerationRunner?.start();
@@ -376,7 +374,7 @@ app.whenReady().then(async () => {
       originalSwitchProvider(provider, geminiApiKey);
       llmClient = contentGenerator!.getCurrentClient();
     };
-    logger.info('IPC handlers initialized successfully');
+    logger!.info('IPC handlers initialized successfully');
 
     app.on('activate', async () => {
       // On macOS it's common to re-create a window in the app when the
@@ -386,8 +384,9 @@ app.whenReady().then(async () => {
       }
     });
   } catch (error) {
-    const logger = getLogger();
-    logger.error({ error }, 'Failed to initialize application');
+    // Use getLogger() as fallback in case initializeServices() failed before logger was initialized
+    const errorLogger = logger || getLogger();
+    errorLogger.error({ error }, 'Failed to initialize application');
     app.quit();
   }
 });
