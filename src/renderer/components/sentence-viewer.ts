@@ -52,7 +52,7 @@ export class SentenceViewer extends LitElement {
   private isPlayingAudio = false;
   
   @state()
-  private localPlayingAudio: 'before' | 'main' | null = null;
+  private localPlayingAudio: 'before' | 'main' | 'after' | null = null;
 
   @state()
   private isRegeneratingAudio = false;
@@ -1781,6 +1781,30 @@ export class SentenceViewer extends LitElement {
         this.localPlayingAudio = null;
         this.requestUpdate();
         
+        // Play after sentence audio if it exists
+        if (this.sentence.contextAfter && this.sentence.id) {
+          try {
+            const contextAudio = await window.electronAPI.dialog.ensureContextSentences(this.sentence.id);
+            const afterSentenceAudioPath = contextAudio.afterSentenceAudio;
+            if (afterSentenceAudioPath) {
+              // Set local state to indicate after-sentence audio is playing
+              this.localPlayingAudio = 'after';
+              this.requestUpdate();
+              
+              await window.electronAPI.audio.playAudio(afterSentenceAudioPath);
+              
+              // Reset state after after-sentence audio finishes
+              this.localPlayingAudio = null;
+              this.requestUpdate();
+            }
+          } catch (error) {
+            console.warn('Failed to play after sentence audio:', error);
+            this.localPlayingAudio = null;
+            this.requestUpdate();
+            // Continue even if after sentence audio fails
+          }
+        }
+        
         // Audio finished playing successfully
         this.dispatchEvent(new CustomEvent('sentence-audio-played', {
           detail: {
@@ -2160,7 +2184,7 @@ export class SentenceViewer extends LitElement {
           </div>
           
           ${this.sentence.contextAfter ? html`
-            <div class="context-section">
+            <div class="context-section ${this.localPlayingAudio === 'after' ? 'playing' : ''}">
               <div class="context-text">${this.sentence.contextAfter}</div>
               <div class="context-translation ${this.audioOnlyMode ? 'hidden' : ''}">${this.sentence.contextAfterTranslation}</div>
             </div>

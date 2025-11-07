@@ -311,6 +311,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_FOLLOW_UP_FROM_TEXT, userText, userTranslation),
       ensureBeforeSentenceAudio: (sentenceId: number) => 
         ipcRenderer.invoke(IPC_CHANNELS.DIALOG.ENSURE_BEFORE_SENTENCE_AUDIO, sentenceId),
+      ensureContextSentences: (sentenceId: number) => 
+        ipcRenderer.invoke(IPC_CHANNELS.DIALOG.ENSURE_CONTEXT_SENTENCES, sentenceId),
       pregenerateSession: () => 
         ipcRenderer.invoke(IPC_CHANNELS.DIALOG.PREGENERATE_SESSION),
       pregenerateSessions: (count: number) =>
@@ -564,6 +566,7 @@ declare global {
         generateFollowUp: (variantId: number) => Promise<{ text: string; translation: string; audio?: string }>;
         generateFollowUpFromText: (userText: string, userTranslation: string) => Promise<{ text: string; translation: string; audio?: string }>;
         ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
+        ensureContextSentences: (sentenceId: number) => Promise<{ beforeSentenceAudio: string | null; afterSentenceAudio: string | null }>;
         pregenerateSession: () => Promise<any | null>;
         pregenerateSessions: (count: number) => Promise<any[]>;
       };
@@ -572,6 +575,7 @@ declare global {
           sentence: any;
           words: any[];
           beforeSentenceAudio?: string;
+          afterSentenceAudio?: string;
           continuationAudios: string[];
         }>>;
         stitchAudio: (audioPaths: string[], language: string) => Promise<string>;

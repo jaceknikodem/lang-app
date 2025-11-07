@@ -69,6 +69,9 @@ export async function checkFlowSentences(): Promise<boolean> {
       if (item.sentence.audioPath) {
         audioPaths.push(item.sentence.audioPath);
       }
+      if (item.afterSentenceAudio) {
+        audioPaths.push(item.afterSentenceAudio);
+      }
       audioPaths.push(...item.continuationAudios);
     }
     

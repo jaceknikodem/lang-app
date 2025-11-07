@@ -40,6 +40,9 @@ export class DialogMode extends LitElement {
   private beforeSentenceAudio: string | null = null;
 
   @state()
+  private afterSentenceAudio: string | null = null;
+
+  @state()
   private responseOptions: DialogueVariant[] = [];
 
   @state()
@@ -292,6 +295,7 @@ export class DialogMode extends LitElement {
               });
               this.currentSentence = sentence;
               this.beforeSentenceAudio = cachedSession.beforeSentenceAudio || null;
+              this.afterSentenceAudio = cachedSession.afterSentenceAudio || null;
               
               // Convert cached response options back to DialogueVariant format
               this.responseOptions = cachedSession.responseOptions.map(v => ({
@@ -359,15 +363,15 @@ export class DialogMode extends LitElement {
       });
       this.currentSentence = sentence;
 
-      // Step 2: Prepare trigger (beforeSentence audio)
-      if (sentence.contextBefore) {
-        try {
-          const audioPath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(sentence.id);
-          this.beforeSentenceAudio = audioPath || null;
-        } catch (error) {
-          console.warn('Failed to generate beforeSentence audio:', error);
-          this.beforeSentenceAudio = null;
-        }
+      // Step 2: Prepare context sentences audio (beforeSentence and afterSentence)
+      try {
+        const contextAudio = await window.electronAPI.dialog.ensureContextSentences(sentence.id);
+        this.beforeSentenceAudio = contextAudio.beforeSentenceAudio || null;
+        this.afterSentenceAudio = contextAudio.afterSentenceAudio || null;
+      } catch (error) {
+        console.warn('Failed to generate context sentences audio:', error);
+        this.beforeSentenceAudio = null;
+        this.afterSentenceAudio = null;
       }
 
       // Step 3: Generate response options (target + 2 variants)
@@ -425,7 +429,10 @@ export class DialogMode extends LitElement {
             translation: sentence.translation,
             contextBefore: sentence.contextBefore,
             contextBeforeTranslation: sentence.contextBeforeTranslation,
+            contextAfter: sentence.contextAfter,
+            contextAfterTranslation: sentence.contextAfterTranslation,
             beforeSentenceAudio: this.beforeSentenceAudio || undefined,
+            afterSentenceAudio: this.afterSentenceAudio || undefined,
             responseOptions: this.responseOptions.map(v => ({
               id: v.id,
               sentenceId: v.sentenceId,
@@ -556,6 +563,17 @@ export class DialogMode extends LitElement {
             console.error('Failed to play continuation audio:', error);
           }
         }
+
+        // Play afterSentence audio if available
+        if (this.afterSentenceAudio) {
+          try {
+            console.log('[DialogMode] Playing afterSentence audio:', this.afterSentenceAudio);
+            await window.electronAPI.audio.playAudio(this.afterSentenceAudio);
+            console.log('[DialogMode] AfterSentence audio finished');
+          } catch (error) {
+            console.error('Failed to play afterSentence audio:', error);
+          }
+        }
       } catch (error) {
         console.error('Failed to play dialog sequence:', error);
       }
@@ -599,6 +617,47 @@ export class DialogMode extends LitElement {
       }
     } catch (error) {
       console.error('Failed to play before sentence audio:', error);
+      this.isAudioPlaying = false;
+    }
+  }
+
+  private async playAfterSentence() {
+    if (!this.afterSentenceAudio) {
+      return;
+    }
+
+    try {
+      // Stop any currently playing audio
+      if (this.currentAudioElement) {
+        this.currentAudioElement.pause();
+      }
+
+      this.isAudioPlaying = true;
+      // Play the afterSentence audio
+      await window.electronAPI.audio.playAudio(this.afterSentenceAudio);
+      this.isAudioPlaying = false; // Reset when audio finishes
+      
+      // Track sentence play count
+      if (this.currentSentence?.id) {
+        void window.electronAPI.database.incrementSentencePlayCount(this.currentSentence.id).catch(err => {
+          console.warn('Failed to increment sentence play count:', err);
+        });
+      }
+      // Track audio playback event
+      if (this.currentSentence?.id && this.currentLanguage) {
+        void window.electronAPI.tracking.recordAudioPlayback({
+          sessionId: this.currentSessionId,
+          sentenceId: this.currentSentence.id,
+          audioPath: this.afterSentenceAudio,
+          language: this.currentLanguage,
+          mode: 'dialog',
+          playbackSpeed: 1.0 // Dialog mode doesn't have playback speed control
+        }).catch((err: unknown) => {
+          console.warn('Failed to record audio playback:', err);
+        });
+      }
+    } catch (error) {
+      console.error('Failed to play after sentence audio:', error);
       this.isAudioPlaying = false;
     }
   }

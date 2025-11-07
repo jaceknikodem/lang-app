@@ -329,7 +329,10 @@ export class DialogService {
             translation: sentence.translation,
             contextBefore: sentence.contextBefore,
             contextBeforeTranslation: sentence.contextBeforeTranslation,
+            contextAfter: sentence.contextAfter,
+            contextAfterTranslation: sentence.contextAfterTranslation,
             beforeSentenceAudio: undefined, // Will be set by IPC handler
+            afterSentenceAudio: undefined, // Will be set by IPC handler
             responseOptions: responseOptions.map(toDialogResponseOption)
           });
         } catch (error) {

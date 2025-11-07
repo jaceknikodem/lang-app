@@ -174,6 +174,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // Ignore error - this is expected for existing databases with the column
     }
 
+    // Migration: Add after_sentence_audio_path column to sentences table if it doesn't exist
+    try {
+      db.exec(`ALTER TABLE sentences ADD COLUMN after_sentence_audio_path TEXT`);
+    } catch (error) {
+      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
+      // Ignore error - this is expected for existing databases with the column
+    }
+
     // Migration: Add ignored column to sentences table if it doesn't exist
     try {
       db.exec(`ALTER TABLE sentences ADD COLUMN ignored BOOLEAN DEFAULT FALSE`);
@@ -1277,6 +1285,23 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
+  async updateAfterSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void> {
+    const db = this.getDb();
+    try {
+      const stmt = db.prepare(`
+        UPDATE sentences
+        SET after_sentence_audio_path = ?
+        WHERE id = ?
+      `);
+      const result = stmt.run(audioPath, sentenceId);
+      if (result.changes === 0) {
+        throw new Error(`Sentence with ID ${sentenceId} not found`);
+      }
+    } catch (error) {
+      throw wrapError(error, `Failed to update after sentence audio path`);
+    }
+  }
+
   /**
    * Update sentence tokens (precomputed tokenization)
    * Also stores all lemmas in sentence_lemmas table for future word matching
@@ -1794,12 +1819,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    * Get all sentences with audio for Flow feature
    * Includes sentences, connected words, before sentence audio paths, and continuation audio paths
    */
-  async getFlowSentences(language?: string): Promise<Array<{
-    sentence: Sentence;
-    words: Word[];
-    beforeSentenceAudio?: string;
-    continuationAudios: string[];
-  }>> {
+      async getFlowSentences(language?: string): Promise<Array<{
+        sentence: Sentence;
+        words: Word[];
+        beforeSentenceAudio?: string;
+        afterSentenceAudio?: string;
+        continuationAudios: string[];
+      }>> {
     const db = this.getDb();
     
     try {
@@ -1823,6 +1849,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         sentence: Sentence;
         words: Word[];
         beforeSentenceAudio?: string;
+        afterSentenceAudio?: string;
         continuationAudios: string[];
       }> = [];
       
@@ -1860,8 +1887,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           }
         }
         
-        // Get before sentence audio path from database (if stored)
+        // Get before and after sentence audio paths from database (if stored)
         const beforeSentenceAudioPath = sentence.beforeSentenceAudioPath || undefined;
+        const afterSentenceAudioPath = sentence.afterSentenceAudioPath || undefined;
         
         // Get dialogue variants and their continuation audio
         const variantsStmt = db.prepare(`
@@ -1877,6 +1905,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           sentence,
           words,
           beforeSentenceAudio: beforeSentenceAudioPath, // We'll check existence later
+          afterSentenceAudio: afterSentenceAudioPath, // We'll check existence later
           continuationAudios
         });
       }
@@ -2876,6 +2905,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       audioGenerationModel: row.audio_generation_model || undefined,
       audioGenerationVoiceId: row.audio_generation_voice_id || undefined,
       beforeSentenceAudioPath: row.before_sentence_audio_path || undefined,
+      afterSentenceAudioPath: row.after_sentence_audio_path || undefined,
       ignored: row.ignored === 1 || row.ignored === true
     };
   }

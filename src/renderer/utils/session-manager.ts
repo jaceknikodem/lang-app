@@ -31,7 +31,10 @@ export interface DialogSessionState {
   translation: string;
   contextBefore?: string;
   contextBeforeTranslation?: string;
+  contextAfter?: string;
+  contextAfterTranslation?: string;
   beforeSentenceAudio?: string;
+  afterSentenceAudio?: string;
   responseOptions: Array<{
     id: number;
     sentenceId: number;

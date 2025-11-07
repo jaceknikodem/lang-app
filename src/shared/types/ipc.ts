@@ -208,6 +208,7 @@ export interface IPCBridge {
     generateFollowUp: (variantId: number) => Promise<{ text: string; translation: string; audio?: string }>;
     generateFollowUpFromText: (userText: string, userTranslation: string) => Promise<{ text: string; translation: string; audio?: string }>;
     ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
+    ensureContextSentences: (sentenceId: number) => Promise<{ beforeSentenceAudio: string | null; afterSentenceAudio: string | null }>;
     pregenerateSession: () => Promise<DialogSession | null>;
     pregenerateSessions: (count: number) => Promise<DialogSession[]>;
   };
@@ -218,6 +219,7 @@ export interface IPCBridge {
       sentence: Sentence;
       words: Word[];
       beforeSentenceAudio?: string;
+      afterSentenceAudio?: string;
       continuationAudios: string[];
     }>>;
     stitchAudio: (audioPaths: string[]) => Promise<string>;
@@ -364,6 +366,7 @@ export const IPC_CHANNELS = {
     GENERATE_FOLLOW_UP: 'dialog:generateFollowUp',
     GENERATE_FOLLOW_UP_FROM_TEXT: 'dialog:generateFollowUpFromText',
     ENSURE_BEFORE_SENTENCE_AUDIO: 'dialog:ensureBeforeSentenceAudio',
+    ENSURE_CONTEXT_SENTENCES: 'dialog:ensureContextSentences',
     PREGENERATE_SESSION: 'dialog:pregenerateSession',
     PREGENERATE_SESSIONS: 'dialog:pregenerateSessions'
   },

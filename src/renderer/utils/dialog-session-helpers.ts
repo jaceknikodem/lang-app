@@ -10,7 +10,10 @@ export interface DialogSessionData {
   translation: string;
   contextBefore?: string;
   contextBeforeTranslation?: string;
+  contextAfter?: string;
+  contextAfterTranslation?: string;
   beforeSentenceAudio?: string;
+  afterSentenceAudio?: string;
   responseOptions: Array<{
     id: number;
     sentenceId: number;
@@ -45,7 +48,10 @@ export function transformDialogSessionData(
       translation: sessionData.translation,
       contextBefore: sessionData.contextBefore,
       contextBeforeTranslation: sessionData.contextBeforeTranslation,
+      contextAfter: sessionData.contextAfter,
+      contextAfterTranslation: sessionData.contextAfterTranslation,
       beforeSentenceAudio: sessionData.beforeSentenceAudio,
+      afterSentenceAudio: sessionData.afterSentenceAudio,
       responseOptions: responseOptionsWithDates.map((v) => ({
         id: v.id,
         sentenceId: v.sentenceId,

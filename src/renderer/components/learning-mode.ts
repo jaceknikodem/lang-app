@@ -81,7 +81,7 @@ export class LearningMode extends LitElement {
   private playbackSpeed: number = 1.0; // 0.9x, 1x, 1.1x, 1.2x
 
   @state()
-  private currentPlayingAudio: 'before' | 'main' | null = null;
+  private currentPlayingAudio: 'before' | 'main' | 'after' | null = null;
 
   @state()
   private audioOnlyMode = false;
@@ -1854,6 +1854,36 @@ export class LearningMode extends LitElement {
   }
 
   /**
+   * Ensure after sentence audio is loaded and ready
+   * Optimized: Skips already cached files
+   */
+  private async ensureAfterSentenceAudioLoaded(sentence: Sentence): Promise<void> {
+    if (!sentence.contextAfter || !sentence.id) {
+      return; // No after sentence text
+    }
+
+    try {
+      // Ensure context sentences audio exists (includes afterSentence)
+      const contextAudio = await window.electronAPI.dialog.ensureContextSentences(sentence.id);
+      const afterSentenceAudioPath = contextAudio.afterSentenceAudio;
+      if (!afterSentenceAudioPath) {
+        return; // No audio generated
+      }
+
+      // If already cached, we're done
+      if (this.audioCache.has(afterSentenceAudioPath)) {
+        return;
+      }
+
+      // Load into cache
+      await this.loadAudioIntoCache(afterSentenceAudioPath);
+    } catch (error) {
+      console.warn(`Failed to load after sentence audio:`, error);
+      // Continue anyway - will generate/load on demand
+    }
+  }
+
+  /**
    * Ensure current sentence's audio is loaded and ready
    * Prioritizes current audio for instant playback
    */
@@ -1873,9 +1903,12 @@ export class LearningMode extends LitElement {
     try {
       await this.loadAudioIntoCache(audioPath);
       
-      // Also ensure before sentence audio is loaded if it exists
+      // Also ensure before and after sentence audio is loaded if they exist
       if (currentSentence.contextBefore) {
         await this.ensureBeforeSentenceAudioLoaded(currentSentence);
+      }
+      if (currentSentence.contextAfter) {
+        await this.ensureAfterSentenceAudioLoaded(currentSentence);
       }
     } catch (error) {
       console.warn(`Failed to load current sentence audio:`, error);
@@ -1948,6 +1981,18 @@ export class LearningMode extends LitElement {
               window.electronAPI.dialog.ensureBeforeSentenceAudio(sentence.id)
                 .catch(err => {
                   console.warn(`Failed to ensure before sentence audio for sentence ${sentence.id}:`, err);
+                  return null;
+                })
+            );
+          }
+          
+          // Collect after sentence audio if it exists
+          if (sentence.contextAfter && sentence.id) {
+            beforeSentencePromises.push(
+              window.electronAPI.dialog.ensureContextSentences(sentence.id)
+                .then(contextAudio => contextAudio.afterSentenceAudio)
+                .catch(err => {
+                  console.warn(`Failed to ensure after sentence audio for sentence ${sentence.id}:`, err);
                   return null;
                 })
             );
@@ -2068,6 +2113,82 @@ export class LearningMode extends LitElement {
   }
 
   /**
+   * Play after sentence audio if it exists
+   * Returns a promise that resolves when audio finishes playing (or immediately if no audio)
+   */
+  private async playAfterSentenceAudio(sentence: Sentence): Promise<void> {
+    if (!sentence.contextAfter || !sentence.id) {
+      return; // No after sentence text
+    }
+
+    try {
+      // Ensure context sentences audio exists (includes afterSentence)
+      const contextAudio = await window.electronAPI.dialog.ensureContextSentences(sentence.id);
+      const afterSentenceAudioPath = contextAudio.afterSentenceAudio;
+      if (!afterSentenceAudioPath) {
+        return; // No audio generated
+      }
+
+      // Load into cache if not already cached
+      if (!this.audioCache.has(afterSentenceAudioPath)) {
+        await this.loadAudioIntoCache(afterSentenceAudioPath).catch(err => {
+          console.warn(`Failed to load after sentence audio into cache: ${err}`);
+        });
+      }
+
+      // Set state to indicate after-sentence audio is playing
+      this.currentPlayingAudio = 'after';
+
+      // Play after sentence audio
+      const cachedAfterAudio = this.audioCache.get(afterSentenceAudioPath);
+      if (cachedAfterAudio) {
+        // Use HTML5 Audio API to play from memory
+        this.beforeAudioElement = new Audio(cachedAfterAudio);
+        this.beforeAudioElement.playbackRate = this.playbackSpeed;
+
+        // Wait for after sentence audio to finish
+        await new Promise<void>((resolve, reject) => {
+          this.beforeAudioElement!.addEventListener('ended', () => {
+            this.beforeAudioElement = null;
+            this.currentPlayingAudio = null;
+            resolve();
+          });
+          this.beforeAudioElement!.addEventListener('error', (e) => {
+            console.warn('Error playing after sentence cached audio, falling back to IPC:', e);
+            this.beforeAudioElement = null;
+            // Fall back to IPC playback
+            window.electronAPI.audio.playAudio(afterSentenceAudioPath)
+              .then(() => {
+                this.currentPlayingAudio = null;
+                resolve();
+              })
+              .catch(reject);
+          });
+          this.beforeAudioElement!.play().catch(playError => {
+            console.warn('Failed to play after sentence cached audio, falling back to IPC:', playError);
+            this.beforeAudioElement = null;
+            // Fall back to IPC playback
+            window.electronAPI.audio.playAudio(afterSentenceAudioPath)
+              .then(() => {
+                this.currentPlayingAudio = null;
+                resolve();
+              })
+              .catch(reject);
+          });
+        });
+      } else {
+        // Not cached: Use IPC playback
+        await window.electronAPI.audio.playAudio(afterSentenceAudioPath);
+        this.currentPlayingAudio = null;
+      }
+    } catch (error) {
+      console.warn('Failed to play after sentence audio:', error);
+      this.currentPlayingAudio = null;
+      // Continue even if after sentence audio fails
+    }
+  }
+
+  /**
    * Play audio immediately - don't wait for loading
    * When called manually (e.g., via space key), plays only the current sentence
    */
@@ -2131,16 +2252,19 @@ export class LearningMode extends LitElement {
               console.warn('Failed to record audio playback:', err);
             });
           }
-          // Auto-scroll to next sentence after 1.5 seconds if enabled
-          if (this.autoScrollEnabled) {
-            this.clearAutoScrollTimer();
-            this.autoScrollTimer = window.setTimeout(() => {
-              if (!this.isLastSentence()) {
-                void this.goToNextSentence();
-              }
-              this.autoScrollTimer = null;
-            }, 1500); // 1.5 seconds delay
-          }
+          // Play after sentence audio if it exists
+          void this.playAfterSentenceAudio(currentSentence).then(() => {
+            // Auto-scroll to next sentence after 1.5 seconds if enabled
+            if (this.autoScrollEnabled) {
+              this.clearAutoScrollTimer();
+              this.autoScrollTimer = window.setTimeout(() => {
+                if (!this.isLastSentence()) {
+                  void this.goToNextSentence();
+                }
+                this.autoScrollTimer = null;
+              }, 1500); // 1.5 seconds delay
+            }
+          });
         });
 
         this.currentAudioElement.addEventListener('error', (e) => {

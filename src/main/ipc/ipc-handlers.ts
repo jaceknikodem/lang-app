@@ -1577,34 +1577,63 @@ function setupDialogHandlers(
       
       // Generate audio if needed (non-blocking - don't fail if audio generation fails)
       let beforeSentenceAudio: string | undefined;
-      if (session.contextBefore && session.sentenceId) {
+      let afterSentenceAudio: string | undefined;
+      if (session.sentenceId) {
         try {
           // Get word ID from sentence
           const sentence = await databaseLayer.getSentenceById(session.sentenceId);
           if (!sentence) {
             throw new Error(`Sentence with ID ${session.sentenceId} not found`);
           }
-          const audioPath = await audioService.generateAudio(
-            session.contextBefore,
-            await databaseLayer.getCurrentLanguage(),
-            '_before_sentence',
-            sentence.wordId,
-            session.sentenceId
-          );
-          
-          // Check if audio was generated successfully
-          if (audioPath && await audioService.audioExists(audioPath)) {
-            beforeSentenceAudio = audioPath;
-            // Save the path to database
-            try {
-              await databaseLayer.updateBeforeSentenceAudioPath(session.sentenceId, audioPath);
-            } catch (dbError) {
-              console.warn('[IPC] Failed to save beforeSentence audio path to database:', dbError);
-              // Continue - audio exists even if DB update fails
+          const language = await databaseLayer.getCurrentLanguage();
+
+          // Generate beforeSentence audio if contextBefore exists
+          if (session.contextBefore) {
+            const audioPath = await audioService.generateAudio(
+              session.contextBefore,
+              language,
+              '_before_sentence',
+              sentence.wordId,
+              session.sentenceId
+            );
+            
+            // Check if audio was generated successfully
+            if (audioPath && await audioService.audioExists(audioPath)) {
+              beforeSentenceAudio = audioPath;
+              // Save the path to database
+              try {
+                await databaseLayer.updateBeforeSentenceAudioPath(session.sentenceId, audioPath);
+              } catch (dbError) {
+                console.warn('[IPC] Failed to save beforeSentence audio path to database:', dbError);
+                // Continue - audio exists even if DB update fails
+              }
+            }
+          }
+
+          // Generate afterSentence audio if contextAfter exists
+          if (session.contextAfter) {
+            const audioPath = await audioService.generateAudio(
+              session.contextAfter,
+              language,
+              '_after_sentence',
+              sentence.wordId,
+              session.sentenceId
+            );
+            
+            // Check if audio was generated successfully
+            if (audioPath && await audioService.audioExists(audioPath)) {
+              afterSentenceAudio = audioPath;
+              // Save the path to database
+              try {
+                await databaseLayer.updateAfterSentenceAudioPath(session.sentenceId, audioPath);
+              } catch (dbError) {
+                console.warn('[IPC] Failed to save afterSentence audio path to database:', dbError);
+                // Continue - audio exists even if DB update fails
+              }
             }
           }
         } catch (error) {
-          console.warn('[IPC] Failed to generate beforeSentence audio during pre-generation:', error);
+          console.warn('[IPC] Failed to generate context sentences audio during pre-generation:', error);
           // Continue without audio
         }
       }
@@ -1613,6 +1642,7 @@ function setupDialogHandlers(
       return {
         ...session,
         beforeSentenceAudio,
+        afterSentenceAudio,
         responseOptions: session.responseOptions.map(v => ({
           ...v,
           createdAt: v.createdAt.toISOString()
@@ -1635,34 +1665,62 @@ function setupDialogHandlers(
       const sessionsWithAudio = await Promise.all(sessions.map(async (session) => {
         // Generate audio if needed (non-blocking - don't fail if audio generation fails)
         let beforeSentenceAudio: string | undefined;
-        if (session.contextBefore && session.sentenceId) {
+        let afterSentenceAudio: string | undefined;
+        if (session.sentenceId) {
           try {
             // Get word ID from sentence
             const sentence = await databaseLayer.getSentenceById(session.sentenceId);
             if (!sentence) {
               throw new Error(`Sentence with ID ${session.sentenceId} not found`);
             }
-            const audioPath = await audioService.generateAudio(
-              session.contextBefore,
-              language,
-              '_before_sentence',
-              sentence.wordId,
-              session.sentenceId
-            );
-            
-            // Check if audio was generated successfully
-            if (audioPath && await audioService.audioExists(audioPath)) {
-              beforeSentenceAudio = audioPath;
-              // Save the path to database
-              try {
-                await databaseLayer.updateBeforeSentenceAudioPath(session.sentenceId, audioPath);
-              } catch (dbError) {
-                console.warn(`[IPC] Failed to save beforeSentence audio path to database for session ${session.sentenceId}:`, dbError);
-                // Continue - audio exists even if DB update fails
+
+            // Generate beforeSentence audio if contextBefore exists
+            if (session.contextBefore) {
+              const audioPath = await audioService.generateAudio(
+                session.contextBefore,
+                language,
+                '_before_sentence',
+                sentence.wordId,
+                session.sentenceId
+              );
+              
+              // Check if audio was generated successfully
+              if (audioPath && await audioService.audioExists(audioPath)) {
+                beforeSentenceAudio = audioPath;
+                // Save the path to database
+                try {
+                  await databaseLayer.updateBeforeSentenceAudioPath(session.sentenceId, audioPath);
+                } catch (dbError) {
+                  console.warn(`[IPC] Failed to save beforeSentence audio path to database for session ${session.sentenceId}:`, dbError);
+                  // Continue - audio exists even if DB update fails
+                }
+              }
+            }
+
+            // Generate afterSentence audio if contextAfter exists
+            if (session.contextAfter) {
+              const audioPath = await audioService.generateAudio(
+                session.contextAfter,
+                language,
+                '_after_sentence',
+                sentence.wordId,
+                session.sentenceId
+              );
+              
+              // Check if audio was generated successfully
+              if (audioPath && await audioService.audioExists(audioPath)) {
+                afterSentenceAudio = audioPath;
+                // Save the path to database
+                try {
+                  await databaseLayer.updateAfterSentenceAudioPath(session.sentenceId, audioPath);
+                } catch (dbError) {
+                  console.warn(`[IPC] Failed to save afterSentence audio path to database for session ${session.sentenceId}:`, dbError);
+                  // Continue - audio exists even if DB update fails
+                }
               }
             }
           } catch (error) {
-            console.warn(`[IPC] Failed to generate beforeSentence audio for session ${session.sentenceId}:`, error);
+            console.warn(`[IPC] Failed to generate context sentences audio for session ${session.sentenceId}:`, error);
             // Continue without audio
           }
         }
@@ -1671,6 +1729,7 @@ function setupDialogHandlers(
         return {
           ...session,
           beforeSentenceAudio,
+          afterSentenceAudio,
           responseOptions: session.responseOptions.map(v => ({
             ...v,
             createdAt: v.createdAt.toISOString()
@@ -1726,6 +1785,76 @@ function setupDialogHandlers(
     } catch (error) {
       console.error('Error ensuring before sentence audio:', error);
       throw new Error(`Failed to ensure before sentence audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DIALOG.ENSURE_CONTEXT_SENTENCES, async (event, sentenceId) => {
+    try {
+      const validatedSentenceId = SentenceIdSchema.parse(sentenceId);
+      
+      // Get the sentence
+      const sentence = await databaseLayer.getSentenceById(validatedSentenceId);
+      if (!sentence) {
+        throw new Error(`Sentence with ID ${validatedSentenceId} not found`);
+      }
+
+      const language = await databaseLayer.getCurrentLanguage();
+      let beforeSentenceAudio: string | null = null;
+      let afterSentenceAudio: string | null = null;
+
+      // Generate beforeSentence audio if contextBefore exists
+      if (sentence.contextBefore) {
+        // If audio path already exists in database, use it
+        if (sentence.beforeSentenceAudioPath) {
+          beforeSentenceAudio = sentence.beforeSentenceAudioPath;
+        } else {
+          // Generate audio with wordId and sentenceId
+          const audioPath = await audioService.generateAudio(
+            sentence.contextBefore,
+            language,
+            '_before_sentence',
+            sentence.wordId,
+            validatedSentenceId
+          );
+
+          // Save the path to database
+          if (audioPath) {
+            await databaseLayer.updateBeforeSentenceAudioPath(validatedSentenceId, audioPath);
+            beforeSentenceAudio = audioPath;
+          }
+        }
+      }
+
+      // Generate afterSentence audio if contextAfter exists
+      if (sentence.contextAfter) {
+        // If audio path already exists in database, use it
+        if (sentence.afterSentenceAudioPath) {
+          afterSentenceAudio = sentence.afterSentenceAudioPath;
+        } else {
+          // Generate audio with wordId and sentenceId
+          const audioPath = await audioService.generateAudio(
+            sentence.contextAfter,
+            language,
+            '_after_sentence',
+            sentence.wordId,
+            validatedSentenceId
+          );
+
+          // Save the path to database
+          if (audioPath) {
+            await databaseLayer.updateAfterSentenceAudioPath(validatedSentenceId, audioPath);
+            afterSentenceAudio = audioPath;
+          }
+        }
+      }
+
+      return {
+        beforeSentenceAudio,
+        afterSentenceAudio
+      };
+    } catch (error) {
+      console.error('Error ensuring context sentences audio:', error);
+      throw new Error(`Failed to ensure context sentences audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
 }

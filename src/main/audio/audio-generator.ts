@@ -199,6 +199,7 @@ export class TTSAudioGenerator implements AudioGenerator {
    * Structure: 
    *   - Continuation audio: /audio/<lang>/variant_<variant_id>.<extension>
    *   - Before sentence audio: /audio/<lang>/word_<word_id>/before_sentence_<sentence_id>.<extension>
+   *   - After sentence audio: /audio/<lang>/word_<word_id>/after_sentence_<sentence_id>.<extension>
    *   - Sentence audio: /audio/<lang>/<word_id>/<sentence_id>.<extension>
    *   - Word audio: /audio/<lang>/<word_id>.<extension>
    * Requires wordId for word/sentence audio, variantId for continuation audio
@@ -216,6 +217,9 @@ export class TTSAudioGenerator implements AudioGenerator {
     if (sentenceId !== undefined && word?.includes('_before_sentence')) {
       // Before sentence audio: /audio/<lang>/word_<word_id>/before_sentence_<sentence_id>.<extension>
       return join(this.config.audioDirectory, language, `word_${wordId}`, `before_sentence_${sentenceId}${this.config.fileExtension}`);
+    } else if (sentenceId !== undefined && word?.includes('_after_sentence')) {
+      // After sentence audio: /audio/<lang>/word_<word_id>/after_sentence_<sentence_id>.<extension>
+      return join(this.config.audioDirectory, language, `word_${wordId}`, `after_sentence_${sentenceId}${this.config.fileExtension}`);
     } else if (sentenceId !== undefined) {
       // Sentence audio: /audio/<lang>/<word_id>/<sentence_id>.<extension>
       return join(this.config.audioDirectory, language, `word_${wordId}`, `sentence_${sentenceId}${this.config.fileExtension}`);

@@ -55,6 +55,7 @@ export interface Sentence {
   audioGenerationVoiceId?: string;
   tokenizedTokens?: PrecomputedToken[];
   beforeSentenceAudioPath?: string;
+  afterSentenceAudioPath?: string;
   ignored?: boolean;
 }
 
@@ -154,7 +155,10 @@ export interface DialogSession {
   translation: string;
   contextBefore?: string;
   contextBeforeTranslation?: string;
+  contextAfter?: string;
+  contextAfterTranslation?: string;
   beforeSentenceAudio?: string;
+  afterSentenceAudio?: string;
   responseOptions: DialogResponseOption[];
 }
 

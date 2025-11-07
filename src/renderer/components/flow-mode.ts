@@ -13,6 +13,7 @@ interface FlowSentence {
   sentence: Sentence;
   words: Word[];
   beforeSentenceAudio?: string;
+  afterSentenceAudio?: string;
   continuationAudios: string[];
 }
 
@@ -140,6 +141,9 @@ export class FlowMode extends LitElement {
           }
           if (item.sentence.audioPath) {
             audioPaths.push(item.sentence.audioPath);
+          }
+          if (item.afterSentenceAudio) {
+            audioPaths.push(item.afterSentenceAudio);
           }
           audioPaths.push(...item.continuationAudios);
           
