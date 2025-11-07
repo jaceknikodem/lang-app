@@ -1,6 +1,8 @@
 import { existsSync } from 'fs';
 import { AudioGenerator } from '../../shared/types/audio';
 import { createAudioError } from '../../shared/utils/error.js';
+import { getLogger } from '../utils/logger.js';
+import { Logger } from '../../shared/utils/logger.js';
 
 /**
  * Base class for audio generators with shared playback functionality
@@ -9,6 +11,11 @@ import { createAudioError } from '../../shared/utils/error.js';
 export abstract class BaseAudioGenerator implements AudioGenerator {
   protected currentAudioProcess?: any; // Track current audio process
   protected currentPlayPromise?: { resolve: () => void; reject: (error: any) => void }; // Store promise callbacks for playback completion
+  protected readonly logger: Logger;
+
+  constructor() {
+    this.logger = getLogger();
+  }
 
   /**
    * Play audio file using system command
@@ -89,7 +96,7 @@ export abstract class BaseAudioGenerator implements AudioGenerator {
           promise.reject(createAudioError('Audio playback was stopped', 'PLAYBACK_STOPPED', { audioPath: '' }));
         }
       } catch (error) {
-        console.warn('Failed to stop audio process:', error);
+        this.logger.warn({ error }, 'Failed to stop audio process');
       }
     }
   }

@@ -8,6 +8,8 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { subDays } from 'date-fns';
 import { SQLiteDatabaseLayer } from '../database/database-layer.js';
+import { getLogger } from '../utils/logger.js';
+import { Logger } from '../../shared/utils/logger.js';
 
 export interface LifecycleConfig {
   databaseLayer: SQLiteDatabaseLayer;
@@ -18,8 +20,10 @@ export interface LifecycleConfig {
 export class LifecycleManager {
   private config: LifecycleConfig;
   private isShuttingDown = false;
+  private readonly logger: Logger;
 
   constructor(config: LifecycleConfig) {
+    this.logger = getLogger();
     this.config = config;
   }
 
@@ -28,7 +32,7 @@ export class LifecycleManager {
    */
   async handleStartup(): Promise<void> {
     try {
-      console.log('Starting application lifecycle initialization...');
+      this.logger.info('Starting application lifecycle initialization...');
 
       // Migrate audio files from old location to userData directory
       await this.migrateAudioFiles();
@@ -42,9 +46,9 @@ export class LifecycleManager {
       // Clean up old backups
       await this.cleanupOldBackups();
 
-      console.log('Application startup completed successfully');
+      this.logger.info('Application startup completed successfully');
     } catch (error) {
-      console.error('Error during application startup:', error);
+      this.logger.error({ error }, 'Error during application startup');
       throw error;
     }
   }
@@ -60,16 +64,16 @@ export class LifecycleManager {
     this.isShuttingDown = true;
 
     try {
-      console.log('Starting graceful shutdown...');
+      this.logger.info('Starting graceful shutdown...');
 
       // Close database connections
       if (this.config.databaseLayer) {
         await this.config.databaseLayer.close();
       }
 
-      console.log('Graceful shutdown completed');
+      this.logger.info('Graceful shutdown completed');
     } catch (error) {
-      console.error('Error during shutdown:', error);
+      this.logger.error({ error }, 'Error during shutdown');
       // Don't throw - we still want to quit
     }
   }
@@ -95,7 +99,7 @@ export class LifecycleManager {
         await fs.copyFile(dbPath, backupDbPath);
       } catch {
         // Database might not exist yet, that's okay
-        console.log('No database to backup (this is normal for first run)');
+        this.logger.debug('No database to backup (this is normal for first run)');
       }
 
       // Backup audio files
@@ -106,7 +110,7 @@ export class LifecycleManager {
         await this.copyDirectory(audioDir, backupAudioDir);
       } catch {
         // Audio directory might not exist yet
-        console.log('No audio files to backup');
+        this.logger.debug('No audio files to backup');
       }
 
       // Create backup metadata
@@ -119,10 +123,10 @@ export class LifecycleManager {
 
       await fs.writeFile(path.join(backupPath, 'metadata.json'), JSON.stringify(metadata, null, 2));
 
-      console.log(`Backup created successfully: ${backupPath}`);
+      this.logger.info({ backupPath }, 'Backup created successfully');
       return backupPath;
     } catch (error) {
-      console.error('Failed to create backup:', error);
+      this.logger.error({ error }, 'Failed to create backup');
       throw error;
     }
   }
@@ -132,13 +136,13 @@ export class LifecycleManager {
    */
   async restoreFromBackup(backupPath: string): Promise<void> {
     try {
-      console.log(`Restoring from backup: ${backupPath}`);
+      this.logger.info({ backupPath }, 'Restoring from backup');
 
       // Verify backup exists and is valid
       const metadataPath = path.join(backupPath, 'metadata.json');
       const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf-8'));
 
-      console.log(`Restoring backup from ${metadata.timestamp}`);
+      this.logger.info({ timestamp: metadata.timestamp }, 'Restoring backup');
 
       // Restore database
       const backupDbPath = path.join(backupPath, 'language_learning.db');
@@ -146,9 +150,9 @@ export class LifecycleManager {
 
       try {
         await fs.copyFile(backupDbPath, dbPath);
-        console.log('Database restored successfully');
+        this.logger.info('Database restored successfully');
       } catch {
-        console.log('No database in backup to restore');
+        this.logger.debug('No database in backup to restore');
       }
 
       // Restore audio files
@@ -158,14 +162,14 @@ export class LifecycleManager {
       try {
         await fs.rm(audioDir, { recursive: true, force: true });
         await this.copyDirectory(backupAudioDir, audioDir);
-        console.log('Audio files restored successfully');
+        this.logger.info('Audio files restored successfully');
       } catch {
-        console.log('No audio files in backup to restore');
+        this.logger.debug('No audio files in backup to restore');
       }
 
-      console.log('Backup restoration completed successfully');
+      this.logger.info('Backup restoration completed successfully');
     } catch (error) {
-      console.error('Failed to restore from backup:', error);
+      this.logger.error({ error, backupPath }, 'Failed to restore from backup');
       throw error;
     }
   }
@@ -183,11 +187,11 @@ export class LifecycleManager {
         // Try to open database to verify it's not corrupted
         // This will be handled by the database layer initialization
       } catch {
-        console.log('Database not found or inaccessible, checking for backups...');
+        this.logger.info('Database not found or inaccessible, checking for backups...');
         await this.offerBackupRecovery();
       }
     } catch (error) {
-      console.error('Error during recovery check:', error);
+      this.logger.error({ error }, 'Error during recovery check');
     }
   }
 
@@ -233,10 +237,10 @@ export class LifecycleManager {
         }
       } catch {
         // No backups directory or no backups found - this is normal for first run
-        console.log('No backups found (normal for first run)');
+        this.logger.debug('No backups found (normal for first run)');
       }
     } catch (error) {
-      console.error('Error during backup recovery offer:', error);
+      this.logger.error({ error }, 'Error during backup recovery offer');
     }
   }
 
@@ -257,14 +261,14 @@ export class LifecycleManager {
 
           if (stats.isDirectory() && stats.mtime < cutoffDate) {
             await fs.rm(backupPath, { recursive: true, force: true });
-            console.log(`Cleaned up old backup: ${backup}`);
+            this.logger.debug({ backup }, 'Cleaned up old backup');
           }
         }
       } catch {
         // Backup directory doesn't exist yet
       }
     } catch (error) {
-      console.error('Error during backup cleanup:', error);
+      this.logger.error({ error }, 'Error during backup cleanup');
     }
   }
 
@@ -288,7 +292,7 @@ export class LifecycleManager {
    */
   async restartAll(): Promise<void> {
     try {
-      console.log('Starting complete data reset...');
+      this.logger.info('Starting complete data reset...');
 
       // Backup all settings before deleting database
       const settingsBackup: Record<string, string> = {};
@@ -302,9 +306,12 @@ export class LifecycleManager {
         for (const row of rows) {
           settingsBackup[row.key] = row.value;
         }
-        console.log(`Backed up ${Object.keys(settingsBackup).length} settings`);
+        this.logger.info(
+          { settingCount: Object.keys(settingsBackup).length },
+          'Backed up settings'
+        );
       } catch {
-        console.log('No settings to backup (this is normal for first run)');
+        this.logger.debug('No settings to backup (this is normal for first run)');
       }
 
       // Close database connection first
@@ -316,9 +323,9 @@ export class LifecycleManager {
       const dbPath = path.join(this.config.userDataPath, 'language_learning.db');
       try {
         await fs.unlink(dbPath);
-        console.log('Database file removed');
+        this.logger.info('Database file removed');
       } catch {
-        console.log('No database file to remove (this is normal)');
+        this.logger.debug('No database file to remove (this is normal)');
       }
 
       // Remove all audio files recursively (including subdirectories)
@@ -339,9 +346,9 @@ export class LifecycleManager {
             await fs.unlink(entryPath);
           }
         }
-        console.log('Audio files removed');
+        this.logger.info('Audio files removed');
       } catch {
-        console.log('No audio files to remove');
+        this.logger.debug('No audio files to remove');
       }
 
       // Reinitialize database
@@ -352,12 +359,12 @@ export class LifecycleManager {
         for (const [key, value] of Object.entries(settingsBackup)) {
           await this.config.databaseLayer.setSetting(key, value);
         }
-        console.log(`Restored ${Object.keys(settingsBackup).length} settings`);
+        this.logger.info({ settingCount: Object.keys(settingsBackup).length }, 'Restored settings');
       }
 
-      console.log('Complete data reset completed successfully');
+      this.logger.info('Complete data reset completed successfully');
     } catch (error) {
-      console.error('Failed to restart all:', error);
+      this.logger.error({ error }, 'Failed to restart all');
       throw error;
     }
   }
@@ -376,9 +383,9 @@ export class LifecycleManager {
       // Open the directory in the system file manager
       await shell.openPath(backupDir);
 
-      console.log(`Opened backup directory: ${backupDir}`);
+      this.logger.info({ backupDir }, 'Opened backup directory');
     } catch (error) {
-      console.error('Failed to open backup directory:', error);
+      this.logger.error({ error, backupDir }, 'Failed to open backup directory');
       throw error;
     }
   }
@@ -396,7 +403,7 @@ export class LifecycleManager {
         await fs.access(oldAudioDir);
       } catch {
         // Old directory doesn't exist, nothing to migrate
-        console.log('No audio files to migrate from old location');
+        this.logger.debug('No audio files to migrate from old location');
         return;
       }
 
@@ -411,19 +418,25 @@ export class LifecycleManager {
       }
 
       if (newDirHasFiles) {
-        console.log('New audio directory already has files, skipping migration');
+        this.logger.debug(
+          { newAudioDir },
+          'New audio directory already has files, skipping migration'
+        );
         return;
       }
 
-      console.log(`Migrating audio files from ${oldAudioDir} to ${newAudioDir}...`);
+      this.logger.info(
+        { oldAudioDir, newAudioDir },
+        'Migrating audio files from old location to new location'
+      );
 
       // Copy all files and directories from old location to new location
       await this.copyDirectory(oldAudioDir, newAudioDir);
 
-      console.log('Audio files migrated successfully');
+      this.logger.info('Audio files migrated successfully');
     } catch (error) {
       // Don't throw - migration failure shouldn't block app startup
-      console.error('Failed to migrate audio files:', error);
+      this.logger.error({ error, oldAudioDir, newAudioDir }, 'Failed to migrate audio files');
     }
   }
 

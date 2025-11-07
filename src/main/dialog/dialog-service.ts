@@ -11,6 +11,8 @@ import {
   DialogSession,
   DialogResponseOption,
 } from '../../shared/types/core.js';
+import { getLogger } from '../utils/logger.js';
+import { Logger } from '../../shared/utils/logger.js';
 
 export interface DialogServiceConfig {
   minWordStrength?: number;
@@ -42,8 +44,10 @@ export class DialogService {
   private database: DatabaseLayer;
   private llmClient: LLMClient;
   private config: DialogServiceConfig;
+  private readonly logger: Logger;
 
   constructor(database: DatabaseLayer, llmClient: LLMClient, config?: DialogServiceConfig) {
+    this.logger = getLogger();
     this.database = database;
     this.llmClient = llmClient;
     this.config = {
@@ -93,7 +97,10 @@ export class DialogService {
       const proficiencyKey = `language_proficiency_${language.toLowerCase()}`;
       proficiencyLevel = (await this.database.getSetting(proficiencyKey)) || undefined;
     } catch (error) {
-      console.warn('Failed to retrieve proficiency level for dialogue variant generation:', error);
+      this.logger.warn(
+        { error, language },
+        'Failed to retrieve proficiency level for dialogue variant generation'
+      );
     }
 
     // Use LLM client method which handles prompt creation, JSON parsing, and validation
@@ -204,7 +211,10 @@ export class DialogService {
       const proficiencyKey = `language_proficiency_${language.toLowerCase()}`;
       proficiencyLevel = (await this.database.getSetting(proficiencyKey)) || undefined;
     } catch (error) {
-      console.warn('Failed to retrieve proficiency level for follow-up generation:', error);
+      this.logger.warn(
+        { error, language },
+        'Failed to retrieve proficiency level for follow-up generation'
+      );
     }
 
     // Use LLM client method which handles prompt creation, JSON parsing, and validation

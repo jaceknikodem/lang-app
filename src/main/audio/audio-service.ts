@@ -10,6 +10,8 @@ import { SpeechRecognitionService, TranscriptionOptions, TranscriptionResult } f
 import { sanitizeFilename } from '../../shared/utils/sanitizeFilename';
 import { getErrorMessage, createAudioError } from '../../shared/utils/error.js';
 import { testingConfig } from '../../shared/config/index.js';
+import { getLogger } from '../utils/logger.js';
+import { Logger } from '../../shared/utils/logger.js';
 
 /**
  * Audio service that coordinates audio generation and playback
@@ -20,8 +22,10 @@ export class AudioService {
   private audioRecorder: AudioRecorder;
   private speechRecognition: SpeechRecognitionService;
   private database?: DatabaseLayer;
+  private readonly logger: Logger;
 
   constructor(audioGenerator?: AudioGenerator, database?: DatabaseLayer) {
+    this.logger = getLogger();
     this.database = database;
     if (audioGenerator) {
       this.audioGenerator = audioGenerator;
@@ -78,7 +82,7 @@ export class AudioService {
         this.audioGenerator = new ElevenLabsAudioGenerator(config, database);
       }
     } catch (error) {
-      console.warn('Failed to check audio backend settings, using system TTS:', error);
+      this.logger.warn({ error }, 'Failed to check audio backend settings, using system TTS');
     }
   }
 
@@ -104,8 +108,8 @@ export class AudioService {
           await this.switchToSystemTTS();
           return;
         }
-      } catch {
-        console.warn('Failed to get ElevenLabs model from database, using default');
+      } catch (error) {
+        this.logger.warn({ error }, 'Failed to get ElevenLabs model from database, using default');
       }
     }
 
@@ -114,7 +118,7 @@ export class AudioService {
       elevenLabsModel: model
     };
     this.audioGenerator = new ElevenLabsAudioGenerator(config, this.database);
-    console.log('Switched to ElevenLabs TTS with model:', model);
+    this.logger.info({ model }, 'Switched to ElevenLabs TTS');
   }
 
 
@@ -123,7 +127,7 @@ export class AudioService {
    */
   async switchToSystemTTS(): Promise<void> {
     this.audioGenerator = new TTSAudioGenerator(undefined, this.database);
-    console.log('Switched to system TTS');
+    this.logger.info('Switched to system TTS');
   }
 
   /**
@@ -221,7 +225,7 @@ export class AudioService {
 
       // Check if file exists
       if (!await this.audioExists(absolutePath)) {
-        console.warn('Audio file not found for normalization:', absolutePath);
+        this.logger.warn({ audioPath: absolutePath }, 'Audio file not found for normalization');
         return null;
       }
 
@@ -261,14 +265,14 @@ export class AudioService {
           return AudioService.getRelativeAudioPath(normalizedPath);
         }
       } catch (ffmpegError) {
-        console.warn('Failed to normalize audio with ffmpeg, using original:', ffmpegError);
+        this.logger.warn({ error: ffmpegError, audioPath }, 'Failed to normalize audio with ffmpeg, using original');
         // Return original if normalization fails
         return audioPath;
       }
 
       return null;
     } catch (error) {
-      console.error('Error normalizing audio volume:', error);
+      this.logger.error({ error, audioPath }, 'Error normalizing audio volume');
       // Return original if normalization fails
       return audioPath;
     }
@@ -302,7 +306,7 @@ export class AudioService {
 
       // Limit to 200 files
       if (existingPaths.length > 200) {
-        console.log(`Limiting audio files to 200 (had ${existingPaths.length})`);
+        this.logger.debug({ originalCount: existingPaths.length }, 'Limiting audio files to 200');
         existingPaths.splice(200);
       }
 
@@ -323,7 +327,7 @@ export class AudioService {
         try {
           unlinkSync(silencePath);
         } catch (error) {
-          console.warn('Failed to delete old silence file:', error);
+          this.logger.warn({ error, silencePath }, 'Failed to delete old silence file');
         }
       }
 
@@ -332,7 +336,7 @@ export class AudioService {
           mkdirSync(audioDir, { recursive: true });
         }
 
-        console.log(`[Flow] Creating silence file: ${silencePath}`);
+        this.logger.debug({ silencePath }, '[Flow] Creating silence file');
         await execFileAsync('ffmpeg', [
           '-f', 'lavfi',
           '-i', 'anullsrc=r=44100:cl=stereo',
@@ -350,12 +354,12 @@ export class AudioService {
         
         // Verify silence file was created
         if (!existsSync(silencePath)) {
-          console.error('[Flow] Silence file was not created after ffmpeg command');
+          this.logger.error({ silencePath }, '[Flow] Silence file was not created after ffmpeg command');
           return null;
         }
-        console.log(`[Flow] Silence file created successfully: ${silencePath}`);
+        this.logger.debug({ silencePath }, '[Flow] Silence file created successfully');
       } catch (error) {
-        console.error('Failed to create silence file:', error);
+        this.logger.error({ error, silencePath }, 'Failed to create silence file');
         return null;
       }
 
@@ -372,11 +376,11 @@ export class AudioService {
         const twoHours = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
         if (fileAge < twoHours) {
           usingCache = true;
-          console.log(`[Flow] Using cached stitched audio file (age: ${Math.round(fileAge / 1000 / 60)} minutes)`);
+          this.logger.debug({ fileAgeMinutes: Math.round(fileAge / 1000 / 60), outputPath }, '[Flow] Using cached stitched audio file');
           return AudioService.getRelativeAudioPath(outputPath);
         } else {
           // Cache expired, delete old file to regenerate
-          console.log(`[Flow] Cache expired (age: ${Math.round(fileAge / 1000 / 60)} minutes), will regenerate`);
+          this.logger.debug({ fileAgeMinutes: Math.round(fileAge / 1000 / 60) }, '[Flow] Cache expired, will regenerate');
           try {
             await unlink(outputPath);
           } catch {
@@ -388,12 +392,12 @@ export class AudioService {
       }
 
       if (!usingCache) {
-        console.log(`[Flow] Creating new stitched audio file with ${existingPaths.length} audio files`);
+        this.logger.info({ audioFileCount: existingPaths.length }, '[Flow] Creating new stitched audio file');
       }
 
       // Verify silence file exists before building list
       if (!existsSync(silencePath)) {
-        console.error(`[Flow] Silence file does not exist: ${silencePath}`);
+        this.logger.error({ silencePath }, '[Flow] Silence file does not exist');
         return null;
       }
 
@@ -402,7 +406,7 @@ export class AudioService {
       for (let i = 0; i < existingPaths.length; i++) {
         // Verify each audio file exists
         if (!existsSync(existingPaths[i])) {
-          console.warn(`[Flow] Audio file does not exist, skipping: ${existingPaths[i]}`);
+          this.logger.warn({ audioPath: existingPaths[i] }, '[Flow] Audio file does not exist, skipping');
           continue;
         }
         inputList.push(existingPaths[i]);
@@ -411,7 +415,11 @@ export class AudioService {
         }
       }
 
-      console.log(`[Flow] Built input list with ${inputList.length} files (${existingPaths.length} audio + ${inputList.length - existingPaths.length} silence)`);
+      this.logger.debug({ 
+        totalFiles: inputList.length, 
+        audioFiles: existingPaths.length, 
+        silenceFiles: inputList.length - existingPaths.length 
+      }, '[Flow] Built input list');
 
       // Create a temporary file list for ffmpeg concat demuxer
       const fileListPath = join(audioDir, 'flow_concat_list.txt');
@@ -423,7 +431,7 @@ export class AudioService {
       try {
         // Use ffmpeg concat filter instead of concat demuxer to handle mixed formats better
         // The concat filter properly handles format differences and ensures silence is included
-        console.log(`[Flow] Stitching audio files with re-encoding (this may take a moment)...`);
+        this.logger.info({ fileCount: inputList.length }, '[Flow] Stitching audio files with re-encoding (this may take a moment)');
         
         // Build filter complex: normalize all inputs to same format, then concat
         // Format: [0:a]aresample=44100:resampler=soxr:ochl=stereo[a0]; [1:a]aresample=44100:resampler=soxr:ochl=stereo[a1]; ...
@@ -457,7 +465,7 @@ export class AudioService {
           timeout: 120000, // 120 seconds timeout for long audio (re-encoding takes longer)
           maxBuffer: 10 * 1024 * 1024 // 10MB buffer
         });
-        console.log(`[Flow] Audio stitching complete: ${outputPath}`);
+        this.logger.info({ outputPath }, '[Flow] Audio stitching complete');
 
         // Clean up temporary file list
         try {
@@ -482,7 +490,7 @@ export class AudioService {
 
       return null;
     } catch (error) {
-      console.error('Error stitching audio:', error);
+      this.logger.error({ error }, 'Error stitching audio');
       return null;
     }
   }
@@ -517,7 +525,7 @@ export class AudioService {
 
       // Limit to 200 pairs (400 files total)
       if (existingPairs.length > 200) {
-        console.log(`Limiting audio pairs to 200 (had ${existingPairs.length})`);
+        this.logger.debug({ originalCount: existingPairs.length }, 'Limiting audio pairs to 200');
         existingPairs.splice(200);
       }
 
@@ -537,7 +545,7 @@ export class AudioService {
         try {
           unlinkSync(silence4SecPath);
         } catch (error) {
-          console.warn('Failed to delete old 4-second silence file:', error);
+          this.logger.warn({ error, silencePath: silence4SecPath }, 'Failed to delete old 4-second silence file');
         }
       }
 
@@ -546,7 +554,7 @@ export class AudioService {
           mkdirSync(audioDir, { recursive: true });
         }
 
-        console.log(`[Flow] Creating 4-second silence file: ${silence4SecPath}`);
+        this.logger.debug({ silencePath: silence4SecPath }, '[Flow] Creating 4-second silence file');
         await execFileAsync('ffmpeg', [
           '-f', 'lavfi',
           '-i', 'anullsrc=r=44100:cl=stereo',
@@ -563,12 +571,12 @@ export class AudioService {
         });
         
         if (!existsSync(silence4SecPath)) {
-          console.error('[Flow] 4-second silence file was not created after ffmpeg command');
+          this.logger.error({ silencePath: silence4SecPath }, '[Flow] 4-second silence file was not created after ffmpeg command');
           return null;
         }
-        console.log(`[Flow] 4-second silence file created successfully: ${silence4SecPath}`);
+        this.logger.debug({ silencePath: silence4SecPath }, '[Flow] 4-second silence file created successfully');
       } catch (error) {
-        console.error('Failed to create 4-second silence file:', error);
+        this.logger.error({ error, silencePath: silence4SecPath }, 'Failed to create 4-second silence file');
         return null;
       }
 
@@ -577,12 +585,12 @@ export class AudioService {
         try {
           unlinkSync(silence2SecPath);
         } catch (error) {
-          console.warn('Failed to delete old 2-second silence file:', error);
+          this.logger.warn({ error, silencePath: silence2SecPath }, 'Failed to delete old 2-second silence file');
         }
       }
 
       try {
-        console.log(`[Flow] Creating 2-second silence file: ${silence2SecPath}`);
+        this.logger.debug({ silencePath: silence2SecPath }, '[Flow] Creating 2-second silence file');
         await execFileAsync('ffmpeg', [
           '-f', 'lavfi',
           '-i', 'anullsrc=r=44100:cl=stereo',
@@ -599,12 +607,12 @@ export class AudioService {
         });
         
         if (!existsSync(silence2SecPath)) {
-          console.error('[Flow] 2-second silence file was not created after ffmpeg command');
+          this.logger.error({ silencePath: silence2SecPath }, '[Flow] 2-second silence file was not created after ffmpeg command');
           return null;
         }
-        console.log(`[Flow] 2-second silence file created successfully: ${silence2SecPath}`);
+        this.logger.debug({ silencePath: silence2SecPath }, '[Flow] 2-second silence file created successfully');
       } catch (error) {
-        console.error('Failed to create 2-second silence file:', error);
+        this.logger.error({ error, silencePath: silence2SecPath }, 'Failed to create 2-second silence file');
         return null;
       }
 
@@ -621,11 +629,11 @@ export class AudioService {
         const twoHours = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
         if (fileAge < twoHours) {
           usingCache = true;
-          console.log(`[Flow] Using cached stitched audio file with English (age: ${Math.round(fileAge / 1000 / 60)} minutes)`);
+          this.logger.debug({ fileAgeMinutes: Math.round(fileAge / 1000 / 60), outputPath }, '[Flow] Using cached stitched audio file with English');
           return AudioService.getRelativeAudioPath(outputPath);
         } else {
           // Cache expired, delete old file to regenerate
-          console.log(`[Flow] Cache expired (age: ${Math.round(fileAge / 1000 / 60)} minutes), will regenerate`);
+          this.logger.debug({ fileAgeMinutes: Math.round(fileAge / 1000 / 60) }, '[Flow] Cache expired, will regenerate');
           try {
             await unlink(outputPath);
           } catch {
@@ -637,12 +645,12 @@ export class AudioService {
       }
 
       if (!usingCache) {
-        console.log(`[Flow] Creating new stitched audio file with English pattern (${existingPairs.length} sentence pairs)`);
+        this.logger.info({ sentencePairCount: existingPairs.length }, '[Flow] Creating new stitched audio file with English pattern');
       }
 
       // Verify silence files exist before building list
       if (!existsSync(silence4SecPath) || !existsSync(silence2SecPath)) {
-        console.error(`[Flow] Silence files do not exist`);
+        this.logger.error({ silence4SecPath, silence2SecPath }, '[Flow] Silence files do not exist');
         return null;
       }
 
@@ -654,7 +662,7 @@ export class AudioService {
         
         // Verify each audio file exists
         if (!existsSync(englishPath) || !existsSync(selectedLangPath)) {
-          console.warn(`[Flow] Audio file pair does not exist, skipping pair ${i}`);
+          this.logger.warn({ pairIndex: i, englishPath, selectedLangPath }, '[Flow] Audio file pair does not exist, skipping pair');
           continue;
         }
         
@@ -671,7 +679,11 @@ export class AudioService {
         }
       }
 
-      console.log(`[Flow] Built input list with ${inputList.length} files (${existingPairs.length * 2} audio + ${inputList.length - existingPairs.length * 2} silence)`);
+      this.logger.debug({ 
+        totalFiles: inputList.length, 
+        audioFiles: existingPairs.length * 2, 
+        silenceFiles: inputList.length - existingPairs.length * 2 
+      }, '[Flow] Built input list with English pattern');
 
       // Create a temporary file list for ffmpeg concat demuxer
       const fileListPath = join(audioDir, 'flow_concat_list_english.txt');
@@ -682,7 +694,7 @@ export class AudioService {
       
       try {
         // Use ffmpeg concat filter to handle mixed formats better
-        console.log(`[Flow] Stitching audio files with English pattern (this may take a moment)...`);
+        this.logger.info({ fileCount: inputList.length }, '[Flow] Stitching audio files with English pattern (this may take a moment)');
         
         // Build filter complex: normalize all inputs to same format, then concat
         const inputArgs: string[] = [];
@@ -714,7 +726,7 @@ export class AudioService {
           timeout: 120000, // 120 seconds timeout for long audio (re-encoding takes longer)
           maxBuffer: 10 * 1024 * 1024 // 10MB buffer
         });
-        console.log(`[Flow] Audio stitching with English pattern complete: ${outputPath}`);
+        this.logger.info({ outputPath }, '[Flow] Audio stitching with English pattern complete');
 
         // Clean up temporary file list
         try {
@@ -739,7 +751,7 @@ export class AudioService {
 
       return null;
     } catch (error) {
-      console.error('Error stitching audio with English pattern:', error);
+      this.logger.error({ error }, 'Error stitching audio with English pattern');
       return null;
     }
   }
@@ -758,7 +770,7 @@ export class AudioService {
       return await this.audioGenerator.audioExists(absolutePath);
     } catch (error) {
       // If there's an error checking existence, assume file doesn't exist
-      console.warn(`Error checking audio file existence: ${getErrorMessage(error)}`);
+      this.logger.warn({ error, audioPath }, 'Error checking audio file existence');
       return false;
     }
   }
@@ -771,7 +783,7 @@ export class AudioService {
   async loadAudioBase64(audioPath: string): Promise<{ data: ArrayBuffer; mimeType: string } | null> {
     try {
       if (!audioPath || typeof audioPath !== 'string') {
-        console.warn(`[AudioService] Invalid audio path: ${audioPath}`);
+        this.logger.warn({ audioPath }, '[AudioService] Invalid audio path');
         return null;
       }
 
@@ -814,7 +826,7 @@ export class AudioService {
       // If file doesn't exist, readFile throws - catch and return null
       // Only log non-file-not-found errors to avoid noise from expected missing files
       if (error instanceof Error && 'code' in error && (error as any).code !== 'ENOENT') {
-        console.error(`[AudioService] Error loading audio file ${audioPath}:`, error);
+        this.logger.error({ error, audioPath }, '[AudioService] Error loading audio file');
       }
       return null;
     }
@@ -860,7 +872,7 @@ export class AudioService {
             await fsPromises.unlink(backupPath).catch(() => {});
           }
         } catch (restoreError) {
-          console.error('Failed to restore previous audio backup:', restoreError);
+          this.logger.error({ error: restoreError, backupPath }, 'Failed to restore previous audio backup');
         }
       }
       throw error;
@@ -895,8 +907,8 @@ export class AudioService {
     if (!targetLanguage && this.database) {
       try {
         targetLanguage = await this.database.getCurrentLanguage();
-      } catch {
-        console.warn('Failed to determine language for external audio, using default "unknown"');
+      } catch (error) {
+        this.logger.warn({ error }, 'Failed to determine language for external audio, using default "unknown"');
       }
     }
     targetLanguage = (targetLanguage || 'unknown').toLowerCase();
@@ -945,7 +957,7 @@ export class AudioService {
         results.push(audioPath);
       } catch (error) {
         // Log error but continue with other texts
-        console.error(`Failed to generate audio for "${text}":`, error);
+        this.logger.error({ error, text, language, wordId, sentenceId }, 'Failed to generate audio');
         // Push empty string to maintain array alignment
         results.push('');
       }
@@ -1013,7 +1025,7 @@ export class AudioService {
     try {
       return await this.audioRecorder.getAvailableDevices();
     } catch (error) {
-      console.error('Error getting recording devices:', error);
+      this.logger.error({ error }, 'Error getting recording devices');
       return ['default'];
     }
   }
@@ -1036,7 +1048,7 @@ export class AudioService {
     try {
       return await this.audioRecorder.getRecordingInfo(filePath);
     } catch (error) {
-      console.error('Error getting recording info:', error);
+      this.logger.error({ error, filePath }, 'Error getting recording info');
       return null;
     }
   }
@@ -1048,13 +1060,13 @@ export class AudioService {
    */
   async initializeSpeechRecognition(): Promise<void> {
     try {
-      console.log('AudioService: Checking speech recognition availability...');
+      this.logger.debug('AudioService: Checking speech recognition availability...');
       await this.speechRecognition.initialize();
-      console.log('AudioService: Speech recognition available');
+      this.logger.info('AudioService: Speech recognition available');
     } catch (error) {
       // Don't throw - just log. isSpeechRecognitionReady() will return false.
       // This allows components to gracefully handle unavailable servers.
-      console.warn('AudioService: Speech recognition not available:', getErrorMessage(error));
+      this.logger.warn({ error }, 'AudioService: Speech recognition not available');
     }
   }
 
@@ -1096,7 +1108,7 @@ export class AudioService {
     try {
       return await this.speechRecognition.isServerAvailable();
     } catch (error) {
-      console.error('Error checking Whisper server availability:', error);
+      this.logger.error({ error }, 'Error checking Whisper server availability');
       return false;
     }
   }

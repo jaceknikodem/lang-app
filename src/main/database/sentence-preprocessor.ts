@@ -7,6 +7,7 @@ import { Word, DictionaryEntry, PrecomputedToken } from '../../shared/types/core
 import { tokenizeSentenceWithDictionary } from '../../renderer/utils/sentence-tokenizer.js';
 import type { TokenizedWord } from '../../renderer/utils/sentence-tokenizer.js';
 import type { LemmatizationService } from '../lemmatization/index.js';
+import { getLogger } from '../utils/logger.js';
 
 export interface PrecomputeSentenceTokensParams {
   sentence: string;
@@ -91,8 +92,13 @@ export async function precomputeSentenceTokens(
       });
 
       if (wordsToLemmatize.length > 0) {
-        console.log(
-          `[Lemmatization] Lemmatizing ${wordsToLemmatize.length} words during sentence preprocessing for language: ${language}`
+        const logger = getLogger();
+        logger.debug(
+          {
+            wordCount: wordsToLemmatize.length,
+            language,
+          },
+          '[Lemmatization] Lemmatizing words during sentence preprocessing'
         );
         const lemmas = await params.lemmatizationService.lemmatizeWords(wordsToLemmatize, language);
 
@@ -107,12 +113,19 @@ export async function precomputeSentenceTokens(
         });
 
         const lemmaCount = Object.keys(lemmas).length;
-        console.log(`[Lemmatization] Applied ${lemmaCount} lemmas to precomputed tokens`);
+        logger.debug(
+          { lemmaCount, language },
+          '[Lemmatization] Applied lemmas to precomputed tokens'
+        );
       }
     } catch (error) {
-      console.warn(
-        '[Lemmatization] Failed to lemmatize words during preprocessing (non-critical):',
-        error
+      const logger = getLogger();
+      logger.warn(
+        {
+          error,
+          language,
+        },
+        '[Lemmatization] Failed to lemmatize words during preprocessing (non-critical)'
       );
       // Continue without lemmas - sentence will still work
     }

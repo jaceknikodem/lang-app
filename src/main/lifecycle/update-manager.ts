@@ -6,6 +6,8 @@
 import { app, dialog, shell } from 'electron';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { getLogger } from '../utils/logger.js';
+import { Logger } from '../../shared/utils/logger.js';
 
 export interface UpdateInfo {
   version: string;
@@ -25,8 +27,10 @@ export interface UpdateConfig {
 export class UpdateManager {
   private config: UpdateConfig;
   private checkTimer?: NodeJS.Timeout;
+  private readonly logger: Logger;
 
   constructor(config: UpdateConfig) {
+    this.logger = getLogger();
     this.config = config;
   }
 
@@ -35,7 +39,7 @@ export class UpdateManager {
    */
   async initialize(): Promise<void> {
     try {
-      console.log('Initializing update manager...');
+      this.logger.info('Initializing update manager...');
 
       if (this.config.checkOnStartup) {
         // Check for updates on startup (with delay to not block app initialization)
@@ -54,9 +58,9 @@ export class UpdateManager {
         );
       }
 
-      console.log('Update manager initialized');
+      this.logger.info('Update manager initialized');
     } catch (error) {
-      console.error('Failed to initialize update manager:', error);
+      this.logger.error({ error }, 'Failed to initialize update manager');
     }
   }
 
@@ -65,7 +69,7 @@ export class UpdateManager {
    */
   async checkForUpdates(showNoUpdateDialog = true): Promise<UpdateInfo | null> {
     try {
-      console.log('Checking for updates...');
+      this.logger.info('Checking for updates...');
 
       // In a real implementation, this would check a remote server
       // For now, we'll simulate the update check process
@@ -73,11 +77,11 @@ export class UpdateManager {
       const updateInfo = await this.fetchUpdateInfo();
 
       if (updateInfo && this.isNewerVersion(updateInfo.version, currentVersion)) {
-        console.log(`Update available: ${updateInfo.version}`);
+        this.logger.info({ version: updateInfo.version, currentVersion }, 'Update available');
         await this.handleUpdateAvailable(updateInfo);
         return updateInfo;
       } else {
-        console.log('No updates available');
+        this.logger.info({ currentVersion }, 'No updates available');
         if (showNoUpdateDialog) {
           await dialog.showMessageBox({
             type: 'info',
@@ -89,7 +93,7 @@ export class UpdateManager {
         return null;
       }
     } catch (error) {
-      console.error('Error checking for updates:', error);
+      this.logger.error({ error }, 'Error checking for updates');
 
       if (showNoUpdateDialog) {
         await dialog.showMessageBox({
@@ -156,7 +160,7 @@ export class UpdateManager {
         app.quit();
       }
     } catch (error) {
-      console.error('Error downloading update:', error);
+      this.logger.error({ error }, 'Error downloading update');
       await dialog.showMessageBox({
         type: 'error',
         title: 'Download Failed',
@@ -204,9 +208,9 @@ export class UpdateManager {
       };
 
       await fs.writeFile(reminderPath, JSON.stringify(reminder, null, 2));
-      console.log('Update reminder scheduled');
+      this.logger.info({ version: updateInfo.version }, 'Update reminder scheduled');
     } catch (error) {
-      console.error('Failed to schedule update reminder:', error);
+      this.logger.error({ error }, 'Failed to schedule update reminder');
     }
   }
 
@@ -232,7 +236,7 @@ export class UpdateManager {
         // No reminder file exists
       }
     } catch (error) {
-      console.error('Error checking update reminders:', error);
+      this.logger.error({ error }, 'Error checking update reminders');
     }
   }
 

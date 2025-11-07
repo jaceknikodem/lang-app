@@ -6,6 +6,7 @@
 import { DatabaseLayer } from '../../shared/types/database.js';
 import { Sentence } from '../../shared/types/core.js';
 import { precomputeSentenceTokens } from './sentence-preprocessor.js';
+import { getLogger } from '../utils/logger.js';
 
 export interface BackfillOptions {
   database: DatabaseLayer;
@@ -18,13 +19,14 @@ export interface BackfillOptions {
  */
 export async function backfillSentenceTokens(options: BackfillOptions): Promise<void> {
   const { database, batchSize = 10, onProgress } = options;
+  const logger = getLogger();
 
   // Get all sentences from database
   const allSentences = await (database as any).getAllSentences();
   const totalSentences = allSentences.length;
 
   if (totalSentences === 0) {
-    console.log('[BackfillSentenceTokens] No sentences found to process');
+    logger.info('[BackfillSentenceTokens] No sentences found to process');
     return;
   }
 
@@ -38,9 +40,12 @@ export async function backfillSentenceTokens(options: BackfillOptions): Promise<
     return;
   }
 
-  console.log('[BackfillSentenceTokens] Starting backfill process...');
-  console.log(
-    `[BackfillSentenceTokens] Processing ${sentencesNeedingTokens.length} of ${totalSentences} sentences...`
+  logger.info(
+    {
+      sentencesNeedingTokens: sentencesNeedingTokens.length,
+      totalSentences,
+    },
+    '[BackfillSentenceTokens] Starting backfill process'
   );
 
   let processed = 0;
@@ -56,8 +61,9 @@ export async function backfillSentenceTokens(options: BackfillOptions): Promise<
         // Get the primary word for this sentence
         const primaryWord = await database.getWordById(sentence.wordId);
         if (!primaryWord) {
-          console.warn(
-            `[BackfillSentenceTokens] Primary word not found for sentence ${sentence.id}, skipping`
+          logger.warn(
+            { sentenceId: sentence.id },
+            '[BackfillSentenceTokens] Primary word not found for sentence, skipping'
           );
           errorCount++;
           processed++;
@@ -91,12 +97,19 @@ export async function backfillSentenceTokens(options: BackfillOptions): Promise<
         processed++;
 
         if (processed % 10 === 0) {
-          console.log(
-            `[BackfillSentenceTokens] Progress: ${processed}/${sentencesNeedingTokens.length} sentences processed`
+          logger.debug(
+            {
+              processed,
+              total: sentencesNeedingTokens.length,
+            },
+            '[BackfillSentenceTokens] Progress'
           );
         }
       } catch (error) {
-        console.error(`[BackfillSentenceTokens] Failed to process sentence ${sentence.id}:`, error);
+        logger.error(
+          { error, sentenceId: sentence.id },
+          '[BackfillSentenceTokens] Failed to process sentence'
+        );
         errorCount++;
         processed++;
       }
@@ -108,10 +121,13 @@ export async function backfillSentenceTokens(options: BackfillOptions): Promise<
     }
   }
 
-  console.log(`[BackfillSentenceTokens] Backfill complete:`, {
-    total: sentencesNeedingTokens.length,
-    processed,
-    success: successCount,
-    errors: errorCount,
-  });
+  logger.info(
+    {
+      total: sentencesNeedingTokens.length,
+      processed,
+      success: successCount,
+      errors: errorCount,
+    },
+    '[BackfillSentenceTokens] Backfill complete'
+  );
 }

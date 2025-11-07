@@ -8,6 +8,8 @@ import { AudioService } from '../audio/audio-service.js';
 import { splitSentenceIntoParts } from '../../shared/utils/sentence.js';
 import { precomputeSentenceTokens } from '../database/sentence-preprocessor.js';
 import type { LemmatizationService } from '../lemmatization/index.js';
+import { getLogger } from '../utils/logger.js';
+import { Logger } from '../../shared/utils/logger.js';
 
 export interface WordGenerationRunnerOptions {
   database: DatabaseLayer;
@@ -35,11 +37,13 @@ export class WordGenerationRunner {
   private readonly retryBackoffMs: number;
   private readonly defaultSentenceCount: number;
   private readonly onWordUpdated?: WordGenerationRunnerOptions['onWordUpdated'];
+  private readonly logger: Logger;
 
   private running = false;
   private loopPromise: Promise<void> | null = null;
 
   constructor(options: WordGenerationRunnerOptions) {
+    this.logger = getLogger();
     this.database = options.database;
     this.contentGenerator = options.contentGenerator;
     this.audioService = options.audioService;
@@ -77,18 +81,24 @@ export class WordGenerationRunner {
           try {
             await this.database.getWordGenerationQueueSummary();
           } catch (summaryError) {
-            console.warn('[WordGenerationRunner] Unable to retrieve queue summary:', summaryError);
+            this.logger.warn(
+              { error: summaryError },
+              '[WordGenerationRunner] Unable to retrieve queue summary'
+            );
           }
           await this.delay(this.pollIntervalMs);
           continue;
         }
 
-        console.log('[WordGenerationRunner] Found job', {
-          jobId: job.id,
-          wordId: job.wordId,
-          attempts: job.attempts,
-          desiredSentenceCount: job.desiredSentenceCount,
-        });
+        this.logger.info(
+          {
+            jobId: job.id,
+            wordId: job.wordId,
+            attempts: job.attempts,
+            desiredSentenceCount: job.desiredSentenceCount,
+          },
+          '[WordGenerationRunner] Found job'
+        );
 
         await this.handleJob(job);
       } catch (error) {
@@ -99,12 +109,12 @@ export class WordGenerationRunner {
           errorMessage.includes('Database not connected') ||
           errorMessage.includes('not connected')
         ) {
-          console.log('[WordGenerationRunner] Database closed, stopping runner');
+          this.logger.info('[WordGenerationRunner] Database closed, stopping runner');
           this.running = false;
           break;
         }
 
-        console.error('WordGenerationRunner loop error:', error);
+        this.logger.error({ error }, 'WordGenerationRunner loop error');
         await this.delay(this.pollIntervalMs);
       }
     }
@@ -120,10 +130,13 @@ export class WordGenerationRunner {
 
       const word = await this.database.getWordById(job.wordId);
       if (!word) {
-        console.warn('[WordGenerationRunner] Word not found for job', {
-          jobId: job.id,
-          wordId: job.wordId,
-        });
+        this.logger.warn(
+          {
+            jobId: job.id,
+            wordId: job.wordId,
+          },
+          '[WordGenerationRunner] Word not found for job'
+        );
         await this.database.completeWordGenerationJob(job.id);
         await this.database.updateWordProcessingStatus(job.wordId, 'ready');
         await this.emitWordUpdate(job.wordId);
@@ -131,7 +144,7 @@ export class WordGenerationRunner {
       }
 
       const language = job.language || word.language;
-      console.log('[WordGenerationRunner] Processing job', {
+      this.logger.info({
         jobId: job.id,
         wordId: word.id,
         word: word.word,
@@ -148,19 +161,25 @@ export class WordGenerationRunner {
       );
       let totalSentences = existingSentences.length;
 
-      console.log('[WordGenerationRunner] Sentence status', {
-        wordId: word.id,
-        existingSentences: totalSentences,
-        desiredCount,
-      });
+      this.logger.debug(
+        {
+          wordId: word.id,
+          existingSentences: totalSentences,
+          desiredCount,
+        },
+        '[WordGenerationRunner] Sentence status'
+      );
 
       if (totalSentences < desiredCount) {
         const needed = desiredCount - totalSentences;
-        console.log('[WordGenerationRunner] Requesting additional sentences', {
-          word: word.word,
-          language,
-          needed,
-        });
+        this.logger.info(
+          {
+            word: word.word,
+            language,
+            needed,
+          },
+          '[WordGenerationRunner] Requesting additional sentences'
+        );
         const generatedSentences = await this.contentGenerator.generateWordSentences(
           word.word,
           language,
@@ -201,13 +220,16 @@ export class WordGenerationRunner {
           if (sentence.audioUrl) {
             // Tatoeba sentence - download audio from external source
             const isTatoebaAudio = sentence.audioUrl.includes('tatoeba.org');
-            console.log('Attempting to download external audio for sentence', {
-              word: word.word,
-              language,
-              audioUrl: sentence.audioUrl,
-              isTatoeba: isTatoebaAudio,
-              sentenceId,
-            });
+            this.logger.debug(
+              {
+                word: word.word,
+                language,
+                audioUrl: sentence.audioUrl,
+                isTatoeba: isTatoebaAudio,
+                sentenceId,
+              },
+              'Attempting to download external audio for sentence'
+            );
             try {
               audioPath = await this.audioService.downloadSentenceAudioFromUrl(
                 sentence.audioUrl,
@@ -230,7 +252,10 @@ export class WordGenerationRunner {
                 audioModel = undefined;
               }
             } catch (downloadError) {
-              console.warn('Failed to download external audio:', downloadError);
+              this.logger.warn(
+                { error: downloadError, audioUrl: sentence.audioUrl, sentenceId },
+                'Failed to download external audio'
+              );
               audioPath = '';
               if (isTatoebaAudio) {
                 sentenceModel = 'tatoeba';
@@ -260,7 +285,10 @@ export class WordGenerationRunner {
               audioModel = audioInfo.model;
               audioVoiceId = audioInfo.voiceId;
             } catch (error) {
-              console.warn('[WordGenerationRunner] Failed to generate audio:', error);
+              this.logger.warn(
+                { error, sentenceId, wordId: word.id },
+                '[WordGenerationRunner] Failed to generate audio'
+              );
               audioPath = '';
               sentenceModel = this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
               const audioInfo = this.audioService.getAudioGenerationInfo();
@@ -282,7 +310,10 @@ export class WordGenerationRunner {
                 sentenceId
               );
             } catch (error) {
-              console.warn('[WordGenerationRunner] Failed to generate English audio:', error);
+              this.logger.warn(
+                { error, sentenceId },
+                '[WordGenerationRunner] Failed to generate English audio'
+              );
               // Non-fatal - continue even if English audio generation fails
             }
           }
@@ -332,25 +363,34 @@ export class WordGenerationRunner {
             });
 
             await this.database.updateSentenceTokens(sentenceId, tokenizedTokens);
-            console.log('[WordGenerationRunner] Precomputed tokens for sentence', {
-              sentenceId,
-              tokenCount: tokenizedTokens.length,
-            });
+            this.logger.debug(
+              {
+                sentenceId,
+                tokenCount: tokenizedTokens.length,
+              },
+              '[WordGenerationRunner] Precomputed tokens for sentence'
+            );
           } catch (tokenError) {
-            console.warn('[WordGenerationRunner] Failed to precompute tokens for sentence', {
-              sentenceId,
-              error: tokenError,
-            });
+            this.logger.warn(
+              {
+                sentenceId,
+                error: tokenError,
+              },
+              '[WordGenerationRunner] Failed to precompute tokens for sentence'
+            );
             // Non-fatal - sentence will work without precomputed tokens
           }
 
           normalizedExisting.add(normalizedSentence);
           totalSentences += 1;
-          console.log('[WordGenerationRunner] Stored sentence for word', {
-            wordId: word.id,
-            sentencePreview: sentence.sentence.slice(0, 80),
-            totalSentences,
-          });
+          this.logger.debug(
+            {
+              wordId: word.id,
+              sentencePreview: sentence.sentence.slice(0, 80),
+              totalSentences,
+            },
+            '[WordGenerationRunner] Stored sentence for word'
+          );
 
           if (totalSentences >= desiredCount) {
             break;
@@ -366,19 +406,26 @@ export class WordGenerationRunner {
         );
       }
 
-      console.log('[WordGenerationRunner] Sentence generation complete', {
-        wordId: word.id,
-        sentenceCount: processingInfo.sentenceCount,
-      });
+      this.logger.info(
+        {
+          wordId: word.id,
+          sentenceCount: processingInfo.sentenceCount,
+        },
+        '[WordGenerationRunner] Sentence generation complete'
+      );
 
       await this.database.updateWordProcessingStatus(word.id, 'ready');
       await this.database.completeWordGenerationJob(job.id);
       await this.emitWordUpdate(word.id);
-      console.log('[WordGenerationRunner] Job completed', { jobId: job.id, wordId: word.id });
+      this.logger.info({ jobId: job.id, wordId: word.id }, '[WordGenerationRunner] Job completed');
     } catch (error) {
-      console.error(
-        `WordGenerationRunner failed for job ${job.id} (attempt ${attemptNumber}):`,
-        error
+      this.logger.error(
+        {
+          jobId: job.id,
+          attemptNumber,
+          error,
+        },
+        `WordGenerationRunner failed for job`
       );
       await this.handleJobFailure(job, attemptNumber, error as Error);
     }
@@ -415,11 +462,14 @@ export class WordGenerationRunner {
         continue;
       }
 
-      console.log('[WordGenerationRunner] Backfilling audio for existing sentence', {
-        sentenceId: sentence.id,
-        wordId,
-        language,
-      });
+      this.logger.debug(
+        {
+          sentenceId: sentence.id,
+          wordId,
+          language,
+        },
+        '[WordGenerationRunner] Backfilling audio for existing sentence'
+      );
 
       try {
         const audioPath = await this.audioService.generateSentenceAudio(
@@ -431,7 +481,10 @@ export class WordGenerationRunner {
         );
         await this.database.updateSentenceAudioPath(sentence.id, audioPath);
       } catch (error) {
-        console.warn(`Failed to generate audio for existing sentence ${sentence.id}:`, error);
+        this.logger.warn(
+          { error, sentenceId: sentence.id, wordId },
+          'Failed to generate audio for existing sentence'
+        );
       }
     }
   }
@@ -451,7 +504,7 @@ export class WordGenerationRunner {
         });
       }
     } catch (error) {
-      console.warn(`Failed to emit word update for word ${wordId}:`, error);
+      this.logger.warn({ error, wordId }, 'Failed to emit word update for word');
     }
   }
 

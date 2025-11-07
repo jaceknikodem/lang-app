@@ -2,6 +2,9 @@
  * Lemmatization service that communicates with the FastAPI Stanza service
  */
 
+import { getLogger } from '../utils/logger.js';
+import { Logger } from '../../shared/utils/logger.js';
+
 export interface LemmatizationServiceConfig {
   serverUrl?: string;
 }
@@ -18,8 +21,10 @@ export interface LemmatizeWordsResponse {
 
 export class LemmatizationService {
   private serverUrl: string;
+  private readonly logger: Logger;
 
   constructor(config: LemmatizationServiceConfig = {}) {
+    this.logger = getLogger();
     this.serverUrl = config.serverUrl || 'http://127.0.0.1:8888';
   }
 
@@ -74,9 +79,12 @@ export class LemmatizationService {
         error instanceof Error &&
         (error.message.includes('ECONNREFUSED') || error.message.includes('fetch failed'))
       ) {
-        console.warn('[Lemmatization] Service unavailable (optional):', error.message);
+        this.logger.warn(
+          { error: error.message, serverUrl: this.serverUrl },
+          '[Lemmatization] Service unavailable (optional)'
+        );
       } else {
-        console.warn('[Lemmatization] Failed to get service status (non-critical):', error);
+        this.logger.warn({ error }, '[Lemmatization] Failed to get service status (non-critical)');
       }
       return null;
     }
@@ -110,12 +118,14 @@ export class LemmatizationService {
 
       // This shows up multiple times in logs, that's OK, we don't actually loaded twice on the server.
       if (data.status === 'already_loaded') {
-        console.log(
-          `[Lemmatization] Stanza model for ${languageCode} (${language}) already loaded`
+        this.logger.debug(
+          { languageCode, language },
+          '[Lemmatization] Stanza model already loaded'
         );
       } else {
-        console.log(
-          `[Lemmatization] Stanza model for ${languageCode} (${language}) loaded successfully`
+        this.logger.info(
+          { languageCode, language },
+          '[Lemmatization] Stanza model loaded successfully'
         );
       }
     } catch (error) {
@@ -126,11 +136,15 @@ export class LemmatizationService {
           error.message.includes('fetch failed') ||
           error.message.includes('timeout'))
       ) {
-        console.warn(
-          `[Lemmatization] Service unavailable, skipping model load for ${language} (non-critical)`
+        this.logger.warn(
+          { language, languageCode },
+          '[Lemmatization] Service unavailable, skipping model load (non-critical)'
         );
       } else {
-        console.warn(`[Lemmatization] Failed to load model for ${language} (non-critical):`, error);
+        this.logger.warn(
+          { error, language, languageCode },
+          '[Lemmatization] Failed to load model (non-critical)'
+        );
       }
       // Don't throw - service is optional
     }
@@ -145,8 +159,13 @@ export class LemmatizationService {
     try {
       const languageCode = this.mapLanguageToCode(language);
 
-      console.log(
-        `[Lemmatization] Calling lemmatize_words API: ${words.length} words for ${languageCode} (${language})`
+      this.logger.debug(
+        {
+          wordCount: words.length,
+          languageCode,
+          language,
+        },
+        '[Lemmatization] Calling lemmatize_words API'
       );
 
       const response = await fetch(`${this.serverUrl}/lemmatize_words`, {
@@ -161,7 +180,10 @@ export class LemmatizationService {
         signal: AbortSignal.timeout(10000), // 10 second timeout (lemmatization can take a moment)
       });
 
-      console.log(`[Lemmatization] lemmatize_words API response status: ${response.status}`);
+      this.logger.debug(
+        { status: response.status, languageCode, language },
+        '[Lemmatization] lemmatize_words API response'
+      );
 
       if (!response.ok) {
         const errorData = await response
@@ -184,7 +206,10 @@ export class LemmatizationService {
         return {};
       }
       // Other errors - log but still return empty (non-critical)
-      console.warn('[Lemmatization] Failed to lemmatize words (non-critical):', error);
+      this.logger.warn(
+        { error, language, wordCount: words.length },
+        '[Lemmatization] Failed to lemmatize words (non-critical)'
+      );
       return {};
     }
   }

@@ -8,6 +8,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { app } from 'electron';
 import { serviceConfig } from '../../shared/config/index.js';
+import { getLogger } from '../utils/logger.js';
+import { Logger } from '../../shared/utils/logger.js';
 
 export interface ManagedService {
   name: string;
@@ -34,8 +36,10 @@ export class ServiceManager {
   private lemmatizationPort: number;
   private maxRestarts: number;
   private isShuttingDown: boolean = false;
+  private readonly logger: Logger;
 
   constructor(config: ServiceManagerConfig = {}) {
+    this.logger = getLogger();
     this.enabled = config.enabled ?? serviceConfig.manageServices;
 
     // Resolve model path - try multiple locations
@@ -82,7 +86,7 @@ export class ServiceManager {
     for (const modelName of preferredModels) {
       const modelPath = path.join(modelsDir, modelName);
       if (fs.existsSync(modelPath)) {
-        console.log(`[ServiceManager] Found Whisper model: ${modelName}`);
+        this.logger.debug({ modelName, modelPath }, '[ServiceManager] Found Whisper model');
         return modelPath;
       }
     }
@@ -93,7 +97,7 @@ export class ServiceManager {
       for (const file of files) {
         if (file.endsWith('.bin') && file.startsWith('ggml')) {
           const modelPath = path.join(modelsDir, file);
-          console.log(`[ServiceManager] Found Whisper model: ${file}`);
+          this.logger.debug({ modelName: file, modelPath }, '[ServiceManager] Found Whisper model');
           return modelPath;
         }
       }
@@ -103,7 +107,10 @@ export class ServiceManager {
 
     // Fallback to default if nothing found
     const defaultModel = path.join(modelsDir, 'ggml-small.bin');
-    console.log(`[ServiceManager] No Whisper model found, will use default path: ${defaultModel}`);
+    this.logger.debug(
+      { defaultModel },
+      '[ServiceManager] No Whisper model found, will use default path'
+    );
     return defaultModel;
   }
 
@@ -175,11 +182,12 @@ export class ServiceManager {
       let actualPort = this.whisperPort;
 
       if (portInUse) {
-        console.log(
-          `[ServiceManager] Whisper port ${this.whisperPort} is in use, finding available port...`
+        this.logger.info(
+          { port: this.whisperPort },
+          '[ServiceManager] Whisper port is in use, finding available port'
         );
         actualPort = await this.findAvailablePort(this.whisperPort);
-        console.log(`[ServiceManager] Using Whisper port ${actualPort} instead`);
+        this.logger.info({ port: actualPort }, '[ServiceManager] Using Whisper port instead');
       }
 
       const url = `http://127.0.0.1:${actualPort}`;
@@ -187,21 +195,19 @@ export class ServiceManager {
       // Check if model file exists
       const modelPath = this.whisperModelPath;
       if (!fs.existsSync(modelPath)) {
-        console.warn(`[ServiceManager] Whisper model not found at ${modelPath}`);
-        console.warn(
-          `[ServiceManager] Please download a Whisper model to: ${path.dirname(modelPath)}`
+        this.logger.warn(
+          { modelPath, modelDir: path.dirname(modelPath) },
+          '[ServiceManager] Whisper model not found, skipping Whisper server start'
         );
-        console.warn(
-          `[ServiceManager] Supported models: ggml-*.bin files (e.g., ggml-small.bin, ggml-large-v3-turbo-q8_0.bin)`
-        );
-        console.warn(`[ServiceManager] Skipping Whisper server start`);
         return;
       }
 
-      console.log(`[ServiceManager] Using Whisper model: ${path.basename(modelPath)}`);
+      this.logger.info(
+        { modelName: path.basename(modelPath), port: actualPort },
+        '[ServiceManager] Using Whisper model, starting whisper-server'
+      );
 
       // Spawn whisper-server
-      console.log(`[ServiceManager] Starting whisper-server on port ${actualPort}...`);
       const whisperProcess = spawn(
         'whisper-server',
         ['--model', modelPath, '--threads', '8', '--port', actualPort.toString()],
@@ -224,11 +230,11 @@ export class ServiceManager {
 
       // Handle stdout/stderr
       whisperProcess.stdout?.on('data', (data) => {
-        console.log(`[Whisper] ${data.toString().trim()}`);
+        this.logger.debug({ service: 'whisper' }, data.toString().trim());
       });
 
       whisperProcess.stderr?.on('data', (data) => {
-        console.error(`[Whisper] ${data.toString().trim()}`);
+        this.logger.warn({ service: 'whisper' }, data.toString().trim());
       });
 
       // Handle process exit
@@ -237,24 +243,30 @@ export class ServiceManager {
           return;
         }
 
-        console.warn(
-          `[ServiceManager] whisper-server exited with code ${code} and signal ${signal}`
+        this.logger.warn(
+          { code, signal, service: 'whisper-server' },
+          '[ServiceManager] whisper-server exited'
         );
 
         if (this.whisperService && this.whisperService.restartCount < this.maxRestarts) {
           this.whisperService.restartCount++;
-          console.log(
-            `[ServiceManager] Restarting whisper-server (attempt ${this.whisperService.restartCount}/${this.maxRestarts})...`
+          this.logger.info(
+            { attempt: this.whisperService.restartCount, maxRestarts: this.maxRestarts },
+            '[ServiceManager] Restarting whisper-server'
           );
 
           // Wait a bit before restarting
           setTimeout(() => {
             this.startWhisperService().catch((err) => {
-              console.error('[ServiceManager] Failed to restart whisper-server:', err);
+              this.logger.error(
+                { error: err },
+                '[ServiceManager] Failed to restart whisper-server'
+              );
             });
           }, 2000);
         } else {
-          console.error(
+          this.logger.error(
+            { maxRestarts: this.maxRestarts },
             '[ServiceManager] Max restart attempts reached for whisper-server, giving up'
           );
           this.whisperService = null;
@@ -269,9 +281,12 @@ export class ServiceManager {
         throw new Error('Whisper server process died immediately');
       }
 
-      console.log(`[ServiceManager] whisper-server started successfully on ${url}`);
+      this.logger.info(
+        { url, port: actualPort },
+        '[ServiceManager] whisper-server started successfully'
+      );
     } catch (error) {
-      console.error('[ServiceManager] Failed to start whisper-server:', error);
+      this.logger.error({ error }, '[ServiceManager] Failed to start whisper-server');
       this.whisperService = null;
     }
   }
@@ -290,11 +305,12 @@ export class ServiceManager {
       let actualPort = this.lemmatizationPort;
 
       if (portInUse) {
-        console.log(
-          `[ServiceManager] Lemmatization port ${this.lemmatizationPort} is in use, finding available port...`
+        this.logger.info(
+          { port: this.lemmatizationPort },
+          '[ServiceManager] Lemmatization port is in use, finding available port'
         );
         actualPort = await this.findAvailablePort(this.lemmatizationPort);
-        console.log(`[ServiceManager] Using Lemmatization port ${actualPort} instead`);
+        this.logger.info({ port: actualPort }, '[ServiceManager] Using Lemmatization port instead');
       }
 
       const url = `http://127.0.0.1:${actualPort}`;
@@ -319,8 +335,9 @@ export class ServiceManager {
       }
 
       if (!fs.existsSync(stanzaServicePath)) {
-        console.warn(
-          `[ServiceManager] stanza-service.py not found at ${stanzaServicePath}, skipping lemmatization service start`
+        this.logger.warn(
+          { stanzaServicePath },
+          '[ServiceManager] stanza-service.py not found, skipping lemmatization service start'
         );
         return;
       }
@@ -337,12 +354,12 @@ export class ServiceManager {
         // Use uv to run the service
         pythonCommand = 'uv';
         args = ['run', 'python', stanzaServicePath];
-        console.log(`[ServiceManager] Using uv to run stanza-service.py`);
+        this.logger.debug('[ServiceManager] Using uv to run stanza-service.py');
       } catch {
         // Fallback to python3
         pythonCommand = 'python3';
         args = [stanzaServicePath];
-        console.log(`[ServiceManager] Using python3 to run stanza-service.py`);
+        this.logger.debug('[ServiceManager] Using python3 to run stanza-service.py');
       }
 
       // Set port via environment variable (stanza-service.py uses uvicorn)
@@ -352,7 +369,7 @@ export class ServiceManager {
       };
 
       // Spawn stanza-service
-      console.log(`[ServiceManager] Starting stanza-service on port ${actualPort}...`);
+      this.logger.info({ port: actualPort }, '[ServiceManager] Starting stanza-service');
       const lemmatizationProcess = spawn(pythonCommand, args, {
         cwd: lemmatizationDir,
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -372,11 +389,11 @@ export class ServiceManager {
 
       // Handle stdout/stderr
       lemmatizationProcess.stdout?.on('data', (data) => {
-        console.log(`[Stanza] ${data.toString().trim()}`);
+        this.logger.debug({ service: 'stanza' }, data.toString().trim());
       });
 
       lemmatizationProcess.stderr?.on('data', (data) => {
-        console.error(`[Stanza] ${data.toString().trim()}`);
+        this.logger.warn({ service: 'stanza' }, data.toString().trim());
       });
 
       // Handle process exit
@@ -385,8 +402,9 @@ export class ServiceManager {
           return;
         }
 
-        console.warn(
-          `[ServiceManager] stanza-service exited with code ${code} and signal ${signal}`
+        this.logger.warn(
+          { code, signal, service: 'stanza-service' },
+          '[ServiceManager] stanza-service exited'
         );
 
         if (
@@ -394,18 +412,23 @@ export class ServiceManager {
           this.lemmatizationService.restartCount < this.maxRestarts
         ) {
           this.lemmatizationService.restartCount++;
-          console.log(
-            `[ServiceManager] Restarting stanza-service (attempt ${this.lemmatizationService.restartCount}/${this.maxRestarts})...`
+          this.logger.info(
+            { attempt: this.lemmatizationService.restartCount, maxRestarts: this.maxRestarts },
+            '[ServiceManager] Restarting stanza-service'
           );
 
           // Wait a bit before restarting
           setTimeout(() => {
             this.startLemmatizationService().catch((err) => {
-              console.error('[ServiceManager] Failed to restart stanza-service:', err);
+              this.logger.error(
+                { error: err },
+                '[ServiceManager] Failed to restart stanza-service'
+              );
             });
           }, 2000);
         } else {
-          console.error(
+          this.logger.error(
+            { maxRestarts: this.maxRestarts },
             '[ServiceManager] Max restart attempts reached for stanza-service, giving up'
           );
           this.lemmatizationService = null;
@@ -420,9 +443,12 @@ export class ServiceManager {
         throw new Error('Lemmatization server process died immediately');
       }
 
-      console.log(`[ServiceManager] stanza-service started successfully on ${url}`);
+      this.logger.info(
+        { url, port: actualPort },
+        '[ServiceManager] stanza-service started successfully'
+      );
     } catch (error) {
-      console.error('[ServiceManager] Failed to start stanza-service:', error);
+      this.logger.error({ error }, '[ServiceManager] Failed to start stanza-service');
       this.lemmatizationService = null;
     }
   }
@@ -436,11 +462,11 @@ export class ServiceManager {
    */
   async start(): Promise<void> {
     if (!this.enabled) {
-      console.log('[ServiceManager] Service management is disabled');
+      this.logger.info('[ServiceManager] Service management is disabled');
       return;
     }
 
-    console.log('[ServiceManager] Starting managed services...');
+    this.logger.info('[ServiceManager] Starting managed services...');
     this.isShuttingDown = false;
 
     // Start services in parallel
@@ -453,7 +479,7 @@ export class ServiceManager {
    * Stop all managed services
    */
   async stop(): Promise<void> {
-    console.log('[ServiceManager] Stopping managed services...');
+    this.logger.info('[ServiceManager] Stopping managed services...');
     this.isShuttingDown = true;
 
     const stopPromises: Promise<void>[] = [];
@@ -499,7 +525,7 @@ export class ServiceManager {
     this.whisperService = null;
     this.lemmatizationService = null;
 
-    console.log('[ServiceManager] All managed services stopped');
+    this.logger.info('[ServiceManager] All managed services stopped');
   }
 
   /**

@@ -10,6 +10,8 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { getSimilarityThresholds, type ProficiencyLevel } from '../../shared/utils/similarity-threshold.js';
 import { serviceConfig } from '../../shared/config/index.js';
+import { getLogger } from '../utils/logger.js';
+import { Logger } from '../../shared/utils/logger.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -44,6 +46,7 @@ export interface SpeechRecognitionError extends Error {
 
 export class SpeechRecognitionService {
   private whisperServerUrl: string = serviceConfig.whisper.serverUrl;
+  private readonly logger: Logger;
 
   // Map app language names to Whisper language codes
   private readonly LANGUAGE_CODE_MAP: Record<string, string> = {
@@ -61,6 +64,7 @@ export class SpeechRecognitionService {
   };
 
   constructor() {
+    this.logger = getLogger();
     // Server URL is loaded from config.toml or can be overridden via environment variable
     // Check environment variable as override (for backward compatibility)
     if (process.env.WHISPER_SERVER_URL) {
@@ -94,19 +98,19 @@ export class SpeechRecognitionService {
       const MIN_FILE_SIZE = 2048; // 2KB
       
       if (fileSizeInBytes < MIN_FILE_SIZE) {
-        console.log(`Skipping ffmpeg - file is too small (${fileSizeInBytes} bytes), likely empty audio`);
+        this.logger.debug({ fileSizeInBytes, filePath }, 'Skipping ffmpeg - file is too small, likely empty audio');
         // Return the original file path if too small - let Whisper handle it or fail gracefully
         return filePath;
       }
     } catch (error) {
-      console.error('Failed to check file size:', error);
+      this.logger.error({ error, filePath }, 'Failed to check file size');
       // If we can't check size, proceed with ffmpeg (existing behavior)
     }
     
     // Create temporary file for the fixed WAV
     const fixedFilePath = filePath.replace(/\.wav$/i, '_fixed.wav');
     
-    console.log('Fixing WAV file headers with ffmpeg...');
+    this.logger.debug({ filePath, fixedFilePath }, 'Fixing WAV file headers with ffmpeg');
     
     // Run ffmpeg to fix the WAV file:
     // -ar 16000: Set audio sample rate to 16kHz
@@ -132,14 +136,14 @@ export class SpeechRecognitionService {
    */
   async initialize(): Promise<void> {
     try {
-      console.log('Checking Whisper server availability...');
+      this.logger.debug('Checking Whisper server availability...');
       const available = await this.isServerAvailable();
       if (!available) {
         throw new Error('Whisper server is not available at http://localhost:8080. Please ensure the server is running and responds with HTTP 200 to GET requests.');
       }
-      console.log('Whisper server is available');
+      this.logger.info('Whisper server is available');
     } catch (error) {
-      console.error('Speech recognition check failed:', error);
+      this.logger.error({ error }, 'Speech recognition check failed');
       const speechError = new Error(`Whisper server not available: ${error instanceof Error ? error.message : 'Unknown error'}`) as SpeechRecognitionError;
       speechError.code = 'WHISPER_NOT_AVAILABLE';
       throw speechError;
@@ -175,7 +179,7 @@ export class SpeechRecognitionService {
       }
       // Check file size - if too small, likely no speech
       const stats = fs.statSync(filePath);
-      console.log(`Transcribing audio: ${filePath} (${(stats.size / 1024).toFixed(1)} KB)`);
+      this.logger.debug({ filePath, fileSizeKB: (stats.size / 1024).toFixed(1) }, 'Transcribing audio');
 
       // Fix WAV headers using ffmpeg to ensure correct sample rate, channels, and format
       // This prevents decoder issues where corrupted headers make the file appear hours long
@@ -183,14 +187,14 @@ export class SpeechRecognitionService {
       
       // Convert app language to Whisper language code
       const whisperLanguageCode = this.mapLanguageToWhisperCode(options.language);
-      console.log(`Transcribing audio with language: ${options.language} (Whisper code: ${whisperLanguageCode})`);
+      this.logger.debug({ language: options.language, whisperLanguageCode }, 'Transcribing audio with language');
 
       // Use Whisper.cpp Server API format: /inference with file parameter
       // API: curl 127.0.0.1:8080/inference -H "Content-Type: multipart/form-data" 
       //      -F file="@<file-path>" -F temperature="0.0" -F response_format="json"
       //      -F translate="false" -F language="es"
       const url = `${this.whisperServerUrl}/inference`;
-      console.log(`Transcribing audio via Whisper server: ${url}`);
+      this.logger.debug({ url }, 'Transcribing audio via Whisper server');
 
       // Read the fixed file as a buffer for native FormData
       const fileBuffer = await fs.promises.readFile(fileToTranscribe);
@@ -225,7 +229,7 @@ export class SpeechRecognitionService {
       let confidence: number | undefined;
 
       try {
-        console.log('Sending request to Whisper server (streaming mode)...');
+        this.logger.debug('Sending request to Whisper server (streaming mode)');
         const startTime = Date.now();
         
         // Use native FormData with fetch - fetch will automatically set Content-Type with boundary
@@ -237,7 +241,7 @@ export class SpeechRecognitionService {
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error(`Whisper server ${url} returned ${response.status}: ${errorText}`);
+          this.logger.error({ url, status: response.status, errorText }, 'Whisper server returned error');
           throw new Error(`Whisper server returned ${response.status}: ${errorText}`);
         }
 
@@ -340,20 +344,17 @@ export class SpeechRecognitionService {
         }
 
         const elapsed = Date.now() - startTime;
-        console.log(`Whisper server streaming completed in ${elapsed}ms`);
+        this.logger.debug({ elapsedMs: elapsed }, 'Whisper server streaming completed');
 
         if (!transcriptionResult || transcriptionResult.trim().length === 0) {
           throw new Error('Whisper server returned empty transcription result');
         }
 
-        console.log(`Successfully transcribed using Whisper server endpoint: /inference (streaming)`);
-        if (confidence !== undefined) {
-          console.log(`Whisper confidence score: ${confidence.toFixed(3)}`);
-        }
+        this.logger.info({ confidence, elapsedMs: elapsed }, 'Successfully transcribed using Whisper server endpoint: /inference (streaming)');
         transcriptionResult = transcriptionResult.trim();
         
       } catch (fetchError) {
-        console.error(`Error calling Whisper server endpoint /inference:`, fetchError);
+        this.logger.error({ error: fetchError, url }, 'Error calling Whisper server endpoint /inference');
         throw new Error(`Failed to transcribe audio via Whisper server: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`);
       }
 
@@ -363,8 +364,7 @@ export class SpeechRecognitionService {
         .replace(/\s+/g, ' ') // Normalize whitespace
         .trim();
 
-      console.log(`Transcription completed: "${transcriptionResult}"`);
-      console.log(`Cleaned transcription: "${cleanedResult}"`);
+      this.logger.debug({ transcriptionResult, cleanedResult }, 'Transcription completed');
 
       // Clean up temporary fixed file if it was created
       if (fileToTranscribe && fileToTranscribe !== filePath) {
@@ -378,7 +378,7 @@ export class SpeechRecognitionService {
       };
 
     } catch (error) {
-      console.error('Transcription error:', error);
+      this.logger.error({ error, filePath }, 'Transcription error');
       
       if (this.isSpeechRecognitionError(error)) {
         throw error;
@@ -569,12 +569,12 @@ export class SpeechRecognitionService {
         });
         
         req.on('error', (error) => {
-          console.log(`Failed to connect to http://${host}:${port}:`, error.message);
+          this.logger.debug({ host, port, error: error.message }, 'Failed to connect to Whisper server');
           resolve(false);
         });
         
         req.on('timeout', () => {
-          console.log(`Whisper server check timed out for http://${host}:${port}`);
+          this.logger.debug({ host, port }, 'Whisper server check timed out');
           req.destroy();
           resolve(false);
         });
@@ -584,7 +584,7 @@ export class SpeechRecognitionService {
       
       return result;
     } catch (error) {
-      console.log(`Error checking http://${host}:${port}:`, error instanceof Error ? error.message : String(error));
+      this.logger.debug({ host, port, error }, 'Error checking Whisper server');
       return false;
     }
   }

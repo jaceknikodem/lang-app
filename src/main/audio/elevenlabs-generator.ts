@@ -45,7 +45,7 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     // Load voice mappings from database (non-blocking, will use defaults if not loaded yet)
     if (database) {
       this.loadVoiceMappings().catch(error => {
-        console.warn('Failed to load voice mappings during construction, using defaults:', error);
+        this.logger.warn({ error }, 'Failed to load voice mappings during construction, using defaults');
       });
     } else {
       // No database, use defaults immediately
@@ -236,7 +236,7 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
       }
       this.voiceMapLoaded = true;
     } catch (error) {
-      console.warn('Failed to load voice mappings from database, using defaults:', error);
+      this.logger.warn({ error }, 'Failed to load voice mappings from database, using defaults');
       this.voiceMap = { ...ElevenLabsAudioGenerator.DEFAULT_VOICE_MAP };
       this.voiceMapLoaded = true;
     }

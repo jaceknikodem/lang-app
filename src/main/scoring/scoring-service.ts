@@ -5,12 +5,16 @@
 
 import { DatabaseLayer } from '../../shared/types/database.js';
 import { ModeScores } from '../../shared/types/core.js';
+import { getLogger } from '../utils/logger.js';
+import { Logger } from '../../shared/utils/logger.js';
 
 export class ScoringService {
   private database: DatabaseLayer;
   private previousMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null = null;
+  private readonly logger: Logger;
 
   constructor(database: DatabaseLayer) {
+    this.logger = getLogger();
     this.database = database;
   }
 
@@ -25,7 +29,7 @@ export class ScoringService {
       const newWordCount = await this.database.getNewWordCount(language);
       return Math.max(0, 10 - 0.7 * newWordCount);
     } catch (error) {
-      console.error('Error calculating add words score:', error);
+      this.logger.error({ error, language }, 'Error calculating add words score');
       return 0;
     }
   }
@@ -43,7 +47,7 @@ export class ScoringService {
       const score = 0.4 * newWordCount + 0.25 * weakWordCount;
       return this.clamp(score, 0, 10);
     } catch (error) {
-      console.error('Error calculating review score:', error);
+      this.logger.error({ error, language }, 'Error calculating review score');
       return 0;
     }
   }
@@ -59,7 +63,7 @@ export class ScoringService {
       const dueWordCount = await this.database.getWordsDueCount(language);
       return Math.min(10, dueWordCount / 5);
     } catch (error) {
-      console.error('Error calculating quiz score:', error);
+      this.logger.error({ error, language }, 'Error calculating quiz score');
       return 0;
     }
   }
@@ -75,7 +79,7 @@ export class ScoringService {
       const ratio = await this.database.getDialogueReadinessRatio(language, 50);
       return 10 * ratio;
     } catch (error) {
-      console.error('Error calculating dialog score:', error);
+      this.logger.error({ error, language }, 'Error calculating dialog score');
       return 0;
     }
   }
@@ -95,7 +99,7 @@ export class ScoringService {
         availableSentencesCount / 10 + (avgPronunciationScore - 7) - timeSinceLastPractice / 10;
       return this.clamp(score, 0, 10);
     } catch (error) {
-      console.error('Error calculating flow score:', error);
+      this.logger.error({ error, language }, 'Error calculating flow score');
       return 0;
     }
   }
@@ -230,8 +234,13 @@ export class ScoringService {
       }
 
       // Log all scores in one line for debugging
-      console.log(
-        `Mode scores: topic-selection=${scores.addWords}, learning=${scores.review}, quiz=${scores.quiz}, dialog=${scores.dialog}, flow=${scores.flow} -> navigating to ${highestMode.mode}`
+      this.logger.debug(
+        {
+          scores,
+          nextMode: highestMode.mode,
+          language,
+        },
+        'Mode scores calculated'
       );
 
       // highestMode.mode cannot be 'topic-selection' because it's excluded from availableModes
@@ -240,7 +249,7 @@ export class ScoringService {
         rankedModes,
       };
     } catch (error) {
-      console.error('Error getting next mode:', error);
+      this.logger.error({ error, language }, 'Error getting next mode');
       return {
         nextMode: null,
         rankedModes: [],
