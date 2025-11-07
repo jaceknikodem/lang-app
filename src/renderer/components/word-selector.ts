@@ -15,6 +15,7 @@ import {
 } from '../utils/word-processor.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
 import { GeneratedWord, Word } from '../../shared/types/core.js';
+import { logger } from '../utils/logger.js';
 
 interface SelectableWord extends GeneratedWord {
   selected: boolean;
@@ -494,7 +495,7 @@ export class WordSelector extends LitElement {
               }
             }
           } catch (error) {
-            console.warn(`Failed to check word ${wordId}:`, error);
+            logger.warn({ error, wordId }, `Failed to check word ${wordId}`);
           }
         }
 
@@ -502,10 +503,13 @@ export class WordSelector extends LitElement {
           // Start a new learning session with the ready words
           const wordIds = readyWords.map((w) => w.id);
           sessionManager.startNewLearningSession(wordIds, Math.min(20, wordIds.length));
-          console.log(`Started learning session with ${readyWords.length} ready words`);
+          logger.info(
+            { readyWordsCount: readyWords.length },
+            `Started learning session with ${readyWords.length} ready words`
+          );
         }
       } catch (error) {
-        console.error('Failed to start learning session:', error);
+        logger.error({ error }, 'Failed to start learning session');
       }
     }
 
@@ -552,19 +556,22 @@ export class WordSelector extends LitElement {
           }
         } else if (processingInfo && processingInfo.processingStatus === 'failed') {
           // Word failed, check next word
-          console.warn(`Word ${currentWordId} failed processing, checking next word`);
+          logger.warn(
+            { wordId: currentWordId },
+            `Word ${currentWordId} failed processing, checking next word`
+          );
           wordIndex++;
           continue;
         }
       } catch (error) {
-        console.warn('Error checking word status:', error);
+        logger.warn({ error }, 'Error checking word status');
       }
 
       // Wait before next poll
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
     }
 
-    console.warn('Timeout waiting for first word to be ready');
+    logger.warn('Timeout waiting for first word to be ready');
     return false;
   }
 
@@ -651,7 +658,7 @@ export class WordSelector extends LitElement {
 
           await window.electronAPI.tracking.recordNeglectedWords(ignoredWordData);
         } catch (error) {
-          console.warn('Failed to record neglected words:', error);
+          logger.warn({ error }, 'Failed to record neglected words');
           // Don't block the flow if tracking fails
         }
       }
@@ -711,7 +718,7 @@ export class WordSelector extends LitElement {
       }
       // If words are queued, don't auto-navigate - user will click button
     } catch (error) {
-      console.error('Failed to process selected words:', error);
+      logger.error({ error }, 'Failed to process selected words');
       this.error = getErrorMessage(error, 'Failed to process selected words. Please try again.');
     } finally {
       this.isProcessing = false;

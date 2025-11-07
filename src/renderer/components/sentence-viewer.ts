@@ -12,6 +12,7 @@ import { getErrorMessage } from '../../shared/utils/error.js';
 import { useKeyboardBindings } from '../utils/keyboard-manager.js';
 import { tokenizeSentenceWithDictionary } from '../utils/sentence-tokenizer.js';
 import type { TokenizedWord as WordInSentence } from '../utils/sentence-tokenizer.js';
+import { logger } from '../utils/logger.js';
 
 @customElement('sentence-viewer')
 export class SentenceViewer extends LitElement {
@@ -739,7 +740,7 @@ export class SentenceViewer extends LitElement {
       const autoplaySetting = await window.electronAPI.database.getSetting('autoplay_audio');
       this.autoplayEnabled = autoplaySetting === 'true';
     } catch (error) {
-      console.error('Failed to load autoplay setting:', error);
+      logger.error({ error }, 'Failed to load autoplay setting');
       this.autoplayEnabled = false;
     }
   }
@@ -759,7 +760,7 @@ export class SentenceViewer extends LitElement {
       await new Promise((resolve) => setTimeout(resolve, 100));
       void this.handlePlayAudio();
     } catch (error) {
-      console.warn('Failed to handle auto-play:', error);
+      logger.warn({ error }, 'Failed to handle auto-play');
     }
   }
 
@@ -904,12 +905,15 @@ export class SentenceViewer extends LitElement {
 
     // If we didn't find a match, log for debugging
     if (!foundMatch) {
-      console.warn('[SentenceViewer] Could not find matching word in parsedWords for:', {
-        word: updatedWord.word,
-        wordId: updatedWord.id,
-        parsedWordsCount: this.parsedWords.length,
-        sampleParsedWord: this.parsedWords.find((w) => !w.wordData && w.text.trim()),
-      });
+      logger.warn(
+        {
+          word: updatedWord.word,
+          wordId: updatedWord.id,
+          parsedWordsCount: this.parsedWords.length,
+          sampleParsedWord: this.parsedWords.find((w) => !w.wordData && w.text.trim()),
+        },
+        '[SentenceViewer] Could not find matching word in parsedWords'
+      );
     }
   }
 
@@ -1100,7 +1104,7 @@ export class SentenceViewer extends LitElement {
       }
     } catch (error) {
       if (requestId === this.tokenizationRequestId) {
-        console.error('Failed to apply dictionary-based tokenization:', error);
+        logger.error({ error }, 'Failed to apply dictionary-based tokenization');
       }
     }
   }
@@ -1206,7 +1210,10 @@ export class SentenceViewer extends LitElement {
               );
             }
           } catch (lemmaError) {
-            console.warn(`[Dictionary] Lemma lookup also failed for "${lemma}":`, lemmaError);
+            logger.warn(
+              { error: lemmaError, lemma },
+              `[Dictionary] Lemma lookup also failed for "${lemma}"`
+            );
             // Continue with null entries
           }
         }
@@ -1215,7 +1222,7 @@ export class SentenceViewer extends LitElement {
         this.dictionaryCache[dictionaryKey] = normalizedEntries;
         return normalizedEntries;
       } catch (error) {
-        console.error('Failed to load dictionary entries:', error);
+        logger.error({ error, dictionaryKey }, 'Failed to load dictionary entries');
         // Cache null to indicate lookup failed/no results
         this.dictionaryCache[dictionaryKey] = null;
         return null;
@@ -1479,7 +1486,7 @@ export class SentenceViewer extends LitElement {
         foundInDict,
       });
     } catch (error) {
-      console.warn('Failed to record dictionary hover:', error);
+      logger.warn({ error }, 'Failed to record dictionary hover');
       // Don't block the flow if tracking fails
     }
   }
@@ -1695,7 +1702,7 @@ export class SentenceViewer extends LitElement {
         wordToAdd =
           (lemmas && lemmas.length > 0 ? lemmas[0] : null) || rawWord.replace(/\s+/g, ' ');
       } catch (error) {
-        console.warn('Failed to lemmatize word (non-critical):', error);
+        logger.warn({ error, rawWord }, 'Failed to lemmatize word (non-critical)');
         wordToAdd = rawWord.replace(/\s+/g, ' ');
       }
     }
@@ -1731,7 +1738,7 @@ export class SentenceViewer extends LitElement {
         suggestedTranslation = gloss ?? '';
       }
     } catch (error) {
-      console.warn('Dictionary lookup failed for', normalized, error);
+      logger.warn({ error, normalized }, 'Dictionary lookup failed');
     }
 
     const translation = (suggestedTranslation || normalized).trim();
@@ -1781,7 +1788,7 @@ export class SentenceViewer extends LitElement {
 
       return newWord || null;
     } catch (error) {
-      console.error('Failed to add word from sentence:', error);
+      logger.error({ error }, 'Failed to add word from sentence');
       this.dispatchEvent(
         new CustomEvent('word-addition-error', {
           detail: {
@@ -1825,7 +1832,7 @@ export class SentenceViewer extends LitElement {
             this.requestUpdate();
           }
         } catch (error) {
-          console.warn('Failed to play before sentence audio:', error);
+          logger.warn({ error }, 'Failed to play before sentence audio');
           this.localPlayingAudio = null;
           this.requestUpdate();
           // Continue with main sentence audio even if before sentence audio fails
@@ -1863,7 +1870,7 @@ export class SentenceViewer extends LitElement {
               this.requestUpdate();
             }
           } catch (error) {
-            console.warn('Failed to play after sentence audio:', error);
+            logger.warn({ error }, 'Failed to play after sentence audio');
             this.localPlayingAudio = null;
             this.requestUpdate();
             // Continue even if after sentence audio fails
@@ -1903,12 +1910,12 @@ export class SentenceViewer extends LitElement {
           // Audio was intentionally stopped, ignore
           return;
         }
-        console.error('Failed to play audio:', err);
+        logger.error({ error: err }, 'Failed to play audio');
       }
     } catch (error) {
       this.localPlayingAudio = null;
       this.requestUpdate();
-      console.error('Failed to play audio:', error);
+      logger.error({ error }, 'Failed to play audio');
     } finally {
       // Reset after a short delay to prevent rapid clicking
       setTimeout(() => {
@@ -1923,14 +1930,14 @@ export class SentenceViewer extends LitElement {
     }
 
     this.isRegeneratingAudio = true;
-    console.info('Recreate audio: start');
+    logger.info('Recreate audio: start');
     try {
       // Ensure no audio is playing
       try {
         await window.electronAPI.audio.stopAudio();
         this.isPlayingAudio = false;
       } catch (e) {
-        console.warn('Stop audio before regenerate failed (non-fatal):', e);
+        logger.warn({ error: e }, 'Stop audio before regenerate failed (non-fatal)');
       }
 
       const oldPath = this.sentence.audioPath;
@@ -1938,7 +1945,7 @@ export class SentenceViewer extends LitElement {
         this.targetWord?.language || (await window.electronAPI.database.getCurrentLanguage());
       const word = this.targetWord?.word;
 
-      console.info('Recreate audio: invoking regenerateAudio', { oldPath });
+      logger.info({ oldPath }, 'Recreate audio: invoking regenerateAudio');
 
       let regeneratedPath: string | undefined;
 
@@ -1953,7 +1960,7 @@ export class SentenceViewer extends LitElement {
         });
         regeneratedPath = result?.audioPath;
       } else {
-        console.warn('Recreate audio: regenerateAudio not available, using fallback flow');
+        logger.warn('Recreate audio: regenerateAudio not available, using fallback flow');
         const fallbackLanguage =
           language ||
           this.targetWord?.language ||
@@ -1973,15 +1980,18 @@ export class SentenceViewer extends LitElement {
             this.sentence.id,
             regeneratedPath
           );
-          console.info(
-            'Recreate audio (fallback): DB audio_path updated for sentence',
-            this.sentence.id
+          logger.info(
+            { sentenceId: this.sentence.id },
+            'Recreate audio (fallback): DB audio_path updated for sentence'
           );
 
           try {
             await window.electronAPI.audio.deleteRecording(oldPath);
           } catch (deleteError) {
-            console.warn('Recreate audio (fallback): failed to delete previous audio', deleteError);
+            logger.warn(
+              { error: deleteError, oldPath },
+              'Recreate audio (fallback): failed to delete previous audio'
+            );
           }
         }
       }
@@ -1998,10 +2008,13 @@ export class SentenceViewer extends LitElement {
           this.sentence.id,
           regeneratedPath
         );
-        console.info('Recreate audio: DB audio_path updated for sentence', this.sentence.id);
+        logger.info(
+          { sentenceId: this.sentence.id },
+          'Recreate audio: DB audio_path updated for sentence'
+        );
       }
 
-      console.info('Recreate audio: regeneration completed with path', regeneratedPath);
+      logger.info({ audioPath: regeneratedPath }, 'Recreate audio: regeneration completed');
 
       this.sentence = { ...this.sentence, audioPath: regeneratedPath };
 
@@ -2038,18 +2051,18 @@ export class SentenceViewer extends LitElement {
             }
           }
         } catch (playError) {
-          console.warn('Failed to play newly regenerated audio:', playError);
+          logger.warn({ error: playError }, 'Failed to play newly regenerated audio');
           // Don't show error to user as regeneration succeeded
           this.isPlayingAudio = false;
         }
       }, 100);
     } catch (error) {
-      console.error('Failed to regenerate audio:', error);
+      logger.error({ error }, 'Failed to regenerate audio');
       const message = getErrorMessage(error);
       window.alert(`Failed to recreate audio: ${message}`);
     } finally {
       this.isRegeneratingAudio = false;
-      console.info('Recreate audio: end');
+      logger.info('Recreate audio: end');
     }
   }
 

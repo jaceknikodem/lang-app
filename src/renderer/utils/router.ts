@@ -2,6 +2,8 @@
  * Simple routing utility for managing application navigation
  */
 
+import { logger } from './logger.js';
+
 export type AppMode =
   | 'topic-selection'
   | 'word-selection'
@@ -44,7 +46,7 @@ export class Router {
       try {
         listener(this.getCurrentRoute());
       } catch (error) {
-        console.error('Router listener error:', error);
+        logger.error({ error }, 'Router listener error');
       }
     });
   }

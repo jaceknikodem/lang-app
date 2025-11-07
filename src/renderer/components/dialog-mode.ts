@@ -18,6 +18,7 @@ import {
 } from '../../shared/utils/similarity-threshold.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
 import { BaseComponent } from './base-component.js';
+import { logger } from '../utils/logger.js';
 
 // DialogueVariant is now imported from shared/types/core.js
 
@@ -166,11 +167,11 @@ export class DialogMode extends BaseComponent {
             language
           );
         } catch (error) {
-          console.warn('Failed to create dialog session:', error);
+          logger.warn({ error }, 'Failed to create dialog session');
         }
       })
       .catch((err) => {
-        console.error('Failed to load current language:', err);
+        logger.error({ error: err }, 'Failed to load current language');
       });
 
     this.loadDialogSession();
@@ -220,7 +221,7 @@ export class DialogMode extends BaseComponent {
     // Cancel any ongoing recording
     if (this.isRecording) {
       this.cancelRecording().catch((err) => {
-        console.error('Error cancelling recording on disconnect:', err);
+        logger.error({ error: err }, 'Error cancelling recording on disconnect');
       });
     }
 
@@ -336,11 +337,14 @@ export class DialogMode extends BaseComponent {
             }
           }
         } catch (error) {
-          console.error('[DialogMode] loadDialogSession - error during validation', {
-            sessionId: cachedSession.id,
-            cachedSentenceId: cachedSession.sentenceId,
-            error,
-          });
+          logger.error(
+            {
+              error,
+              sessionId: cachedSession.id,
+              cachedSentenceId: cachedSession.sentenceId,
+            },
+            '[DialogMode] loadDialogSession - error during validation'
+          );
           sessionManager.consumeCurrentDialogSession();
         }
       }
@@ -373,7 +377,7 @@ export class DialogMode extends BaseComponent {
         this.beforeSentenceAudio = contextAudio.beforeSentenceAudio || null;
         this.afterSentenceAudio = contextAudio.afterSentenceAudio || null;
       } catch (error) {
-        console.warn('Failed to generate context sentences audio:', error);
+        logger.warn({ error }, 'Failed to generate context sentences audio');
         this.beforeSentenceAudio = null;
         this.afterSentenceAudio = null;
       }
@@ -409,7 +413,7 @@ export class DialogMode extends BaseComponent {
         // Shuffle options so target isn't always first
         this.responseOptions.sort(() => Math.random() - 0.5);
       } catch (error) {
-        console.error('Failed to generate variants:', error);
+        logger.error({ error }, 'Failed to generate variants');
         // Fallback: use only the target sentence
         this.responseOptions = [
           {
@@ -452,7 +456,10 @@ export class DialogMode extends BaseComponent {
           // Add to cache (will set currentDialogIndex if it's the first session)
           sessionManager.addDialogSession(dialogSession);
         } catch (error) {
-          console.error('[DialogMode] loadDialogSession - failed to save session to cache', error);
+          logger.error(
+            { error },
+            '[DialogMode] loadDialogSession - failed to save session to cache'
+          );
         }
       }
 
@@ -466,7 +473,7 @@ export class DialogMode extends BaseComponent {
         });
       }
     } catch (error) {
-      console.error('Failed to load dialog session:', error);
+      logger.error({ error }, 'Failed to load dialog session');
       this.error = getErrorMessage(error, 'Failed to load dialog session');
       this.isLoading = false;
     }
@@ -476,7 +483,7 @@ export class DialogMode extends BaseComponent {
     try {
       this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
     } catch (error) {
-      console.error('Failed to check speech recognition readiness:', error);
+      logger.error({ error }, 'Failed to check speech recognition readiness');
       this.speechRecognitionReady = false;
     }
   }
@@ -486,7 +493,7 @@ export class DialogMode extends BaseComponent {
       const autoplaySetting = await window.electronAPI.database.getSetting('autoplay_audio');
       this.autoplayEnabled = autoplaySetting === 'true';
     } catch (error) {
-      console.error('Failed to load autoplay setting:', error);
+      logger.error({ error }, 'Failed to load autoplay setting');
       this.autoplayEnabled = false;
     }
   }
@@ -514,16 +521,19 @@ export class DialogMode extends BaseComponent {
         // Play trigger audio and wait for it to complete
         if (this.beforeSentenceAudio) {
           try {
-            console.log('[DialogMode] Playing trigger audio:', this.beforeSentenceAudio);
+            logger.debug(
+              { audioPath: this.beforeSentenceAudio },
+              '[DialogMode] Playing trigger audio'
+            );
             await window.electronAPI.audio.playAudio(this.beforeSentenceAudio);
-            console.log('[DialogMode] Trigger audio finished');
+            logger.debug('[DialogMode] Trigger audio finished');
 
             // Track sentence play count
             if (this.currentSentence?.id) {
               void window.electronAPI.database
                 .incrementSentencePlayCount(this.currentSentence.id)
                 .catch((err) => {
-                  console.warn('Failed to increment sentence play count:', err);
+                  logger.warn({ error: err }, 'Failed to increment sentence play count');
                 });
             }
             // Track audio playback event
@@ -538,11 +548,11 @@ export class DialogMode extends BaseComponent {
                   playbackSpeed: 1.0, // Dialog mode doesn't have playback speed control
                 })
                 .catch((err: unknown) => {
-                  console.warn('Failed to record audio playback:', err);
+                  logger.warn({ error: err }, 'Failed to record audio playback');
                 });
             }
           } catch (error) {
-            console.error('Failed to play trigger audio:', error);
+            logger.error({ error }, 'Failed to play trigger audio');
             // Continue with next audio even if this one fails
           }
         }
@@ -557,11 +567,11 @@ export class DialogMode extends BaseComponent {
             );
             const audioPathToPlay = normalizedPath || this.recordedAudioPath;
 
-            console.log('[DialogMode] Playing user recording:', audioPathToPlay);
+            logger.debug({ audioPath: audioPathToPlay }, '[DialogMode] Playing user recording');
             await window.electronAPI.audio.playAudio(audioPathToPlay);
-            console.log('[DialogMode] User recording finished');
+            logger.debug('[DialogMode] User recording finished');
           } catch (error) {
-            console.error('Failed to play user recording:', error);
+            logger.error({ error }, 'Failed to play user recording');
             // Continue with next audio even if this one fails
           }
         }
@@ -569,26 +579,32 @@ export class DialogMode extends BaseComponent {
         // Play continuation audio and wait for it to complete
         if (this.followUpAudio) {
           try {
-            console.log('[DialogMode] Playing continuation audio:', this.followUpAudio);
+            logger.debug(
+              { audioPath: this.followUpAudio },
+              '[DialogMode] Playing continuation audio'
+            );
             await window.electronAPI.audio.playAudio(this.followUpAudio);
-            console.log('[DialogMode] Continuation audio finished');
+            logger.debug('[DialogMode] Continuation audio finished');
           } catch (error) {
-            console.error('Failed to play continuation audio:', error);
+            logger.error({ error }, 'Failed to play continuation audio');
           }
         }
 
         // Play afterSentence audio if available
         if (this.afterSentenceAudio) {
           try {
-            console.log('[DialogMode] Playing afterSentence audio:', this.afterSentenceAudio);
+            logger.debug(
+              { audioPath: this.afterSentenceAudio },
+              '[DialogMode] Playing afterSentence audio'
+            );
             await window.electronAPI.audio.playAudio(this.afterSentenceAudio);
-            console.log('[DialogMode] AfterSentence audio finished');
+            logger.debug('[DialogMode] AfterSentence audio finished');
           } catch (error) {
-            console.error('Failed to play afterSentence audio:', error);
+            logger.error({ error }, 'Failed to play afterSentence audio');
           }
         }
       } catch (error) {
-        console.error('Failed to play dialog sequence:', error);
+        logger.error({ error }, 'Failed to play dialog sequence');
       }
       return;
     }
@@ -614,7 +630,7 @@ export class DialogMode extends BaseComponent {
         void window.electronAPI.database
           .incrementSentencePlayCount(this.currentSentence.id)
           .catch((err) => {
-            console.warn('Failed to increment sentence play count:', err);
+            logger.warn({ error: err }, 'Failed to increment sentence play count');
           });
       }
       // Track audio playback event
@@ -629,11 +645,11 @@ export class DialogMode extends BaseComponent {
             playbackSpeed: 1.0, // Dialog mode doesn't have playback speed control
           })
           .catch((err: unknown) => {
-            console.warn('Failed to record audio playback:', err);
+            logger.warn({ error: err }, 'Failed to record audio playback');
           });
       }
     } catch (error) {
-      console.error('Failed to play before sentence audio:', error);
+      logger.error({ error }, 'Failed to play before sentence audio');
       this.isAudioPlaying = false;
     }
   }
@@ -659,7 +675,7 @@ export class DialogMode extends BaseComponent {
         void window.electronAPI.database
           .incrementSentencePlayCount(this.currentSentence.id)
           .catch((err) => {
-            console.warn('Failed to increment sentence play count:', err);
+            logger.warn({ error: err }, 'Failed to increment sentence play count');
           });
       }
       // Track audio playback event
@@ -674,11 +690,11 @@ export class DialogMode extends BaseComponent {
             playbackSpeed: 1.0, // Dialog mode doesn't have playback speed control
           })
           .catch((err: unknown) => {
-            console.warn('Failed to record audio playback:', err);
+            logger.warn({ error: err }, 'Failed to record audio playback');
           });
       }
     } catch (error) {
-      console.error('Failed to play after sentence audio:', error);
+      logger.error({ error }, 'Failed to play after sentence audio');
       this.isAudioPlaying = false;
     }
   }
@@ -699,7 +715,7 @@ export class DialogMode extends BaseComponent {
       await window.electronAPI.audio.playAudio(this.followUpAudio);
       this.isAudioPlaying = false; // Reset when audio finishes
     } catch (error) {
-      console.error('Failed to play follow-up audio:', error);
+      logger.error({ error }, 'Failed to play follow-up audio');
       this.isAudioPlaying = false;
     }
   }
@@ -720,7 +736,7 @@ export class DialogMode extends BaseComponent {
       await window.electronAPI.audio.playAudio(audioPath);
       this.isAudioPlaying = false; // Reset when audio finishes
     } catch (error) {
-      console.error('Failed to play assistant audio:', error);
+      logger.error({ error }, 'Failed to play assistant audio');
       this.isAudioPlaying = false;
     }
   }
@@ -834,7 +850,7 @@ export class DialogMode extends BaseComponent {
       // Set up periodic check for recording status (in case of auto-stop)
       this.setupRecordingStatusCheck();
     } catch (error) {
-      console.error('Error starting recording:', error);
+      logger.error({ error }, 'Error starting recording');
       this.isRecording = false;
       this.error = `Failed to start recording: ${getErrorMessage(error)}`;
     }
@@ -873,7 +889,7 @@ export class DialogMode extends BaseComponent {
         await this.performSpeechRecognition();
       }
     } catch (error) {
-      console.error('Error stopping recording:', error);
+      logger.error({ error }, 'Error stopping recording');
       this.isRecording = false;
       this.clearRecordingTimer();
       this.clearRecordingStatusCheck();
@@ -900,7 +916,7 @@ export class DialogMode extends BaseComponent {
       this.isTranscribing = false;
       this.streamingTranscriptionText = null;
     } catch (error) {
-      console.error('Error cancelling recording:', error);
+      logger.error({ error }, 'Error cancelling recording');
       this.isRecording = false;
       this.clearRecordingTimer();
       this.clearRecordingStatusCheck();
@@ -931,7 +947,7 @@ export class DialogMode extends BaseComponent {
             await this.handleRecordingAutoStop();
           }
         } catch (error) {
-          console.error('Error checking recording status:', error);
+          logger.error({ error }, 'Error checking recording status');
         }
       }
     }, 500);
@@ -967,7 +983,7 @@ export class DialogMode extends BaseComponent {
         await this.performSpeechRecognition();
       }
     } catch (error) {
-      console.error('Error handling auto-stop:', error);
+      logger.error({ error }, 'Error handling auto-stop');
       this.error = 'Recording stopped automatically but there was an error processing it.';
       this.isRecording = false;
     }
@@ -1036,7 +1052,7 @@ export class DialogMode extends BaseComponent {
             this.currentRecording?.filePath || null // Audio path
           );
         } catch (error) {
-          console.warn('Failed to record pronunciation attempt:', error);
+          logger.warn({ error }, 'Failed to record pronunciation attempt');
         }
       }
 
@@ -1057,7 +1073,7 @@ export class DialogMode extends BaseComponent {
       }
       // If similarity is too low, show "Try Again" button next to the similarity badge
     } catch (error) {
-      console.error('Speech recognition failed:', error);
+      logger.error({ error }, 'Speech recognition failed');
       this.transcriptionResult = {
         text: 'Speech recognition failed. Please try again.',
         similarity: 0,
@@ -1251,7 +1267,7 @@ export class DialogMode extends BaseComponent {
         });
       }
     } catch (error) {
-      console.error('Failed to generate follow-up:', error);
+      logger.error({ error }, 'Failed to generate follow-up');
       this.followUpText = '';
       this.followUpTranslation = '';
     } finally {
@@ -1297,7 +1313,7 @@ export class DialogMode extends BaseComponent {
     // Schedule a new dialog session to be generated asynchronously and added to the end of the queue
     setImmediate(() => {
       this.scheduleNewDialogSession().catch((error) => {
-        console.error('Failed to schedule new dialog session:', error);
+        logger.error({ error }, 'Failed to schedule new dialog session');
         // Non-critical error - continue without new session
       });
     });
@@ -1360,13 +1376,16 @@ export class DialogMode extends BaseComponent {
 
       // Add to the end of the queue (FIFO - removes oldest if queue is full)
       sessionManager.addDialogSession(dialogSession);
-      console.log('New dialog session generated and added to queue:', {
-        sessionId: dialogSession.id,
-        sentenceId: dialogSession.sentenceId,
-        variantsCount: dialogSession.responseOptions.length,
-      });
+      logger.info(
+        {
+          sessionId: dialogSession.id,
+          sentenceId: dialogSession.sentenceId,
+          variantsCount: dialogSession.responseOptions.length,
+        },
+        'New dialog session generated and added to queue'
+      );
     } catch (error) {
-      console.error('Failed to schedule new dialog session:', error);
+      logger.error({ error }, 'Failed to schedule new dialog session');
       // Non-critical error - don't throw
     }
   }

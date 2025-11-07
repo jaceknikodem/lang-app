@@ -10,6 +10,7 @@ import { sessionManager } from '../utils/session-manager.js';
 import { useKeyboardBindings, CommonKeys } from '../utils/keyboard-manager.js';
 import { loadCurrentLanguage, loadLemmatizationModel } from '../utils/language-manager.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
+import { logger } from '../utils/logger.js';
 import { BaseComponent } from './base-component.js';
 
 @customElement('topic-selector')
@@ -279,7 +280,7 @@ export class TopicSelector extends BaseComponent {
     try {
       this.allTopicSuggestions = await window.electronAPI.topics.getTopics();
     } catch (error) {
-      console.error('[TopicSelector] Error loading topics:', error);
+      logger.error({ error }, '[TopicSelector] Error loading topics');
       this.allTopicSuggestions = [];
     }
   }
@@ -300,7 +301,7 @@ export class TopicSelector extends BaseComponent {
         const topUsedTopics = topicCounts.slice(0, 10).map((tc) => tc.topic);
         frequentlyUsedTopics = new Set(topUsedTopics);
       } catch (error) {
-        console.error('[TopicSelector] Error getting topic word counts:', error);
+        logger.error({ error }, '[TopicSelector] Error getting topic word counts');
         // Continue without filtering if there's an error
       }
     }
@@ -375,7 +376,10 @@ export class TopicSelector extends BaseComponent {
         language: this.currentLanguage,
       });
     } catch (error) {
-      console.error('Failed to generate words:', error);
+      logger.error(
+        { error, topic: this.topic, language: this.currentLanguage },
+        'Failed to generate words'
+      );
       this.error = getErrorMessage(
         error,
         'Failed to generate vocabulary words. Please check that Ollama is running and try again.'

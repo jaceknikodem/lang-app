@@ -12,6 +12,7 @@ import { STRENGTH_BOOST_CONFIG } from '../../shared/constants/index.js';
 import { useKeyboardBindings, GlobalShortcuts } from '../utils/keyboard-manager.js';
 import { loadCurrentLanguage, loadLemmatizationModel } from '../utils/language-manager.js';
 import { BaseComponent } from './base-component.js';
+import { logger } from '../utils/logger.js';
 import './sentence-viewer.js';
 import './session-complete.js';
 import './progress-bar.js';
@@ -159,7 +160,7 @@ export class LearningMode extends BaseComponent {
       // Refresh queue summary
       await this.refreshQueueSummary();
     } catch (error) {
-      console.error('Failed to reload data after language change:', error);
+      logger.error({ error }, 'Failed to reload data after language change');
     }
   };
 
@@ -569,7 +570,7 @@ export class LearningMode extends BaseComponent {
       const language = this.currentLanguage || 'spanish';
       this.currentSessionId = await window.electronAPI.tracking.createSession('learning', language);
     } catch (error) {
-      console.warn('Failed to create learning session:', error);
+      logger.warn({ error }, 'Failed to create learning session');
       // Continue without session tracking
     }
 
@@ -638,9 +639,9 @@ export class LearningMode extends BaseComponent {
       const language =
         this.currentLanguage || (await window.electronAPI.database.getCurrentLanguage());
       this.allWords = await window.electronAPI.database.getAllWords(language, true, false);
-      console.log('Loaded all words for highlighting:', this.allWords.length);
+      logger.debug({ wordCount: this.allWords.length }, 'Loaded all words for highlighting');
     } catch (error) {
-      console.error('Failed to load all words:', error);
+      logger.error({ error }, 'Failed to load all words');
       // Don't set error state here as this is not critical for basic functionality
     }
   }
@@ -787,7 +788,7 @@ export class LearningMode extends BaseComponent {
         `Loaded ${this.selectedWords.length} words with sentences for learning session: ${this.selectedWords.map((w) => `${w.id}("${w.word}")`).join(', ')}`
       );
     } catch (error) {
-      console.error('Failed to load words:', error);
+      logger.error({ error }, 'Failed to load words');
       this.error = 'Failed to load words from database.';
     }
   }
@@ -855,7 +856,7 @@ export class LearningMode extends BaseComponent {
                 .filter((path) => path && !this.audioCache.has(path))
                 .map((path) =>
                   this.loadAudioIntoCache(path).catch((err) => {
-                    console.warn(`Failed to preload audio ${path}:`, err);
+                    logger.warn({ error: err, audioPath: path }, `Failed to preload audio`);
                   })
                 )
             : [];
@@ -902,8 +903,9 @@ export class LearningMode extends BaseComponent {
           })
           .filter((w: WordWithSentences) => {
             if (w.sentences.length === 0) {
-              console.warn(
-                `Word ${w.id} ("${w.word}") filtered out: no sentences after prepareSentencesForWord`
+              logger.warn(
+                { wordId: w.id, word: w.word },
+                `Word filtered out: no sentences after prepareSentencesForWord`
               );
             }
             return w.sentences.length > 0;
@@ -931,7 +933,7 @@ export class LearningMode extends BaseComponent {
           const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
 
           if (!sentences.length) {
-            console.warn(`No sentences found for word: ${word.word}`);
+            logger.warn({ word: word.word, wordId: word.id }, `No sentences found for word`);
           }
 
           // Keep sentences in their original order for consistent review
@@ -980,7 +982,7 @@ export class LearningMode extends BaseComponent {
       );
 
       if (this.wordsWithSentences.length === 0) {
-        console.warn('No words have sentences available for learning');
+        logger.warn('No words have sentences available for learning');
         this.error =
           'No sentences available for the selected words. Please generate new words or check if sentence generation completed successfully.';
       } else {
@@ -993,7 +995,7 @@ export class LearningMode extends BaseComponent {
         this.preloadNextSentenceAudio();
       }
     } catch (err) {
-      console.error('Failed to load words and sentences:', err);
+      logger.error({ error: err }, 'Failed to load words and sentences');
       this.error = 'Failed to load learning content. Please try again.';
     } finally {
       this.isLoading = false;
@@ -1045,7 +1047,7 @@ export class LearningMode extends BaseComponent {
         return true;
       }
     } catch (error) {
-      console.error('Failed to append new words to learning session:', error);
+      logger.error({ error }, 'Failed to append new words to learning session');
     }
 
     return false;
@@ -1102,7 +1104,7 @@ export class LearningMode extends BaseComponent {
         this.failureMessageExpiresAt = null;
       }
     } catch (error) {
-      console.warn('Failed to refresh queue summary:', error);
+      logger.warn({ error }, 'Failed to refresh queue summary');
     }
   }
 
@@ -1138,7 +1140,10 @@ export class LearningMode extends BaseComponent {
           const preparedSentences = this.prepareSentencesForWord(word, sentences);
 
           if (!preparedSentences.length) {
-            console.warn(`Word ${word.word} has no sentences ready after job completion.`);
+            logger.warn(
+              { word: word.word, wordId: word.id },
+              `Word has no sentences ready after job completion`
+            );
             return;
           }
 
@@ -1177,7 +1182,7 @@ export class LearningMode extends BaseComponent {
           await this.loadAllWords();
         }
       } catch (error) {
-        console.error('Unable to fetch word after job completion:', error);
+        logger.error({ error }, 'Unable to fetch word after job completion');
       }
     } else if (update.processingStatus === 'failed') {
       this.failureMessageExpiresAt = Date.now() + 10000;
@@ -1326,7 +1331,12 @@ export class LearningMode extends BaseComponent {
         // Fire and forget; no need to block UI
         window.electronAPI.database
           .updateSentenceLastShown(currentSentence.id)
-          .catch((err) => console.warn('Failed to update sentence last_shown:', err));
+          .catch((err) =>
+            logger.warn(
+              { error: err, sentenceId: currentSentence.id },
+              'Failed to update sentence last_shown'
+            )
+          );
       }
 
       // Disable auto-scroll when we reach the last sentence
@@ -1439,7 +1449,7 @@ export class LearningMode extends BaseComponent {
 
       this.requestUpdate();
     } catch (error) {
-      console.error('Failed to update word status:', error);
+      logger.error({ error }, 'Failed to update word status');
       this.error = 'Failed to update word status. Please try again.';
     } finally {
       this.isProcessing = false;
@@ -1504,7 +1514,10 @@ export class LearningMode extends BaseComponent {
       }
 
       if (!newSentence) {
-        console.warn('No other sentence found for word:', currentWord.word);
+        logger.warn(
+          { word: currentWord.word, wordId: currentWord.id },
+          'No other sentence found for word'
+        );
         this.isProcessing = false;
         return;
       }
@@ -1577,7 +1590,7 @@ export class LearningMode extends BaseComponent {
       // Force re-render
       this.requestUpdate();
     } catch (error) {
-      console.error('Failed to load other sentence:', error);
+      logger.error({ error }, 'Failed to load other sentence');
       window.alert('Failed to load another sentence. Please try again.');
     } finally {
       this.isProcessing = false;
@@ -1646,7 +1659,7 @@ export class LearningMode extends BaseComponent {
       this.currentSentenceIndex = newSentenceIndex;
       this.saveProgressToSession();
     } catch (error) {
-      console.error('Failed to delete sentence:', error);
+      logger.error({ error }, 'Failed to delete sentence');
       window.alert('Failed to remove sentence. Please try again.');
     } finally {
       this.isProcessing = false;
@@ -1694,7 +1707,7 @@ export class LearningMode extends BaseComponent {
 
     // Load current sentence's audio into cache in background (non-blocking)
     void this.ensureCurrentSentenceAudioLoaded().catch((err) => {
-      console.warn('Failed to load audio into cache:', err);
+      logger.warn({ error: err }, 'Failed to load audio into cache');
     });
 
     // Immediately load next sentence's audio in background
@@ -1753,9 +1766,9 @@ export class LearningMode extends BaseComponent {
 
       // Clear the learning session so next time it will load fresh words from database
       sessionManager.clearLearningSession();
-      console.log('Learning session cleared after completion');
+      logger.debug('Learning session cleared after completion');
     } catch (error) {
-      console.error('Failed to record learning session:', error);
+      logger.error({ error }, 'Failed to record learning session');
     }
   }
 
@@ -1891,7 +1904,7 @@ export class LearningMode extends BaseComponent {
         this.blobUrlCache.set(audioPath, blobUrl);
       }
     } catch (error) {
-      console.warn(`Failed to load audio for ${audioPath}:`, error);
+      logger.warn({ error, audioPath }, `Failed to load audio`);
       throw error;
     }
   }
@@ -1921,7 +1934,7 @@ export class LearningMode extends BaseComponent {
       // Load into cache
       await this.loadAudioIntoCache(beforeSentenceAudioPath);
     } catch (error) {
-      console.warn(`Failed to load before sentence audio:`, error);
+      logger.warn({ error }, `Failed to load before sentence audio`);
       // Continue anyway - will generate/load on demand
     }
   }
@@ -1951,7 +1964,7 @@ export class LearningMode extends BaseComponent {
       // Load into cache
       await this.loadAudioIntoCache(afterSentenceAudioPath);
     } catch (error) {
-      console.warn(`Failed to load after sentence audio:`, error);
+      logger.warn({ error }, `Failed to load after sentence audio`);
       // Continue anyway - will generate/load on demand
     }
   }
@@ -1984,7 +1997,7 @@ export class LearningMode extends BaseComponent {
         await this.ensureAfterSentenceAudioLoaded(currentSentence);
       }
     } catch (error) {
-      console.warn(`Failed to load current sentence audio:`, error);
+      logger.warn({ error }, `Failed to load current sentence audio`);
       // Continue anyway - will fall back to IPC playback
     }
   }
@@ -2025,7 +2038,7 @@ export class LearningMode extends BaseComponent {
 
     // Load next sentence's audio in background (non-blocking)
     void this.loadAudioIntoCache(nextAudioPath).catch((error) => {
-      console.warn(`Failed to preload next sentence audio:`, error);
+      logger.warn({ error, audioPath: nextAudioPath }, `Failed to preload next sentence audio`);
       // Non-critical - will load on-demand if needed
     });
   }
@@ -2052,9 +2065,9 @@ export class LearningMode extends BaseComponent {
           if (sentence.contextBefore && sentence.id) {
             beforeSentencePromises.push(
               window.electronAPI.dialog.ensureBeforeSentenceAudio(sentence.id).catch((err) => {
-                console.warn(
-                  `Failed to ensure before sentence audio for sentence ${sentence.id}:`,
-                  err
+                logger.warn(
+                  { error: err, sentenceId: sentence.id },
+                  `Failed to ensure before sentence audio`
                 );
                 return null;
               })
@@ -2068,9 +2081,9 @@ export class LearningMode extends BaseComponent {
                 .ensureContextSentences(sentence.id)
                 .then((contextAudio) => contextAudio.afterSentenceAudio || null)
                 .catch((err) => {
-                  console.warn(
-                    `Failed to ensure after sentence audio for sentence ${sentence.id}:`,
-                    err
+                  logger.warn(
+                    { error: err, sentenceId: sentence.id },
+                    'Failed to ensure after sentence audio'
                   );
                   return null;
                 })
@@ -2095,7 +2108,8 @@ export class LearningMode extends BaseComponent {
         return;
       }
 
-      console.log(
+      logger.debug(
+        { audioFileCount: audioPaths.length },
         `Pre-loading ${audioPaths.length} audio files (including before sentence audio) into cache for review mode...`
       );
 
@@ -2104,15 +2118,18 @@ export class LearningMode extends BaseComponent {
         try {
           await this.loadAudioIntoCache(audioPath);
         } catch (error) {
-          console.warn(`Failed to preload audio for ${audioPath}:`, error);
+          logger.warn({ error, audioPath }, `Failed to preload audio`);
           // Continue loading other files even if one fails
         }
       });
 
       await Promise.all(loadPromises);
-      console.log(`Audio cache ready: ${this.audioCache.size} files loaded`);
+      logger.debug(
+        { cacheSize: this.audioCache.size },
+        `Audio cache ready: ${this.audioCache.size} files loaded`
+      );
     } catch (error) {
-      console.error('Error preloading audio:', error);
+      logger.error({ error }, 'Error preloading audio');
       // Don't fail review if audio caching fails - will fall back to file system
     }
   }
@@ -2138,7 +2155,10 @@ export class LearningMode extends BaseComponent {
       // Load into cache if not already cached
       if (!this.audioCache.has(beforeSentenceAudioPath)) {
         await this.loadAudioIntoCache(beforeSentenceAudioPath).catch((err) => {
-          console.warn(`Failed to load before sentence audio into cache: ${err}`);
+          logger.warn(
+            { error: err, audioPath: beforeSentenceAudioPath },
+            `Failed to load before sentence audio into cache`
+          );
         });
       }
 
@@ -2161,7 +2181,10 @@ export class LearningMode extends BaseComponent {
             resolve();
           });
           this.beforeAudioElement!.addEventListener('error', (e) => {
-            console.warn('Error playing before sentence cached audio, falling back to IPC:', e);
+            logger.warn(
+              { error: e },
+              'Error playing before sentence cached audio, falling back to IPC'
+            );
             this.beforeAudioElement = null;
             // Fall back to IPC playback
             window.electronAPI.audio
@@ -2174,9 +2197,9 @@ export class LearningMode extends BaseComponent {
               .catch(reject);
           });
           this.beforeAudioElement!.play().catch((playError) => {
-            console.warn(
-              'Failed to play before sentence cached audio, falling back to IPC:',
-              playError
+            logger.warn(
+              { error: playError },
+              'Failed to play before sentence cached audio, falling back to IPC'
             );
             this.beforeAudioElement = null;
             // Fall back to IPC playback
@@ -2198,7 +2221,7 @@ export class LearningMode extends BaseComponent {
         // Don't track here - will be tracked once with main sentence audio
       }
     } catch (error) {
-      console.warn('Failed to play before sentence audio:', error);
+      logger.warn({ error }, 'Failed to play before sentence audio');
       this.currentPlayingAudio = null;
       // Continue with main sentence audio even if before sentence audio fails
     }
@@ -2224,7 +2247,10 @@ export class LearningMode extends BaseComponent {
       // Load into cache if not already cached
       if (!this.audioCache.has(afterSentenceAudioPath)) {
         await this.loadAudioIntoCache(afterSentenceAudioPath).catch((err) => {
-          console.warn(`Failed to load after sentence audio into cache: ${err}`);
+          logger.warn(
+            { error: err, audioPath: afterSentenceAudioPath },
+            `Failed to load after sentence audio into cache`
+          );
         });
       }
 
@@ -2246,7 +2272,10 @@ export class LearningMode extends BaseComponent {
             resolve();
           });
           this.beforeAudioElement!.addEventListener('error', (e) => {
-            console.warn('Error playing after sentence cached audio, falling back to IPC:', e);
+            logger.warn(
+              { error: e },
+              'Error playing after sentence cached audio, falling back to IPC'
+            );
             this.beforeAudioElement = null;
             // Fall back to IPC playback
             window.electronAPI.audio
@@ -2258,9 +2287,9 @@ export class LearningMode extends BaseComponent {
               .catch(reject);
           });
           this.beforeAudioElement!.play().catch((playError) => {
-            console.warn(
-              'Failed to play after sentence cached audio, falling back to IPC:',
-              playError
+            logger.warn(
+              { error: playError },
+              'Failed to play after sentence cached audio, falling back to IPC'
             );
             this.beforeAudioElement = null;
             // Fall back to IPC playback
@@ -2279,7 +2308,7 @@ export class LearningMode extends BaseComponent {
         this.currentPlayingAudio = null;
       }
     } catch (error) {
-      console.warn('Failed to play after sentence audio:', error);
+      logger.warn({ error }, 'Failed to play after sentence audio');
       this.currentPlayingAudio = null;
       // Continue even if after sentence audio fails
     }
@@ -2335,7 +2364,10 @@ export class LearningMode extends BaseComponent {
             void window.electronAPI.database
               .incrementSentencePlayCount(currentSentence.id)
               .catch((err) => {
-                console.warn('Failed to increment sentence play count:', err);
+                logger.warn(
+                  { error: err, sentenceId: currentSentence.id },
+                  'Failed to increment sentence play count'
+                );
               });
           }
           // Track audio playback event
@@ -2350,7 +2382,7 @@ export class LearningMode extends BaseComponent {
                 playbackSpeed: this.playbackSpeed,
               })
               .catch((err: unknown) => {
-                console.warn('Failed to record audio playback:', err);
+                logger.warn({ error: err }, 'Failed to record audio playback');
               });
           }
           // Play after sentence audio if it exists
@@ -2369,7 +2401,7 @@ export class LearningMode extends BaseComponent {
         });
 
         this.currentAudioElement.addEventListener('error', (e) => {
-          console.warn('Error playing cached audio, falling back to IPC:', e);
+          logger.warn({ error: e }, 'Error playing cached audio, falling back to IPC');
           this.currentAudioElement = null;
           // Fall back to IPC playback
           void window.electronAPI.audio
@@ -2382,7 +2414,10 @@ export class LearningMode extends BaseComponent {
                 void window.electronAPI.database
                   .incrementSentencePlayCount(currentSentence.id)
                   .catch((err) => {
-                    console.warn('Failed to increment sentence play count:', err);
+                    logger.warn(
+                      { error: err, sentenceId: currentSentence.id },
+                      'Failed to increment sentence play count'
+                    );
                   });
               }
               // Track audio playback event
@@ -2397,13 +2432,13 @@ export class LearningMode extends BaseComponent {
                     playbackSpeed: this.playbackSpeed,
                   })
                   .catch((err: unknown) => {
-                    console.warn('Failed to record audio playback:', err);
+                    logger.warn({ error: err }, 'Failed to record audio playback');
                   });
               }
             })
             .catch((err) => {
               this.currentPlayingAudio = null;
-              console.error('Failed to play audio via IPC:', err);
+              logger.error({ error: err }, 'Failed to play audio via IPC');
             });
         });
 
@@ -2411,7 +2446,7 @@ export class LearningMode extends BaseComponent {
           await this.currentAudioElement.play();
           return; // Success - audio playing from cache
         } catch (playError) {
-          console.warn('Failed to play cached audio:', playError);
+          logger.warn({ error: playError }, 'Failed to play cached audio');
           this.currentAudioElement = null;
           this.currentPlayingAudio = null;
           // Fall through to IPC playback
@@ -2431,7 +2466,10 @@ export class LearningMode extends BaseComponent {
             void window.electronAPI.database
               .incrementSentencePlayCount(currentSentence.id)
               .catch((err) => {
-                console.warn('Failed to increment sentence play count:', err);
+                logger.warn(
+                  { error: err, sentenceId: currentSentence.id },
+                  'Failed to increment sentence play count'
+                );
               });
           }
           // Track audio playback event
@@ -2446,7 +2484,7 @@ export class LearningMode extends BaseComponent {
                 playbackSpeed: this.playbackSpeed,
               })
               .catch((err: unknown) => {
-                console.warn('Failed to record audio playback:', err);
+                logger.warn({ error: err }, 'Failed to record audio playback');
               });
           }
         })
@@ -2454,18 +2492,21 @@ export class LearningMode extends BaseComponent {
           this.currentPlayingAudio = null;
           // Don't log PLAYBACK_STOPPED errors
           if (err?.code !== 'PLAYBACK_STOPPED') {
-            console.error('Failed to play audio via IPC:', err);
+            logger.error({ error: err }, 'Failed to play audio via IPC');
           }
         });
 
       // Load audio into cache in background for next time (non-blocking)
       if (!this.audioCache.has(currentAudioPath)) {
         void this.loadAudioIntoCache(currentAudioPath).catch((err) => {
-          console.warn(`Failed to load audio into cache: ${err}`);
+          logger.warn(
+            { error: err, audioPath: currentAudioPath },
+            `Failed to load audio into cache`
+          );
         });
       }
     } catch (error) {
-      console.error('Failed to play audio:', error);
+      logger.error({ error }, 'Failed to play audio');
     }
   }
 
@@ -2584,7 +2625,7 @@ export class LearningMode extends BaseComponent {
       this.sessionStartTime = Date.now();
       this.saveProgressToSession();
     } catch (error) {
-      console.error('Failed to start new learning session:', error);
+      logger.error({ error }, 'Failed to start new learning session');
       this.error = 'Failed to start a new learning session. Please try again.';
     } finally {
       this.isLoading = false;
@@ -2608,7 +2649,7 @@ export class LearningMode extends BaseComponent {
         await this.loadAllWords();
       }
     } catch (error) {
-      console.error('Failed to load newly added word:', error);
+      logger.error({ error, wordId }, 'Failed to load newly added word');
     }
   }
 
@@ -2650,7 +2691,7 @@ export class LearningMode extends BaseComponent {
     try {
       await window.electronAPI.database.updateWordStrength(wordId, newStrength);
     } catch (error) {
-      console.error('Failed to update word strength after sentence exposure:', error);
+      logger.error({ error, wordId }, 'Failed to update word strength after sentence exposure');
     }
   }
 

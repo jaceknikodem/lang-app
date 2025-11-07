@@ -2,6 +2,8 @@
  * Session manager for persisting and restoring application state
  */
 
+import { logger } from './logger.js';
+
 export interface LearningSessionState {
   id: string;
   wordIds: number[];
@@ -153,9 +155,9 @@ export class SessionManager {
       this.currentSession = updatedSession;
       this.persistSessions();
 
-      console.log('Session saved:', updatedSession.currentMode);
+      logger.debug({ mode: updatedSession.currentMode }, 'Session saved');
     } catch (error) {
-      console.error('Failed to save session:', error);
+      logger.error({ error }, 'Failed to save session');
     }
   }
 
@@ -191,9 +193,9 @@ export class SessionManager {
       this.currentSession = defaultSession;
 
       this.persistSessions();
-      console.log('Session cleared');
+      logger.debug('Session cleared');
     } catch (error) {
-      console.error('Failed to clear session:', error);
+      logger.error({ error }, 'Failed to clear session');
     }
   }
 
@@ -275,7 +277,7 @@ export class SessionManager {
     const session = this.getCurrentSession();
     if (!session.learningSession) {
       // If no session exists, we can't append sentences without words
-      console.warn('Cannot append sentences to learning session: no active session exists');
+      logger.warn('Cannot append sentences to learning session: no active session exists');
       return;
     }
 
@@ -352,7 +354,7 @@ export class SessionManager {
     try {
       this.persistSessions();
     } catch (error) {
-      console.error('Failed to clear learning session:', error);
+      logger.error({ error }, 'Failed to clear learning session');
     }
   }
 
@@ -486,7 +488,7 @@ export class SessionManager {
     try {
       this.persistSessions();
     } catch (error) {
-      console.error('Failed to clear quiz session:', error);
+      logger.error({ error }, 'Failed to clear quiz session');
     }
   }
 
@@ -624,7 +626,7 @@ export class SessionManager {
     try {
       this.persistSessions();
     } catch (error) {
-      console.error('Failed to add dialog session:', error);
+      logger.error({ error }, 'Failed to add dialog session');
     }
   }
 
@@ -663,7 +665,7 @@ export class SessionManager {
     try {
       this.persistSessions();
     } catch (error) {
-      console.error('Failed to consume dialog session:', error);
+      logger.error({ error }, 'Failed to consume dialog session');
     }
   }
 
@@ -689,7 +691,7 @@ export class SessionManager {
     try {
       this.persistSessions();
     } catch (error) {
-      console.error('Failed to clear dialog sessions:', error);
+      logger.error({ error }, 'Failed to clear dialog sessions');
     }
   }
 
@@ -713,7 +715,7 @@ export class SessionManager {
     try {
       this.persistSessions();
     } catch (error) {
-      console.error('Failed to set dialog sessions:', error);
+      logger.error({ error }, 'Failed to set dialog sessions');
     }
   }
 
@@ -811,7 +813,7 @@ export class SessionManager {
         this.currentSession = legacySession;
       }
     } catch (error) {
-      console.error('Failed to load session from storage:', error);
+      logger.error({ error }, 'Failed to load session from storage');
     }
   }
 
@@ -872,7 +874,7 @@ export class SessionManager {
 
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(payload));
     } catch (error) {
-      console.error('Failed to persist session:', error);
+      logger.error({ error }, 'Failed to persist session');
     }
   }
 }

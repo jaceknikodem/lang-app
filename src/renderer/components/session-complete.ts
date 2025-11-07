@@ -9,6 +9,7 @@ import { router, AppMode } from '../utils/router.js';
 import { Word, StudyStats } from '../../shared/types/core.js';
 import { useKeyboardBindings, CommonKeys } from '../utils/keyboard-manager.js';
 import { sessionManager } from '../utils/session-manager.js';
+import { logger } from '../utils/logger.js';
 
 export interface SessionSummary {
   type: 'learning' | 'quiz';
@@ -233,7 +234,7 @@ export class SessionComplete extends LitElement {
       if (savedQuizSession) {
         if (!savedQuizSession.isComplete) {
           // Safety check: if there's an incomplete session (shouldn't happen), log a warning
-          console.warn('[SessionComplete] Found incomplete quiz session, clearing it');
+          logger.warn('[SessionComplete] Found incomplete quiz session, clearing it');
         }
         // Always clear the quiz session after completion
         sessionManager.clearQuizSession();
@@ -272,7 +273,7 @@ export class SessionComplete extends LitElement {
       const language = await window.electronAPI.database.getCurrentLanguage();
       this.studyStats = await window.electronAPI.database.getStudyStats(language);
     } catch (error) {
-      console.error('Failed to load updated stats:', error);
+      logger.error({ error }, 'Failed to load updated stats');
     }
   }
 
@@ -343,7 +344,7 @@ export class SessionComplete extends LitElement {
         router.goToTopicSelection();
       }
     } catch (error) {
-      console.error('Failed to get next mode and navigate:', error);
+      logger.error({ error }, 'Failed to get next mode and navigate');
       // Fallback to topic selection on error
       router.goToTopicSelection();
     } finally {

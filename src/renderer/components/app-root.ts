@@ -38,6 +38,7 @@ import type { ProficiencyLevel } from './language-proficiency-selector.js';
 import type { LanguageDataState, UIState } from './app-root-state.js';
 import { createInitialLanguageDataState, createInitialUIState } from './app-root-state.js';
 import { AutopilotManager } from '../utils/autopilot-manager.js';
+import { logger } from '../utils/logger.js';
 import './topic-selector.js';
 import './word-selector.js';
 import './learning-mode.js';
@@ -586,7 +587,7 @@ export class AppRoot extends LitElement {
 
       this.uiState = { ...this.uiState, isLoading: false };
     } catch (error) {
-      console.error('Failed to initialize app:', error);
+      logger.error({ error }, 'Failed to initialize app');
       this.uiState = { ...this.uiState, isLoading: false };
     }
   }
@@ -596,7 +597,7 @@ export class AppRoot extends LitElement {
       // Load persisted session state (includes learning session metadata)
       this.sessionState = sessionManager.getCurrentSession();
     } catch (error) {
-      console.error('Failed to load session:', error);
+      logger.error({ error }, 'Failed to load session');
       this.sessionState = sessionManager.getCurrentSession();
     }
   }
@@ -682,7 +683,7 @@ export class AppRoot extends LitElement {
         sessionManager.startNewLearningSession(sessionWordIds, Math.min(20, sessionWordIds.length));
       }
     } catch (error) {
-      console.error('Failed to ensure learning session:', error);
+      logger.error({ error }, 'Failed to ensure learning session');
     }
   }
 
@@ -730,7 +731,7 @@ export class AppRoot extends LitElement {
       try {
         await this.pregenerateDialogSession();
       } catch (error) {
-        console.error('Failed to pre-generate dialog session after language change:', error);
+        logger.error({ error }, 'Failed to pre-generate dialog session after language change');
         // Non-critical - continue without cached dialog session
       }
     }, 1000);
@@ -771,7 +772,7 @@ export class AppRoot extends LitElement {
         this.pregenerateDialogSessionAfterLanguageChange();
       });
     } catch (error) {
-      console.error('Failed to change language:', error);
+      logger.error({ error, newLanguage: select.value }, 'Failed to change language');
       // Revert the selection
       select.value = this.languageDataState.currentLanguage;
     }
@@ -793,7 +794,7 @@ export class AppRoot extends LitElement {
         showProficiencySelector: false,
       };
     } catch (error) {
-      console.error('Failed to save proficiency level:', error);
+      logger.error({ error, level }, 'Failed to save proficiency level');
     }
   }
 
@@ -816,12 +817,12 @@ export class AppRoot extends LitElement {
           );
           proficiencyMap.set(langStat.language, proficiency);
         } catch (error) {
-          console.warn(`Failed to get proficiency for ${langStat.language}:`, error);
+          logger.warn({ error, language: langStat.language }, 'Failed to get proficiency');
         }
       }
       this.proficiencyScores = proficiencyMap;
     } catch (error) {
-      console.error('Failed to load language stats:', error);
+      logger.error({ error }, 'Failed to load language stats');
       this.languageStats = [];
     }
   }
@@ -842,7 +843,7 @@ export class AppRoot extends LitElement {
         wordCategoryStats: calculateWordCategoryStats(allWords),
       };
     } catch (error) {
-      console.error('Failed to load word stats:', error);
+      logger.error({ error }, 'Failed to load word stats');
       this.languageDataState = { ...this.languageDataState, wordCategoryStats: null };
     }
   }
@@ -891,7 +892,7 @@ export class AppRoot extends LitElement {
             router.goToLearning();
           }
         } catch (error) {
-          console.error('Failed to load words for learning:', error);
+          logger.error({ error }, 'Failed to load words for learning');
           router.goToLearning();
         }
         break;
@@ -916,7 +917,7 @@ export class AppRoot extends LitElement {
     try {
       await window.electronAPI.lifecycle.closeApp();
     } catch (error) {
-      console.error('Error closing app:', error);
+      logger.error({ error }, 'Error closing app');
     }
   }
 
@@ -976,7 +977,7 @@ export class AppRoot extends LitElement {
     window.electronAPI.database
       .setSetting('autoplay_audio', this.uiState.autoplayAudioEnabled ? 'true' : 'false')
       .catch((error: Error) => {
-        console.error('Failed to save autoplay audio setting:', error);
+        logger.error({ error }, 'Failed to save autoplay audio setting');
         // Revert the state if saving failed
         this.uiState = { ...this.uiState, autoplayAudioEnabled: previousValue };
       });
@@ -1073,7 +1074,7 @@ export class AppRoot extends LitElement {
         }, 100);
       }
     } catch (error) {
-      console.error('Error checking scores for autopilot:', error);
+      logger.error({ error }, 'Error checking scores for autopilot');
     }
   }
 
@@ -1093,10 +1094,10 @@ export class AppRoot extends LitElement {
         // Trigger autopilot check
         window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
       } else {
-        console.error(`[Auto Add] Failed: ${result.error}`);
+        logger.error({ error: result.error }, '[Auto Add] Failed');
       }
     } catch (error) {
-      console.error('[Auto Add] Error in handleAutoAddNew:', error);
+      logger.error({ error }, '[Auto Add] Error in handleAutoAddNew');
     }
   }
 
@@ -1421,7 +1422,7 @@ export class AppRoot extends LitElement {
         (session) => sessionManager.addDialogSession(session)
       );
     } catch (error) {
-      console.error('Failed to pre-generate dialog sessions:', error);
+      logger.error({ error }, 'Failed to pre-generate dialog sessions');
       // Non-critical error - don't throw
     }
   }

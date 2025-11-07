@@ -8,6 +8,7 @@
 
 import { GeneratedWord } from '../../shared/types/core.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
+import { logger } from './logger.js';
 import {
   processSelectedWords,
   setupWordProcessingSession,
@@ -176,7 +177,7 @@ export async function autoAddNewWords(language?: string): Promise<AutoAddWordsRe
           : undefined,
     };
   } catch (error) {
-    console.error('[Auto Add] Error in autoAddNewWords:', error);
+    logger.error({ error }, '[Auto Add] Error in autoAddNewWords');
     return {
       success: false,
       topic: '',

@@ -8,6 +8,7 @@ import { sharedStyles } from '../styles/shared.js';
 import { Word, Sentence } from '../../shared/types/core.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
 import { keyboardManager, CommonKeys } from '../utils/keyboard-manager.js';
+import { logger } from '../utils/logger.js';
 import { BaseComponent } from './base-component.js';
 
 interface FlowSentence {
@@ -66,11 +67,11 @@ export class FlowMode extends BaseComponent {
           this.currentLanguage = language;
           this.currentSessionId = await window.electronAPI.tracking.createSession('flow', language);
         } catch (error) {
-          console.warn('Failed to create flow session:', error);
+          logger.warn({ error, language }, 'Failed to create flow session');
         }
       })
       .catch((err) => {
-        console.warn('Failed to get current language for flow session:', err);
+        logger.warn({ error: err }, 'Failed to get current language for flow session');
       });
 
     this.loadFlowSentences();
@@ -99,7 +100,7 @@ export class FlowMode extends BaseComponent {
       try {
         this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
       } catch (error) {
-        console.warn('[Flow] Failed to get current language:', error);
+        logger.warn({ error }, '[Flow] Failed to get current language');
         this.currentLanguage = null;
       }
 
@@ -108,7 +109,7 @@ export class FlowMode extends BaseComponent {
       let needsEnglishStitching = true;
       // Ensure we have a valid language before constructing the path
       if (!this.currentLanguage) {
-        console.warn('[Flow] No current language available, cannot use cache');
+        logger.warn('[Flow] No current language available, cannot use cache');
         needsStitching = true;
         needsEnglishStitching = true;
       } else {
@@ -230,13 +231,13 @@ export class FlowMode extends BaseComponent {
                 this.currentLanguage
               );
             if (!this.stitchedAudioPathWithEnglish) {
-              console.warn(
+              logger.warn(
                 '[Flow] Failed to stitch audio files with English pattern. Will use regular audio only.'
               );
             }
           }
         } catch (err) {
-          console.error('Error stitching audio:', err);
+          logger.error({ error: err }, 'Error stitching audio');
           this.error = `Failed to stitch audio: ${getErrorMessage(err)}`;
         } finally {
           this.isStitching = false;
@@ -253,11 +254,11 @@ export class FlowMode extends BaseComponent {
             this.requestUpdate();
           })
           .catch((err) => {
-            console.warn('Failed to load flow sentences for display:', err);
+            logger.warn({ error: err }, 'Failed to load flow sentences for display');
           });
       }
     } catch (err) {
-      console.error('Error loading flow sentences:', err);
+      logger.error({ error: err }, 'Error loading flow sentences');
       this.error = `Failed to load flow sentences: ${getErrorMessage(err)}`;
     } finally {
       this.isLoading = false;
@@ -396,7 +397,7 @@ export class FlowMode extends BaseComponent {
       });
 
       this.audioElement.addEventListener('error', (e) => {
-        console.error('Error playing audio:', e);
+        logger.error({ error: e }, 'Error playing audio');
         this.stopAudio();
         this.error = 'Failed to play audio';
       });
@@ -437,7 +438,7 @@ export class FlowMode extends BaseComponent {
       this.playbackStartTime = Date.now();
       this.playbackTimer = null; // Reset timer trigger flag
     } catch (err) {
-      console.error('Error playing audio:', err);
+      logger.error({ error: err }, 'Error playing audio');
       this.error = `Failed to play audio: ${getErrorMessage(err)}`;
       this.stopAudio();
     }
@@ -467,7 +468,7 @@ export class FlowMode extends BaseComponent {
     // Close audio context if it exists
     if (this.audioContext) {
       this.audioContext.close().catch((err) => {
-        console.warn('Error closing audio context:', err);
+        logger.warn({ error: err }, 'Error closing audio context');
       });
       this.audioContext = null;
     }
@@ -536,7 +537,7 @@ export class FlowMode extends BaseComponent {
 
   private setupAudioVisualization() {
     if (!this.audioElement) {
-      console.warn('[Flow] No audio element available for visualization');
+      logger.warn('[Flow] No audio element available for visualization');
       return;
     }
 
@@ -547,7 +548,7 @@ export class FlowMode extends BaseComponent {
       // Resume context if suspended (required for some browsers)
       if (this.audioContext.state === 'suspended') {
         this.audioContext.resume().catch((err) => {
-          console.warn('[Flow] Failed to resume audio context:', err);
+          logger.warn({ error: err }, '[Flow] Failed to resume audio context');
         });
       }
 
@@ -566,9 +567,9 @@ export class FlowMode extends BaseComponent {
       source.connect(this.analyser);
       this.analyser.connect(this.audioContext.destination);
 
-      console.log('[Flow] Audio visualization setup complete');
+      logger.debug('[Flow] Audio visualization setup complete');
     } catch (err) {
-      console.error('[Flow] Failed to set up audio visualization:', err);
+      logger.error({ error: err }, '[Flow] Failed to set up audio visualization');
       // Non-critical - visualization will just not work
     }
   }

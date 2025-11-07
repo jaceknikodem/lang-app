@@ -3,12 +3,14 @@
  * Helper functions for app initialization that can be reused across components
  */
 
+import { logger } from './logger.js';
+
 /**
  * Check if electronAPI is available
  */
 export function checkElectronAPI(): boolean {
   if (!window.electronAPI) {
-    console.error('electronAPI not available - preload script may have failed');
+    logger.error('electronAPI not available - preload script may have failed');
     return false;
   }
   return true;
@@ -21,7 +23,7 @@ export async function checkLLMAvailability(): Promise<void> {
   try {
     await window.electronAPI.llm.isAvailable();
   } catch (error) {
-    console.warn('LLM check failed (this is OK):', error);
+    logger.warn({ error }, 'LLM check failed (this is OK)');
   }
 }
 
@@ -33,7 +35,7 @@ export async function loadAutoplayAudioSetting(): Promise<boolean> {
     const autoplaySetting = await window.electronAPI.database.getSetting('autoplay_audio');
     return autoplaySetting === 'true';
   } catch (error) {
-    console.error('Failed to load autoplay audio setting:', error);
+    logger.error({ error }, 'Failed to load autoplay audio setting');
     return false;
   }
 }
@@ -48,7 +50,7 @@ export async function checkExistingWords(language: string): Promise<boolean> {
     const stats = await window.electronAPI.database.getStudyStats(language);
     return stats.totalWords > 0;
   } catch (error) {
-    console.error('Failed to check existing words:', error);
+    logger.error({ error }, 'Failed to check existing words');
     return false;
   }
 }
@@ -79,7 +81,7 @@ export async function checkFlowSentences(): Promise<boolean> {
     // Only enable Flow button if we have at least one audio file
     return audioPaths.length > 0;
   } catch (error) {
-    console.error('Failed to check flow sentences:', error);
+    logger.error({ error }, 'Failed to check flow sentences');
     return false;
   }
 }
@@ -97,7 +99,7 @@ export async function checkProficiencyLevel(language: string): Promise<string | 
     const proficiency = await window.electronAPI.database.getSetting(proficiencyKey);
     return proficiency as string | null;
   } catch (error) {
-    console.error('Failed to check proficiency level:', error);
+    logger.error({ error, language }, 'Failed to check proficiency level');
     return null;
   }
 }
@@ -110,7 +112,7 @@ export function scheduleDeferred(task: () => Promise<void>, delay: number = 0): 
     try {
       await task();
     } catch (error) {
-      console.error('Deferred initialization task failed:', error);
+      logger.error({ error }, 'Deferred initialization task failed');
     }
   }, delay);
 }

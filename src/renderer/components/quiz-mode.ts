@@ -22,6 +22,7 @@ import {
   type ProficiencyLevel,
 } from '../../shared/utils/similarity-threshold.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
+import { logger } from '../utils/logger.js';
 
 @customElement('quiz-mode')
 export class QuizMode extends BaseComponent {
@@ -140,7 +141,7 @@ export class QuizMode extends BaseComponent {
       // Start a fresh quiz session with the new language's words
       await this.startQuiz();
     } catch (error) {
-      console.error('Failed to reload quiz data after language change:', error);
+      logger.error({ error }, 'Failed to reload quiz data after language change');
       this.error = 'Failed to reload quiz data. Please try again.';
       this.isLoading = false;
     }
@@ -1249,7 +1250,7 @@ export class QuizMode extends BaseComponent {
     // Initialize speech recognition asynchronously (non-blocking, Whisper is optional)
     // Don't await - let it run in background so quiz can start even if Whisper is unavailable
     this.initializeSpeechRecognition().catch((err) => {
-      console.warn('Speech recognition initialization failed (non-blocking):', err);
+      logger.warn({ error: err }, 'Speech recognition initialization failed (non-blocking)');
     });
 
     // Start periodic check of speech recognition readiness (includes server availability)
@@ -1257,7 +1258,7 @@ export class QuizMode extends BaseComponent {
 
     // Also check immediately in case Whisper is already available
     this.checkSpeechRecognitionReady().catch((err) => {
-      console.warn('Initial speech recognition check failed:', err);
+      logger.warn({ error: err }, 'Initial speech recognition check failed');
     });
 
     // Load autoplay preference
@@ -1277,7 +1278,7 @@ export class QuizMode extends BaseComponent {
         );
       }
     } catch (error) {
-      console.warn('Failed to load proficiency level or create session:', error);
+      logger.warn({ error }, 'Failed to load proficiency level or create session');
     }
 
     // Check if there's an existing quiz session to restore
@@ -1318,7 +1319,7 @@ export class QuizMode extends BaseComponent {
     // Cancel any ongoing recording
     if (this.isRecording) {
       this.cancelRecording().catch((err) => {
-        console.error('Error cancelling recording on disconnect:', err);
+        logger.error({ error: err }, 'Error cancelling recording on disconnect');
       });
     }
 
@@ -1414,11 +1415,16 @@ export class QuizMode extends BaseComponent {
 
       void this.maybeAutoplayCurrentQuestion(true);
 
-      console.log(
-        `Restored quiz session: Question ${this.quizSession.currentQuestionIndex + 1}/${this.quizSession.totalQuestions}, Score: ${this.quizSession.score}`
+      logger.info(
+        {
+          questionIndex: this.quizSession.currentQuestionIndex + 1,
+          totalQuestions: this.quizSession.totalQuestions,
+          score: this.quizSession.score,
+        },
+        'Restored quiz session'
       );
     } catch (error) {
-      console.error('Error restoring quiz session:', error);
+      logger.error({ error }, 'Error restoring quiz session');
       this.error = 'Failed to restore quiz session. Starting a new quiz.';
       sessionManager.clearQuizSession();
       await this.loadSelectedWords();
@@ -1498,7 +1504,7 @@ export class QuizMode extends BaseComponent {
 
       void this.maybeAutoplayCurrentQuestion(true);
     } catch (error) {
-      console.error('Error starting quiz:', error);
+      logger.error({ error }, 'Error starting quiz');
       this.error = 'Failed to start quiz. Please try again.';
     } finally {
       this.isLoading = false;
@@ -1510,7 +1516,7 @@ export class QuizMode extends BaseComponent {
       const autoplaySetting = await window.electronAPI.database.getSetting('autoplay_audio');
       this.autoplayEnabled = autoplaySetting === 'true';
     } catch (error) {
-      console.error('Failed to load autoplay setting:', error);
+      logger.error({ error }, 'Failed to load autoplay setting');
       this.autoplayEnabled = false;
     }
   }
@@ -1521,9 +1527,9 @@ export class QuizMode extends BaseComponent {
       const language = await window.electronAPI.database.getCurrentLanguage();
       const words = await window.electronAPI.quiz.getWeakestWords(10, language);
       this.selectedWords = words;
-      console.log('Loaded weakest words for quiz:', this.selectedWords.length);
+      logger.info({ wordCount: this.selectedWords.length }, 'Loaded weakest words for quiz');
     } catch (error) {
-      console.error('Failed to load words:', error);
+      logger.error({ error }, 'Failed to load words');
       this.error = 'Failed to load words from database.';
     }
   }
@@ -1632,7 +1638,7 @@ export class QuizMode extends BaseComponent {
       // Save progress immediately after each answer
       this.saveQuizProgressToSession();
     } catch (error) {
-      console.error('[Quiz] Error updating word with SRS:', error);
+      logger.error({ error }, '[Quiz] Error updating word with SRS');
     }
 
     // Show result AFTER updating the word so the updated strength is displayed
@@ -1688,7 +1694,7 @@ export class QuizMode extends BaseComponent {
 
       // Load current question's audio into cache in background (non-blocking)
       void this.ensureCurrentQuestionAudioLoaded().catch((err) => {
-        console.warn('Failed to load audio into cache:', err);
+        logger.warn({ error: err }, 'Failed to load audio into cache');
       });
 
       // Immediately load next question's audio in background
@@ -1715,7 +1721,7 @@ export class QuizMode extends BaseComponent {
       // Dispatch event for autopilot to check scores after quiz is done
       window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
     } catch (error) {
-      console.error('Error recording quiz session:', error);
+      logger.error({ error }, 'Error recording quiz session');
       // Don't block the UI for this error, but ensure session is cleared
       sessionManager.clearQuizSession();
       this.showQuizCompletion();
@@ -1791,7 +1797,7 @@ export class QuizMode extends BaseComponent {
 
     // Load audio into cache in background for next time (non-blocking)
     void this.ensureCurrentQuestionAudioLoaded().catch((err) => {
-      console.warn('Failed to load audio into cache:', err);
+      logger.warn({ error: err }, 'Failed to load audio into cache');
     });
   }
 
@@ -1814,7 +1820,7 @@ export class QuizMode extends BaseComponent {
     try {
       await this.loadAudioIntoCache(audioPath);
     } catch (error) {
-      console.warn(`Failed to load current question audio:`, error);
+      logger.warn({ error, audioPath }, 'Failed to load current question audio');
       // Continue anyway - will fall back to IPC playback
     }
   }
@@ -1847,7 +1853,7 @@ export class QuizMode extends BaseComponent {
 
     // Load next question's audio in background (non-blocking)
     void this.loadAudioIntoCache(nextAudioPath).catch((error) => {
-      console.warn(`Failed to preload next question audio:`, error);
+      logger.warn({ error, audioPath: nextAudioPath }, 'Failed to preload next question audio');
       // Non-critical - will load on-demand if needed
     });
   }
@@ -1871,7 +1877,7 @@ export class QuizMode extends BaseComponent {
         this.blobUrlCache.set(audioPath, blobUrl);
       }
     } catch (error) {
-      console.warn(`Failed to load audio for ${audioPath}:`, error);
+      logger.warn({ error, audioPath }, 'Failed to load audio');
       throw error;
     }
   }
@@ -1899,15 +1905,15 @@ export class QuizMode extends BaseComponent {
         try {
           await this.loadAudioIntoCache(audioPath);
         } catch (error) {
-          console.warn(`Failed to preload audio for ${audioPath}:`, error);
+          logger.warn({ error, audioPath }, 'Failed to preload audio');
           // Continue loading other files even if one fails
         }
       });
 
       await Promise.all(loadPromises);
-      console.log(`Audio cache ready: ${this.audioCache.size} files loaded`);
+      logger.info({ fileCount: this.audioCache.size }, 'Audio cache ready');
     } catch (error) {
-      console.error('Error preloading audio:', error);
+      logger.error({ error }, 'Error preloading audio');
       // Don't fail quiz if audio caching fails - will fall back to file system
     }
   }
@@ -1941,7 +1947,10 @@ export class QuizMode extends BaseComponent {
             void window.electronAPI.database
               .incrementSentencePlayCount(this.currentQuestion.sentence.id)
               .catch((err) => {
-                console.warn('Failed to increment sentence play count:', err);
+                logger.warn(
+                  { error: err, sentenceId: this.currentQuestion.sentence.id },
+                  'Failed to increment sentence play count'
+                );
               });
           }
           // Track audio playback event
@@ -1956,13 +1965,13 @@ export class QuizMode extends BaseComponent {
                 playbackSpeed: 1.0, // Quiz mode doesn't have playback speed control
               })
               .catch((err: unknown) => {
-                console.warn('Failed to record audio playback:', err);
+                logger.warn({ error: err }, 'Failed to record audio playback');
               });
           }
         });
 
         this.currentAudioElement.addEventListener('error', (e) => {
-          console.warn('Error playing cached audio, falling back to IPC:', e);
+          logger.warn({ error: e }, 'Error playing cached audio, falling back to IPC');
           this.currentAudioElement = null;
           // Fall back to IPC playback
           void window.electronAPI.audio
@@ -1973,7 +1982,10 @@ export class QuizMode extends BaseComponent {
                 void window.electronAPI.database
                   .incrementSentencePlayCount(this.currentQuestion.sentence.id)
                   .catch((err) => {
-                    console.warn('Failed to increment sentence play count:', err);
+                    logger.warn(
+                      { error: err, sentenceId: this.currentQuestion.sentence.id },
+                      'Failed to increment sentence play count'
+                    );
                   });
               }
               // Track audio playback event
@@ -1988,12 +2000,12 @@ export class QuizMode extends BaseComponent {
                     playbackSpeed: 1.0, // Quiz mode doesn't have playback speed control
                   })
                   .catch((err: unknown) => {
-                    console.warn('Failed to record audio playback:', err);
+                    logger.warn({ error: err }, 'Failed to record audio playback');
                   });
               }
             })
             .catch((err) => {
-              console.error('Failed to play audio via IPC:', err);
+              logger.error({ error: err }, 'Failed to play audio via IPC');
             });
         });
 
@@ -2001,7 +2013,7 @@ export class QuizMode extends BaseComponent {
           await this.currentAudioElement.play();
           return; // Success - audio playing from cache
         } catch (playError) {
-          console.warn('Failed to play cached audio:', playError);
+          logger.warn({ error: playError }, 'Failed to play cached audio');
           this.currentAudioElement = null;
           // Fall through to IPC playback
         }
@@ -2017,7 +2029,10 @@ export class QuizMode extends BaseComponent {
             void window.electronAPI.database
               .incrementSentencePlayCount(this.currentQuestion.sentence.id)
               .catch((err) => {
-                console.warn('Failed to increment sentence play count:', err);
+                logger.warn(
+                  { error: err, sentenceId: this.currentQuestion.sentence.id },
+                  'Failed to increment sentence play count'
+                );
               });
           }
           // Track audio playback event
@@ -2032,15 +2047,15 @@ export class QuizMode extends BaseComponent {
                 playbackSpeed: 1.0, // Quiz mode doesn't have playback speed control
               })
               .catch((err: unknown) => {
-                console.warn('Failed to record audio playback:', err);
+                logger.warn({ error: err }, 'Failed to record audio playback');
               });
           }
         })
         .catch((err) => {
-          console.error('Failed to play audio via IPC:', err);
+          logger.error({ error: err }, 'Failed to play audio via IPC');
         });
     } catch (error) {
-      console.error('Error playing audio:', error);
+      logger.error({ error }, 'Error playing audio');
     }
   }
 
@@ -2217,7 +2232,7 @@ export class QuizMode extends BaseComponent {
       // Set up periodic check for recording status (in case of auto-stop)
       this.setupRecordingStatusCheck();
     } catch (error) {
-      console.error('Error starting recording:', error);
+      logger.error({ error }, 'Error starting recording');
       this.isRecording = false;
       this.error = `Failed to start recording: ${getErrorMessage(error)}`;
     }
@@ -2250,7 +2265,7 @@ export class QuizMode extends BaseComponent {
         await this.performSpeechRecognition();
       }
     } catch (error) {
-      console.error('Error stopping recording:', error);
+      logger.error({ error }, 'Error stopping recording');
       this.isRecording = false;
       this.clearRecordingTimer();
       this.clearRecordingStatusCheck();
@@ -2269,7 +2284,7 @@ export class QuizMode extends BaseComponent {
       this.clearRecordingTimer();
       this.clearRecordingStatusCheck();
     } catch (error) {
-      console.error('Error cancelling recording:', error);
+      logger.error({ error }, 'Error cancelling recording');
       this.isRecording = false;
       this.clearRecordingTimer();
       this.clearRecordingStatusCheck();
@@ -2297,7 +2312,7 @@ export class QuizMode extends BaseComponent {
             await this.handleRecordingAutoStop();
           }
         } catch (error) {
-          console.error('Error checking recording status:', error);
+          logger.error({ error }, 'Error checking recording status');
         }
       }
     }, 500);
@@ -2333,7 +2348,7 @@ export class QuizMode extends BaseComponent {
         await this.performSpeechRecognition();
       }
     } catch (error) {
-      console.error('Error handling auto-stop:', error);
+      logger.error({ error }, 'Error handling auto-stop');
       this.error = 'Recording stopped automatically but there was an error processing it.';
       this.isRecording = false;
     }
@@ -2367,14 +2382,14 @@ export class QuizMode extends BaseComponent {
         this.currentProficiencyLevel
       );
 
-      console.log('Text comparison:', comparison);
+      logger.debug({ comparison }, 'Text comparison');
 
       this.transcriptionResult = {
         text: typedText,
         ...comparison,
       };
     } catch (error) {
-      console.error('Text comparison failed:', error);
+      logger.error({ error }, 'Text comparison failed');
       this.transcriptionResult = {
         text: typedText,
         similarity: 0,
@@ -2397,23 +2412,23 @@ export class QuizMode extends BaseComponent {
   private async initializeSpeechRecognition() {
     try {
       // initializeSpeechRecognition() already checks if server is available
-      console.log('Quiz: Initializing speech recognition...');
+      logger.info('Initializing speech recognition...');
       await window.electronAPI.audio.initializeSpeechRecognition();
       this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
-      console.log('Quiz: Speech recognition initialized:', this.speechRecognitionReady);
+      logger.info({ ready: this.speechRecognitionReady }, 'Speech recognition initialized');
 
       if (this.speechRecognitionReady) {
-        console.log('✓ Speech recognition is ready for use');
+        logger.info('Speech recognition is ready for use');
       } else {
-        console.log('Quiz: Speech recognition not ready (server may be unavailable)');
+        logger.info('Speech recognition not ready (server may be unavailable)');
       }
     } catch (error) {
-      console.error('Quiz: Failed to initialize speech recognition:', error);
+      logger.error({ error }, 'Failed to initialize speech recognition');
       this.speechRecognitionReady = false;
 
       // Show user-friendly message
       const errorMessage = getErrorMessage(error);
-      console.warn('Speech recognition not available:', errorMessage);
+      logger.warn({ errorMessage }, 'Speech recognition not available');
     }
   }
 
@@ -2437,9 +2452,9 @@ export class QuizMode extends BaseComponent {
   private async checkSpeechRecognitionReady() {
     try {
       this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
-      console.log('Quiz: Speech recognition ready:', this.speechRecognitionReady);
+      logger.debug({ ready: this.speechRecognitionReady }, 'Speech recognition ready');
     } catch (error) {
-      console.error('Quiz: Failed to check speech recognition readiness:', error);
+      logger.error({ error }, 'Failed to check speech recognition readiness');
       this.speechRecognitionReady = false;
     }
   }
@@ -2463,11 +2478,14 @@ export class QuizMode extends BaseComponent {
       // Transcription language is always the foreign language
       const transcriptionLanguage = currentLanguage;
 
-      console.log('Transcribing audio:', {
-        filePath: this.currentRecording.filePath,
-        expectedSentence,
-        transcriptionLanguage,
-      });
+      logger.debug(
+        {
+          filePath: this.currentRecording.filePath,
+          expectedSentence,
+          transcriptionLanguage,
+        },
+        'Transcribing audio'
+      );
 
       // Transcribe the recorded audio (streaming API)
       const transcriptionResult = await window.electronAPI.audio.transcribeAudio(
@@ -2477,7 +2495,7 @@ export class QuizMode extends BaseComponent {
         }
       );
 
-      console.log('Transcription result:', transcriptionResult);
+      logger.debug({ transcriptionResult }, 'Transcription result');
 
       // Compare transcription with expected sentence
       const comparison = await window.electronAPI.audio.compareTranscription(
@@ -2486,7 +2504,7 @@ export class QuizMode extends BaseComponent {
         this.currentProficiencyLevel
       );
 
-      console.log('Transcription comparison:', comparison);
+      logger.debug({ comparison }, 'Transcription comparison');
 
       this.transcriptionResult = {
         text: transcriptionResult.text,
@@ -2504,7 +2522,7 @@ export class QuizMode extends BaseComponent {
             this.currentRecording?.filePath || null // Audio path
           );
         } catch (error) {
-          console.warn('Failed to record pronunciation attempt:', error);
+          logger.warn({ error }, 'Failed to record pronunciation attempt');
         }
       }
 
@@ -2518,8 +2536,13 @@ export class QuizMode extends BaseComponent {
           const newStrength = Math.min(100, currentStrength + boost);
 
           try {
-            console.log(
-              `[Pronunciation] Good pronunciation detected (${Math.round(comparison.similarity * 100)}%). Increasing word strength: ${currentStrength} → ${newStrength} (+${boost})`
+            logger.info(
+              {
+                similarity: Math.round(comparison.similarity * 100),
+                wordId: word.id,
+                strengthChange: `${currentStrength} → ${newStrength} (+${boost})`,
+              },
+              '[Pronunciation] Good pronunciation detected, increasing word strength'
             );
             await window.electronAPI.database.updateWordStrength(word.id, newStrength);
             await window.electronAPI.database.updateLastStudied(word.id);
@@ -2531,12 +2554,15 @@ export class QuizMode extends BaseComponent {
               this.requestUpdate(); // Trigger UI update to show new strength
             }
           } catch (error) {
-            console.error('Failed to update word strength after good pronunciation:', error);
+            logger.error(
+              { error, wordId: word.id },
+              'Failed to update word strength after good pronunciation'
+            );
           }
         }
       }
     } catch (error) {
-      console.error('Speech recognition failed:', error);
+      logger.error({ error }, 'Speech recognition failed');
       this.transcriptionResult = {
         text: 'Speech recognition failed. Please try again.',
         similarity: 0,

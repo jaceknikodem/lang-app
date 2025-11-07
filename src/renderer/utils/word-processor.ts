@@ -5,6 +5,7 @@
 
 import { GeneratedWord } from '../../shared/types/core.js';
 import { sessionManager } from './session-manager.js';
+import { logger } from './logger.js';
 
 export interface ProcessWordsOptions {
   language: string;
@@ -54,9 +55,9 @@ export async function processSelectedWords(
       });
       queuedCount++;
       queuedWordIds.push(wordId);
-      console.log('Enqueued word for asynchronous processing:', word.word);
+      logger.debug({ word: word.word }, 'Enqueued word for asynchronous processing');
     } catch (wordError) {
-      console.error(`Failed to process word ${word.word}:`, wordError);
+      logger.error({ error: wordError, word: word.word }, 'Failed to process word');
       failedWords.push(word.word);
     }
   }
@@ -92,7 +93,7 @@ export async function processKnownWords(
       console.log('Known word processed:', word.word);
       processedKnown++;
     } catch (wordError) {
-      console.error(`Failed to process known word ${word.word}:`, wordError);
+      logger.error({ error: wordError, word: word.word }, 'Failed to process known word');
       failedWords.push(word.word);
     }
   }

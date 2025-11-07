@@ -6,6 +6,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
+import { logger } from '../utils/logger.js';
 import type { RecordingSession, RecordingOptions } from '../../shared/types/audio.js';
 
 export interface RecordingResult {
@@ -307,7 +308,7 @@ export class AudioRecorder extends LitElement {
         this.startTimer();
       }
     } catch (error) {
-      console.error('Error checking current session:', error);
+      logger.error({ error }, 'Error checking current session');
     }
   }
 
@@ -332,7 +333,7 @@ export class AudioRecorder extends LitElement {
         })
       );
     } catch (error) {
-      console.error('Error starting recording:', error);
+      logger.error({ error }, 'Error starting recording');
       this.error = `Failed to start recording: ${getErrorMessage(error)}`;
     }
   }
@@ -365,7 +366,7 @@ export class AudioRecorder extends LitElement {
 
       this.currentSession = null;
     } catch (error) {
-      console.error('Error stopping recording:', error);
+      logger.error({ error }, 'Error stopping recording');
       this.error = `Failed to stop recording: ${getErrorMessage(error)}`;
       this.isRecording = false;
       this.clearTimer();
@@ -391,7 +392,7 @@ export class AudioRecorder extends LitElement {
         })
       );
     } catch (error) {
-      console.error('Error cancelling recording:', error);
+      logger.error({ error }, 'Error cancelling recording');
       this.error = `Failed to cancel recording: ${getErrorMessage(error)}`;
     }
   }
@@ -404,7 +405,7 @@ export class AudioRecorder extends LitElement {
       await window.electronAPI.audio.playAudio(this.lastRecording.filePath);
       this.isPlaying = false;
     } catch (error) {
-      console.error('Error playing recording:', error);
+      logger.error({ error }, 'Error playing recording');
       this.error = `Failed to play recording: ${getErrorMessage(error)}`;
       this.isPlaying = false;
     }
@@ -424,7 +425,7 @@ export class AudioRecorder extends LitElement {
         })
       );
     } catch (error) {
-      console.error('Error deleting recording:', error);
+      logger.error({ error }, 'Error deleting recording');
       this.error = `Failed to delete recording: ${getErrorMessage(error)}`;
     }
   }
@@ -466,7 +467,7 @@ export class AudioRecorder extends LitElement {
             await this.handleAutoStop();
           }
         } catch (error) {
-          console.error('Error checking recording status:', error);
+          logger.error({ error }, 'Error checking recording status');
         }
       }
     }, 500);
@@ -512,7 +513,7 @@ export class AudioRecorder extends LitElement {
 
       this.currentSession = null;
     } catch (error) {
-      console.error('Error handling auto-stop:', error);
+      logger.error({ error }, 'Error handling auto-stop');
       this.error = 'Recording stopped automatically but there was an error processing it.';
       this.isRecording = false;
       this.clearTimer();
