@@ -326,13 +326,14 @@ export class SessionComplete extends LitElement {
           case 'dialog':
             router.goToDialog();
             break;
-          case 'flow':
+          case 'flow': {
             // Flow mode is just an overlay, trigger play from app-root
             const appRoot = document.querySelector('app-root') as any;
             if (appRoot && typeof appRoot.handleFlowPlay === 'function') {
               appRoot.handleFlowPlay();
             }
             break;
+          }
           default:
             router.goToTopicSelection();
             break;

@@ -60,6 +60,7 @@ export function sanitizeFilename(text: string, maxLength = 100): string {
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '');
 
+  // eslint-disable-next-line no-control-regex
   const asciiOnly = normalized.replace(/[^\x00-\x7F]/g, (char) => transliterationMap[char] || '');
 
   return asciiOnly

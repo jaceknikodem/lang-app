@@ -18,7 +18,7 @@ export function cleanLLMResponse(rawResponse: string): string {
   cleanResponse = cleanResponse.replace(/^(Here's|Here is|The|Response:|JSON:)\s*/i, '');
 
   // Remove any text before the first [ or {
-  const jsonStart = cleanResponse.search(/[\[{]/);
+  const jsonStart = cleanResponse.search(/[[{]/);
   if (jsonStart > 0) {
     cleanResponse = cleanResponse.substring(jsonStart);
   }

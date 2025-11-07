@@ -26,9 +26,10 @@ export class LLMFactory {
       case 'ollama':
         return new OllamaClient(config.ollamaConfig);
 
-      case 'gemini':
+      case 'gemini': {
         const apiKey = config.geminiConfig?.apiKey || '';
         return new GeminiClient(apiKey, config.geminiConfig?.config);
+      }
 
       default:
         throw new Error(`Unsupported LLM provider: ${config.provider}`);

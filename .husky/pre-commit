@@ -10,4 +10,11 @@ npx lint-staged || {
   exit 0
 }
 
+# Run lint and fail on errors (warnings are allowed)
+echo "🔍 Running linter..."
+npm run lint -- --max-warnings=-1 || {
+  echo "❌ Linting errors detected. Please fix them before committing."
+  exit 1
+}
+
 echo "✅ Pre-commit checks passed!"

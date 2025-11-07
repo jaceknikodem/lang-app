@@ -359,7 +359,7 @@ export class SpeechRecognitionService {
 
       // Clean the transcription result: remove punctuation and trim
       const cleanedResult = transcriptionResult
-        .replace(/[.,!?;:'"()\[\]{}—–-]/g, '') // Remove punctuation
+        .replace(/[.,!?;:'"()[\]{}—–-]/g, '') // Remove punctuation
         .replace(/\s+/g, ' ') // Normalize whitespace
         .trim();
 
