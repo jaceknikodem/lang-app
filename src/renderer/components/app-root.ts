@@ -1192,14 +1192,14 @@ export class AppRoot extends LitElement {
                         ` : ''}
                         ${pronunciationScore !== null && pronunciationScore !== undefined ? html`
                           <div class="stat-box pronunciation">
-                            <span class="stat-value">${pronunciationScore.toFixed(1)}/10</span>
+                            <span class="stat-value">${pronunciationScore.toFixed(1)}</span>
                             <div class="tooltip">Average pronunciation score (0-10 scale) based on ${pronunciationAttemptCount} attempt${pronunciationAttemptCount !== 1 ? 's' : ''}</div>
                           </div>
                         ` : ''}
                         ${proficiencyScore !== undefined && proficiencyScore !== null ? html`
                           <div class="stat-box proficiency-score">
-                            <span class="stat-value">${proficiencyScore.toFixed(0)}/100</span>
-                            <div class="tooltip">Overall proficiency score (0-100) based on pronunciation, audio speed, engagement, word position, and strength</div>
+                            <span class="stat-value">${proficiencyScore.toFixed(0)}%</span>
+                            <div class="tooltip">Overall proficiency score (0-100%) based on pronunciation, audio speed, engagement, word position, and strength</div>
                           </div>
                         ` : ''}
                         ${proficiencyLevelDisplay ? html`

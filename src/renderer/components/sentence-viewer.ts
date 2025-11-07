@@ -1424,8 +1424,11 @@ export class SentenceViewer extends LitElement {
       let sessionId: number | undefined;
       // Note: session tracking would need to be implemented separately if needed
 
+      // Use lemmatized version if available, otherwise fall back to dictionary form or text
+      const wordToRecord = wordInfo.lemma || wordInfo.dictionaryForm || wordInfo.text.trim();
+
       await window.electronAPI.tracking.recordDictionaryHover({
-        word: wordInfo.dictionaryForm || wordInfo.text.trim(),
+        word: wordToRecord,
         language: this.targetWord?.language || 'spanish',
         sentenceId: this.sentence?.id,
         sessionId,
