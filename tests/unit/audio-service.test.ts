@@ -385,8 +385,7 @@ describe('Audio Service', () => {
           confidence: 0.95
         };
         const options: TranscriptionOptions = {
-          language: 'english',
-          model: 'base'
+          language: 'english'
         };
 
         mockSpeechRecognition.transcribeAudio.mockResolvedValue(mockResult);

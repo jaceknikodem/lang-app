@@ -966,8 +966,7 @@ export class DialogMode extends LitElement {
       const transcription = await window.electronAPI.audio.transcribeAudio(
         this.currentRecording.filePath,
         {
-          language: currentLanguage,
-          model: 'base'
+          language: currentLanguage
         }
       );
 

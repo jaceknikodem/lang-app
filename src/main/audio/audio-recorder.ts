@@ -17,7 +17,6 @@ export interface RecordingOptions {
   threshold?: number;
   silence?: string;
   endOnSilence?: boolean;
-  device?: string;
 }
 
 export interface RecordingSession {
@@ -63,7 +62,6 @@ export class AudioRecorder {
       threshold: options.threshold || 0.5,
       silence: options.silence || '1.5',
       endOnSilence: options.endOnSilence !== undefined ? options.endOnSilence : true,
-      device: options.device || null,
       ...options
     };
 

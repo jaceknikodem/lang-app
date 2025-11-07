@@ -2477,8 +2477,7 @@ export class QuizMode extends LitElement {
       const transcriptionResult = await window.electronAPI.audio.transcribeAudio(
         this.currentRecording.filePath,
         {
-          language: transcriptionLanguage,
-          model: 'base' // Use base model for good balance of speed and accuracy
+          language: transcriptionLanguage
         }
       );
 

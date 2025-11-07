@@ -40,7 +40,6 @@ export interface RecordingOptions {
   threshold?: number;
   silence?: string;
   endOnSilence?: boolean;
-  device?: string;
 }
 
 export interface RecordingSession {
@@ -53,19 +52,7 @@ export interface RecordingSession {
 
 export interface TranscriptionOptions {
   language: string; // Required - must be provided
-  model?: 'tiny' | 'base' | 'small' | 'medium' | 'large';
   temperature?: number;
-  best_of?: number;
-  beam_size?: number;
-  patience?: number;
-  length_penalty?: number;
-  suppress_tokens?: string;
-  initial_prompt?: string;
-  condition_on_previous_text?: boolean;
-  fp16?: boolean;
-  compression_ratio_threshold?: number;
-  logprob_threshold?: number;
-  no_speech_threshold?: number;
 }
 
 export interface TranscriptionResult {

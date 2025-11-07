@@ -861,19 +861,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       
       const validatedOptions = z.object({
         language: z.string(),
-        model: z.enum(['tiny', 'base', 'small', 'medium', 'large']).optional(),
-        temperature: z.number().optional(),
-        best_of: z.number().optional(),
-        beam_size: z.number().optional(),
-        patience: z.number().optional(),
-        length_penalty: z.number().optional(),
-        suppress_tokens: z.string().optional(),
-        initial_prompt: z.string().optional(),
-        condition_on_previous_text: z.boolean().optional(),
-        fp16: z.boolean().optional(),
-        compression_ratio_threshold: z.number().optional(),
-        logprob_threshold: z.number().optional(),
-        no_speech_threshold: z.number().optional()
+        temperature: z.number().optional()
       }).parse(options);
 
       // Create progress callback that sends IPC events

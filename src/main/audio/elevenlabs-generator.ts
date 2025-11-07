@@ -3,7 +3,6 @@ import { join, dirname } from 'path';
 import { app } from 'electron';
 import { AudioConfig, AudioError } from '../../shared/types/audio';
 import { DatabaseLayer } from '../../shared/types/database';
-import { sanitizeFilename } from '../../shared/utils/sanitizeFilename';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { BaseAudioGenerator } from './base-audio-generator';
@@ -175,7 +174,6 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
    *   - Before sentence audio: /audio/<lang>/word_<word_id>/before_sentence_<sentence_id>.<extension>
    *   - After sentence audio: /audio/<lang>/word_<word_id>/after_sentence_<sentence_id>.<extension>
    *   - Sentence audio: /audio/<lang>/<word_id>/<sentence_id>.<extension>
-   *   - Word audio: /audio/<lang>/<word_id>.<extension>
    * Requires wordId for word/sentence audio, variantId for continuation audio
    */
   private getAudioPath(text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number): string {
