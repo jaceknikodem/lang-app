@@ -46,6 +46,14 @@ async function initializeServices(): Promise<void> {
     await databaseLayer.initialize();
     logger.info('Database initialized successfully');
 
+    // Initialize and start ServiceManager (manages external services like whisper-server and stanza-service)
+    // This must be done before LemmatizationService initialization, as it sets environment variables
+    serviceManager = new ServiceManager({
+      enabled: serviceConfig.manageServices
+    });
+    await serviceManager.start();
+    logger.info('ServiceManager initialized successfully');
+
     // Initialize lifecycle manager with database reference
     lifecycleManager = new LifecycleManager({
       databaseLayer: databaseLayer,
@@ -326,13 +334,6 @@ app.whenReady().then(async () => {
     
     // Set up security policies
     await setupSecurity();
-
-    // Start managed services (whisper-server and stanza-service) if enabled
-    // This is controlled by config.toml or MANAGE_SERVICES environment variable
-    serviceManager = new ServiceManager({
-      enabled: serviceConfig.manageServices
-    });
-    await serviceManager.start();
 
     // Create the main window early - show UI while services initialize
     // This provides better perceived performance
