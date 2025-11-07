@@ -1740,19 +1740,39 @@ function setupDialogHandlers(
       let beforeSentenceAudio: string | null = null;
       let afterSentenceAudio: string | null = null;
 
+      // Select a voice ID once for context sentences to ensure consistency
+      // Only needed if we're using ElevenLabs and at least one context sentence needs generation
+      let contextVoiceId: string | undefined = undefined;
+      const needsBeforeGeneration = sentence.contextBefore && !sentence.beforeSentenceAudioPath;
+      const needsAfterGeneration = sentence.contextAfter && !sentence.afterSentenceAudioPath;
+      
+      if (needsBeforeGeneration || needsAfterGeneration) {
+        // Check if audioService is using ElevenLabs
+        const audioInfo = audioService.getAudioGenerationInfo();
+        if (audioInfo.service === 'elevenlabs') {
+          // Get the ElevenLabs generator and select a voice ID for the language
+          const generator = (audioService as any).audioGenerator;
+          if (generator && typeof generator.getVoiceForLanguage === 'function') {
+            contextVoiceId = await generator.getVoiceForLanguage(language);
+          }
+        }
+      }
+
       // Generate beforeSentence audio if contextBefore exists
       if (sentence.contextBefore) {
         // If audio path already exists in database, use it
         if (sentence.beforeSentenceAudioPath) {
           beforeSentenceAudio = sentence.beforeSentenceAudioPath;
         } else {
-          // Generate audio with wordId and sentenceId
+          // Generate audio with wordId and sentenceId, using the selected voice ID
           const audioPath = await audioService.generateAudio(
             sentence.contextBefore,
             language,
             '_before_sentence',
             sentence.wordId,
-            validatedSentenceId
+            validatedSentenceId,
+            undefined,
+            contextVoiceId
           );
 
           // Save the path to database
@@ -1769,13 +1789,15 @@ function setupDialogHandlers(
         if (sentence.afterSentenceAudioPath) {
           afterSentenceAudio = sentence.afterSentenceAudioPath;
         } else {
-          // Generate audio with wordId and sentenceId
+          // Generate audio with wordId and sentenceId, using the same voice ID as before_sentence
           const audioPath = await audioService.generateAudio(
             sentence.contextAfter,
             language,
             '_after_sentence',
             sentence.wordId,
-            validatedSentenceId
+            validatedSentenceId,
+            undefined,
+            contextVoiceId
           );
 
           // Save the path to database

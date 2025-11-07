@@ -63,7 +63,7 @@ describe('Audio Service', () => {
       const result = await service.generateAudio('hello', '');
 
       expect(result).toBe('hello.aiff');
-      expect(mockGenerator.generateAudio).toHaveBeenCalledWith('hello', undefined, undefined, undefined, undefined, undefined);
+      expect(mockGenerator.generateAudio).toHaveBeenCalledWith('hello', undefined, undefined, undefined, undefined, undefined, undefined);
     });
 
     it('should handle text trimming', async () => {
@@ -82,7 +82,7 @@ describe('Audio Service', () => {
       const service = new AudioService(mockGenerator);
       await service.generateAudio(text, language);
       
-      expect(mockGenerator.generateAudio).toHaveBeenCalledWith('hello world', 'english', undefined, undefined, undefined, undefined);
+      expect(mockGenerator.generateAudio).toHaveBeenCalledWith('hello world', 'english', undefined, undefined, undefined, undefined, undefined);
     });
   });
 

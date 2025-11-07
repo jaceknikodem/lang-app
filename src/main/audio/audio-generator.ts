@@ -37,8 +37,9 @@ export class TTSAudioGenerator extends BaseAudioGenerator {
   /**
    * Generate audio file for given text using system TTS
    * Returns path to generated audio file
+   * Note: voiceId parameter is ignored for system TTS
    */
-  async generateAudio(text: string, language?: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number): Promise<string> {
+  async generateAudio(text: string, language?: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, voiceId?: string): Promise<string> {
     if (!text || text.trim().length === 0) {
       throw this.createAudioError('GENERATION_FAILED', 'Text cannot be empty');
     }

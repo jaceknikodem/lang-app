@@ -61,7 +61,7 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
    * Generate audio file for given text using ElevenLabs API
    * Returns path to generated audio file
    */
-  async generateAudio(text: string, language?: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number): Promise<string> {
+  async generateAudio(text: string, language?: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, voiceId?: string): Promise<string> {
     if (!text || text.trim().length === 0) {
       throw this.createAudioError('GENERATION_FAILED', 'Text cannot be empty');
     }
@@ -96,14 +96,14 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
         mkdirSync(dir, { recursive: true });
       }
 
-      // Get voice ID for the language
-      const voiceId = await this.getVoiceForLanguage(targetLanguage);
+      // Get voice ID for the language (use provided voiceId if available, otherwise select randomly)
+      const finalVoiceId = voiceId || await this.getVoiceForLanguage(targetLanguage);
       
       // Store the voiceID that was used for this generation
-      this.lastUsedVoiceId = voiceId;
+      this.lastUsedVoiceId = finalVoiceId;
 
       // Make API request to ElevenLabs (rate-limited to 1 concurrent request)
-      const audioBuffer = await queueApiRequest(() => this.callElevenLabsAPI(text, voiceId));
+      const audioBuffer = await queueApiRequest(() => this.callElevenLabsAPI(text, finalVoiceId));
 
       // Write audio file
       writeFileSync(audioPath, audioBuffer);
@@ -353,7 +353,7 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
    * Get appropriate voice ID for language
    * Randomly selects from multiple voices per language for variety
    */
-  private async getVoiceForLanguage(language: string): Promise<string> {
+  async getVoiceForLanguage(language: string): Promise<string> {
     // Ensure voice mappings are loaded
     if (!this.voiceMapLoaded) {
       await this.loadVoiceMappings();
