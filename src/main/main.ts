@@ -117,7 +117,7 @@ async function initializeServices(): Promise<void> {
         if (storedProvider === 'gemini' || storedProvider === 'ollama') {
           initialProvider = storedProvider as LLMProvider;
         }
-      } catch (e) {
+      } catch {
         logger.warn('Could not read llm_provider setting, defaulting to ollama');
       }
     } else {
@@ -134,7 +134,7 @@ async function initializeServices(): Promise<void> {
       try {
         const storedKey = await databaseLayer.getSetting('gemini_api_key');
         geminiApiKey = storedKey || '';
-      } catch (e) {
+      } catch {
         logger.warn('Could not read gemini_api_key setting');
       }
     }

@@ -3,9 +3,8 @@ import { promisify } from 'util';
 import { existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { app } from 'electron';
-import { AudioConfig, AudioError } from '../../shared/types/audio';
+import { AudioConfig } from '../../shared/types/audio';
 import { DatabaseLayer } from '../../shared/types/database';
-import { sanitizeFilename } from '../../shared/utils/sanitizeFilename';
 import { createAudioError } from '../../shared/utils/error.js';
 import { BaseAudioGenerator } from './base-audio-generator';
 
@@ -40,7 +39,7 @@ export class TTSAudioGenerator extends BaseAudioGenerator {
    * Returns path to generated audio file
    * Note: voiceId parameter is ignored for system TTS
    */
-  async generateAudio(text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, voiceId?: string): Promise<string> {
+  async generateAudio(text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, _voiceId?: string): Promise<string> {
     if (!text || text.trim().length === 0) {
       throw createAudioError('Text cannot be empty', 'GENERATION_FAILED');
     }

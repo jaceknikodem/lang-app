@@ -1,14 +1,10 @@
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { app } from 'electron';
-import { AudioConfig, AudioError } from '../../shared/types/audio';
+import { AudioConfig } from '../../shared/types/audio';
 import { DatabaseLayer } from '../../shared/types/database';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
 import { createAudioError } from '../../shared/utils/error.js';
 import { BaseAudioGenerator } from './base-audio-generator';
-
-const execFileAsync = promisify(execFile);
 
 // Simple queue to limit ElevenLabs API calls to 1 concurrent request
 let apiRequestQueue: Promise<any> = Promise.resolve();

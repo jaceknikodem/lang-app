@@ -25,7 +25,7 @@ describe('Duplicate Checking Simple Integration', () => {
         warn: jest.spyOn(logger, 'warn').mockImplementation(() => {}),
         error: jest.spyOn(logger, 'error').mockImplementation(() => {}),
       };
-    } catch (e) {
+    } catch {
       loggerSpy = {
         warn: jest.fn(),
         error: jest.fn(),

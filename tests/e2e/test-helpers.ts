@@ -208,7 +208,7 @@ export async function waitForElementWithTimeout(
 ): Promise<void> {
   try {
     await page.waitForSelector(selector, { timeout });
-  } catch (error) {
+  } catch {
     const customError = errorMessage || `Element '${selector}' not found within ${timeout}ms`;
     throw new Error(customError);
   }
@@ -222,7 +222,6 @@ export async function verifyAppStability(page: Page): Promise<void> {
   await page.waitForSelector('app-root', { timeout: 5000 });
 
   // Check that navigation is functional
-  const navigation = page.locator('nav');
   await page.waitForSelector('nav', { timeout: 5000 });
 
   // Verify no JavaScript errors in console
@@ -332,16 +331,15 @@ export async function insertTestWord(page: Page, language: string = 'spanish'): 
       const stats = await electronAPI.database.getStudyStats(langToUse);
 
       return { wordId, totalWords: stats.totalWords, langUsed: langToUse, success: true };
-    } catch (error) {
+    } catch {
       return {
-        error: error instanceof Error ? error.message : String(error),
         success: false,
       };
     }
   }, language);
 
   if (!result.success) {
-    throw new Error(`Failed to insert test word: ${result.error || 'Unknown error'}`);
+    throw new Error('Failed to insert test word');
   }
 
   // Word insertion succeeded (we got a wordId), and we've set the proficiency level
@@ -432,7 +430,7 @@ export async function getWordStrength(page: Page, wordId: number): Promise<numbe
     try {
       const word = await electronAPI.database.getWordById(id);
       return word ? word.strength : null;
-    } catch (error) {
+    } catch {
       return null;
     }
   }, wordId);
@@ -462,7 +460,7 @@ export async function getWordKnownStatus(
     try {
       const word = await electronAPI.database.getWordById(id);
       return word ? { known: word.known || false, ignored: word.ignored || false } : null;
-    } catch (error) {
+    } catch {
       return null;
     }
   }, wordId);
@@ -488,7 +486,7 @@ export async function getCurrentLanguage(page: Page): Promise<string | null> {
     const electronAPI = (window as any).electronAPI;
     try {
       return await electronAPI.database.getCurrentLanguage();
-    } catch (error) {
+    } catch {
       return null;
     }
   });
@@ -515,16 +513,15 @@ export async function setLanguage(page: Page, language: string): Promise<void> {
     try {
       await electronAPI.database.setCurrentLanguage(lang);
       return { success: true };
-    } catch (error) {
+    } catch {
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
       };
     }
   }, language);
 
   if (!result.success) {
-    throw new Error(`Failed to set language: ${result.error || 'Unknown error'}`);
+    throw new Error('Failed to set language');
   }
 
   // Wait for language change to propagate
@@ -552,7 +549,7 @@ export async function getSessionState(page: Page): Promise<any> {
         return JSON.parse(sessionData);
       }
       return null;
-    } catch (error) {
+    } catch {
       return null;
     }
   });

@@ -126,7 +126,7 @@ export class DialogService {
           variantTranslation: variant.translation,
           createdAt: new Date(),
         });
-      } catch (error) {
+      } catch {
         // Continue storing other variants even if one fails
       }
     }
@@ -224,7 +224,7 @@ export class DialogService {
           result.text,
           result.translation
         );
-      } catch (cacheError) {
+      } catch {
         // Continue even if caching fails
       }
     }
@@ -319,7 +319,7 @@ export class DialogService {
               afterSentenceAudio: undefined, // Will be set by IPC handler
               responseOptions: responseOptions.map(toDialogResponseOption),
             });
-          } catch (error) {
+          } catch {
             // Continue with other sentences even if one fails
           }
         })

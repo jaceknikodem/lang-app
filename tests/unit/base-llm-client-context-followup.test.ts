@@ -4,14 +4,13 @@
 
 import { BaseLLMClient } from '../../src/main/llm/base-llm-client';
 import { z } from 'zod';
-import { ContextSentenceResponseSchema, FollowUpResponseSchema } from '../../src/main/llm/schemas';
 
 // Create a test subclass to test protected methods
 class TestLLMClient extends BaseLLMClient {
   private mockResponse: any;
 
   // Override makeRequest to return mock responses
-  protected async makeRequest(prompt: string, model?: string): Promise<any> {
+  protected async makeRequest(_prompt: string, _model?: string): Promise<any> {
     return this.mockResponse;
   }
 
@@ -158,7 +157,7 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
     });
 
     it('should return empty object on ZodError', async () => {
-      const zodError = new z.ZodError([
+      new z.ZodError([
         {
           code: 'invalid_type',
           expected: 'object',

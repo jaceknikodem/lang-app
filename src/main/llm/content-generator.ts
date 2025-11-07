@@ -474,7 +474,7 @@ export class ContentGenerator {
   private filterWordsByProficiencyLevel(
     words: GeneratedWord[],
     proficiencyLevel: string,
-    language: string
+    _language: string
   ): GeneratedWord[] {
     const level = proficiencyLevel.toLowerCase();
     let maxFrequency: number;
@@ -681,7 +681,7 @@ export class ContentGenerator {
   async isServiceAvailable(): Promise<boolean> {
     try {
       return await this.llmClient.isAvailable();
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -748,7 +748,7 @@ export class ContentGenerator {
    */
   private validateGeneratedSentences(
     sentences: GeneratedSentence[],
-    targetWord: string
+    _targetWord: string
   ): GeneratedSentence[] {
     if (!Array.isArray(sentences)) {
       return [];

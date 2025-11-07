@@ -793,7 +793,7 @@ export class SentenceViewer extends LitElement {
     // Note: Lemmatization only happens during sentence generation, not here
     const parts = this.sentence.sentenceParts ?? splitSentenceIntoParts(this.sentence.sentence);
 
-    const baseWords: WordInSentence[] = parts.map((text, index) => {
+    const baseWords: WordInSentence[] = parts.map((text, _index) => {
       if (/^\s+$/.test(text)) {
         return { text, isTargetWord: false };
       }
@@ -1237,7 +1237,6 @@ export class SentenceViewer extends LitElement {
       return '';
     }
 
-    const language = entries[0]?.lang || this.targetWord?.language || '';
     const content = entries
       .map((entry) => {
         const glossText = entry.glosses.join(', ');
@@ -1959,8 +1958,6 @@ export class SentenceViewer extends LitElement {
           language ||
           this.targetWord?.language ||
           (await window.electronAPI.database.getCurrentLanguage());
-
-        const fallbackWord = `${word || this.targetWord?.word || 'sentence'}-regen-${Date.now()}`;
 
         // Generate new audio with proper IDs
         regeneratedPath = await window.electronAPI.audio.generateAudio(

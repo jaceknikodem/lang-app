@@ -2194,9 +2194,6 @@ export class QuizMode extends BaseComponent {
     this.stopCachedAudio();
 
     try {
-      // Get the expected sentence (foreign language)
-      const expectedSentence = this.currentQuestion.sentence.sentence;
-
       const recordingOptions: RecordingOptions = {
         sampleRate: 16000,
         channels: 1,
@@ -2205,7 +2202,7 @@ export class QuizMode extends BaseComponent {
         endOnSilence: true,
       };
 
-      const session = await window.electronAPI.audio.startRecording(recordingOptions);
+      await window.electronAPI.audio.startRecording(recordingOptions);
       this.isRecording = true;
       this.recordingTime = 0;
       this.currentRecording = null;

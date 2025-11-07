@@ -97,7 +97,7 @@ export class ServiceManager {
           return modelPath;
         }
       }
-    } catch (error) {
+    } catch {
       // Directory read failed, will fall through to default
     }
 

@@ -3,13 +3,12 @@
  */
 
 import { GeneratedWord, GeneratedSentence } from '../../shared/types/core.js';
-import { LLMClient, LLMConfig, LLMError } from '../../shared/types/llm.js';
+import { LLMClient, LLMConfig } from '../../shared/types/llm.js';
 import { LLM_CONFIG } from '../../shared/constants/index.js';
 import { cleanLLMResponse } from './utils.js';
 import { BaseLLMClient } from './base-llm-client.js';
 import { ensureError } from '../../shared/utils/error.js';
 import { getLogger } from '../utils/logger.js';
-import { z } from 'zod';
 import axios from 'axios';
 
 interface GeminiRequest {
@@ -203,7 +202,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
           }
         }
       }
-    } catch (parseError) {
+    } catch {
       // If parsing fails, return null to fall back to exponential backoff
       return null;
     }

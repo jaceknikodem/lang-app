@@ -6,7 +6,7 @@ import { DatabaseLayer } from '../../shared/types/database.js';
 import { Word } from '../../shared/types/core.js';
 import { SRSAlgorithm, SRSReviewResult } from './srs-algorithm.js';
 import { FsrsEngine } from './fsrs-engine.js';
-import { SchedulerEngine, SchedulerEngineName, SchedulerEngineUpdate } from './engine.js';
+import { SchedulerEngine, SchedulerEngineUpdate } from './engine.js';
 
 type UpdateWordSRSOptions = Parameters<DatabaseLayer['updateWordSRS']>[5];
 

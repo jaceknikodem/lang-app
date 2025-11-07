@@ -1,5 +1,5 @@
 import { existsSync } from 'fs';
-import { AudioGenerator, AudioError } from '../../shared/types/audio';
+import { AudioGenerator } from '../../shared/types/audio';
 import { createAudioError } from '../../shared/utils/error.js';
 
 /**
@@ -39,7 +39,6 @@ export abstract class BaseAudioGenerator implements AudioGenerator {
 
         // Resolve when audio finishes playing
         this.currentAudioProcess.on('close', (code: number | null) => {
-          const process = this.currentAudioProcess;
           const promise = this.currentPlayPromise;
           this.currentAudioProcess = undefined;
           this.currentPlayPromise = undefined;

@@ -4,7 +4,6 @@
 
 import { BaseLLMClient } from '../../src/main/llm/base-llm-client';
 import { GeneratedWord } from '../../src/shared/types/core';
-import { WordGenerationResponseSchema } from '../../src/main/llm/schemas';
 import { z } from 'zod';
 
 // Create a test subclass to test protected methods
@@ -12,7 +11,7 @@ class TestLLMClient extends BaseLLMClient {
   private mockResponse: any;
 
   // Override makeRequest to return mock responses
-  protected async makeRequest(prompt: string, model?: string): Promise<any> {
+  protected async makeRequest(_prompt: string, _model?: string): Promise<any> {
     return this.mockResponse;
   }
 
@@ -333,7 +332,7 @@ describe('BaseLLMClient Duplicate Filtering', () => {
     });
 
     it('should handle ZodError instance with detailed error message', async () => {
-      const zodError = new z.ZodError([
+      new z.ZodError([
         {
           code: 'invalid_type',
           expected: 'array',

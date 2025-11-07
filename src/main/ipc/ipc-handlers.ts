@@ -2,23 +2,21 @@
  * IPC handlers for secure communication between main and renderer processes
  */
 
-import { ipcMain, app, dialog, BrowserWindow } from 'electron';
+import { ipcMain, app, dialog } from 'electron';
 import { z } from 'zod';
 import { IPC_CHANNELS } from '../../shared/types/ipc.js';
 import { SQLiteDatabaseLayer } from '../database/database-layer.js';
-import { LLMClient, ContentGenerator, LLMFactory, LLMProvider } from '../llm/index.js';
+import { LLMClient, ContentGenerator, LLMFactory } from '../llm/index.js';
 import { AudioService } from '../audio/audio-service.js';
 import { LifecycleManager, UpdateManager } from '../lifecycle/index.js';
 import { SRSService } from '../srs/srs-service.js';
 import { WordGenerationRunner } from '../jobs/word-generation-runner.js';
-import { CreateWordRequest } from '../../shared/types/core.js';
 import { LemmatizationService } from '../lemmatization/index.js';
 import { DialogService } from '../dialog/index.js';
-import { existsSync, mkdirSync } from 'fs';
 import { promises as fsPromises } from 'fs';
-import { dirname, join } from 'path';
+import { join } from 'path';
 import { createIPCHandler } from './ipc-handler-helper.js';
-import { getErrorMessage, wrapError } from '../../shared/utils/error.js';
+import { wrapError } from '../../shared/utils/error.js';
 
 // Validation schemas for input sanitization
 const CreateWordSchema = z.object({
@@ -559,7 +557,7 @@ function setupLLMHandlers(
       async () => {
         try {
           return await llmClient.isAvailable();
-        } catch (error) {
+        } catch {
           // Return false on error instead of throwing
           return false;
         }
@@ -575,7 +573,7 @@ function setupLLMHandlers(
       async () => {
         try {
           return await llmClient.getAvailableModels();
-        } catch (error) {
+        } catch {
           // Return empty array on error instead of throwing
           return [];
         }
@@ -835,7 +833,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       async (audioPath) => {
         try {
           return await audioService.audioExists(audioPath);
-        } catch (error) {
+        } catch {
           // Return false on error instead of throwing
           return false;
         }
@@ -852,7 +850,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
         try {
           const validatedTargetDb = targetDb !== undefined ? targetDb : 5; // Default to 5dB amplification
           return await audioService.normalizeAudioVolume(audioPath, validatedTargetDb);
-        } catch (error) {
+        } catch {
           // Return original path if normalization fails
           return audioPath;
         }
@@ -868,7 +866,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       async (audioPath) => {
         try {
           return await audioService.loadAudioBase64(audioPath);
-        } catch (error) {
+        } catch {
           // Return null on error instead of throwing
           return null;
         }
@@ -980,7 +978,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       () => {
         try {
           return audioService.getCurrentRecordingSession();
-        } catch (error) {
+        } catch {
           // Return null on error instead of throwing
           return null;
         }
@@ -996,7 +994,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       () => {
         try {
           return audioService.isRecording();
-        } catch (error) {
+        } catch {
           // Return false on error instead of throwing
           return false;
         }
@@ -1012,7 +1010,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       async () => {
         try {
           return await audioService.getAvailableRecordingDevices();
-        } catch (error) {
+        } catch {
           // Return default device on error instead of throwing
           return ['default'];
         }
@@ -1039,7 +1037,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       async (filePath) => {
         try {
           return await audioService.getRecordingInfo(filePath);
-        } catch (error) {
+        } catch {
           // Return null on error instead of throwing
           return null;
         }
@@ -1114,7 +1112,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
       async () => {
         try {
           return await audioService.isSpeechRecognitionReady();
-        } catch (error) {
+        } catch {
           // Return false on error instead of throwing
           return false;
         }
@@ -1422,7 +1420,7 @@ function setupLifecycleHandlers(
         try {
           const updateInfo = await updateManager.checkForUpdates(true);
           return updateInfo !== null;
-        } catch (error) {
+        } catch {
           // Return false on error instead of throwing
           return false;
         }
@@ -2246,7 +2244,7 @@ function setupFlowHandlers(databaseLayer: SQLiteDatabaseLayer, audioService: Aud
           return {
             mtime: stats.mtime,
           };
-        } catch (error) {
+        } catch {
           // File doesn't exist or other error
           return null;
         }

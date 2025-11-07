@@ -105,7 +105,7 @@ export class AudioService {
             await this.switchToSystemTTS();
             return;
           }
-        } catch (error) {
+        } catch {
           console.warn('Failed to get ElevenLabs model from database, using default');
         }
       }
@@ -389,11 +389,11 @@ export class AudioService {
           console.log(`[Flow] Cache expired (age: ${Math.round(fileAge / 1000 / 60)} minutes), will regenerate`);
           try {
             await unlink(outputPath);
-          } catch (e) {
+          } catch {
             // Ignore deletion errors
           }
         }
-      } catch (error) {
+        } catch {
         // File doesn't exist, need to create it
       }
 
@@ -472,7 +472,7 @@ export class AudioService {
         // Clean up temporary file list
         try {
           unlinkSync(fileListPath);
-        } catch (e) {
+        } catch {
           // Ignore cleanup errors
         }
 
@@ -484,7 +484,7 @@ export class AudioService {
         // Clean up temporary file list on error
         try {
           unlinkSync(fileListPath);
-        } catch (e) {
+        } catch {
           // Ignore cleanup errors
         }
         throw error;
@@ -638,11 +638,11 @@ export class AudioService {
           console.log(`[Flow] Cache expired (age: ${Math.round(fileAge / 1000 / 60)} minutes), will regenerate`);
           try {
             await unlink(outputPath);
-          } catch (e) {
+          } catch {
             // Ignore deletion errors
           }
         }
-      } catch (error) {
+        } catch {
         // File doesn't exist, need to create it
       }
 
@@ -729,7 +729,7 @@ export class AudioService {
         // Clean up temporary file list
         try {
           unlinkSync(fileListPath);
-        } catch (e) {
+        } catch {
           // Ignore cleanup errors
         }
 
@@ -741,7 +741,7 @@ export class AudioService {
         // Clean up temporary file list on error
         try {
           unlinkSync(fileListPath);
-        } catch (e) {
+        } catch {
           // Ignore cleanup errors
         }
         throw error;
@@ -905,7 +905,7 @@ export class AudioService {
     if (!targetLanguage && this.database) {
       try {
         targetLanguage = await this.database.getCurrentLanguage();
-      } catch (error) {
+      } catch {
         console.warn('Failed to determine language for external audio, using default "unknown"');
       }
     }

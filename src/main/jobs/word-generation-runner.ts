@@ -75,7 +75,7 @@ export class WordGenerationRunner {
 
         if (!job) {
           try {
-            const summary = await this.database.getWordGenerationQueueSummary();
+            await this.database.getWordGenerationQueueSummary();
           } catch (summaryError) {
             console.warn('[WordGenerationRunner] Unable to retrieve queue summary:', summaryError);
           }
@@ -176,7 +176,6 @@ export class WordGenerationRunner {
           }
 
           let audioPath: string = '';
-          const isTatoebaSentence = Boolean(sentence.audioUrl);
           let sentenceModel: string | undefined;
           let audioService: string | undefined;
           let audioModel: string | undefined;
@@ -423,8 +422,6 @@ export class WordGenerationRunner {
       });
 
       try {
-        // Get word info to pass wordId
-        const word = await this.database.getWordById(wordId);
         const audioPath = await this.audioService.generateSentenceAudio(
           sentence.sentence,
           language,

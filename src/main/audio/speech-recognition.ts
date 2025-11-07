@@ -6,7 +6,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as http from 'http';
-import { app } from 'electron';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { getSimilarityThresholds, type ProficiencyLevel } from '../../shared/utils/similarity-threshold.js';
@@ -277,7 +276,7 @@ export class SpeechRecognitionService {
                   options.onProgress(accumulatedText, false);
                 }
               }
-            } catch (e) {
+            } catch {
               // JSON is incomplete, continue accumulating chunks
               // This is expected for streaming JSON responses
             }
@@ -314,7 +313,7 @@ export class SpeechRecognitionService {
               // Finalize the last update
               options.onProgress(transcriptionResult, true);
             }
-          } catch (parseError) {
+          } catch {
             // If we accumulated text during streaming, use it
             if (accumulatedText) {
               transcriptionResult = accumulatedText;

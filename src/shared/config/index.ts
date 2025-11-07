@@ -84,7 +84,7 @@ convict.addFormat({
     }
     try {
       new URL(val);
-    } catch (e) {
+    } catch {
       throw new Error('must be a valid URL');
     }
   },

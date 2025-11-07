@@ -4,7 +4,6 @@
 
 import { FrequencyWordManager, WordEntry } from '../../src/main/llm/frequency-word-manager';
 import { DatabaseLayer } from '../../src/shared/types/database';
-import { promises as fs } from 'fs';
 import { join } from 'path';
 import * as os from 'os';
 

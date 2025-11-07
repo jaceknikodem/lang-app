@@ -992,8 +992,8 @@ export class LearningMode extends BaseComponent {
         // Load next sentence's audio right after current one is ready
         this.preloadNextSentenceAudio();
       }
-    } catch (error) {
-      console.error('Failed to load words and sentences:', error);
+    } catch (err) {
+      console.error('Failed to load words and sentences:', err);
       this.error = 'Failed to load learning content. Please try again.';
     } finally {
       this.isLoading = false;
@@ -2496,7 +2496,7 @@ export class LearningMode extends BaseComponent {
       await window.electronAPI.audio.stopAudio();
       // Small delay to ensure audio fully stops before starting new one
       await new Promise((resolve) => setTimeout(resolve, 100));
-    } catch (err) {
+    } catch {
       // Ignore errors when stopping (might not be playing)
     }
   }
@@ -2510,7 +2510,7 @@ export class LearningMode extends BaseComponent {
     void this.incrementStrengthForWord(wordId);
   }
 
-  private handleSentenceAudioCompleted(event: CustomEvent<{ wordId?: number }>) {
+  private handleSentenceAudioCompleted(_event: CustomEvent<{ wordId?: number }>) {
     // Auto-scroll to next sentence after audio finishes (1.5 seconds delay)
     if (this.autoScrollEnabled) {
       this.clearAutoScrollTimer();
@@ -2594,7 +2594,7 @@ export class LearningMode extends BaseComponent {
   private async handleWordAddedFromSentence(
     event: CustomEvent<{ wordId: number; word: string; translation: string }>
   ): Promise<void> {
-    const { wordId, word } = event.detail;
+    const { wordId } = event.detail;
     await this.refreshQueueSummary();
 
     try {

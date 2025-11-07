@@ -8,12 +8,7 @@ import { ElectronApplication, Page } from 'playwright';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import {
-  insertTestWord,
-  getWordStrength,
-  getWordKnownStatus,
-  setupWordsForTesting,
-} from './test-helpers.js';
+import { insertTestWord, getWordStrength, getWordKnownStatus } from './test-helpers.js';
 
 let electronApp: ElectronApplication;
 let page: Page;
@@ -232,7 +227,7 @@ test.describe('SRS and Strength Updates', () => {
       // Use SRS service to process a good answer (recall rating 2)
       try {
         await electronAPI.srs.processReview(id, 2, false, 'spanish');
-      } catch (error) {
+      } catch {
         // SRS service might not be available, so we'll just update strength directly
         const word = await electronAPI.database.getWordById(id);
         if (word) {
@@ -271,7 +266,7 @@ test.describe('SRS and Strength Updates', () => {
       // Use SRS service to process a failed answer (recall rating 0)
       try {
         await electronAPI.srs.processReview(id, 0, false, 'spanish');
-      } catch (error) {
+      } catch {
         // SRS service might not be available, so we'll just update strength directly
         const word = await electronAPI.database.getWordById(id);
         if (word) {

@@ -1,6 +1,4 @@
 import { AudioService } from '../../src/main/audio/audio-service';
-import { TTSAudioGenerator } from '../../src/main/audio/audio-generator';
-import { ElevenLabsAudioGenerator } from '../../src/main/audio/elevenlabs-generator';
 import type { RecordingSession, RecordingOptions } from '../../src/main/audio/audio-recorder';
 import type {
   TranscriptionOptions,
@@ -146,8 +144,6 @@ describe('Audio Service', () => {
     let mockRecorder: any;
 
     beforeEach(() => {
-      // Get the mocked AudioRecorder instance
-      const { AudioRecorder } = require('../../src/main/audio/audio-recorder');
       audioService = new AudioService();
       // Get the instance created in constructor
       mockRecorder = (audioService as any).audioRecorder;
@@ -695,9 +691,6 @@ describe('Audio Service', () => {
         mockGenerator.audioExists.mockResolvedValueOnce(false); // After ffmpeg fails, normalized file still doesn't exist
 
         // Mock execFileAsync to fail
-        const { execFile } = require('child_process');
-        const { promisify } = require('util');
-        const execFileAsync = promisify(execFile);
         jest
           .spyOn(require('util'), 'promisify')
           .mockReturnValueOnce(() => Promise.reject(new Error('ffmpeg failed')));
@@ -810,7 +803,9 @@ describe('Audio Service', () => {
 
         const service = new AudioService(mockGenerator);
         await expect(service.playAudio('test.aiff')).rejects.toThrow();
-        expect((await service.playAudio('test.aiff').catch((e) => e)).code).toBe('FILE_NOT_FOUND');
+        expect((await service.playAudio('test.aiff').catch((_e) => _e)).code).toBe(
+          'FILE_NOT_FOUND'
+        );
       });
 
       it('should handle PLAYBACK_STOPPED error', async () => {

@@ -929,7 +929,7 @@ export class AppRoot extends LitElement {
     // Stop previously played audio
     try {
       await window.electronAPI.audio.stopAudio();
-    } catch (err) {
+    } catch {
       // Ignore errors when stopping (might not be playing)
     }
 

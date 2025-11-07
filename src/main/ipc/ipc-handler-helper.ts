@@ -4,7 +4,7 @@
 
 import { z } from 'zod';
 import { IpcMainInvokeEvent } from 'electron';
-import { getErrorMessage, wrapError } from '../../shared/utils/error.js';
+import { wrapError } from '../../shared/utils/error.js';
 import { getLogger } from '../utils/logger.js';
 
 type HandlerFunction<TInput extends any[], TOutput> = (

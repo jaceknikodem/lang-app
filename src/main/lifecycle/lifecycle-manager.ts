@@ -93,7 +93,7 @@ export class LifecycleManager {
 
       try {
         await fs.copyFile(dbPath, backupDbPath);
-      } catch (error) {
+      } catch {
         // Database might not exist yet, that's okay
         console.log('No database to backup (this is normal for first run)');
       }
@@ -104,7 +104,7 @@ export class LifecycleManager {
 
       try {
         await this.copyDirectory(audioDir, backupAudioDir);
-      } catch (error) {
+      } catch {
         // Audio directory might not exist yet
         console.log('No audio files to backup');
       }
@@ -147,7 +147,7 @@ export class LifecycleManager {
       try {
         await fs.copyFile(backupDbPath, dbPath);
         console.log('Database restored successfully');
-      } catch (error) {
+      } catch {
         console.log('No database in backup to restore');
       }
 
@@ -159,7 +159,7 @@ export class LifecycleManager {
         await fs.rm(audioDir, { recursive: true, force: true });
         await this.copyDirectory(backupAudioDir, audioDir);
         console.log('Audio files restored successfully');
-      } catch (error) {
+      } catch {
         console.log('No audio files in backup to restore');
       }
 
@@ -182,7 +182,7 @@ export class LifecycleManager {
         await fs.access(dbPath);
         // Try to open database to verify it's not corrupted
         // This will be handled by the database layer initialization
-      } catch (error) {
+      } catch {
         console.log('Database not found or inaccessible, checking for backups...');
         await this.offerBackupRecovery();
       }
@@ -303,7 +303,7 @@ export class LifecycleManager {
           settingsBackup[row.key] = row.value;
         }
         console.log(`Backed up ${Object.keys(settingsBackup).length} settings`);
-      } catch (error) {
+      } catch {
         console.log('No settings to backup (this is normal for first run)');
       }
 
@@ -317,7 +317,7 @@ export class LifecycleManager {
       try {
         await fs.unlink(dbPath);
         console.log('Database file removed');
-      } catch (error) {
+      } catch {
         console.log('No database file to remove (this is normal)');
       }
 
@@ -340,7 +340,7 @@ export class LifecycleManager {
           }
         }
         console.log('Audio files removed');
-      } catch (error) {
+      } catch {
         console.log('No audio files to remove');
       }
 
@@ -401,11 +401,9 @@ export class LifecycleManager {
       }
 
       // Check if new audio directory already has files
-      let newDirExists = false;
       let newDirHasFiles = false;
       try {
         await fs.access(newAudioDir);
-        newDirExists = true;
         const entries = await fs.readdir(newAudioDir);
         newDirHasFiles = entries.length > 0;
       } catch {

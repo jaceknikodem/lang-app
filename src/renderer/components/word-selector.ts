@@ -462,13 +462,13 @@ export class WordSelector extends LitElement {
   private getSelectedWords(): GeneratedWord[] {
     return this.selectableWords
       .filter((word) => word.selected && !word.markedAsKnown)
-      .map(({ selected, markedAsKnown, ...word }) => word);
+      .map(({ selected: _selected, markedAsKnown: _markedAsKnown, ...word }) => word);
   }
 
   private getKnownWords(): GeneratedWord[] {
     return this.selectableWords
       .filter((word) => word.markedAsKnown)
-      .map(({ selected, markedAsKnown, ...word }) => word);
+      .map(({ selected: _selected, markedAsKnown: _markedAsKnown, ...word }) => word);
   }
 
   private async handleGoToReview() {
@@ -799,7 +799,7 @@ export class WordSelector extends LitElement {
           ${(this.wordsProcessed
             ? this.selectableWords.filter((w) => w.selected || w.markedAsKnown)
             : this.selectableWords
-          ).map((word, index) => {
+          ).map((word, _index) => {
             // Find the original index in selectableWords array
             const originalIndex = this.selectableWords.findIndex(
               (w) => w.word === word.word && w.translation === word.translation

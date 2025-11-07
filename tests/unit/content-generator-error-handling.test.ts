@@ -23,7 +23,7 @@ class MockLLMClient implements LLMClient {
     topic: string,
     language: string,
     count: number,
-    proficiencyLevel?: string
+    _proficiencyLevel?: string
   ): Promise<GeneratedWord[]> {
     this.calls++;
 
@@ -46,8 +46,8 @@ class MockLLMClient implements LLMClient {
     word: string,
     language: string,
     count: number,
-    topic?: string,
-    proficiencyLevel?: string
+    _topic?: string,
+    _proficiencyLevel?: string
   ): Promise<GeneratedSentence[]> {
     this.calls++;
 
@@ -71,28 +71,28 @@ class MockLLMClient implements LLMClient {
   }
 
   async generateContextSentences(
-    sentence: string,
-    translation: string,
-    language: string
+    _sentence: string,
+    _translation: string,
+    _language: string
   ): Promise<any> {
     return {};
   }
 
   async generateDialogueVariants(
-    triggerSentence: string,
-    triggerTranslation: string,
-    language: string,
-    knownWords: string[],
-    count: number
+    _triggerSentence: string,
+    _triggerTranslation: string,
+    _language: string,
+    _knownWords: string[],
+    _count: number
   ): Promise<any[]> {
     return [];
   }
 
-  async generateFollowUp(sentence: string, translation: string, language: string): Promise<any> {
+  async generateFollowUp(_sentence: string, _translation: string, _language: string): Promise<any> {
     return { text: '', translation: '' };
   }
 
-  async generateResponse(prompt: string, model?: string): Promise<string> {
+  async generateResponse(_prompt: string, _model?: string): Promise<string> {
     return '';
   }
 
@@ -100,22 +100,22 @@ class MockLLMClient implements LLMClient {
     return ['test-model'];
   }
 
-  setModel(model: string): void {}
+  setModel(_model: string): void {}
   getCurrentModel(): string {
     return 'test-model';
   }
 
-  setWordGenerationModel(model: string): void {}
+  setWordGenerationModel(_model: string): void {}
   getWordGenerationModel(): string {
     return 'test-model';
   }
 
-  setSentenceGenerationModel(model: string): void {}
+  setSentenceGenerationModel(_model: string): void {}
   getSentenceGenerationModel(): string {
     return 'test-model';
   }
 
-  setDatabaseLayer(database: any): void {}
+  setDatabaseLayer(_database: any): void {}
 }
 
 describe('ContentGenerator Error Handling', () => {

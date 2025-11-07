@@ -3,7 +3,6 @@
  */
 
 import { OllamaClient } from '../../dist/main/main/llm/ollama-client.js';
-import { GeneratedWord } from '../../dist/main/shared/types/core.js';
 import axios from 'axios';
 
 // Mock axios for testing
@@ -38,7 +37,7 @@ describe('OllamaClient Duplicate Checking', () => {
         warn: jest.spyOn(logger, 'warn').mockImplementation(() => {}),
         error: jest.spyOn(logger, 'error').mockImplementation(() => {}),
       };
-    } catch (e) {
+    } catch {
       // If logger not available, create a no-op spy
       loggerSpy = {
         warn: jest.fn(),

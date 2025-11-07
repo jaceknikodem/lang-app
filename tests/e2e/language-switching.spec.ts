@@ -218,7 +218,7 @@ test.describe('Language Switching', () => {
     await setLanguage(page, 'spanish');
 
     // Create learning session in Spanish
-    const spanishWordIds = await page.evaluate(async () => {
+    await page.evaluate(async () => {
       const electronAPI = (window as any).electronAPI;
       const wordId1 = await electronAPI.database.insertWord({
         word: 'session-spanish-1',
@@ -250,7 +250,7 @@ test.describe('Language Switching', () => {
     await setLanguage(page, 'italian');
 
     // Create learning session in Italian
-    const italianWordIds = await page.evaluate(async () => {
+    await page.evaluate(async () => {
       const electronAPI = (window as any).electronAPI;
       const wordId1 = await electronAPI.database.insertWord({
         word: 'session-italian-1',
@@ -296,9 +296,7 @@ test.describe('Language Switching', () => {
       expect(spanishSessions.length).toBeGreaterThan(0);
       expect(restoredSpanishSessions.length).toBeGreaterThan(0);
       // Verify at least one session has learning progress
-      const hasLearningSession = spanishSessions.some(
-        (s: any) => s.learningProgress || s.learningSession
-      );
+      spanishSessions.some((s: any) => s.learningProgress || s.learningSession);
       // Learning session may or may not be restored depending on implementation
     }
   });

@@ -4,7 +4,6 @@
  */
 
 import { test, expect, _electron as electron } from '@playwright/test';
-import { ElectronApplication, Page } from 'playwright';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -14,8 +13,6 @@ import {
   getWordKnownStatus,
   getCurrentLanguage,
   getSessionState,
-  verifyAudioFileExists,
-  verifyDatabaseIntegrity,
   countAudioFiles,
 } from './test-helpers.js';
 
@@ -178,7 +175,7 @@ test.describe('Data Persistence', () => {
     await page1.waitForTimeout(3000);
 
     // Create words and start learning session
-    const wordIds = await page1.evaluate(async () => {
+    await page1.evaluate(async () => {
       const electronAPI = (window as any).electronAPI;
       const wordId1 = await electronAPI.database.insertWord({
         word: 'word1',
@@ -287,7 +284,7 @@ test.describe('Data Persistence', () => {
     await page1.waitForTimeout(3000);
 
     // Create words and start quiz session
-    const wordIds = await page1.evaluate(async () => {
+    await page1.evaluate(async () => {
       const electronAPI = (window as any).electronAPI;
       const wordId1 = await electronAPI.database.insertWord({
         word: 'quiz-word1',
@@ -338,8 +335,6 @@ test.describe('Data Persistence', () => {
     if (session2 && session2.sessions) {
       const sessions = Object.values(session2.sessions);
       expect(sessions.length).toBeGreaterThan(0);
-      // Check if any session has quiz progress
-      const hasQuizSession = sessions.some((s: any) => s.quizProgress || s.quizSession);
       // Quiz session may or may not be restored depending on implementation
       // Just verify session data exists
     }
@@ -502,8 +497,8 @@ test.describe('Data Persistence', () => {
     await insertTestWord(page1);
     await page1.waitForTimeout(3000);
 
-    // Count initial audio files
-    const initialAudioCount = countAudioFiles(testDataDir);
+    // Count initial audio files (verify function works)
+    countAudioFiles(testDataDir);
 
     // Generate some audio (by navigating to learning mode if words exist)
     // This is a simplified test - in practice, audio generation happens during learning
@@ -512,9 +507,9 @@ test.describe('Data Persistence', () => {
     // Close first app
     await app1.close();
 
-    // Verify audio directory still exists
+    // Verify audio directory still exists (or may not exist if no audio generated)
     const audioDir = path.join(testDataDir, 'audio');
-    const audioDirExists = fs.existsSync(audioDir);
+    fs.existsSync(audioDir);
     // Audio directory may or may not exist depending on whether audio was generated
     // This test just verifies the structure can persist
 

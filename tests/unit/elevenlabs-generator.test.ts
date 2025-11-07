@@ -92,7 +92,7 @@ describe('ElevenLabs Audio Generator', () => {
     it('should handle different languages', () => {
       const languages = ['spanish', 'portuguese', 'italian', 'indonesian', 'polish'];
 
-      languages.forEach((language) => {
+      languages.forEach((_language) => {
         expect(() => {
           new ElevenLabsAudioGenerator({
             elevenLabsApiKey: mockApiKey,

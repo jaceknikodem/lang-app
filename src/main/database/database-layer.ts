@@ -31,7 +31,7 @@ import {
   parseTokenizedTokens,
 } from '../../shared/utils/sentence.js';
 import { backfillSentenceTokens } from './backfill-sentence-tokens.js';
-import { getErrorMessage, wrapError } from '../../shared/utils/error.js';
+import { wrapError } from '../../shared/utils/error.js';
 
 export class SQLiteDatabaseLayer implements DatabaseLayer {
   private connection: DatabaseConnection;
@@ -155,7 +155,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     // Migration: Add audio_generation_voice_id column if it doesn't exist
     try {
       db.exec(`ALTER TABLE sentences ADD COLUMN audio_generation_voice_id TEXT`);
-    } catch (error) {
+    } catch {
       // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
       // Ignore error - this is expected for existing databases with the column
     }
@@ -163,7 +163,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     // Migration: Add topic column to words table if it doesn't exist
     try {
       db.exec(`ALTER TABLE words ADD COLUMN topic TEXT`);
-    } catch (error) {
+    } catch {
       // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
       // Ignore error - this is expected for existing databases with the column
     }
@@ -181,7 +181,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         )
         WHERE language IS NULL
       `);
-    } catch (error) {
+    } catch {
       // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
       // Ignore error - this is expected for existing databases with the column
     }
@@ -189,7 +189,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     // Migration: Add before_sentence_audio_path column to sentences table if it doesn't exist
     try {
       db.exec(`ALTER TABLE sentences ADD COLUMN before_sentence_audio_path TEXT`);
-    } catch (error) {
+    } catch {
       // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
       // Ignore error - this is expected for existing databases with the column
     }
@@ -197,7 +197,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     // Migration: Add after_sentence_audio_path column to sentences table if it doesn't exist
     try {
       db.exec(`ALTER TABLE sentences ADD COLUMN after_sentence_audio_path TEXT`);
-    } catch (error) {
+    } catch {
       // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
       // Ignore error - this is expected for existing databases with the column
     }
@@ -205,7 +205,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     // Migration: Add ignored column to sentences table if it doesn't exist
     try {
       db.exec(`ALTER TABLE sentences ADD COLUMN ignored BOOLEAN DEFAULT FALSE`);
-    } catch (error) {
+    } catch {
       // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
       // Ignore error - this is expected for existing databases with the column
     }
@@ -304,7 +304,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     // Migration: Add audio_path column to pronunciation_attempts table if it doesn't exist
     try {
       db.exec(`ALTER TABLE pronunciation_attempts ADD COLUMN audio_path TEXT`);
-    } catch (error) {
+    } catch {
       // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
       // Ignore error - this is expected for existing databases with the column
     }
@@ -3018,7 +3018,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       try {
         // Try to select from the column to check if it exists
         db.prepare('SELECT sentence_tokens FROM sentences LIMIT 1').get();
-      } catch (error) {
+      } catch {
         // Column doesn't exist yet - migration may not have run
         console.log(
           'Sentence tokens column not found, skipping backfill (migration may not have run)'

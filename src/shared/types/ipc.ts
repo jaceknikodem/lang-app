@@ -11,7 +11,6 @@ import {
   CreateWordRequest,
   DictionaryEntry,
   DialogueVariant,
-  ModeScores,
   DialogSession,
 } from './core.js';
 import { JobWordInfo, WordProcessingStatus } from './database.js';

@@ -2,13 +2,12 @@
  * Ollama HTTP client for local LLM communication
  */
 
-import { LLMClient, LLMConfig, LLMError } from '../../shared/types/llm.js';
+import { LLMClient, LLMConfig } from '../../shared/types/llm.js';
 import { LLM_CONFIG } from '../../shared/constants/index.js';
 import { cleanLLMResponse } from './utils.js';
 import { BaseLLMClient } from './base-llm-client.js';
 import { ensureError } from '../../shared/utils/error.js';
 import { getLogger } from '../utils/logger.js';
-import { z } from 'zod';
 import axios from 'axios';
 
 interface OllamaRequest {
@@ -43,7 +42,7 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
         validateStatus: () => true, // Don't throw on any status
       });
       return response.status === 200;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -147,7 +146,7 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
         let parsed: any;
         try {
           parsed = JSON.parse(cleanResponse);
-        } catch (parseError) {
+        } catch {
           throw new Error(`Invalid JSON response: ${cleanResponse.substring(0, 100)}...`);
         }
 

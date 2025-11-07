@@ -316,7 +316,7 @@ export class AudioRecorder {
           reject(new Error(`sox not found: ${error.message}`));
         });
       });
-    } catch (error) {
+    } catch {
       throw new Error('Audio recording requires sox to be installed. Please install sox using: brew install sox');
     }
 

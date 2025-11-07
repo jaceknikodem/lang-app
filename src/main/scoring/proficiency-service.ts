@@ -256,7 +256,7 @@ export class ProficiencyService {
 
       const row = stmt.get(word.word, language) as any;
       return row?.frequency_position ?? null;
-    } catch (error) {
+    } catch {
       // If word doesn't have frequency position, that's okay
       return null;
     }

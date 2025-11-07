@@ -32,7 +32,7 @@ jest.mock('p-limit', () => {
                 const result = await fn();
                 resolve(result);
               } catch (error) {
-                resolve(Promise.reject(error));
+                reject(error);
               } finally {
                 running--;
                 if (queue.length > 0) {

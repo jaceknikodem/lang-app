@@ -62,7 +62,7 @@ class TestLLMClient extends BaseLLMClient {
   }
 
   // Abstract method implementation (not used in tests)
-  protected async makeRequest(prompt: string, model?: string): Promise<any> {
+  protected async makeRequest(_prompt: string, _model?: string): Promise<any> {
     throw new Error('Not implemented in test class');
   }
 }

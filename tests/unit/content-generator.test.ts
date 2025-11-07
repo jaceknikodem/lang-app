@@ -3,11 +3,8 @@
  */
 
 import { ContentGenerator } from '../../src/main/llm/content-generator';
-import { OllamaClient } from '../../src/main/llm/ollama-client';
 import { GeneratedWord, GeneratedSentence } from '../../src/shared/types/core';
-import type { LLMClient } from '../../src/shared/types/llm';
 import type { DatabaseLayer } from '../../src/shared/types/database';
-import type { LemmatizationService } from '../../src/main/lemmatization/index';
 
 // Mock the OllamaClient
 class MockOllamaClient {
@@ -19,7 +16,7 @@ class MockOllamaClient {
         topic: string,
         language: string,
         count: number,
-        proficiencyLevel?: string
+        _proficiencyLevel?: string
       ): Promise<GeneratedWord[]> => {
         // Simulate generating the requested number of words
         const words: GeneratedWord[] = [];
@@ -39,8 +36,8 @@ class MockOllamaClient {
         word: string,
         language: string,
         count: number,
-        topic?: string,
-        proficiencyLevel?: string
+        _topic?: string,
+        _proficiencyLevel?: string
       ): Promise<GeneratedSentence[]> => {
         const sentences: GeneratedSentence[] = [];
         for (let i = 1; i <= count; i++) {

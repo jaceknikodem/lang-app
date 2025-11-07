@@ -507,7 +507,7 @@ export class DialogMode extends BaseComponent {
           await new Promise((resolve) => setTimeout(resolve, 200));
           await window.electronAPI.audio.stopAudio(); // Stop again to catch any late-starting audio
           await new Promise((resolve) => setTimeout(resolve, 200));
-        } catch (stopError) {
+        } catch {
           // Ignore errors when stopping (might not be playing)
         }
 
@@ -819,7 +819,7 @@ export class DialogMode extends BaseComponent {
         endOnSilence: true,
       };
 
-      const session = await window.electronAPI.audio.startRecording(recordingOptions);
+      await window.electronAPI.audio.startRecording(recordingOptions);
       this.isRecording = true;
       this.recordingTime = 0;
       this.currentRecording = null;
@@ -2186,7 +2186,7 @@ export class DialogMode extends BaseComponent {
               ? html`
                   <div class="response-options">
                     ${this.responseOptions.map(
-                      (option, index) => html`
+                      (option, _index) => html`
                         <div class="response-option">
                           <p class="sentence">${option.variantSentence}</p>
                           ${this.showTranslations
