@@ -2,11 +2,12 @@
  * Settings panel component for application lifecycle management
  */
 
-import { LitElement, html, css } from 'lit';
+import { html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
 import { sessionManager } from '../utils/session-manager.js';
+import { BaseComponent } from './base-component.js';
 import './voice-bubble.js';
 import './status-message.js';
 import './confirmation-dialog.js';
@@ -15,7 +16,7 @@ import './app-button.js';
 // Type is already declared in preload.ts, no need to redeclare
 
 @customElement('settings-panel')
-export class SettingsPanel extends LitElement {
+export class SettingsPanel extends BaseComponent {
   static styles = [
     sharedStyles,
     css`
@@ -438,12 +439,6 @@ export class SettingsPanel extends LitElement {
   @state()
   private isLoadingProviders = false;
 
-
-
-
-  @state()
-  private currentLanguage = '';
-
   @state()
   private elevenLabsApiKey = '';
 
@@ -474,14 +469,10 @@ export class SettingsPanel extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
     await this.loadSettings();
-    
-    // Listen for language changes from the navigation dropdown
-    document.addEventListener('language-changed', this.handleExternalLanguageChange);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    document.removeEventListener('language-changed', this.handleExternalLanguageChange);
   }
 
   private async loadSettings() {
@@ -558,7 +549,7 @@ export class SettingsPanel extends LitElement {
   private async loadLanguageSettings() {
     try {
       // Get current language
-      this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+      this.currentLanguage = await window.electronAPI.database.getCurrentLanguage() || null;
 
       console.log('Language settings loaded:', {
         current: this.currentLanguage
@@ -961,13 +952,6 @@ export class SettingsPanel extends LitElement {
 
 
 
-  private handleExternalLanguageChange = async (event: Event) => {
-    const customEvent = event as CustomEvent;
-    console.log('Settings panel received language change:', customEvent.detail);
-    
-    // Update current language
-    this.currentLanguage = customEvent.detail.language;
-  };
 
   private async updateElevenLabsApiKey(event: Event) {
     const input = event.target as HTMLInputElement;

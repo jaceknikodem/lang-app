@@ -2,7 +2,7 @@
  * Learning mode component for sentence review and word interaction
  */
 
-import { LitElement, html, css } from 'lit';
+import { html, css } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
@@ -11,6 +11,7 @@ import { Word, Sentence } from '../../shared/types/core.js';
 import { STRENGTH_BOOST_CONFIG } from '../../shared/constants/index.js';
 import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 import { loadCurrentLanguage, loadLemmatizationModel } from '../utils/language-manager.js';
+import { BaseComponent } from './base-component.js';
 import './sentence-viewer.js';
 import './session-complete.js';
 import './progress-bar.js';
@@ -21,7 +22,7 @@ interface WordWithSentences extends Word {
 }
 
 @customElement('learning-mode')
-export class LearningMode extends LitElement {
+export class LearningMode extends BaseComponent {
 
   @state()
   private wordsWithSentences: WordWithSentences[] = [];
@@ -37,12 +38,6 @@ export class LearningMode extends LitElement {
 
   @state()
   private currentSentenceIndex = 0;
-
-  @state()
-  private isLoading = true;
-
-  @state()
-  private error = '';
 
   @state()
   private isProcessing = false;
@@ -61,9 +56,6 @@ export class LearningMode extends LitElement {
     queuedWords: Array<{ wordId: number; word: string; status: 'queued' | 'processing' | 'completed' | 'failed'; language: string; topic?: string }>;
     processingWords: Array<{ wordId: number; word: string; status: 'queued' | 'processing' | 'completed' | 'failed'; language: string; topic?: string }>;
   } = { queued: 0, processing: 0, failed: 0, queuedWords: [], processingWords: [] };
-
-  @state()
-  private currentLanguage: string | null = null;
 
   @state()
   private infoMessage = '';
@@ -113,18 +105,17 @@ export class LearningMode extends LitElement {
   // HTML5 Audio instances for playing cached audio
   private currentAudioElement: HTMLAudioElement | null = null;
   private beforeAudioElement: HTMLAudioElement | null = null;
-  private handleExternalLanguageChange = async (event: Event) => {
+  
+  protected override handleExternalLanguageChange = async (event: Event): Promise<void> => {
+    // Call base class handler first
+    await super.handleExternalLanguageChange(event);
+    
     const detail = (event as CustomEvent<{ language?: string }>).detail;
     const newLanguage = detail?.language;
 
     if (!newLanguage || newLanguage === this.currentLanguage) {
       return;
     }
-
-    this.currentLanguage = newLanguage;
-    
-    // Update session manager with new language to ensure it uses correct language's session
-    sessionManager.setActiveLanguage(newLanguage);
     
     // Reload all data for the new language
     try {
@@ -553,8 +544,10 @@ export class LearningMode extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback();
-    document.addEventListener('language-changed', this.handleExternalLanguageChange);
     window.addEventListener('stop-auto-scroll', this.handleStopAutoScroll);
+    
+    // Set initial loading state
+    this.isLoading = true;
     
     // Reset session tracking for fresh session
     this.wordsIncrementedThisSession.clear();
@@ -617,7 +610,6 @@ export class LearningMode extends LitElement {
     this.stopJobMonitoring();
     this.clearInfoTimeout();
     this.clearAutoScrollTimer();
-    document.removeEventListener('language-changed', this.handleExternalLanguageChange);
     window.removeEventListener('stop-auto-scroll', this.handleStopAutoScroll);
   }
 
@@ -791,7 +783,7 @@ export class LearningMode extends LitElement {
     this.wordsIncrementedThisSession.clear();
 
     this.isLoading = true;
-    this.error = '';
+    this.error = null;
 
     try {
       // Check if we have cached IDs in session for fast batch loading
@@ -2449,7 +2441,7 @@ export class LearningMode extends LitElement {
 
     this.showCompletion = false;
     this.sessionSummary = null;
-    this.error = '';
+    this.error = null;
     this.currentWordIndex = 0;
     this.currentSentenceIndex = 0;
     this.lastRecordedSentenceId = null;

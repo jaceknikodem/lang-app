@@ -2,7 +2,7 @@
  * Dialog mode component for conversational practice
  */
 
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { Sentence, DialogueVariant } from '../../shared/types/core.js';
 import { sharedStyles } from '../styles/shared.js';
@@ -13,6 +13,7 @@ import type { RecordingOptions, RecordingSession } from '../../shared/types/audi
 import { checkProficiencyLevel } from '../utils/app-initializer.js';
 import { getSimilarityThresholds, getSimilarityClass, type ProficiencyLevel } from '../../shared/utils/similarity-threshold.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
+import { BaseComponent } from './base-component.js';
 
 // DialogueVariant is now imported from shared/types/core.js
 
@@ -26,13 +27,7 @@ interface TranscriptionResult {
 }
 
 @customElement('dialog-mode')
-export class DialogMode extends LitElement {
-  @state()
-  private isLoading = false;
-
-  @state()
-  private error: string | null = null;
-
+export class DialogMode extends BaseComponent {
   @state()
   private currentSentence: Sentence | null = null;
 
@@ -105,27 +100,24 @@ export class DialogMode extends LitElement {
   private currentAudioElement: HTMLAudioElement | null = null;
   private transcriptionProgressUnsubscribe: (() => void) | null = null;
   private keyboardUnsubscribe?: () => void;
-  private currentLanguage = '';
   private currentProficiencyLevel: ProficiencyLevel | null = null;
   private dialogCount = 0; // Track number of dialogs completed in this session
   private currentSessionId: number | undefined;
 
-  private handleExternalLanguageChange = async (event: Event) => {
+  protected override handleExternalLanguageChange = async (event: Event): Promise<void> => {
+    // Call base class handler first
+    await super.handleExternalLanguageChange(event);
+    
     const detail = (event as CustomEvent<{ language?: string }>).detail;
     const newLanguage = detail?.language;
 
     if (!newLanguage || newLanguage === this.currentLanguage) {
       return;
     }
-
-    this.currentLanguage = newLanguage;
     
     // Load proficiency level for the new language
     const proficiency = await checkProficiencyLevel(newLanguage);
     this.currentProficiencyLevel = proficiency as ProficiencyLevel | null;
-    
-    // Update session manager with new language to ensure it uses correct language's session
-    sessionManager.setActiveLanguage(newLanguage);
     
     // Cancel any ongoing recording or transcription
     if (this.isRecording) {
@@ -154,9 +146,6 @@ export class DialogMode extends LitElement {
     
     // Reset dialog count when component is connected
     this.dialogCount = 0;
-    
-    // Listen for language changes
-    document.addEventListener('language-changed', this.handleExternalLanguageChange);
     
     // Load current language and proficiency level, and create dialog session for tracking
     window.electronAPI.database.getCurrentLanguage().then(async language => {
@@ -203,9 +192,6 @@ export class DialogMode extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    
-    // Remove language change listener
-    document.removeEventListener('language-changed', this.handleExternalLanguageChange);
     
     // Clean up transcription progress listener
     if (this.transcriptionProgressUnsubscribe) {

@@ -2,7 +2,7 @@
  * Quiz mode component for vocabulary assessment
  */
 
-import { LitElement, html, css, nothing } from 'lit';
+import { html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { Word, Sentence, QuizQuestion, QuizSession, QuizResult } from '../../shared/types/core.js';
 import { STRENGTH_BOOST_CONFIG } from '../../shared/constants/index.js';
@@ -10,6 +10,7 @@ import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { sessionManager, type QuizSessionState } from '../utils/session-manager.js';
 import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
+import { BaseComponent } from './base-component.js';
 import './session-complete.js';
 import './progress-bar.js';
 import type { SessionSummary } from './session-complete.js';
@@ -20,17 +21,10 @@ import { getSimilarityThresholds, getSimilarityClass, type ProficiencyLevel } fr
 import { getErrorMessage } from '../../shared/utils/error.js';
 
 @customElement('quiz-mode')
-export class QuizMode extends LitElement {
-
+export class QuizMode extends BaseComponent {
 
   @state()
   private quizSession: QuizSession | null = null;
-
-  @state()
-  private isLoading = false;
-
-  @state()
-  private error: string | null = null;
 
   @state()
   private currentQuestion: QuizQuestion | null = null;
@@ -99,7 +93,6 @@ export class QuizMode extends LitElement {
   private keyboardUnsubscribe?: () => void;
   private lastAutoplayKey: string | null = null;
   private currentSessionId: number | undefined;
-  private currentLanguage: string | null = null;
   private recordingTimer: number | null = null;
   private recordingStatusCheckTimer: number | null = null;
   private speechRecognitionCheckTimer: number | null = null;
@@ -113,7 +106,10 @@ export class QuizMode extends LitElement {
   
   private currentProficiencyLevel: ProficiencyLevel | null = null;
 
-  private handleExternalLanguageChange = async (event: Event) => {
+  protected override handleExternalLanguageChange = async (event: Event): Promise<void> => {
+    // Call base class handler first
+    await super.handleExternalLanguageChange(event);
+    
     const detail = (event as CustomEvent<{ language?: string }>).detail;
     const newLanguage = detail?.language;
 
@@ -1239,9 +1235,6 @@ export class QuizMode extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
 
-    // Listen for language changes
-    document.addEventListener('language-changed', this.handleExternalLanguageChange);
-
     // Setup keyboard bindings
     this.setupKeyboardBindings();
 
@@ -1331,9 +1324,6 @@ export class QuizMode extends LitElement {
         console.error('Error cancelling recording on disconnect:', err);
       });
     }
-
-    // Clean up language change listener
-    document.removeEventListener('language-changed', this.handleExternalLanguageChange);
 
     // Clean up keyboard bindings
     if (this.keyboardUnsubscribe) {

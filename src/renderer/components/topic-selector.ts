@@ -2,7 +2,7 @@
  * Topic selection component for vocabulary generation
  */
 
-import { LitElement, html, css } from 'lit';
+import { html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
@@ -11,20 +11,15 @@ import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } fro
 import { loadCurrentLanguage, loadLemmatizationModel } from '../utils/language-manager.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
 import { ALL_TOPIC_SUGGESTIONS } from '../../shared/constants/topics.js';
+import { BaseComponent } from './base-component.js';
 
 @customElement('topic-selector')
-export class TopicSelector extends LitElement {
+export class TopicSelector extends BaseComponent {
   @state()
   private topic = '';
 
   @state()
   private isGenerating = false;
-
-  @state()
-  private error = '';
-
-  @state()
-  private currentLanguage = '';
 
   @state()
   private suggestions: string[] = [];
@@ -247,8 +242,6 @@ export class TopicSelector extends LitElement {
     await this.loadCurrentLanguage();
     this.selectRandomSuggestions();
     this.setupKeyboardBindings();
-    // Listen for language changes
-    window.addEventListener('language-changed', this.handleExternalLanguageChange);
   }
 
   disconnectedCallback() {
@@ -256,32 +249,29 @@ export class TopicSelector extends LitElement {
     if (this.keyboardUnsubscribe) {
       this.keyboardUnsubscribe();
     }
-    window.removeEventListener('language-changed', this.handleExternalLanguageChange);
   }
 
   private async loadCurrentLanguage() {
-    this.currentLanguage = await loadCurrentLanguage('spanish');
+    this.currentLanguage = await loadCurrentLanguage('spanish') || null;
   }
 
-  private handleExternalLanguageChange = async (event: Event) => {
+  protected override handleExternalLanguageChange = async (event: Event): Promise<void> => {
+    // Call base class handler first
+    await super.handleExternalLanguageChange(event);
+    
     const detail = (event as CustomEvent<{ language?: string }>).detail;
     const newLanguage = detail?.language;
 
     if (!newLanguage || newLanguage === this.currentLanguage) {
       return;
     }
-
-    this.currentLanguage = newLanguage;
-    
-    // Update session manager with new language to ensure it uses correct language's session
-    sessionManager.setActiveLanguage(newLanguage);
     
     // Reload lemmatization model for the new language (async, non-blocking)
     void loadLemmatizationModel(newLanguage);
     
     // Reset state for the new language
     this.topic = '';
-    this.error = '';
+    this.error = null;
     this.selectRandomSuggestions();
     
     // Request update to reflect changes
@@ -295,7 +285,7 @@ export class TopicSelector extends LitElement {
 
   private handleSuggestionClick(suggestion: string) {
     this.topic = suggestion;
-    this.error = ''; // Clear any errors
+    this.error = null; // Clear any errors
     // Focus the input field to show the suggestion was applied
     const input = this.shadowRoot?.querySelector('#topic-input') as HTMLInputElement;
     if (input) {
@@ -308,7 +298,7 @@ export class TopicSelector extends LitElement {
   private handleTopicChange(e: Event) {
     const input = e.target as HTMLInputElement;
     this.topic = input.value;
-    this.error = ''; // Clear error when user types
+    this.error = null; // Clear error when user types
   }
 
 
@@ -321,14 +311,15 @@ export class TopicSelector extends LitElement {
     console.log('Starting word generation...', { topic: this.topic, language: this.currentLanguage });
 
     this.isGenerating = true;
-    this.error = '';
+    this.error = null;
 
     try {
       // Generate words based on topic (or general vocabulary if no topic)
       console.log('Calling generateWords API...');
+      const language = this.currentLanguage || 'spanish'; // Default fallback
       const words = await window.electronAPI.llm.generateWords(
         this.topic.trim() || undefined,
-        this.currentLanguage
+        language
       );
 
       console.log('Generated words result:', words);

@@ -2,12 +2,13 @@
  * Flow mode component for playing long stitched audio from all sentences
  */
 
-import { LitElement, html, css } from 'lit';
+import { html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { Word, Sentence } from '../../shared/types/core.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
 import { keyboardManager, CommonKeys } from '../utils/keyboard-manager.js';
+import { BaseComponent } from './base-component.js';
 
 interface FlowSentence {
   sentence: Sentence;
@@ -18,15 +19,9 @@ interface FlowSentence {
 }
 
 @customElement('flow-mode')
-export class FlowMode extends LitElement {
+export class FlowMode extends BaseComponent {
   @state()
   private flowSentences: FlowSentence[] = [];
-
-  @state()
-  private isLoading = true;
-
-  @state()
-  private error = '';
 
   @state()
   private isStitching = false;
@@ -39,9 +34,6 @@ export class FlowMode extends LitElement {
 
   @state()
   private stitchedAudioPath: string | null = null;
-
-  @state()
-  private currentLanguage: string | null = null;
 
   private directKeyHandler?: (event: KeyboardEvent) => void;
   private audioElement: HTMLAudioElement | null = null;
@@ -60,9 +52,13 @@ export class FlowMode extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     
+    // Set initial loading state
+    this.isLoading = true;
+    
     // Create flow session for tracking
     window.electronAPI.database.getCurrentLanguage().then(async language => {
       try {
+        this.currentLanguage = language;
         this.currentSessionId = await window.electronAPI.tracking.createSession('flow', language);
       } catch (error) {
         console.warn('Failed to create flow session:', error);
@@ -91,7 +87,7 @@ export class FlowMode extends LitElement {
   private async loadFlowSentences() {
     try {
       this.isLoading = true;
-      this.error = '';
+      this.error = null;
 
       // Get current language for per-language caching
       try {
