@@ -5,6 +5,7 @@ import { AudioConfig, AudioError } from '../../shared/types/audio';
 import { DatabaseLayer } from '../../shared/types/database';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { createAudioError } from '../../shared/utils/error.js';
 import { BaseAudioGenerator } from './base-audio-generator';
 
 const execFileAsync = promisify(execFile);
@@ -63,11 +64,11 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
    */
   async generateAudio(text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, voiceId?: string): Promise<string> {
     if (!text || text.trim().length === 0) {
-      throw this.createAudioError('GENERATION_FAILED', 'Text cannot be empty');
+      throw createAudioError('Text cannot be empty', 'GENERATION_FAILED');
     }
 
     if (!this.config.elevenLabsApiKey) {
-      throw this.createAudioError('API_ERROR', 'ElevenLabs API key not configured');
+      throw createAudioError('ElevenLabs API key not configured', 'API_ERROR');
     }
 
 
@@ -99,16 +100,16 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
 
       // Verify file was created
       if (!await this.audioExists(audioPath)) {
-        throw this.createAudioError('GENERATION_FAILED', `Audio file not created: ${audioPath}`);
+        throw createAudioError(`Audio file not created: ${audioPath}`, 'GENERATION_FAILED', { audioPath });
       }
 
       return audioPath;
     } catch (error) {
       if (error instanceof Error && error.message.includes('API')) {
-        throw this.createAudioError('API_ERROR', `ElevenLabs API error: ${error.message}`, audioPath);
+        throw createAudioError(`ElevenLabs API error: ${error.message}`, 'API_ERROR', { audioPath, cause: error });
       }
       const message = error instanceof Error ? error.message : 'Unknown TTS error';
-      throw this.createAudioError('GENERATION_FAILED', `TTS generation failed: ${message}`, audioPath);
+      throw createAudioError(`TTS generation failed: ${message}`, 'GENERATION_FAILED', { audioPath, cause: error });
     }
   }
 
@@ -172,7 +173,7 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     }
 
     if (wordId === undefined) {
-      throw this.createAudioError('INVALID_PATH', `Word ID or variant ID is required for audio file naming. Text: "${text}"`);
+      throw createAudioError(`Word ID or variant ID is required for audio file naming. Text: "${text}"`, 'INVALID_PATH');
     }
 
     if (sentenceId !== undefined && word?.includes('_before_sentence')) {
@@ -372,16 +373,5 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     if (!existsSync(this.config.audioDirectory)) {
       mkdirSync(this.config.audioDirectory, { recursive: true });
     }
-  }
-
-  /**
-   * Create standardized audio error
-   */
-  protected createAudioError(code: AudioError['code'], message: string, audioPath?: string, cause?: unknown): AudioError {
-    // @ts-expect-error - Error constructor with cause is supported in Node.js 16.9.0+ but TypeScript types may not include it
-    const error = new Error(message, { cause }) as AudioError;
-    error.code = code;
-    error.audioPath = audioPath;
-    return error;
   }
 }

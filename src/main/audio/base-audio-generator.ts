@@ -1,5 +1,6 @@
 import { existsSync } from 'fs';
 import { AudioGenerator, AudioError } from '../../shared/types/audio';
+import { createAudioError } from '../../shared/utils/error.js';
 
 /**
  * Base class for audio generators with shared playback functionality
@@ -15,7 +16,7 @@ export abstract class BaseAudioGenerator implements AudioGenerator {
    */
   async playAudio(audioPath: string): Promise<void> {
     if (!await this.audioExists(audioPath)) {
-      throw this.createAudioError('FILE_NOT_FOUND', `Audio file not found: ${audioPath}`, audioPath);
+      throw createAudioError(`Audio file not found: ${audioPath}`, 'FILE_NOT_FOUND', { audioPath });
     }
 
     try {
@@ -29,7 +30,7 @@ export abstract class BaseAudioGenerator implements AudioGenerator {
       // Return a promise that resolves when the audio finishes playing
       return new Promise<void>((resolve, reject) => {
         if (!this.currentAudioProcess) {
-          reject(this.createAudioError('PLAYBACK_FAILED', 'Audio process not created', audioPath));
+          reject(createAudioError('Audio process not created', 'PLAYBACK_FAILED', { audioPath }));
           return;
         }
 
@@ -56,7 +57,7 @@ export abstract class BaseAudioGenerator implements AudioGenerator {
             } else {
               // Audio playback exited with error code
               if (promise) {
-                promise.reject(this.createAudioError('PLAYBACK_FAILED', `Audio playback exited with code ${code}`, audioPath));
+                promise.reject(createAudioError(`Audio playback exited with code ${code}`, 'PLAYBACK_FAILED', { audioPath }));
               }
             }
           }, 200); // 200ms buffer to ensure audio fully finishes
@@ -68,13 +69,13 @@ export abstract class BaseAudioGenerator implements AudioGenerator {
           this.currentAudioProcess = undefined;
           this.currentPlayPromise = undefined;
           if (promise) {
-            promise.reject(this.createAudioError('PLAYBACK_FAILED', `Audio playback error: ${error.message}`, audioPath));
+            promise.reject(createAudioError(`Audio playback error: ${error.message}`, 'PLAYBACK_FAILED', { audioPath, cause: error }));
           }
         });
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown playback error';
-      throw this.createAudioError('PLAYBACK_FAILED', `Audio playback failed: ${message}`, audioPath);
+      throw createAudioError(`Audio playback failed: ${message}`, 'PLAYBACK_FAILED', { audioPath, cause: error });
     }
   }
 
@@ -91,7 +92,7 @@ export abstract class BaseAudioGenerator implements AudioGenerator {
         if (this.currentPlayPromise) {
           const promise = this.currentPlayPromise;
           this.currentPlayPromise = undefined;
-          promise.reject(this.createAudioError('PLAYBACK_STOPPED', 'Audio playback was stopped', ''));
+          promise.reject(createAudioError('Audio playback was stopped', 'PLAYBACK_STOPPED', { audioPath: '' }));
         }
       } catch (error) {
         console.warn('Failed to stop audio process:', error);
@@ -108,6 +109,5 @@ export abstract class BaseAudioGenerator implements AudioGenerator {
 
   // Abstract methods that must be implemented by subclasses
   abstract generateAudio(text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, voiceId?: string): Promise<string>;
-  protected abstract createAudioError(code: AudioError['code'], message: string, audioPath?: string, cause?: unknown): AudioError;
 }
 
