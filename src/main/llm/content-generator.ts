@@ -11,6 +11,7 @@ import { FrequencyWordManager } from './frequency-word-manager.js';
 import type { LemmatizationService } from '../lemmatization/index.js';
 import { wrapError } from '../../shared/utils/error.js';
 import { getLogger } from '../utils/logger.js';
+import { Logger } from '../../shared/utils/logger.js';
 
 const TATOEBA_API_URL = 'https://tatoeba.org/en/api_v0/search';
 const TATOEBA_TARGET_LANGUAGE = 'eng';
@@ -226,7 +227,7 @@ export class ContentGenerator {
       throw new Error(`No new words available from frequency list for ${language}`);
     }
 
-    logger.info(
+    this.logger.info(
       { wordCount: nextWordEntries.length, words: nextWordEntries.map((e) => e.word) },
       `Selected ${nextWordEntries.length} words from frequency list`
     );

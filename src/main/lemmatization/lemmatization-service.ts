@@ -95,8 +95,9 @@ export class LemmatizationService {
    * Service is optional - silently fails if unavailable
    */
   async loadModel(language: string): Promise<void> {
+    let languageCode: string | undefined;
     try {
-      const languageCode = this.mapLanguageToCode(language);
+      languageCode = this.mapLanguageToCode(language);
 
       const response = await fetch(`${this.serverUrl}/load_model`, {
         method: 'POST',

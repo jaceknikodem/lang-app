@@ -143,10 +143,13 @@ export class ScoringService {
     nextMode: 'learning' | 'quiz' | 'dialog' | 'flow' | null;
     rankedModes: Array<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'>;
   }> {
+    const currentMode = options.currentMode ?? undefined;
+    const initialTakeover = options.initialTakeover;
+    let language: string | null = options.language ?? null;
     try {
-      const currentMode = options.currentMode ?? undefined;
-      const language = options.language ?? (await this.database.getCurrentLanguage());
-      const initialTakeover = options.initialTakeover;
+      if (!language) {
+        language = await this.database.getCurrentLanguage();
+      }
 
       // Calculate scores internally (never exposed)
       const scores = await this.calculateAllScores(language);

@@ -6,6 +6,7 @@ import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { DatabaseLayer } from '../../shared/types/database.js';
 import { getLogger } from '../utils/logger.js';
+import { Logger } from '../../shared/utils/logger.js';
 
 export interface FrequencyWordManagerConfig {
   wordsDirectory: string;

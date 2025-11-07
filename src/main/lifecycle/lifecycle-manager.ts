@@ -373,9 +373,9 @@ export class LifecycleManager {
    * Open the backup directory in the system file manager
    */
   async openBackupDirectory(): Promise<void> {
+    const backupDir = path.join(this.config.userDataPath, 'backups');
     try {
       const { shell } = await import('electron');
-      const backupDir = path.join(this.config.userDataPath, 'backups');
 
       // Ensure backup directory exists
       await fs.mkdir(backupDir, { recursive: true });
@@ -394,10 +394,9 @@ export class LifecycleManager {
    * Migrate audio files from old location (process.cwd()/audio) to new location (userData/audio)
    */
   private async migrateAudioFiles(): Promise<void> {
+    const oldAudioDir = path.join(process.cwd(), 'audio');
+    const newAudioDir = path.join(app.getPath('userData'), 'audio');
     try {
-      const oldAudioDir = path.join(process.cwd(), 'audio');
-      const newAudioDir = path.join(app.getPath('userData'), 'audio');
-
       // Check if old audio directory exists
       try {
         await fs.access(oldAudioDir);

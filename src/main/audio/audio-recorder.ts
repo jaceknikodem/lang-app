@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { app, systemPreferences } from 'electron';
 import { getLogger } from '../utils/logger.js';
+import { Logger } from '../../shared/utils/logger.js';
 
 // Import the recorder module
 const recorder = require('node-record-lpcm16');
