@@ -33,11 +33,15 @@ import {
 } from '../../shared/utils/sentence.js';
 import { backfillSentenceTokens } from './backfill-sentence-tokens.js';
 import { wrapError } from '../../shared/utils/error.js';
+import { getLogger } from '../utils/logger.js';
+import { Logger } from '../../shared/utils/logger.js';
 
 export class SQLiteDatabaseLayer implements DatabaseLayer {
   private connection: DatabaseConnection;
+  private readonly logger: Logger;
 
   constructor(config: DatabaseConfig) {
+    this.logger = getLogger();
     this.connection = new DatabaseConnection(config);
   }
 
@@ -63,7 +67,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         try {
           await this.runSentenceTokenBackfill();
         } catch (tokenError) {
-          console.warn('Sentence token backfill skipped due to error:', tokenError);
+          this.logger.warn({ error: tokenError }, 'Sentence token backfill skipped due to error');
         }
       });
 
@@ -73,11 +77,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         try {
           await this.populateDictionaryFromFiles();
         } catch (dictError) {
-          console.warn('Dictionary population skipped due to error:', dictError);
+          this.logger.warn({ error: dictError }, 'Dictionary population skipped due to error');
         }
       });
 
-      console.log('Database initialized successfully');
+      this.logger.info('Database initialized successfully');
     } catch (error) {
       throw wrapError(error, `Failed to initialize database`);
     }
@@ -515,7 +519,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         updateSentenceCount.run(wordId);
       }
 
-      console.log(
+      this.logger.debug(
+        { wordId, word: wordData.word, linkedSentences: matchingSentences.length },
         `[insertWord] Linked ${matchingSentences.length} existing sentences to new word ${wordData.word} (ID: ${wordId})`
       );
     }
@@ -1011,7 +1016,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       return matchingWords;
     } catch (error) {
-      console.error('Failed to find matching learning words:', error);
+      this.logger.error({ error }, 'Failed to find matching learning words');
       // Return empty array on error to avoid breaking sentence insertion
       return [];
     }
@@ -1123,9 +1128,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           } catch (error) {
             // Ignore duplicate key errors (if entry already exists)
             if (error instanceof Error && !error.message.includes('UNIQUE constraint')) {
-              console.warn(
-                `Failed to insert junction table entry for sentence ${sentenceId}, word ${matchedWord.id}:`,
-                error
+              this.logger.warn(
+                { error, sentenceId, wordId: matchedWord.id },
+                `Failed to insert junction table entry for sentence ${sentenceId}, word ${matchedWord.id}`
               );
             }
           }
@@ -1164,12 +1169,15 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
               }
             });
 
-            console.log(`[insertSentence] Stored ${lemmas.size} lemmas for sentence ${sentenceId}`);
+            this.logger.debug(
+              { sentenceId, lemmaCount: lemmas.size },
+              `[insertSentence] Stored ${lemmas.size} lemmas for sentence ${sentenceId}`
+            );
           }
         } catch (error) {
-          console.warn(
-            `Failed to store lemmas for sentence ${sentenceId} during insertion:`,
-            error
+          this.logger.warn(
+            { error, sentenceId },
+            `Failed to store lemmas for sentence ${sentenceId} during insertion`
           );
         }
       }
@@ -1396,7 +1404,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         }
       });
 
-      console.log(`[updateSentenceTokens] Stored ${lemmas.size} lemmas for sentence ${sentenceId}`);
+      this.logger.debug(
+        { sentenceId, lemmaCount: lemmas.size },
+        `[updateSentenceTokens] Stored ${lemmas.size} lemmas for sentence ${sentenceId}`
+      );
     } catch (error) {
       throw wrapError(error, `Failed to update sentence tokens`);
     }
@@ -2720,9 +2731,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
       if (err?.code !== 'ENOENT') {
-        console.warn('Failed to access dictionary directory:', error);
+        this.logger.warn({ error }, 'Failed to access dictionary directory');
       } else {
-        console.warn('Dictionary directory not found, skipping dictionary population');
+        this.logger.warn('Dictionary directory not found, skipping dictionary population');
       }
       return;
     }
@@ -2731,7 +2742,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     try {
       files = await fsPromises.readdir(dictDir);
     } catch (error) {
-      console.warn('Failed to read dictionary directory:', error);
+      this.logger.warn({ error }, 'Failed to read dictionary directory');
       return;
     }
 
@@ -2763,7 +2774,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // If entries exist but not marked, just mark it and skip
       if (existingEntry && alreadyMarked !== 'true') {
         await this.setSetting(markerKey, 'true');
-        console.log(`Dictionary entries already present for ${language}, marked as populated`);
+        this.logger.info(
+          { language },
+          `Dictionary entries already present for ${language}, marked as populated`
+        );
         continue;
       }
 
@@ -2773,7 +2787,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
     // Early return if all dictionaries are already populated
     if (languagesToProcess.length === 0) {
-      console.log('All dictionaries already populated, skipping import');
+      this.logger.info('All dictionaries already populated, skipping import');
       return;
     }
 
@@ -2799,9 +2813,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
         transaction(entries);
         await this.setSetting(markerKey, 'true');
-        console.log(`Dictionary populated for ${language} (${entries.length} entries)`);
+        this.logger.info(
+          { language, entryCount: entries.length },
+          `Dictionary populated for ${language} (${entries.length} entries)`
+        );
       } catch (error) {
-        console.warn(`Failed to import dictionary for ${language}:`, error);
+        this.logger.warn({ error, language }, `Failed to import dictionary for ${language}`);
       }
     }
   }
@@ -2865,9 +2882,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           lang: language,
         });
       } catch (error) {
-        console.warn(
-          `Failed to parse dictionary entry in ${path.basename(filePath)} at line ${index + 1}:`,
-          error
+        this.logger.warn(
+          { error, filePath: path.basename(filePath), lineNumber: index + 1 },
+          `Failed to parse dictionary entry in ${path.basename(filePath)} at line ${index + 1}`
         );
       }
     });
@@ -2938,9 +2955,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       );
 
       updateTransaction(updates);
-      console.log(`Backfilled sentence_parts for ${updates.length} sentences`);
+      this.logger.info(
+        { sentenceCount: updates.length },
+        `Backfilled sentence_parts for ${updates.length} sentences`
+      );
     } catch (error) {
-      console.warn('Failed to backfill sentence parts:', error);
+      this.logger.warn({ error }, 'Failed to backfill sentence parts');
     }
   }
 
@@ -2957,7 +2977,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         db.prepare('SELECT sentence_tokens FROM sentences LIMIT 1').get();
       } catch {
         // Column doesn't exist yet - migration may not have run
-        console.log(
+        this.logger.info(
           'Sentence tokens column not found, skipping backfill (migration may not have run)'
         );
         return;
@@ -2968,13 +2988,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         batchSize: 10,
         onProgress: (processed, total) => {
           if (processed % 50 === 0) {
-            console.log(`Backfilling sentence tokens: ${processed}/${total} processed`);
+            this.logger.debug(
+              { processed, total },
+              `Backfilling sentence tokens: ${processed}/${total} processed`
+            );
           }
         },
       });
-      console.log('Sentence token backfill completed');
+      this.logger.info('Sentence token backfill completed');
     } catch (error) {
-      console.error('Failed to backfill sentence tokens:', error);
+      this.logger.error({ error }, 'Failed to backfill sentence tokens');
       // Non-fatal - continue without backfill
     }
   }
@@ -3360,7 +3383,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       deletePronunciationStmt.run(language);
 
-      console.log(`Successfully reset progress for language: ${language}`);
+      this.logger.info({ language }, `Successfully reset progress for language: ${language}`);
     } catch (error) {
       throw wrapError(error, `Failed to reset language progress`);
     }
@@ -3670,13 +3693,15 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       }>;
 
       if (frequentlyLookedUp.length === 0) {
-        console.log(
+        this.logger.debug(
+          { language: currentLanguage },
           `[processFrequentlyLookedUpWords] No frequently looked-up words found for ${currentLanguage}`
         );
         return 0;
       }
 
-      console.log(
+      this.logger.debug(
+        { language: currentLanguage, wordCount: frequentlyLookedUp.length },
         `[processFrequentlyLookedUpWords] Found ${frequentlyLookedUp.length} frequently looked-up words for ${currentLanguage}`
       );
 
@@ -3744,13 +3769,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       }
 
       if (wordsToAdd.length === 0) {
-        console.log(
+        this.logger.debug(
           `[processFrequentlyLookedUpWords] All frequently looked-up words already exist`
         );
         return 0;
       }
 
-      console.log(
+      this.logger.info(
+        { wordCount: wordsToAdd.length },
         `[processFrequentlyLookedUpWords] Adding ${wordsToAdd.length} new words from dictionary hovers`
       );
 
@@ -3768,19 +3794,21 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           await this.enqueueWordGeneration(wordId, wordData.language, undefined, 3);
 
           wordsAdded++;
-          console.log(
+          this.logger.debug(
+            { wordId, word: wordData.word },
             `[processFrequentlyLookedUpWords] Added word: ${wordData.word} (ID: ${wordId})`
           );
         } catch (error) {
-          console.warn(
-            `[processFrequentlyLookedUpWords] Failed to add word "${wordData.word}":`,
-            error
+          this.logger.warn(
+            { error, word: wordData.word },
+            `[processFrequentlyLookedUpWords] Failed to add word "${wordData.word}"`
           );
           // Continue with next word
         }
       }
 
-      console.log(
+      this.logger.info(
+        { wordsAdded },
         `[processFrequentlyLookedUpWords] Successfully added ${wordsAdded} words from dictionary hovers`
       );
       return wordsAdded;

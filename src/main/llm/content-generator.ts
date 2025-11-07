@@ -202,7 +202,7 @@ export class ContentGenerator {
       const proficiencyKey = `language_proficiency_${language.toLowerCase()}`;
       proficiencyLevel = (await database.getSetting(proficiencyKey)) || undefined;
     } catch (error) {
-      console.warn('Failed to retrieve proficiency level:', error);
+      this.logger.warn({ error }, 'Failed to retrieve proficiency level');
     }
 
     // Check if there are more words to process
@@ -363,7 +363,7 @@ export class ContentGenerator {
         const proficiencyKey = `language_proficiency_${targetLanguage.toLowerCase()}`;
         proficiencyLevel = (await database.getSetting(proficiencyKey)) || undefined;
       } catch (error) {
-        console.warn('Failed to retrieve proficiency level:', error);
+        this.logger.warn({ error }, 'Failed to retrieve proficiency level');
       }
     }
 
@@ -402,9 +402,9 @@ export class ContentGenerator {
             };
           });
         } catch (error) {
-          console.warn(
-            '[ContentGenerator] Failed to lemmatize words, using original words:',
-            error
+          this.logger.warn(
+            { error },
+            '[ContentGenerator] Failed to lemmatize words, using original words'
           );
           // Continue with original words if lemmatization fails
         }
@@ -558,7 +558,10 @@ export class ContentGenerator {
                 const proficiencyKey = `language_proficiency_${targetLanguage.toLowerCase()}`;
                 proficiencyLevel = (await database.getSetting(proficiencyKey)) || undefined;
               } catch (error) {
-                console.warn('Failed to retrieve proficiency level for context generation:', error);
+                this.logger.warn(
+                  { error },
+                  'Failed to retrieve proficiency level for context generation'
+                );
               }
             }
 

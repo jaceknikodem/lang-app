@@ -4,6 +4,8 @@
  */
 
 import { DatabaseLayer } from '../../shared/types/database.js';
+import { getLogger } from '../utils/logger.js';
+import { Logger } from '../../shared/utils/logger.js';
 
 export interface ProficiencyMetrics {
   pronunciationScore: number;
@@ -26,6 +28,7 @@ interface PlaybackData {
 
 export class ProficiencyService {
   private database: DatabaseLayer;
+  private readonly logger: Logger;
 
   // Weights for combining different metrics
   private readonly weights = {
@@ -37,6 +40,7 @@ export class ProficiencyService {
   };
 
   constructor(database: DatabaseLayer) {
+    this.logger = getLogger();
     this.database = database;
   }
 
@@ -78,7 +82,7 @@ export class ProficiencyService {
 
       return totalWeight > 0 ? weightedSum / totalWeight : 0;
     } catch (error) {
-      console.error('Error calculating language proficiency:', error);
+      this.logger.error({ error }, 'Error calculating language proficiency');
       return 0;
     }
   }
@@ -130,7 +134,7 @@ export class ProficiencyService {
         overallProficiency,
       };
     } catch (error) {
-      console.error(`Error calculating proficiency for word ${wordId}:`, error);
+      this.logger.error({ error, wordId }, `Error calculating proficiency for word ${wordId}`);
       return {
         pronunciationScore: 0,
         audioSpeedScore: 50,
@@ -170,7 +174,7 @@ export class ProficiencyService {
 
       return allAttempts;
     } catch (error) {
-      console.error('Error getting word pronunciation data:', error);
+      this.logger.error({ error, wordId }, 'Error getting word pronunciation data');
       return [];
     }
   }
@@ -216,7 +220,7 @@ export class ProficiencyService {
         timestamp: new Date(row.created_at as string | number | Date).getTime(),
       }));
     } catch (error) {
-      console.error('Error getting word playback data:', error);
+      this.logger.error({ error, wordId }, 'Error getting word playback data');
       return [];
     }
   }
@@ -229,7 +233,7 @@ export class ProficiencyService {
       const sentences = await this.database.getSentencesByWord(wordId);
       return sentences.reduce((sum, s) => sum + (s.playCount ?? 0), 0);
     } catch (error) {
-      console.error('Error getting word engagement data:', error);
+      this.logger.error({ error, wordId }, 'Error getting word engagement data');
       return 0;
     }
   }

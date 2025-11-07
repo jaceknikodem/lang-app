@@ -7,13 +7,17 @@ import { Word } from '../../shared/types/core.js';
 import { SRSAlgorithm, SRSReviewResult } from './srs-algorithm.js';
 import { FsrsEngine } from './fsrs-engine.js';
 import { SchedulerEngine, SchedulerEngineUpdate } from './engine.js';
+import { getLogger } from '../utils/logger.js';
+import { Logger } from '../../shared/utils/logger.js';
 
 type UpdateWordSRSOptions = Parameters<DatabaseLayer['updateWordSRS']>[5];
 
 export class SRSService {
   private readonly engine: SchedulerEngine;
+  private readonly logger: Logger;
 
   constructor(private database: DatabaseLayer) {
+    this.logger = getLogger();
     this.engine = new FsrsEngine();
   }
 
@@ -182,15 +186,36 @@ export class SRSService {
 
     const previousStrength = word.strength;
 
-    console.log(`[SRS Service] Processing review for word "${word.word}" (ID: ${wordId})`);
-    console.log(`[SRS Service] Using engine: ${this.engine.name}`);
-    console.log(
+    this.logger.debug(
+      { wordId, word: word.word },
+      `[SRS Service] Processing review for word "${word.word}" (ID: ${wordId})`
+    );
+    this.logger.debug(
+      { engine: this.engine.name },
+      `[SRS Service] Using engine: ${this.engine.name}`
+    );
+    this.logger.debug(
+      {
+        wordId,
+        recall: reviewResult.recall,
+        recallText:
+          reviewResult.recall === 0
+            ? 'Failed'
+            : reviewResult.recall === 1
+              ? 'Hard'
+              : reviewResult.recall === 2
+                ? 'Good'
+                : 'Easy',
+      },
       `[SRS Service] Review result: recall=${reviewResult.recall} (${reviewResult.recall === 0 ? 'Failed' : reviewResult.recall === 1 ? 'Hard' : reviewResult.recall === 2 ? 'Good' : 'Easy'})`
     );
 
     const update = this.engine.update(word, reviewResult, now);
 
-    console.log(`[SRS Service] Saving update to database for word "${word.word}" (ID: ${wordId})`);
+    this.logger.debug(
+      { wordId, word: word.word },
+      `[SRS Service] Saving update to database for word "${word.word}" (ID: ${wordId})`
+    );
 
     await this.database.updateWordSRS(
       wordId,
@@ -220,16 +245,23 @@ export class SRSService {
               : reviewResult.recall === 2
                 ? 'good'
                 : 'easy';
-        console.log(
+        this.logger.debug(
+          {
+            wordId,
+            recall: ratingText,
+            strengthDelta,
+            sessionId: sessionId || 'none',
+          },
           `[Tracking] Quiz performance: wordId=${wordId}, recall=${ratingText}, strengthDelta=${strengthDelta > 0 ? '+' : ''}${strengthDelta}, sessionId=${sessionId || 'none'}`
         );
       } catch (error) {
-        console.warn(`[SRS Service] Failed to record SRS adjustment:`, error);
+        this.logger.warn({ error }, `[SRS Service] Failed to record SRS adjustment`);
       }
     }
 
-    console.log(
-      `[SRS Service] Successfully saved SRS update for word "${word.word}" (ID: ${wordId})\n`
+    this.logger.debug(
+      { wordId, word: word.word },
+      `[SRS Service] Successfully saved SRS update for word "${word.word}" (ID: ${wordId})`
     );
   }
 

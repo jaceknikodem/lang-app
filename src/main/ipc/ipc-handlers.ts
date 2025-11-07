@@ -17,6 +17,7 @@ import { promises as fsPromises } from 'fs';
 import { join } from 'path';
 import { createIPCHandler } from './ipc-handler-helper.js';
 import { wrapError } from '../../shared/utils/error.js';
+import { getLogger } from '../utils/logger.js';
 
 // Validation schemas for input sanitization
 const CreateWordSchema = z.object({
@@ -105,7 +106,6 @@ export function setupIPCHandlers(
   // Scoring handlers (if scoringService is provided, will be added in main.ts)
   // setupScoringHandlers is called separately after scoring service initialization
 
-  const { getLogger } = require('../utils/logger.js');
   const logger = getLogger();
   logger.info('IPC handlers registered successfully');
 }
@@ -129,7 +129,11 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       [WordIdSchema, StrengthSchema],
       async (wordId, strength) => {
         await databaseLayer.updateWordStrength(wordId, strength);
-        console.log(`[Tracking] Word progress: wordId=${wordId}, strength=${strength}`);
+        const logger = getLogger();
+        logger.debug(
+          { wordId, strength },
+          `[Tracking] Word progress: wordId=${wordId}, strength=${strength}`
+        );
       },
       'update word strength'
     )
@@ -141,7 +145,11 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       [WordIdSchema, BooleanSchema],
       async (wordId, known) => {
         await databaseLayer.markWordKnown(wordId, known);
-        console.log(`[Tracking] Word progress: wordId=${wordId}, known=${known}`);
+        const logger = getLogger();
+        logger.debug(
+          { wordId, known },
+          `[Tracking] Word progress: wordId=${wordId}, known=${known}`
+        );
       },
       'mark word known'
     )
@@ -153,7 +161,11 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       [WordIdSchema, BooleanSchema],
       async (wordId, ignored) => {
         await databaseLayer.markWordIgnored(wordId, ignored);
-        console.log(`[Tracking] Word progress: wordId=${wordId}, ignored=${ignored}`);
+        const logger = getLogger();
+        logger.debug(
+          { wordId, ignored },
+          `[Tracking] Word progress: wordId=${wordId}, ignored=${ignored}`
+        );
       },
       'mark word ignored'
     )
@@ -293,7 +305,9 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
         z.string().optional().nullable(),
       ],
       (sentenceId, similarityScore, expectedText, transcribedText, audioPath) => {
-        console.log(
+        const logger = getLogger();
+        logger.debug(
+          { sentenceId, similarityScore, audioPath: audioPath || 'none' },
           `[Pronunciation] Recording attempt: sentenceId=${sentenceId}, similarity=${similarityScore.toFixed(2)}, audioPath=${audioPath || 'none'}`
         );
         return databaseLayer.recordPronunciationAttempt(
@@ -337,7 +351,8 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       WordIdSchema,
       async (wordId) => {
         await databaseLayer.updateLastStudied(wordId);
-        console.log(`[Tracking] Word progress: wordId=${wordId}, lastStudied=now`);
+        const logger = getLogger();
+        logger.debug({ wordId }, `[Tracking] Word progress: wordId=${wordId}, lastStudied=now`);
       },
       'update last studied'
     )
@@ -668,7 +683,8 @@ function setupLLMHandlers(
         // If switching to Gemini and no API key provided, get it from database
         if (provider === 'gemini' && !validatedApiKey && databaseLayer) {
           const storedApiKey = await databaseLayer.getSetting('gemini_api_key');
-          console.log('Retrieved Gemini API key from database:', !!storedApiKey);
+          const logger = getLogger();
+          logger.debug({ hasApiKey: !!storedApiKey }, 'Retrieved Gemini API key from database');
           validatedApiKey = storedApiKey || undefined;
         }
 
@@ -686,7 +702,8 @@ function setupLLMHandlers(
           newClient.setDatabaseLayer(databaseLayer);
         }
 
-        console.log(`Switched to ${provider} provider`);
+        const logger = getLogger();
+        logger.info({ provider }, `Switched to ${provider} provider`);
       },
       'switch provider'
     )
@@ -709,7 +726,8 @@ function setupLLMHandlers(
           }
         }
 
-        console.log('Gemini API key set successfully');
+        const logger = getLogger();
+        logger.info('Gemini API key set successfully');
       },
       'set Gemini API key'
     )
@@ -904,7 +922,8 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
               );
             }
           } catch (error) {
-            console.warn('Failed to update voiceID after regeneration:', error);
+            const logger = getLogger();
+            logger.warn({ error }, 'Failed to update voiceID after regeneration');
           }
         }
 
@@ -1074,7 +1093,8 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
 
       return await audioService.transcribeAudio(validatedFilePath, transcriptionOptions);
     } catch (error) {
-      console.error('Error transcribing audio:', error);
+      const logger = getLogger();
+      logger.error({ error }, 'Error transcribing audio');
       throw wrapError(error, `Failed to transcribe audio`);
     }
   });
@@ -1473,7 +1493,8 @@ function setupLifecycleHandlers(
     createIPCHandler(
       undefined,
       async () => {
-        console.log('Close app requested via IPC');
+        const logger = getLogger();
+        logger.info('Close app requested via IPC');
 
         // Stop word generation runner FIRST (before database is closed)
         if (wordGenerationRunner) {
@@ -1489,7 +1510,8 @@ function setupLifecycleHandlers(
               await audioService.stopRecording();
             }
           } catch (error) {
-            console.warn('Error stopping recording during app close:', error);
+            const logger = getLogger();
+            logger.warn({ error }, 'Error stopping recording during app close');
           }
         }
 
@@ -1559,7 +1581,8 @@ export function cleanupIPCHandlers(): void {
     ipcMain.removeAllListeners(channel);
   });
 
-  console.log('IPC handlers cleaned up');
+  const logger = getLogger();
+  logger.info('IPC handlers cleaned up');
 }
 
 /**
@@ -1575,7 +1598,8 @@ function setupLemmatizationHandlers(lemmatizationService: LemmatizationService):
           return await lemmatizationService.getStatus();
         } catch (error) {
           // Service is optional - return null status instead of throwing
-          console.warn('[Lemmatization] Error getting status (non-critical):', error);
+          const logger = getLogger();
+          logger.warn({ error }, '[Lemmatization] Error getting status (non-critical)');
           return null;
         }
       },
@@ -1593,7 +1617,8 @@ function setupLemmatizationHandlers(lemmatizationService: LemmatizationService):
         } catch (error) {
           // Service is optional - don't throw, just log
           // loadModel already handles errors gracefully
-          console.warn('[Lemmatization] Error loading model (non-critical):', error);
+          const logger = getLogger();
+          logger.warn({ error }, '[Lemmatization] Error loading model (non-critical)');
         }
       },
       'load lemmatization model'
@@ -1610,7 +1635,8 @@ function setupLemmatizationHandlers(lemmatizationService: LemmatizationService):
         } catch (error) {
           // Service is optional - return empty object instead of throwing
           // lemmatizeWords already handles errors gracefully and returns {}
-          console.warn('[Lemmatization] Error lemmatizing words (non-critical):', error);
+          const logger = getLogger();
+          logger.warn({ error }, '[Lemmatization] Error lemmatizing words (non-critical)');
           return {};
         }
       },
@@ -1722,11 +1748,13 @@ function setupDialogHandlers(
                   followUp.translation,
                   audioPath
                 );
-                console.log('[IPC] Generated and cached continuation audio:', audioPath);
+                const logger = getLogger();
+                logger.debug({ audioPath }, '[IPC] Generated and cached continuation audio');
               }
             }
           } catch (audioError) {
-            console.error('[IPC] Failed to generate continuation audio:', audioError);
+            const logger = getLogger();
+            logger.error({ error: audioError }, '[IPC] Failed to generate continuation audio');
             // Continue without audio - non-critical
           }
         } else if (followUp.text && followUp.text.trim().length > 0 && variantId < 0) {
@@ -1745,15 +1773,17 @@ function setupDialogHandlers(
 
             if (audioPath) {
               continuationAudio = audioPath;
-              console.log(
-                '[IPC] Generated continuation audio for pseudo-variant (not cached in DB):',
-                audioPath
+              const logger = getLogger();
+              logger.debug(
+                { audioPath },
+                '[IPC] Generated continuation audio for pseudo-variant (not cached in DB)'
               );
             }
           } catch (audioError) {
-            console.error(
-              '[IPC] Failed to generate continuation audio for pseudo-variant:',
-              audioError
+            const logger = getLogger();
+            logger.error(
+              { error: audioError },
+              '[IPC] Failed to generate continuation audio for pseudo-variant'
             );
             // Continue without audio - non-critical
           }
@@ -1816,9 +1846,10 @@ function setupDialogHandlers(
                       audioPath
                     );
                   } catch (dbError) {
-                    console.warn(
-                      '[IPC] Failed to save beforeSentence audio path to database:',
-                      dbError
+                    const logger = getLogger();
+                    logger.warn(
+                      { error: dbError },
+                      '[IPC] Failed to save beforeSentence audio path to database'
                     );
                     // Continue - audio exists even if DB update fails
                   }
@@ -1842,18 +1873,20 @@ function setupDialogHandlers(
                   try {
                     await databaseLayer.updateAfterSentenceAudioPath(session.sentenceId, audioPath);
                   } catch (dbError) {
-                    console.warn(
-                      '[IPC] Failed to save afterSentence audio path to database:',
-                      dbError
+                    const logger = getLogger();
+                    logger.warn(
+                      { error: dbError },
+                      '[IPC] Failed to save afterSentence audio path to database'
                     );
                     // Continue - audio exists even if DB update fails
                   }
                 }
               }
             } catch (error) {
-              console.warn(
-                '[IPC] Failed to generate context sentences audio during pre-generation:',
-                error
+              const logger = getLogger();
+              logger.warn(
+                { error },
+                '[IPC] Failed to generate context sentences audio during pre-generation'
               );
               // Continue without audio
             }
@@ -1870,7 +1903,8 @@ function setupDialogHandlers(
             })),
           };
         } catch (error) {
-          console.error('Error pre-generating dialog session:', error);
+          const logger = getLogger();
+          logger.error({ error }, 'Error pre-generating dialog session');
           return null; // Don't throw - this is a background operation
         }
       },
@@ -1923,9 +1957,10 @@ function setupDialogHandlers(
                           audioPath
                         );
                       } catch (dbError) {
-                        console.warn(
-                          `[IPC] Failed to save beforeSentence audio path to database for session ${session.sentenceId}:`,
-                          dbError
+                        const logger = getLogger();
+                        logger.warn(
+                          { error: dbError, sentenceId: session.sentenceId },
+                          `[IPC] Failed to save beforeSentence audio path to database for session ${session.sentenceId}`
                         );
                         // Continue - audio exists even if DB update fails
                       }
@@ -1952,18 +1987,20 @@ function setupDialogHandlers(
                           audioPath
                         );
                       } catch (dbError) {
-                        console.warn(
-                          `[IPC] Failed to save afterSentence audio path to database for session ${session.sentenceId}:`,
-                          dbError
+                        const logger = getLogger();
+                        logger.warn(
+                          { error: dbError, sentenceId: session.sentenceId },
+                          `[IPC] Failed to save afterSentence audio path to database for session ${session.sentenceId}`
                         );
                         // Continue - audio exists even if DB update fails
                       }
                     }
                   }
                 } catch (error) {
-                  console.warn(
-                    `[IPC] Failed to generate context sentences audio for session ${session.sentenceId}:`,
-                    error
+                  const logger = getLogger();
+                  logger.warn(
+                    { error, sentenceId: session.sentenceId },
+                    `[IPC] Failed to generate context sentences audio for session ${session.sentenceId}`
                   );
                   // Continue without audio
                 }
@@ -1984,7 +2021,8 @@ function setupDialogHandlers(
 
           return sessionsWithAudio;
         } catch (error) {
-          console.error('Error pre-generating dialog sessions:', error);
+          const logger = getLogger();
+          logger.error({ error }, 'Error pre-generating dialog sessions');
           return []; // Don't throw - this is a background operation
         }
       },
@@ -2247,7 +2285,9 @@ function setupTrackingHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       [z.enum(['learning', 'quiz', 'dialog', 'flow']), LanguageSchema],
       async (mode, language) => {
         const sessionId = await databaseLayer.createLearningSession({ mode, language });
-        console.log(
+        const logger = getLogger();
+        logger.debug(
+          { sessionId, mode, language },
           `[Tracking] Learning session created: id=${sessionId}, mode=${mode}, language=${language}`
         );
         return sessionId;
@@ -2276,7 +2316,9 @@ function setupTrackingHandlers(databaseLayer: SQLiteDatabaseLayer): void {
         ]
           .filter(Boolean)
           .join(', ');
-        console.log(
+        const logger = getLogger();
+        logger.debug(
+          { sessionId, counts },
           `[Tracking] Learning session updated: id=${sessionId}${counts ? ', ' + counts : ''}`
         );
       },
@@ -2297,7 +2339,16 @@ function setupTrackingHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       }),
       async (data) => {
         const id = await databaseLayer.recordAudioPlayback(data);
-        console.log(
+        const logger = getLogger();
+        logger.debug(
+          {
+            id,
+            mode: data.mode,
+            language: data.language,
+            speed: data.playbackSpeed?.toFixed(1) || '1.0',
+            sentenceId: data.sentenceId || 'none',
+            sessionId: data.sessionId || 'none',
+          },
           `[Tracking] Audio playback: mode=${data.mode}, language=${data.language}, speed=${data.playbackSpeed?.toFixed(1) || '1.0'}x, sentenceId=${data.sentenceId || 'none'}, sessionId=${data.sessionId || 'none'}`
         );
         return id;
@@ -2322,7 +2373,13 @@ function setupTrackingHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       async (data) => {
         const count = await databaseLayer.recordNeglectedWords(data);
         if (count > 0) {
-          console.log(
+          const logger = getLogger();
+          logger.debug(
+            {
+              count,
+              language: data[0]?.language || 'unknown',
+              topic: data[0]?.topic || 'none',
+            },
             `[Tracking] Neglected words (batch): count=${count}, language=${data[0]?.language || 'unknown'}, topic=${data[0]?.topic || 'none'}`
           );
         }
@@ -2346,7 +2403,17 @@ function setupTrackingHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       }),
       async (data) => {
         const id = await databaseLayer.recordDictionaryHover(data);
-        console.log(
+        const logger = getLogger();
+        logger.debug(
+          {
+            id,
+            word: data.word,
+            language: data.language,
+            duration: data.hoverDurationMs,
+            foundInDict: data.foundInDict,
+            sentenceId: data.sentenceId || 'none',
+            sessionId: data.sessionId || 'none',
+          },
           `[Tracking] Dictionary hover: word="${data.word}", language=${data.language}, duration=${data.hoverDurationMs}ms, foundInDict=${data.foundInDict}, sentenceId=${data.sentenceId || 'none'}, sessionId=${data.sessionId || 'none'}`
         );
         return id;
@@ -2378,7 +2445,8 @@ function setupLogHandlers(): void {
           }
         } catch (error) {
           // Fallback to console if logger is not available
-          console.error('Error logging from renderer:', error);
+          const logger = getLogger();
+          logger.error({ error }, 'Error logging from renderer');
         }
       },
       'log from renderer'
@@ -2410,7 +2478,8 @@ function setupTopicsHandlers(): void {
       cachedTopics = topics;
       return topics;
     } catch (error) {
-      console.error('[Topics] Error loading topics from file:', error);
+      const logger = getLogger();
+      logger.error({ error }, '[Topics] Error loading topics from file');
       // Return empty array as fallback
       cachedTopics = [];
       return [];
