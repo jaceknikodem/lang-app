@@ -8,7 +8,6 @@ import { LLM_CONFIG } from '../../shared/constants/index.js';
 import { cleanLLMResponse } from './utils.js';
 import { BaseLLMClient } from './base-llm-client.js';
 import { ensureError } from '../../shared/utils/error.js';
-import { getLogger } from '../utils/logger.js';
 import axios from 'axios';
 
 interface GeminiRequest {
@@ -62,9 +61,8 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
   }
 
   async isAvailable(): Promise<boolean> {
-    const logger = getLogger();
     if (!this.apiKey || this.apiKey.trim() === '') {
-      logger.warn('[GeminiClient] API key is empty or not set');
+      this.logger.warn('[GeminiClient] API key is empty or not set');
       return false;
     }
 
@@ -98,14 +96,14 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
           errorMessage = 'Unable to read error response';
         }
 
-        logger.warn(
+        this.logger.warn(
           { status: response.status, statusText: response.statusText, errorMessage },
           '[GeminiClient] Availability check failed'
         );
 
         // If it's a 403 or 400, it might be a regional/billing issue
         if (response.status === 403 || response.status === 400) {
-          logger.warn(
+          this.logger.warn(
             '[GeminiClient] This might be a regional restriction or billing issue. Check your Google Cloud Console settings.'
           );
         }
@@ -116,14 +114,14 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
       return true;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.warn({ error, errorMessage }, '[GeminiClient] Availability check error');
+      this.logger.warn({ error, errorMessage }, '[GeminiClient] Availability check error');
 
       // If it's a timeout, log that specifically
       if (
         axios.isAxiosError(error) &&
         (error.code === 'ECONNABORTED' || error.message.includes('timeout'))
       ) {
-        logger.warn(
+        this.logger.warn(
           '[GeminiClient] Request timed out. This might indicate network issues or the API is slow to respond.'
         );
       }
@@ -147,9 +145,8 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
    * Helper method to log validation errors with a specific prefix
    */
   private logValidationError(error: unknown, prefix: string): void {
-    const logger = getLogger();
     if (error instanceof Error && error.message.includes('Invalid response format')) {
-      logger.error({ error, prefix }, 'Validation error');
+      this.logger.error({ error, prefix }, 'Validation error');
     }
   }
 
@@ -420,8 +417,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         try {
           parsed = JSON.parse(cleanResponse);
         } catch (parseError) {
-          const logger = getLogger();
-          logger.error({ parseError, cleanResponse }, 'JSON parsing failed for response');
+          this.logger.error({ parseError, cleanResponse }, 'JSON parsing failed for response');
           throw new Error(`Invalid JSON response: ${cleanResponse}...`);
         }
 
@@ -477,8 +473,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
 
             // Use the extracted retry delay from the API
             const seconds = Math.ceil(retryDelayMs / 1000);
-            const logger = getLogger();
-            logger.info(
+            this.logger.info(
               { attemptNumber: attempt, retryDelay: seconds },
               `Attempt ${attempt} failed with HTTP 429, retrying in ${seconds}s (as specified by API)...`
             );
@@ -489,8 +484,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
               Math.max(Math.pow(factor, attempt - 1), minTimeout / 1000),
               maxTimeout / 1000
             );
-            const logger = getLogger();
-            logger.info(
+            this.logger.info(
               { attemptNumber: attempt, retryDelay: backoffSeconds },
               `Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`
             );
@@ -512,8 +506,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
             Math.max(Math.pow(factor, attempt - 1), minTimeout / 1000),
             maxTimeout / 1000
           );
-          const logger = getLogger();
-          logger.info(
+          this.logger.info(
             { attemptNumber: attempt, retryDelay: backoffSeconds },
             `Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`
           );

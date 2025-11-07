@@ -32,8 +32,10 @@ export class AudioRecorder {
   private recordingStream: any = null;
   private fileStream: fs.WriteStream | null = null;
   private audioDirectory: string;
+  private readonly logger: Logger;
 
   constructor() {
+    this.logger = getLogger();
     // Set up audio directory for recordings
     this.audioDirectory = path.join(app.getPath('userData'), 'recordings');
     this.ensureAudioDirectory();
@@ -83,10 +85,9 @@ export class AudioRecorder {
       // Set up silence detection if enabled
       if (recordingOptions.endOnSilence) {
         this.recordingStream.stream().on('silence', () => {
-          const logger = getLogger();
-          logger.info('Silence detected, stopping recording automatically');
+          this.logger.info('Silence detected, stopping recording automatically');
           this.stopRecording().catch(error => {
-            logger.error({ error }, 'Error auto-stopping recording on silence');
+            this.logger.error({ error }, 'Error auto-stopping recording on silence');
           });
         });
       }
@@ -94,8 +95,7 @@ export class AudioRecorder {
       // Pipe audio data to file
       this.recordingStream.stream().pipe(this.fileStream);
 
-      const logger = getLogger();
-      logger.info({ sessionId }, `Started recording: ${sessionId}`);
+      this.logger.info({ sessionId }, `Started recording: ${sessionId}`);
       return { ...this.currentSession };
 
     } catch (error) {
@@ -150,8 +150,7 @@ export class AudioRecorder {
         throw new Error('Recording file was not created');
       }
 
-      const logger = getLogger();
-      logger.info({ sessionId: session.id, duration: session.duration }, `Stopped recording: ${session.id}, duration: ${session.duration}ms`);
+      this.logger.info({ sessionId: session.id, duration: session.duration }, `Stopped recording: ${session.id}, duration: ${session.duration}ms`);
       
       const completedSession = { ...session };
       this.currentSession = null;
@@ -192,13 +191,11 @@ export class AudioRecorder {
         fs.unlinkSync(filePath);
       }
 
-      const logger = getLogger();
-      logger.info({ sessionId: this.currentSession.id }, `Cancelled recording: ${this.currentSession.id}`);
+      this.logger.info({ sessionId: this.currentSession.id }, `Cancelled recording: ${this.currentSession.id}`);
       this.currentSession = null;
 
     } catch (error) {
-      const logger = getLogger();
-      logger.error({ error }, 'Error cancelling recording');
+      this.logger.error({ error }, 'Error cancelling recording');
       await this.cleanup();
     }
   }
@@ -227,8 +224,7 @@ export class AudioRecorder {
       // to enumerate audio input devices
       return ['default'];
     } catch (error) {
-      const logger = getLogger();
-      logger.error({ error }, 'Error getting available devices');
+      this.logger.error({ error }, 'Error getting available devices');
       return ['default'];
     }
   }
@@ -240,8 +236,7 @@ export class AudioRecorder {
     try {
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
-        const logger = getLogger();
-        logger.info({ filePath }, `Deleted recording: ${filePath}`);
+        this.logger.info({ filePath }, `Deleted recording: ${filePath}`);
       }
     } catch (error) {
       throw new Error(`Failed to delete recording: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -264,8 +259,7 @@ export class AudioRecorder {
         // For now, we'll rely on the session duration
       };
     } catch (error) {
-      const logger = getLogger();
-      logger.error({ error }, 'Error getting recording info');
+      this.logger.error({ error }, 'Error getting recording info');
       return null;
     }
   }
@@ -294,8 +288,7 @@ export class AudioRecorder {
 
       this.currentSession = null;
     } catch (error) {
-      const logger = getLogger();
-      logger.error({ error }, 'Error during cleanup');
+      this.logger.error({ error }, 'Error during cleanup');
     }
   }
 
@@ -340,8 +333,7 @@ export class AudioRecorder {
         if (error instanceof Error && error.message.includes('Microphone')) {
           throw error;
         }
-        const logger = getLogger();
-        logger.warn({ error }, 'Could not check microphone permissions');
+        this.logger.warn({ error }, 'Could not check microphone permissions');
         // Continue anyway - the recording will fail if permissions are actually missing
       }
     }
@@ -354,12 +346,10 @@ export class AudioRecorder {
     try {
       if (!fs.existsSync(this.audioDirectory)) {
         fs.mkdirSync(this.audioDirectory, { recursive: true });
-        const logger = getLogger();
-        logger.info({ audioDirectory: this.audioDirectory }, `Created audio directory: ${this.audioDirectory}`);
+        this.logger.info({ audioDirectory: this.audioDirectory }, `Created audio directory: ${this.audioDirectory}`);
       }
     } catch (error) {
-      const logger = getLogger();
-      logger.error({ error }, 'Error creating audio directory');
+      this.logger.error({ error }, 'Error creating audio directory');
       throw new Error('Failed to create audio directory');
     }
   }

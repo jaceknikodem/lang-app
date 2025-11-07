@@ -22,8 +22,10 @@ export class FrequencyWordManager {
   private config: FrequencyWordManagerConfig;
   private wordLists: Map<string, WordEntry[]> = new Map();
   private wordPositions: Map<string, number> = new Map();
+  private readonly logger: Logger;
 
   constructor(config?: Partial<FrequencyWordManagerConfig>) {
+    this.logger = getLogger();
     this.config = {
       wordsDirectory: config?.wordsDirectory || join(process.cwd(), 'words'),
       batchSize: config?.batchSize || 10,
@@ -37,8 +39,7 @@ export class FrequencyWordManager {
   async initialize(): Promise<void> {
     // Lazy initialization - don't load word lists until they're actually needed
     // This significantly speeds up application startup
-    const logger = getLogger();
-    logger.info('Frequency word manager initialized (lazy loading enabled)');
+    this.logger.info('Frequency word manager initialized (lazy loading enabled)');
   }
 
   /**
@@ -61,8 +62,7 @@ export class FrequencyWordManager {
         }
       }
     } catch (error) {
-      const logger = getLogger();
-      logger.warn({ error }, 'Error scanning for language files');
+      this.logger.warn({ error }, 'Error scanning for language files');
     }
 
     return languages;
@@ -104,8 +104,7 @@ export class FrequencyWordManager {
       }
 
       const withTranslations = wordEntries.filter((entry) => entry.translation !== null).length;
-      const logger = getLogger();
-      logger.info(
+      this.logger.info(
         { language, totalWords: wordEntries.length, withTranslations },
         `Loaded ${wordEntries.length} words for ${language} (${withTranslations} with translations)`
       );
@@ -168,8 +167,7 @@ export class FrequencyWordManager {
     const startPosition = Math.max(currentPosition, minPositionForProficiency);
 
     if (minPositionForProficiency > 0 && startPosition === minPositionForProficiency) {
-      const logger = getLogger();
-      logger.info(
+      this.logger.info(
         { startPosition, proficiencyLevel, minPositionForProficiency },
         `Starting at position ${startPosition} for proficiency level ${proficiencyLevel} (skipping top ${minPositionForProficiency} words)`
       );
@@ -232,14 +230,15 @@ export class FrequencyWordManager {
       const currentPosition = this.wordPositions.get(language) || 0;
       this.wordPositions.set(language, Math.max(currentPosition, maxPosition));
 
-      const logger = getLogger();
-      logger.info(
+      this.logger.info(
         { language, position: this.wordPositions.get(language), totalWords: wordList.length },
         `Updated position for ${language}: ${this.wordPositions.get(language)}/${wordList.length}`
       );
     } catch (error) {
-      const logger = getLogger();
-      logger.warn({ error, language }, `Failed to update position from database for ${language}`);
+      this.logger.warn(
+        { error, language },
+        `Failed to update position from database for ${language}`
+      );
     }
   }
 

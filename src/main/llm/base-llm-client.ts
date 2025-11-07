@@ -7,6 +7,7 @@ import { LLMConfig, LLMError } from '../../shared/types/llm.js';
 import { LLM_CONFIG } from '../../shared/constants/index.js';
 import { ensureError } from '../../shared/utils/error.js';
 import { getLogger } from '../utils/logger.js';
+import { Logger } from '../../shared/utils/logger.js';
 import {
   WordGenerationResponseSchema,
   SentenceGenerationResponseSchema,
@@ -22,8 +23,10 @@ import { z } from 'zod';
 export abstract class BaseLLMClient {
   protected config: LLMConfig;
   protected databaseLayer?: any;
+  protected readonly logger: Logger;
 
   constructor(config: Partial<LLMConfig> = {}) {
+    this.logger = getLogger();
     this.config = {
       baseUrl: config.baseUrl || '',
       model: config.model || '',
@@ -102,8 +105,7 @@ export abstract class BaseLLMClient {
       const parseResult = WordGenerationResponseSchema.safeParse(response);
 
       if (!parseResult.success) {
-        const logger = getLogger();
-        logger.error(
+        this.logger.error(
           { issues: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) },
           'Validation failed'
         );
@@ -131,8 +133,7 @@ export abstract class BaseLLMClient {
         return !existingWordsSet.has(wordLower);
       });
 
-      const logger = getLogger();
-      logger.info(
+      this.logger.info(
         {
           uniqueWords: uniqueWords.length,
           newWords: newWords.length,
@@ -195,8 +196,7 @@ export abstract class BaseLLMClient {
       const parseResult = SentenceGenerationResponseSchema.safeParse(response);
 
       if (!parseResult.success) {
-        const logger = getLogger();
-        logger.error(
+        this.logger.error(
           { issues: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) },
           'Sentence validation failed'
         );
@@ -255,8 +255,7 @@ export abstract class BaseLLMClient {
       const parseResult = ContextSentenceResponseSchema.safeParse(response);
 
       if (!parseResult.success) {
-        const logger = getLogger();
-        logger.warn(
+        this.logger.warn(
           { issues: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) },
           'Context sentence validation failed'
         );
@@ -286,16 +285,14 @@ export abstract class BaseLLMClient {
       };
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const logger = getLogger();
-        logger.warn(
+        this.logger.warn(
           { error },
           'Context sentence generation validation failed, returning empty context'
         );
         return {};
       }
       // On any error, return empty context instead of throwing
-      const logger = getLogger();
-      logger.warn({ error }, 'Context sentence generation failed, returning empty context');
+      this.logger.warn({ error }, 'Context sentence generation failed, returning empty context');
       return {};
     }
   }
@@ -309,16 +306,14 @@ export abstract class BaseLLMClient {
     limit?: number
   ): Promise<string[]> {
     if (!this.databaseLayer) {
-      const logger = getLogger();
-      logger.warn('Database layer not set, cannot check for duplicates');
+      this.logger.warn('Database layer not set, cannot check for duplicates');
       return [];
     }
 
     try {
       return await this.databaseLayer.getExistingWordsForDuplicateChecking(language, topic, limit);
     } catch (error) {
-      const logger = getLogger();
-      logger.error({ error }, 'Failed to get existing words for duplicate checking');
+      this.logger.error({ error }, 'Failed to get existing words for duplicate checking');
       return [];
     }
   }
@@ -328,16 +323,14 @@ export abstract class BaseLLMClient {
    */
   protected async getKnownWords(language: string): Promise<string[]> {
     if (!this.databaseLayer) {
-      const logger = getLogger();
-      logger.warn('Database layer not set, cannot get known words');
+      this.logger.warn('Database layer not set, cannot get known words');
       return [];
     }
 
     try {
       return await this.databaseLayer.getKnownWordsForSentenceGeneration(language, 50);
     } catch (error) {
-      const logger = getLogger();
-      logger.error({ error }, 'Failed to get known words for sentence generation');
+      this.logger.error({ error }, 'Failed to get known words for sentence generation');
       return [];
     }
   }
@@ -352,16 +345,14 @@ export abstract class BaseLLMClient {
     topic?: string
   ): Promise<Set<string>> {
     if (!this.databaseLayer) {
-      const logger = getLogger();
-      logger.warn('Database layer not set, cannot check words existence');
+      this.logger.warn('Database layer not set, cannot check words existence');
       return new Set();
     }
 
     try {
       return await this.databaseLayer.checkWordsExist(language, words, topic);
     } catch (error) {
-      const logger = getLogger();
-      logger.error({ error }, 'Failed to check words existence');
+      this.logger.error({ error }, 'Failed to check words existence');
       return new Set();
     }
   }
@@ -606,8 +597,7 @@ Rules:
       const parseResult = DialogueVariantResponseSchema.safeParse(response);
 
       if (!parseResult.success) {
-        const logger = getLogger();
-        logger.error(
+        this.logger.error(
           { issues: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) },
           'Dialogue variant validation failed'
         );
@@ -712,8 +702,7 @@ ${knownWords.length > 0 ? '7. Prefer using words from the provided list when pos
       const parseResult = FollowUpResponseSchema.safeParse(response);
 
       if (!parseResult.success) {
-        const logger = getLogger();
-        logger.warn(
+        this.logger.warn(
           { issues: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) },
           'Follow-up validation failed'
         );
@@ -725,13 +714,14 @@ ${knownWords.length > 0 ? '7. Prefer using words from the provided list when pos
       return parseResult.data;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const logger = getLogger();
-        logger.warn({ error }, 'Follow-up generation validation failed, returning empty result');
+        this.logger.warn(
+          { error },
+          'Follow-up generation validation failed, returning empty result'
+        );
         return { text: '', translation: '' };
       }
       // On any error, return empty result instead of throwing
-      const logger = getLogger();
-      logger.warn({ error }, 'Follow-up generation failed, returning empty result');
+      this.logger.warn({ error }, 'Follow-up generation failed, returning empty result');
       return { text: '', translation: '' };
     }
   }

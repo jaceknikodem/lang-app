@@ -8,12 +8,15 @@ import path from 'path';
 import fs from 'fs';
 import { getLogger } from '../utils/logger.js';
 import { env } from '../../shared/config/index.js';
+import { Logger } from '../../shared/utils/logger.js';
 
 export class DatabaseConnection {
   private db: Database.Database | null = null;
   private config: DatabaseConfig;
+  private readonly logger: Logger;
 
   constructor(config: DatabaseConfig) {
+    this.logger = getLogger();
     this.config = config;
   }
 
@@ -33,14 +36,13 @@ export class DatabaseConnection {
       }
 
       // Create database connection
-      const logger = getLogger();
       this.db = new Database(this.config.databasePath, {
         timeout: this.config.timeout || 5000,
         verbose:
           env === 'development'
             ? (message?: unknown, ...additionalArgs: unknown[]) => {
                 const sql = typeof message === 'string' ? message : String(message);
-                logger.debug({ sql, additionalArgs }, 'SQL query');
+                this.logger.debug({ sql, additionalArgs }, 'SQL query');
               }
             : undefined,
       });

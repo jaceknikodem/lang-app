@@ -7,7 +7,6 @@ import { LLM_CONFIG } from '../../shared/constants/index.js';
 import { cleanLLMResponse } from './utils.js';
 import { BaseLLMClient } from './base-llm-client.js';
 import { ensureError } from '../../shared/utils/error.js';
-import { getLogger } from '../utils/logger.js';
 import axios from 'axios';
 
 interface OllamaRequest {
@@ -73,8 +72,7 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
         })
         .filter(Boolean);
     } catch (error) {
-      const logger = getLogger();
-      logger.error({ error }, 'Error fetching available models');
+      this.logger.error({ error }, 'Error fetching available models');
       return [];
     }
   }
@@ -202,8 +200,7 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
             Math.max(Math.pow(factor, attempt - 1), minTimeout / 1000),
             maxTimeout / 1000
           );
-          const logger = getLogger();
-          logger.info(
+          this.logger.info(
             { attemptNumber: attempt, retryDelay: backoffSeconds },
             `Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`
           );
@@ -224,8 +221,7 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
             Math.max(Math.pow(factor, attempt - 1), minTimeout / 1000),
             maxTimeout / 1000
           );
-          const logger = getLogger();
-          logger.info(
+          this.logger.info(
             { attemptNumber: attempt, retryDelay: backoffSeconds },
             `Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`
           );
