@@ -29,6 +29,18 @@ All tracking happens locally and never leaves your device. The app tracks:
 
 All data is stored in a local SQLite database and never transmitted anywhere.
 
+## Intelligence of the System
+
+The app uses intelligent algorithms across four key areas:
+
+- **Word Selection**: Prioritizes words by recency (oldest studied first) and strength (weakest first). For topic-based learning, uses LLMs to generate relevant vocabulary, but excludes words you already know/ignore, and words you didn't skip last few times. For frequency-based learning, adapts starting position to proficiency level (A1: position 200, A2: 500, B1: 1000).
+
+- **Sentence Creation**: Combines Tatoeba examples with LLM-generated sentences. Creates natural, conversational sentences that incorporate known words and include contextual dialogue.
+
+- **Quiz Word Selection**: Prioritizes words due for SRS review, then falls back to weakest words. Excludes recently reviewed words (within 24 hours) and randomizes selection for variety.
+
+- **Mode Selection**: Scores each mode based on your learning state (new words, weak words, due reviews, dialogue readiness, pronunciation strength) and navigates to the highest-scoring mode, avoiding mode bouncing.
+
 ## Tech Stack
 
 - **Runtime**: Electron (TypeScript)
