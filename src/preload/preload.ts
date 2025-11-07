@@ -341,6 +341,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke(IPC_CHANNELS.LOG.LOG, level, message, data)
     },
 
+    // Topics operations
+    topics: {
+      getTopics: () =>
+        ipcRenderer.invoke(IPC_CHANNELS.TOPICS.GET_TOPICS)
+    },
+
     // Tracking operations
     tracking: {
       createSession: (mode: 'learning' | 'quiz' | 'dialog' | 'flow', language: string) =>
@@ -584,6 +590,9 @@ declare global {
           rankedModes: Array<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'>;
         }>;
         getLanguageProficiency: (language: string | null, timeWindowDays?: number) => Promise<number>;
+      };
+      topics: {
+        getTopics: () => Promise<string[]>;
       };
       tracking: {
         createSession: (mode: 'learning' | 'quiz' | 'dialog' | 'flow', language: string) => Promise<number>;

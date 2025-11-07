@@ -237,6 +237,11 @@ export interface IPCBridge {
   log: {
     log: (level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal', message: string, data?: any) => Promise<void>;
   };
+
+  // Topics operations
+  topics: {
+    getTopics: () => Promise<string[]>;
+  };
 }
 
 // IPC channel names
@@ -386,5 +391,8 @@ export const IPC_CHANNELS = {
   },
   LOG: {
     LOG: 'log:log'
+  },
+  TOPICS: {
+    GET_TOPICS: 'topics:getTopics'
   }
 } as const;

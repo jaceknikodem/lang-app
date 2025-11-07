@@ -6,7 +6,6 @@
  * 4. Processes words using shared word processing utilities
  */
 
-import { ALL_TOPIC_SUGGESTIONS } from '../../shared/constants/topics.js';
 import { GeneratedWord } from '../../shared/types/core.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
 import { processSelectedWords, setupWordProcessingSession, ProcessWordsOptions } from './word-processor.js';
@@ -90,9 +89,18 @@ export async function autoAddNewWords(language?: string): Promise<AutoAddWordsRe
       };
     }
 
-    // Step 1: Randomly select a topic
-    const randomIndex = Math.floor(Math.random() * ALL_TOPIC_SUGGESTIONS.length);
-    const selectedTopic = ALL_TOPIC_SUGGESTIONS[randomIndex];
+    // Step 1: Load topics and randomly select one
+    const topics = await window.electronAPI.topics.getTopics();
+    if (topics.length === 0) {
+      return {
+        success: false,
+        topic: '',
+        wordsAdded: 0,
+        error: 'No topics available'
+      };
+    }
+    const randomIndex = Math.floor(Math.random() * topics.length);
+    const selectedTopic = topics[randomIndex];
 
     console.log(`[Auto Add] Selected topic: "${selectedTopic}"`);
 

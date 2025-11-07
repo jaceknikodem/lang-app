@@ -198,14 +198,16 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
   private static readonly DEFAULT_VOICE_MAP: Record<string, string[]> = {
     'portuguese': ['GDzHdQOi6jjf8zaXhCYD', '9pDzHy2OpOgeXM8SeL0t'],
     'pt': ['GDzHdQOi6jjf8zaXhCYD', '9pDzHy2OpOgeXM8SeL0t'],
-    'italian': ['oCS6WHyqobqW2UapCSHl', 'CiwzbDpaN3pQXjTgx3ML'],
-    'it': ['oCS6WHyqobqW2UapCSHl', 'CiwzbDpaN3pQXjTgx3ML'],
-    'polish': ['zzBTsLBFM6AOJtkr1e9b', 'g8ZOdhoD9R6eYKPTjKbE'],
-    'pl': ['zzBTsLBFM6AOJtkr1e9b', 'g8ZOdhoD9R6eYKPTjKbE'],
+    'italian': ['oCS6WHyqobqW2UapCSHl', 'CiwzbDpaN3pQXjTgx3ML', 'P951amuWPNCJ0L15rFyC'],
+    'it': ['oCS6WHyqobqW2UapCSHl', 'CiwzbDpaN3pQXjTgx3ML', 'P951amuWPNCJ0L15rFyC'],
+    'polish': ['wyWA56cQNU2KqUW4eCsI', 'g8ZOdhoD9R6eYKPTjKbE', 'CiwzbDpaN3pQXjTgx3ML'],
+    'pl': ['wyWA56cQNU2KqUW4eCsI', 'g8ZOdhoD9R6eYKPTjKbE', 'CiwzbDpaN3pQXjTgx3ML'],
     'spanish': ['Nh2zY9kknu6z4pZy6FhD', 'P951amuWPNCJ0L15rFyC'],
     'es': ['Nh2zY9kknu6z4pZy6FhD', 'P951amuWPNCJ0L15rFyC'],
     'indonesian': ['plgKUYgnlZ1DCNh54DwJ', 'I7sakys8pBZ1Z5f0UhT9'],
     'id': ['plgKUYgnlZ1DCNh54DwJ', 'I7sakys8pBZ1Z5f0UhT9'],
+    'english': ['wyWA56cQNU2KqUW4eCsI'],
+    'en': ['wyWA56cQNU2KqUW4eCsI'],
   };
 
   /**

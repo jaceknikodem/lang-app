@@ -10,7 +10,6 @@ import { sessionManager } from '../utils/session-manager.js';
 import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 import { loadCurrentLanguage, loadLemmatizationModel } from '../utils/language-manager.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
-import { ALL_TOPIC_SUGGESTIONS } from '../../shared/constants/topics.js';
 import { BaseComponent } from './base-component.js';
 
 @customElement('topic-selector')
@@ -24,10 +23,10 @@ export class TopicSelector extends BaseComponent {
   @state()
   private suggestions: string[] = [];
 
-  private keyboardUnsubscribe?: () => void;
+  @state()
+  private allTopicSuggestions: string[] = [];
 
-  // Import topics from shared constants (safe for both renderer and Node.js)
-  private readonly ALL_TOPIC_SUGGESTIONS = ALL_TOPIC_SUGGESTIONS;
+  private keyboardUnsubscribe?: () => void;
 
   static styles = [
     sharedStyles,
@@ -240,6 +239,7 @@ export class TopicSelector extends BaseComponent {
   async connectedCallback() {
     super.connectedCallback();
     await this.loadCurrentLanguage();
+    await this.loadTopics();
     this.selectRandomSuggestions();
     this.setupKeyboardBindings();
   }
@@ -272,14 +272,27 @@ export class TopicSelector extends BaseComponent {
     // Reset state for the new language
     this.topic = '';
     this.error = null;
+    await this.loadTopics();
     this.selectRandomSuggestions();
     
     // Request update to reflect changes
     this.requestUpdate();
   };
 
+  private async loadTopics() {
+    try {
+      this.allTopicSuggestions = await window.electronAPI.topics.getTopics();
+    } catch (error) {
+      console.error('[TopicSelector] Error loading topics:', error);
+      this.allTopicSuggestions = [];
+    }
+  }
+
   private selectRandomSuggestions() {
-    const shuffled = [...this.ALL_TOPIC_SUGGESTIONS].sort(() => Math.random() - 0.5);
+    if (this.allTopicSuggestions.length === 0) {
+      return;
+    }
+    const shuffled = [...this.allTopicSuggestions].sort(() => Math.random() - 0.5);
     this.suggestions = shuffled.slice(0, 3);
   }
 

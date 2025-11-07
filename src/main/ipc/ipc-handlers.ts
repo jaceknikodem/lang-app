@@ -95,6 +95,9 @@ export function setupIPCHandlers(
   // Log handlers
   setupLogHandlers();
 
+  // Topics handlers
+  setupTopicsHandlers();
+
   // Tracking handlers
   setupTrackingHandlers(databaseLayer);
 
@@ -2193,6 +2196,50 @@ function setupLogHandlers(): void {
         }
       },
       'log from renderer'
+    )
+  );
+}
+
+function setupTopicsHandlers(): void {
+  // Cache topics after first load
+  let cachedTopics: string[] | null = null;
+
+  /**
+   * Load topics from topics.txt file (cached after first load)
+   */
+  async function loadTopicsFromFile(): Promise<string[]> {
+    // Return cached topics if already loaded
+    if (cachedTopics !== null) {
+      return cachedTopics;
+    }
+
+    try {
+      const topicsPath = join(process.cwd(), 'topics.txt');
+      const content = await fsPromises.readFile(topicsPath, 'utf-8');
+      const topics = content
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+      // Cache the topics
+      cachedTopics = topics;
+      return topics;
+    } catch (error) {
+      console.error('[Topics] Error loading topics from file:', error);
+      // Return empty array as fallback
+      cachedTopics = [];
+      return [];
+    }
+  }
+
+  ipcMain.handle(
+    IPC_CHANNELS.TOPICS.GET_TOPICS,
+    createIPCHandler(
+      [],
+      async () => {
+        const topics = await loadTopicsFromFile();
+        return topics;
+      },
+      'get topics'
     )
   );
 }

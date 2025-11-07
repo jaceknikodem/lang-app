@@ -4,12 +4,12 @@
 
 import { lookup } from 'node:dns/promises';
 import { GeneratedWord, GeneratedSentence } from '../../shared/types/core.js';
-import { LLMClient, LLMError } from '../../shared/types/llm.js';
+import { LLMClient } from '../../shared/types/llm.js';
 import { DatabaseLayer } from '../../shared/types/database.js';
 import { LLMFactory, LLMFactoryConfig, LLMProvider } from './llm-factory.js';
 import { FrequencyWordManager } from './frequency-word-manager.js';
 import type { LemmatizationService } from '../lemmatization/index.js';
-import { getErrorMessage, wrapError, ensureError } from '../../shared/utils/error.js';
+import { wrapError } from '../../shared/utils/error.js';
 import { getLogger } from '../utils/logger.js';
 
 const TATOEBA_API_URL = 'https://tatoeba.org/en/api_v0/search';
