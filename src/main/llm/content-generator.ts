@@ -161,13 +161,8 @@ export class ContentGenerator {
       // Get proficiency level to determine generation method
       let proficiencyLevel: string | undefined;
       if (database) {
-        try {
-          const proficiencyKey = `language_proficiency_${targetLanguage.toLowerCase()}`;
-          proficiencyLevel = (await database.getSetting(proficiencyKey)) || undefined;
-        } catch (error) {
-          const logger = getLogger();
-          logger.warn({ error }, 'Failed to retrieve proficiency level');
-        }
+        const proficiencyKey = `language_proficiency_${targetLanguage.toLowerCase()}`;
+        proficiencyLevel = (await database.getSetting(proficiencyKey)) || undefined;
       }
 
       // If no topic is provided and we have a database, use frequency-based selection

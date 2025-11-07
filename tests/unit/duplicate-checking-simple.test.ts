@@ -156,7 +156,7 @@ describe('Duplicate Checking Simple Integration', () => {
 
       // Mock axios to capture the prompt
       let capturedPrompt = '';
-      (mockedAxios.post as jest.Mock).mockImplementation((url, data) => {
+      (mockedAxios.post as jest.Mock).mockImplementation((_url, data) => {
         capturedPrompt = (data as any).prompt;
 
         return Promise.resolve({
@@ -186,7 +186,7 @@ describe('Duplicate Checking Simple Integration', () => {
           ),
         getExistingWordsForDuplicateChecking: jest
           .fn()
-          .mockImplementation((language: string, topic?: string, limit?: number) => {
+          .mockImplementation((_language: string, _topic?: string, limit?: number) => {
             // Respect the limit parameter in the mock
             if (limit) {
               return Promise.resolve(existingWords.slice(0, limit));
@@ -199,7 +199,7 @@ describe('Duplicate Checking Simple Integration', () => {
       ollamaClient.setDatabaseLayer(mockDatabase);
 
       let capturedPrompt = '';
-      (mockedAxios.post as jest.Mock).mockImplementation((url, data) => {
+      (mockedAxios.post as jest.Mock).mockImplementation((_url, data) => {
         capturedPrompt = (data as any).prompt;
 
         return Promise.resolve({

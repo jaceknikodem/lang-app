@@ -65,7 +65,7 @@ describe('ElevenLabs Audio Generator', () => {
       });
 
       await expect(generator.generateAudio('hello', 'spanish', undefined, 1)).rejects.toThrow(
-        'ElevenLabs API error'
+        'API request failed'
       );
     });
 
@@ -74,7 +74,7 @@ describe('ElevenLabs Audio Generator', () => {
       (fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
 
       await expect(generator.generateAudio('hello', 'spanish', undefined, 1)).rejects.toThrow(
-        'ElevenLabs API call failed: Network error'
+        'Network error'
       );
     });
   });

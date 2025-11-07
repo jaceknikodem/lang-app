@@ -555,12 +555,7 @@ function setupLLMHandlers(
     createIPCHandler(
       undefined,
       async () => {
-        try {
-          return await llmClient.isAvailable();
-        } catch {
-          // Return false on error instead of throwing
-          return false;
-        }
+        return await llmClient.isAvailable();
       },
       'check LLM availability'
     )
@@ -571,12 +566,7 @@ function setupLLMHandlers(
     createIPCHandler(
       undefined,
       async () => {
-        try {
-          return await llmClient.getAvailableModels();
-        } catch {
-          // Return empty array on error instead of throwing
-          return [];
-        }
+        return await llmClient.getAvailableModels();
       },
       'get available models'
     )
@@ -831,12 +821,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
     createIPCHandler(
       AudioPathSchema,
       async (audioPath) => {
-        try {
-          return await audioService.audioExists(audioPath);
-        } catch {
-          // Return false on error instead of throwing
-          return false;
-        }
+        return await audioService.audioExists(audioPath);
       },
       'check audio existence'
     )
@@ -847,13 +832,8 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
     createIPCHandler(
       [AudioPathSchema, z.number().optional()],
       async (audioPath, targetDb) => {
-        try {
-          const validatedTargetDb = targetDb !== undefined ? targetDb : 5; // Default to 5dB amplification
-          return await audioService.normalizeAudioVolume(audioPath, validatedTargetDb);
-        } catch {
-          // Return original path if normalization fails
-          return audioPath;
-        }
+        const validatedTargetDb = targetDb !== undefined ? targetDb : 5; // Default to 5dB amplification
+        return await audioService.normalizeAudioVolume(audioPath, validatedTargetDb);
       },
       'normalize audio volume'
     )
@@ -864,12 +844,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
     createIPCHandler(
       AudioPathSchema,
       async (audioPath) => {
-        try {
-          return await audioService.loadAudioBase64(audioPath);
-        } catch {
-          // Return null on error instead of throwing
-          return null;
-        }
+        return await audioService.loadAudioBase64(audioPath);
       },
       'load audio as base64'
     )

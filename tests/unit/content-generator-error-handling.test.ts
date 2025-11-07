@@ -21,7 +21,7 @@ class MockLLMClient implements LLMClient {
 
   async generateTopicWords(
     topic: string,
-    language: string,
+    _language: string,
     count: number,
     _proficiencyLevel?: string
   ): Promise<GeneratedWord[]> {
@@ -44,7 +44,7 @@ class MockLLMClient implements LLMClient {
 
   async generateSentences(
     word: string,
-    language: string,
+    _language: string,
     count: number,
     _topic?: string,
     _proficiencyLevel?: string

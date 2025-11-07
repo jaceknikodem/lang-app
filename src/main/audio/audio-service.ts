@@ -92,34 +92,29 @@ export class AudioService {
       return;
     }
 
-    try {
-      // Get model from database if available
-      let model = 'eleven_flash_v2_5'; // Default to flash model
-      if (this.database) {
-        try {
-          const savedModel = await this.database.getSetting('elevenlabs_model');
-          if (savedModel && savedModel !== 'disabled') {
-            model = savedModel;
-          } else if (savedModel === 'disabled') {
-            // If model is disabled, switch to system TTS instead
-            await this.switchToSystemTTS();
-            return;
-          }
-        } catch {
-          console.warn('Failed to get ElevenLabs model from database, using default');
+    // Get model from database if available
+    let model = 'eleven_flash_v2_5'; // Default to flash model
+    if (this.database) {
+      try {
+        const savedModel = await this.database.getSetting('elevenlabs_model');
+        if (savedModel && savedModel !== 'disabled') {
+          model = savedModel;
+        } else if (savedModel === 'disabled') {
+          // If model is disabled, switch to system TTS instead
+          await this.switchToSystemTTS();
+          return;
         }
+      } catch {
+        console.warn('Failed to get ElevenLabs model from database, using default');
       }
-
-      const config = {
-        elevenLabsApiKey: apiKey,
-        elevenLabsModel: model
-      };
-      this.audioGenerator = new ElevenLabsAudioGenerator(config, this.database);
-      console.log('Switched to ElevenLabs TTS with model:', model);
-    } catch (error) {
-      console.error('Failed to switch to ElevenLabs TTS:', error);
-      throw error;
     }
+
+    const config = {
+      elevenLabsApiKey: apiKey,
+      elevenLabsModel: model
+    };
+    this.audioGenerator = new ElevenLabsAudioGenerator(config, this.database);
+    console.log('Switched to ElevenLabs TTS with model:', model);
   }
 
 
@@ -127,13 +122,8 @@ export class AudioService {
    * Switch back to system TTS
    */
   async switchToSystemTTS(): Promise<void> {
-    try {
-      this.audioGenerator = new TTSAudioGenerator(undefined, this.database);
-      console.log('Switched to system TTS');
-    } catch (error) {
-      console.error('Failed to switch to system TTS:', error);
-      throw error;
-    }
+    this.audioGenerator = new TTSAudioGenerator(undefined, this.database);
+    console.log('Switched to system TTS');
   }
 
   /**
@@ -1227,7 +1217,7 @@ export class AudioService {
     return join(app.getPath('userData'), 'audio', relativePath);
   }
 
-  private buildExternalAudioPath(sentence: string, language: string, word: string | undefined, extension: string, wordId?: number, sentenceId?: number): string {
+  private buildExternalAudioPath(sentence: string, language: string, _word: string | undefined, extension: string, wordId?: number, sentenceId?: number): string {
     const baseDirectory = join(app.getPath('userData'), 'audio');
     const safeLanguage = sanitizeFilename(language || 'unknown');
     const ext = extension.startsWith('.') ? extension : `.${extension}`;

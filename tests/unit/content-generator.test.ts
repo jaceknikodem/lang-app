@@ -14,7 +14,7 @@ class MockOllamaClient {
     .mockImplementation(
       (
         topic: string,
-        language: string,
+        _language: string,
         count: number,
         _proficiencyLevel?: string
       ): Promise<GeneratedWord[]> => {
@@ -34,7 +34,7 @@ class MockOllamaClient {
     .mockImplementation(
       (
         word: string,
-        language: string,
+        _language: string,
         count: number,
         _topic?: string,
         _proficiencyLevel?: string
@@ -188,7 +188,7 @@ describe('ContentGenerator', () => {
       // Reset mocks
       mockClient.isAvailable.mockResolvedValue(true);
       mockClient.generateSentences.mockImplementation(
-        (word: string, language: string, count: number) => {
+        (word: string, _language: string, count: number) => {
           const sentences: GeneratedSentence[] = [];
           for (let i = 1; i <= count; i++) {
             sentences.push({

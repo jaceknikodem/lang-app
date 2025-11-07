@@ -19,63 +19,58 @@ export abstract class BaseAudioGenerator implements AudioGenerator {
       throw createAudioError(`Audio file not found: ${audioPath}`, 'FILE_NOT_FOUND', { audioPath });
     }
 
-    try {
-      // Stop any currently playing audio first
-      this.stopAudio();
+    // Stop any currently playing audio first
+    this.stopAudio();
 
-      // Use 'afplay' command on macOS to play audio files
-      const { spawn } = await import('child_process');
-      this.currentAudioProcess = spawn('afplay', [audioPath]);
-      
-      // Return a promise that resolves when the audio finishes playing
-      return new Promise<void>((resolve, reject) => {
-        if (!this.currentAudioProcess) {
-          reject(createAudioError('Audio process not created', 'PLAYBACK_FAILED', { audioPath }));
-          return;
-        }
+    // Use 'afplay' command on macOS to play audio files
+    const { spawn } = await import('child_process');
+    this.currentAudioProcess = spawn('afplay', [audioPath]);
+    
+    // Return a promise that resolves when the audio finishes playing
+    return new Promise<void>((resolve, reject) => {
+      if (!this.currentAudioProcess) {
+        reject(createAudioError('Audio process not created', 'PLAYBACK_FAILED', { audioPath }));
+        return;
+      }
 
-        // Store promise callbacks so stopAudio can reject if needed
-        this.currentPlayPromise = { resolve, reject };
+      // Store promise callbacks so stopAudio can reject if needed
+      this.currentPlayPromise = { resolve, reject };
 
-        // Resolve when audio finishes playing
-        this.currentAudioProcess.on('close', (code: number | null) => {
-          const promise = this.currentPlayPromise;
-          this.currentAudioProcess = undefined;
-          this.currentPlayPromise = undefined;
-          
-          // Add a small buffer delay to ensure audio has fully stopped playing
-          // This prevents race conditions where the process exits slightly before audio finishes
-          setTimeout(() => {
-            // Treat exit code 0 (success) and null (signal termination, often normal) as success
-            // Null can occur when the process is terminated by a signal after successful completion
-            if (code === 0 || code === null) {
-              // Audio played successfully
-              if (promise) {
-                promise.resolve();
-              }
-            } else {
-              // Audio playback exited with error code
-              if (promise) {
-                promise.reject(createAudioError(`Audio playback exited with code ${code}`, 'PLAYBACK_FAILED', { audioPath }));
-              }
-            }
-          }, 200); // 200ms buffer to ensure audio fully finishes
-        });
+      // Resolve when audio finishes playing
+      this.currentAudioProcess.on('close', (code: number | null) => {
+        const promise = this.currentPlayPromise;
+        this.currentAudioProcess = undefined;
+        this.currentPlayPromise = undefined;
         
-        // Reject on process error
-        this.currentAudioProcess.on('error', (error: Error) => {
-          const promise = this.currentPlayPromise;
-          this.currentAudioProcess = undefined;
-          this.currentPlayPromise = undefined;
-          if (promise) {
-            promise.reject(createAudioError(`Audio playback error: ${error.message}`, 'PLAYBACK_FAILED', { audioPath, cause: error }));
+        // Add a small buffer delay to ensure audio has fully stopped playing
+        // This prevents race conditions where the process exits slightly before audio finishes
+        setTimeout(() => {
+          // Treat exit code 0 (success) and null (signal termination, often normal) as success
+          // Null can occur when the process is terminated by a signal after successful completion
+          if (code === 0 || code === null) {
+            // Audio played successfully
+            if (promise) {
+              promise.resolve();
+            }
+          } else {
+            // Audio playback exited with error code
+            if (promise) {
+              promise.reject(createAudioError(`Audio playback exited with code ${code}`, 'PLAYBACK_FAILED', { audioPath }));
+            }
           }
-        });
+        }, 200); // 200ms buffer to ensure audio fully finishes
       });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown playback error';
-      throw createAudioError(`Audio playback failed: ${message}`, 'PLAYBACK_FAILED', { audioPath, cause: error });
-    }
+      
+      // Reject on process error
+      this.currentAudioProcess.on('error', (error: Error) => {
+        const promise = this.currentPlayPromise;
+        this.currentAudioProcess = undefined;
+        this.currentPlayPromise = undefined;
+        if (promise) {
+          promise.reject(createAudioError(`Audio playback error: ${error.message}`, 'PLAYBACK_FAILED', { audioPath, cause: error }));
+        }
+      });
+    });
   }
 
   /**

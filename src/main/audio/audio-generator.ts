@@ -16,9 +16,8 @@ const execFileAsync = promisify(execFile);
  */
 export class TTSAudioGenerator extends BaseAudioGenerator {
   private config: AudioConfig;
-  private database?: DatabaseLayer;
 
-  constructor(config?: Partial<AudioConfig>, database?: DatabaseLayer) {
+  constructor(config?: Partial<AudioConfig>, _database?: DatabaseLayer) {
     super();
     this.config = {
       audioDirectory: join(app.getPath('userData'), 'audio'),
@@ -27,8 +26,6 @@ export class TTSAudioGenerator extends BaseAudioGenerator {
       rate: 160, // Words per minute
       ...config
     };
-
-    this.database = database;
 
     // Ensure audio directory exists
     this.ensureAudioDirectory();
@@ -51,36 +48,31 @@ export class TTSAudioGenerator extends BaseAudioGenerator {
       return audioPath;
     }
 
-    try {
-      // Ensure directory exists for the file
-      const dir = dirname(audioPath);
-      if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
-      }
-
-      // Build TTS command arguments
-      // Use English voice if generating English sentence audio, otherwise use language-specific voice
-      const voiceLanguage = word === 'english_sentence' ? 'english' : language;
-      const args = [
-        '-v', this.getVoiceForLanguage(voiceLanguage),
-        '-r', this.config.rate!.toString(),
-        '-o', audioPath,
-        text
-      ];
-
-      // Execute TTS command
-      await execFileAsync(this.config.ttsCommand, args);
-
-      // Verify file was created
-      if (!await this.audioExists(audioPath)) {
-        throw createAudioError(`Audio file not created: ${audioPath}`, 'GENERATION_FAILED', { audioPath });
-      }
-
-      return audioPath;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown TTS error';
-      throw createAudioError(`TTS generation failed: ${message}`, 'GENERATION_FAILED', { audioPath, cause: error });
+    // Ensure directory exists for the file
+    const dir = dirname(audioPath);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
     }
+
+    // Build TTS command arguments
+    // Use English voice if generating English sentence audio, otherwise use language-specific voice
+    const voiceLanguage = word === 'english_sentence' ? 'english' : language;
+    const args = [
+      '-v', this.getVoiceForLanguage(voiceLanguage),
+      '-r', this.config.rate!.toString(),
+      '-o', audioPath,
+      text
+    ];
+
+    // Execute TTS command
+    await execFileAsync(this.config.ttsCommand, args);
+
+    // Verify file was created
+    if (!await this.audioExists(audioPath)) {
+      throw createAudioError(`Audio file not created: ${audioPath}`, 'GENERATION_FAILED', { audioPath });
+    }
+
+    return audioPath;
   }
 
 

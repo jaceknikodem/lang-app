@@ -461,69 +461,65 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   async insertWord(wordData: CreateWordRequest): Promise<number> {
     const db = this.getDb();
 
-    try {
-      // Initialize SRS values for new word
-      const tomorrow = addDays(new Date(), 1);
+    // Initialize SRS values for new word
+    const tomorrow = addDays(new Date(), 1);
 
-      const stmt = db.prepare(`
-        INSERT INTO words (
-          word, language, translation, topic,
-          strength, interval_days, ease_factor, next_due
-        )
-        VALUES (?, ?, ?, ?, 20, 1, 2.5, ?)
+    const stmt = db.prepare(`
+      INSERT INTO words (
+        word, language, translation, topic,
+        strength, interval_days, ease_factor, next_due
+      )
+      VALUES (?, ?, ?, ?, 20, 1, 2.5, ?)
+    `);
+
+    const result = stmt.run(
+      wordData.word,
+      wordData.language,
+      wordData.translation,
+      wordData.topic || null,
+      tomorrow.toISOString()
+    );
+
+    const wordId = result.lastInsertRowid as number;
+
+    // Find existing sentences that contain this word's lemma (same language only)
+    const normalizedWord = wordData.word.toLowerCase().trim();
+
+    const findSentencesStmt = db.prepare(`
+      SELECT DISTINCT sl.sentence_id 
+      FROM sentence_lemmas sl
+      INNER JOIN sentences s ON sl.sentence_id = s.id
+      WHERE sl.lemma = ? AND s.language = ?
+    `);
+
+    const matchingSentences = findSentencesStmt.all(normalizedWord, wordData.language) as Array<{
+      sentence_id: number;
+    }>;
+
+    if (matchingSentences.length > 0) {
+      // Link these sentences to the new word via sentence_words junction table
+      const insertJunction = db.prepare(`
+        INSERT OR IGNORE INTO sentence_words (sentence_id, word_id)
+        VALUES (?, ?)
       `);
 
-      const result = stmt.run(
-        wordData.word,
-        wordData.language,
-        wordData.translation,
-        wordData.topic || null,
-        tomorrow.toISOString()
-      );
-
-      const wordId = result.lastInsertRowid as number;
-
-      // Find existing sentences that contain this word's lemma (same language only)
-      const normalizedWord = wordData.word.toLowerCase().trim();
-
-      const findSentencesStmt = db.prepare(`
-        SELECT DISTINCT sl.sentence_id 
-        FROM sentence_lemmas sl
-        INNER JOIN sentences s ON sl.sentence_id = s.id
-        WHERE sl.lemma = ? AND s.language = ?
+      const updateSentenceCount = db.prepare(`
+        UPDATE words 
+        SET sentence_count = sentence_count + 1
+        WHERE id = ?
       `);
 
-      const matchingSentences = findSentencesStmt.all(normalizedWord, wordData.language) as Array<{
-        sentence_id: number;
-      }>;
-
-      if (matchingSentences.length > 0) {
-        // Link these sentences to the new word via sentence_words junction table
-        const insertJunction = db.prepare(`
-          INSERT OR IGNORE INTO sentence_words (sentence_id, word_id)
-          VALUES (?, ?)
-        `);
-
-        const updateSentenceCount = db.prepare(`
-          UPDATE words 
-          SET sentence_count = sentence_count + 1
-          WHERE id = ?
-        `);
-
-        for (const row of matchingSentences) {
-          insertJunction.run(row.sentence_id, wordId);
-          updateSentenceCount.run(wordId);
-        }
-
-        console.log(
-          `[insertWord] Linked ${matchingSentences.length} existing sentences to new word ${wordData.word} (ID: ${wordId})`
-        );
+      for (const row of matchingSentences) {
+        insertJunction.run(row.sentence_id, wordId);
+        updateSentenceCount.run(wordId);
       }
 
-      return wordId;
-    } catch (error) {
-      throw wrapError(error, `Failed to insert word`);
+      console.log(
+        `[insertWord] Linked ${matchingSentences.length} existing sentences to new word ${wordData.word} (ID: ${wordId})`
+      );
     }
+
+    return wordId;
   }
 
   /**
@@ -532,20 +528,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   async updateWordStrength(wordId: number, strength: number): Promise<void> {
     const db = this.getDb();
 
-    try {
-      const stmt = db.prepare(`
-        UPDATE words 
-        SET strength = ?, last_studied = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `);
+    const stmt = db.prepare(`
+      UPDATE words 
+      SET strength = ?, last_studied = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
 
-      const result = stmt.run(strength, wordId);
+    const result = stmt.run(strength, wordId);
 
-      if (result.changes === 0) {
-        throw new Error(`Word with ID ${wordId} not found`);
-      }
-    } catch (error) {
-      throw wrapError(error, `Failed to update word strength`);
+    if (result.changes === 0) {
+      throw new Error(`Word with ID ${wordId} not found`);
     }
   }
 
@@ -555,20 +547,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   async markWordKnown(wordId: number, known: boolean): Promise<void> {
     const db = this.getDb();
 
-    try {
-      const stmt = db.prepare(`
-        UPDATE words 
-        SET known = ?, last_studied = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `);
+    const stmt = db.prepare(`
+      UPDATE words 
+      SET known = ?, last_studied = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
 
-      const result = stmt.run(known ? 1 : 0, wordId);
+    const result = stmt.run(known ? 1 : 0, wordId);
 
-      if (result.changes === 0) {
-        throw new Error(`Word with ID ${wordId} not found`);
-      }
-    } catch (error) {
-      throw wrapError(error, `Failed to mark word as known`);
+    if (result.changes === 0) {
+      throw new Error(`Word with ID ${wordId} not found`);
     }
   }
 
@@ -578,20 +566,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   async markWordIgnored(wordId: number, ignored: boolean): Promise<void> {
     const db = this.getDb();
 
-    try {
-      const stmt = db.prepare(`
-        UPDATE words 
-        SET ignored = ?, last_studied = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `);
+    const stmt = db.prepare(`
+      UPDATE words 
+      SET ignored = ?, last_studied = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
 
-      const result = stmt.run(ignored ? 1 : 0, wordId);
+    const result = stmt.run(ignored ? 1 : 0, wordId);
 
-      if (result.changes === 0) {
-        throw new Error(`Word with ID ${wordId} not found`);
-      }
-    } catch (error) {
-      throw wrapError(error, `Failed to mark word as ignored`);
+    if (result.changes === 0) {
+      throw new Error(`Word with ID ${wordId} not found`);
     }
   }
 
@@ -601,36 +585,32 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   async getWordsToStudy(limit: number, language: string): Promise<Word[]> {
     const db = this.getDb();
 
-    try {
-      // First, get words due for review (SRS priority)
-      const dueWords = await this.getWordsDueWithPriority(language, limit);
+    // First, get words due for review (SRS priority)
+    const dueWords = await this.getWordsDueWithPriority(language, limit);
 
-      // If we have enough due words, return them
-      if (dueWords.length >= limit) {
-        return dueWords.slice(0, limit);
-      }
-
-      // If we need more words, get additional words by strength (only words with sentences)
-      const remainingLimit = limit - dueWords.length;
-      const now = new Date().toISOString();
-
-      const stmt = db.prepare(`
-        SELECT DISTINCT w.* FROM words w
-        INNER JOIN sentence_words sw ON w.id = sw.word_id
-        WHERE w.known = FALSE AND w.ignored = FALSE AND w.language = ?
-        AND w.next_due > ?
-        ORDER BY w.strength ASC, RANDOM()
-        LIMIT ?
-      `);
-
-      const rows = stmt.all(language, now, remainingLimit) as any[];
-      const additionalWords = rows.map(this.mapRowToWord);
-
-      // Combine due words with additional words
-      return [...dueWords, ...additionalWords];
-    } catch (error) {
-      throw wrapError(error, `Failed to get words to study`);
+    // If we have enough due words, return them
+    if (dueWords.length >= limit) {
+      return dueWords.slice(0, limit);
     }
+
+    // If we need more words, get additional words by strength (only words with sentences)
+    const remainingLimit = limit - dueWords.length;
+    const now = new Date().toISOString();
+
+    const stmt = db.prepare(`
+      SELECT DISTINCT w.* FROM words w
+      INNER JOIN sentence_words sw ON w.id = sw.word_id
+      WHERE w.known = FALSE AND w.ignored = FALSE AND w.language = ?
+      AND w.next_due > ?
+      ORDER BY w.strength ASC, RANDOM()
+      LIMIT ?
+    `);
+
+    const rows = stmt.all(language, now, remainingLimit) as any[];
+    const additionalWords = rows.map(this.mapRowToWord);
+
+    // Combine due words with additional words
+    return [...dueWords, ...additionalWords];
   }
 
   /**
@@ -644,28 +624,24 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   ): Promise<Word[]> {
     const db = this.getDb();
 
-    try {
-      let query = `
-        SELECT * FROM words 
-        WHERE known = FALSE AND ignored = FALSE 
-        AND strength >= ? AND strength <= ? AND language = ?
-        ORDER BY last_studied ASC NULLS FIRST
-      `;
+    let query = `
+      SELECT * FROM words 
+      WHERE known = FALSE AND ignored = FALSE 
+      AND strength >= ? AND strength <= ? AND language = ?
+      ORDER BY last_studied ASC NULLS FIRST
+    `;
 
-      if (limit) {
-        query += ' LIMIT ?';
-      }
-
-      const stmt = db.prepare(query);
-      const params = limit
-        ? [minStrength, maxStrength, language, limit]
-        : [minStrength, maxStrength, language];
-      const rows = stmt.all(...params) as any[];
-
-      return rows.map(this.mapRowToWord);
-    } catch (error) {
-      throw wrapError(error, `Failed to get words by strength`);
+    if (limit) {
+      query += ' LIMIT ?';
     }
+
+    const stmt = db.prepare(query);
+    const params = limit
+      ? [minStrength, maxStrength, language, limit]
+      : [minStrength, maxStrength, language];
+    const rows = stmt.all(...params) as any[];
+
+    return rows.map(this.mapRowToWord);
   }
 
   /**
@@ -678,34 +654,30 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   ): Promise<Word[]> {
     const db = this.getDb();
 
-    try {
-      const whereConditions: string[] = [`w.language = ?`];
+    const whereConditions: string[] = [`w.language = ?`];
 
-      if (!includeKnown) {
-        whereConditions.push('w.known = FALSE');
-      }
-
-      if (!includeIgnored) {
-        whereConditions.push('w.ignored = FALSE');
-      }
-
-      const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
-
-      // Use sentence_words junction table instead of direct join on sentences.word_id
-      const stmt = db.prepare(`
-        SELECT DISTINCT w.* FROM words w
-        INNER JOIN sentence_words sw ON w.id = sw.word_id
-        ${whereClause}
-        ORDER BY w.strength ASC, RANDOM()
-      `);
-
-      const rows = stmt.all(language) as any[];
-      const words = rows.map(this.mapRowToWord);
-
-      return this.shuffleArray(words);
-    } catch (error) {
-      throw wrapError(error, `Failed to get words with sentences`);
+    if (!includeKnown) {
+      whereConditions.push('w.known = FALSE');
     }
+
+    if (!includeIgnored) {
+      whereConditions.push('w.ignored = FALSE');
+    }
+
+    const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
+
+    // Use sentence_words junction table instead of direct join on sentences.word_id
+    const stmt = db.prepare(`
+      SELECT DISTINCT w.* FROM words w
+      INNER JOIN sentence_words sw ON w.id = sw.word_id
+      ${whereClause}
+      ORDER BY w.strength ASC, RANDOM()
+    `);
+
+    const rows = stmt.all(language) as any[];
+    const words = rows.map(this.mapRowToWord);
+
+    return this.shuffleArray(words);
   }
 
   /**
@@ -718,32 +690,28 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   ): Promise<Word[]> {
     const db = this.getDb();
 
-    try {
-      const whereConditions: string[] = [`w.language = ?`];
+    const whereConditions: string[] = [`w.language = ?`];
 
-      if (!includeKnown) {
-        whereConditions.push('w.known = FALSE');
-      }
-
-      if (!includeIgnored) {
-        whereConditions.push('w.ignored = FALSE');
-      }
-
-      const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
-
-      // Use sentence_words junction table instead of direct join on sentences.word_id
-      const stmt = db.prepare(`
-        SELECT DISTINCT w.* FROM words w
-        INNER JOIN sentence_words sw ON w.id = sw.word_id
-        ${whereClause}
-        ORDER BY w.last_studied ASC NULLS FIRST
-      `);
-
-      const rows = stmt.all(language) as any[];
-      return rows.map(this.mapRowToWord);
-    } catch (error) {
-      throw wrapError(error, `Failed to get words with sentences ordered by strength`);
+    if (!includeKnown) {
+      whereConditions.push('w.known = FALSE');
     }
+
+    if (!includeIgnored) {
+      whereConditions.push('w.ignored = FALSE');
+    }
+
+    const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
+
+    // Use sentence_words junction table instead of direct join on sentences.word_id
+    const stmt = db.prepare(`
+      SELECT DISTINCT w.* FROM words w
+      INNER JOIN sentence_words sw ON w.id = sw.word_id
+      ${whereClause}
+      ORDER BY w.last_studied ASC NULLS FIRST
+    `);
+
+    const rows = stmt.all(language) as any[];
+    return rows.map(this.mapRowToWord);
   }
 
   /**
@@ -756,43 +724,39 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   ): Promise<Word[]> {
     const db = this.getDb();
 
-    try {
-      const whereConditions: string[] = [`language = ?`];
+    const whereConditions: string[] = [`language = ?`];
 
-      if (!includeKnown) {
-        whereConditions.push('known = FALSE');
-      }
-
-      if (!includeIgnored) {
-        whereConditions.push('ignored = FALSE');
-      }
-
-      const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
-
-      // If we're getting words for learning (not including known/ignored), shuffle them
-      const orderClause =
-        !includeKnown && !includeIgnored
-          ? 'ORDER BY strength ASC, RANDOM()'
-          : 'ORDER BY created_at DESC';
-
-      const stmt = db.prepare(`
-        SELECT * FROM words 
-        ${whereClause}
-        ${orderClause}
-      `);
-
-      const rows = stmt.all(language) as any[];
-      const words = rows.map(this.mapRowToWord);
-
-      // Additional shuffling for learning words to ensure variety
-      if (!includeKnown && !includeIgnored) {
-        return this.shuffleArray(words);
-      }
-
-      return words;
-    } catch (error) {
-      throw wrapError(error, `Failed to get all words`);
+    if (!includeKnown) {
+      whereConditions.push('known = FALSE');
     }
+
+    if (!includeIgnored) {
+      whereConditions.push('ignored = FALSE');
+    }
+
+    const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
+
+    // If we're getting words for learning (not including known/ignored), shuffle them
+    const orderClause =
+      !includeKnown && !includeIgnored
+        ? 'ORDER BY strength ASC, RANDOM()'
+        : 'ORDER BY created_at DESC';
+
+    const stmt = db.prepare(`
+      SELECT * FROM words 
+      ${whereClause}
+      ${orderClause}
+    `);
+
+    const rows = stmt.all(language) as any[];
+    const words = rows.map(this.mapRowToWord);
+
+    // Additional shuffling for learning words to ensure variety
+    if (!includeKnown && !includeIgnored) {
+      return this.shuffleArray(words);
+    }
+
+    return words;
   }
 
   /**
@@ -801,14 +765,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   async getWordById(wordId: number): Promise<Word | null> {
     const db = this.getDb();
 
-    try {
-      const stmt = db.prepare('SELECT * FROM words WHERE id = ?');
-      const row = stmt.get(wordId) as any;
+    const stmt = db.prepare('SELECT * FROM words WHERE id = ?');
+    const row = stmt.get(wordId) as any;
 
-      return row ? this.mapRowToWord(row) : null;
-    } catch (error) {
-      throw wrapError(error, `Failed to get word by ID`);
-    }
+    return row ? this.mapRowToWord(row) : null;
   }
 
   /**
@@ -821,20 +781,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   ): Promise<string[]> {
     const db = this.getDb();
 
-    try {
-      // Get all known words for the language, shuffled
-      const stmt = db.prepare(`
-        SELECT word FROM words 
-        WHERE language = ? AND known = TRUE AND ignored = FALSE
-        ORDER BY RANDOM()
-        LIMIT ?
-      `);
+    // Get all known words for the language, shuffled
+    const stmt = db.prepare(`
+      SELECT word FROM words 
+      WHERE language = ? AND known = TRUE AND ignored = FALSE
+      ORDER BY RANDOM()
+      LIMIT ?
+    `);
 
-      const rows = stmt.all(language, limit) as Array<{ word: string }>;
-      return rows.map((row) => row.word);
-    } catch (error) {
-      throw wrapError(error, `Failed to get known words for sentence generation`);
-    }
+    const rows = stmt.all(language, limit) as Array<{ word: string }>;
+    return rows.map((row) => row.word);
   }
 
   async getKnownWords(
@@ -844,20 +800,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   ): Promise<string[]> {
     const db = this.getDb();
 
-    try {
-      // Get words that are either known OR have strength >= minWordStrength
-      const stmt = db.prepare(`
-        SELECT word FROM words 
-        WHERE language = ? AND ignored = FALSE AND (known = TRUE OR strength >= ?)
-        ORDER BY RANDOM()
-        LIMIT ?
-      `);
+    // Get words that are either known OR have strength >= minWordStrength
+    const stmt = db.prepare(`
+      SELECT word FROM words 
+      WHERE language = ? AND ignored = FALSE AND (known = TRUE OR strength >= ?)
+      ORDER BY RANDOM()
+      LIMIT ?
+    `);
 
-      const rows = stmt.all(language, minWordStrength, maxWords) as Array<{ word: string }>;
-      return rows.map((row) => row.word);
-    } catch (error) {
-      throw wrapError(error, `Failed to get known words`);
-    }
+    const rows = stmt.all(language, minWordStrength, maxWords) as Array<{ word: string }>;
+    return rows.map((row) => row.word);
   }
 
   /**
@@ -873,27 +825,23 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   ): Promise<string[]> {
     const db = this.getDb();
 
-    try {
-      // Get words (learning, known, and ignored) for the language, optionally filtered by topic and limited
-      // This includes ignored words to ensure they are filtered out during generation
-      let query = `SELECT word FROM words WHERE language = ?`;
-      const params: any[] = [language];
+    // Get words (learning, known, and ignored) for the language, optionally filtered by topic and limited
+    // This includes ignored words to ensure they are filtered out during generation
+    let query = `SELECT word FROM words WHERE language = ?`;
+    const params: any[] = [language];
 
-      if (topic) {
-        query += ` AND topic = ?`;
-        params.push(topic);
-      }
-
-      if (limit && limit > 0) {
-        query += ` LIMIT ${Math.floor(limit)}`;
-      }
-
-      const stmt = db.prepare(query);
-      const rows = stmt.all(...params) as Array<{ word: string }>;
-      return rows.map((row) => row.word);
-    } catch (error) {
-      throw wrapError(error, `Failed to get existing words for duplicate checking`);
+    if (topic) {
+      query += ` AND topic = ?`;
+      params.push(topic);
     }
+
+    if (limit && limit > 0) {
+      query += ` LIMIT ${Math.floor(limit)}`;
+    }
+
+    const stmt = db.prepare(query);
+    const rows = stmt.all(...params) as Array<{ word: string }>;
+    return rows.map((row) => row.word);
   }
 
   /**
@@ -905,21 +853,17 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   async getIgnoredWords(language: string, topic?: string): Promise<string[]> {
     const db = this.getDb();
 
-    try {
-      let query = `SELECT word FROM words WHERE language = ? AND ignored = TRUE`;
-      const params: any[] = [language];
+    let query = `SELECT word FROM words WHERE language = ? AND ignored = TRUE`;
+    const params: any[] = [language];
 
-      if (topic) {
-        query += ` AND topic = ?`;
-        params.push(topic);
-      }
-
-      const stmt = db.prepare(query);
-      const rows = stmt.all(...params) as Array<{ word: string }>;
-      return rows.map((row) => row.word);
-    } catch (error) {
-      throw wrapError(error, `Failed to get ignored words`);
+    if (topic) {
+      query += ` AND topic = ?`;
+      params.push(topic);
     }
+
+    const stmt = db.prepare(query);
+    const rows = stmt.all(...params) as Array<{ word: string }>;
+    return rows.map((row) => row.word);
   }
 
   /**
@@ -938,55 +882,51 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       return new Set();
     }
 
-    try {
-      // Normalize words to lowercase for comparison
-      const normalizedWords = words.map((w) => w.toLowerCase());
+    // Normalize words to lowercase for comparison
+    const normalizedWords = words.map((w) => w.toLowerCase());
 
-      // Create placeholders for IN clause
-      const placeholders = normalizedWords.map(() => '?').join(',');
+    // Create placeholders for IN clause
+    const placeholders = normalizedWords.map(() => '?').join(',');
 
-      // Query 1: Check words table (existing words - learning, known, or ignored)
-      let wordsQuery = `
-        SELECT LOWER(word) as word 
-        FROM words 
-        WHERE language = ? AND LOWER(word) IN (${placeholders})
-      `;
+    // Query 1: Check words table (existing words - learning, known, or ignored)
+    let wordsQuery = `
+      SELECT LOWER(word) as word 
+      FROM words 
+      WHERE language = ? AND LOWER(word) IN (${placeholders})
+    `;
 
-      const wordsParams: any[] = [language, ...normalizedWords];
+    const wordsParams: any[] = [language, ...normalizedWords];
 
-      if (topic) {
-        wordsQuery += ` AND topic = ?`;
-        wordsParams.push(topic);
-      }
-
-      const wordsStmt = db.prepare(wordsQuery);
-      const wordsRows = wordsStmt.all(...wordsParams) as Array<{ word: string }>;
-      const existingWordsSet = new Set(wordsRows.map((row) => row.word));
-
-      // Query 2: Check neglected_words table (words neglected 3+ times in last 7 days)
-      // Filter by language only (no topic filtering - if neglected in any topic, filter it out)
-      const neglectedQuery = `
-        SELECT LOWER(word) as word
-        FROM neglected_words
-        WHERE language = ? 
-          AND LOWER(word) IN (${placeholders})
-          AND ignored_at >= DATE('now', '-7 days')
-        GROUP BY LOWER(word)
-        HAVING COUNT(*) >= 3
-      `;
-
-      const neglectedParams: any[] = [language, ...normalizedWords];
-      const neglectedStmt = db.prepare(neglectedQuery);
-      const neglectedRows = neglectedStmt.all(...neglectedParams) as Array<{ word: string }>;
-      const neglectedWordsSet = new Set(neglectedRows.map((row) => row.word));
-
-      // Combine both sets
-      const combinedSet = new Set([...existingWordsSet, ...neglectedWordsSet]);
-
-      return combinedSet;
-    } catch (error) {
-      throw wrapError(error, `Failed to check words existence`);
+    if (topic) {
+      wordsQuery += ` AND topic = ?`;
+      wordsParams.push(topic);
     }
+
+    const wordsStmt = db.prepare(wordsQuery);
+    const wordsRows = wordsStmt.all(...wordsParams) as Array<{ word: string }>;
+    const existingWordsSet = new Set(wordsRows.map((row) => row.word));
+
+    // Query 2: Check neglected_words table (words neglected 3+ times in last 7 days)
+    // Filter by language only (no topic filtering - if neglected in any topic, filter it out)
+    const neglectedQuery = `
+      SELECT LOWER(word) as word
+      FROM neglected_words
+      WHERE language = ? 
+        AND LOWER(word) IN (${placeholders})
+        AND ignored_at >= DATE('now', '-7 days')
+      GROUP BY LOWER(word)
+      HAVING COUNT(*) >= 3
+    `;
+
+    const neglectedParams: any[] = [language, ...normalizedWords];
+    const neglectedStmt = db.prepare(neglectedQuery);
+    const neglectedRows = neglectedStmt.all(...neglectedParams) as Array<{ word: string }>;
+    const neglectedWordsSet = new Set(neglectedRows.map((row) => row.word));
+
+    // Combine both sets
+    const combinedSet = new Set([...existingWordsSet, ...neglectedWordsSet]);
+
+    return combinedSet;
   }
 
   /**
@@ -995,19 +935,15 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   async getWordsByIds(wordIds: number[]): Promise<Word[]> {
     const db = this.getDb();
 
-    try {
-      if (wordIds.length === 0) {
-        return [];
-      }
-
-      const placeholders = wordIds.map(() => '?').join(',');
-      const stmt = db.prepare(`SELECT * FROM words WHERE id IN (${placeholders})`);
-      const rows = stmt.all(...wordIds) as any[];
-
-      return rows.map((row) => this.mapRowToWord(row));
-    } catch (error) {
-      throw wrapError(error, `Failed to get words by IDs`);
+    if (wordIds.length === 0) {
+      return [];
     }
+
+    const placeholders = wordIds.map(() => '?').join(',');
+    const stmt = db.prepare(`SELECT * FROM words WHERE id IN (${placeholders})`);
+    const rows = stmt.all(...wordIds) as any[];
+
+    return rows.map((row) => this.mapRowToWord(row));
   }
 
   // Sentence management operations

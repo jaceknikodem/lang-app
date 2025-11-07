@@ -75,40 +75,32 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
       return audioPath;
     }
 
-    try {
-      // Ensure directory exists for the file
-      const dir = dirname(audioPath);
-      if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
-      }
-
-      // Get voice ID for the language (use provided voiceId if available, otherwise select randomly)
-      // Use English voice if generating English sentence audio, otherwise use language-specific voice
-      const voiceLanguage = word === 'english_sentence' ? 'english' : language;
-      const finalVoiceId = voiceId || await this.getVoiceForLanguage(voiceLanguage);
-      
-      // Store the voiceID that was used for this generation
-      this.lastUsedVoiceId = finalVoiceId;
-
-      // Make API request to ElevenLabs (rate-limited to 1 concurrent request)
-      const audioBuffer = await queueApiRequest(() => this.callElevenLabsAPI(text, finalVoiceId));
-
-      // Write audio file
-      writeFileSync(audioPath, audioBuffer);
-
-      // Verify file was created
-      if (!await this.audioExists(audioPath)) {
-        throw createAudioError(`Audio file not created: ${audioPath}`, 'GENERATION_FAILED', { audioPath });
-      }
-
-      return audioPath;
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('API')) {
-        throw createAudioError(`ElevenLabs API error: ${error.message}`, 'API_ERROR', { audioPath, cause: error });
-      }
-      const message = error instanceof Error ? error.message : 'Unknown TTS error';
-      throw createAudioError(`TTS generation failed: ${message}`, 'GENERATION_FAILED', { audioPath, cause: error });
+    // Ensure directory exists for the file
+    const dir = dirname(audioPath);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
     }
+
+    // Get voice ID for the language (use provided voiceId if available, otherwise select randomly)
+    // Use English voice if generating English sentence audio, otherwise use language-specific voice
+    const voiceLanguage = word === 'english_sentence' ? 'english' : language;
+    const finalVoiceId = voiceId || await this.getVoiceForLanguage(voiceLanguage);
+    
+    // Store the voiceID that was used for this generation
+    this.lastUsedVoiceId = finalVoiceId;
+
+    // Make API request to ElevenLabs (rate-limited to 1 concurrent request)
+    const audioBuffer = await queueApiRequest(() => this.callElevenLabsAPI(text, finalVoiceId));
+
+    // Write audio file
+    writeFileSync(audioPath, audioBuffer);
+
+    // Verify file was created
+    if (!await this.audioExists(audioPath)) {
+      throw createAudioError(`Audio file not created: ${audioPath}`, 'GENERATION_FAILED', { audioPath });
+    }
+
+    return audioPath;
   }
 
 
@@ -129,30 +121,23 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
       }
     };
 
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Accept': 'audio/mpeg',
-          'Content-Type': 'application/json',
-          'xi-api-key': this.config.elevenLabsApiKey!
-        },
-        body: JSON.stringify(requestBody)
-      });
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'audio/mpeg',
+        'Content-Type': 'application/json',
+        'xi-api-key': this.config.elevenLabsApiKey!
+      },
+      body: JSON.stringify(requestBody)
+    });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      return Buffer.from(arrayBuffer);
-    } catch (error) {
-      if (error instanceof Error) {
-        throw new Error(`ElevenLabs API call failed: ${error.message}`);
-      }
-      throw new Error('ElevenLabs API call failed: Unknown error');
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
     }
+
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
   }
 
   /**
