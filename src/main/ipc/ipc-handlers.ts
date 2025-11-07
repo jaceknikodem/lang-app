@@ -1514,56 +1514,6 @@ function setupDialogHandlers(
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.DIALOG.GENERATE_FOLLOW_UP_FROM_TEXT, async (event, userText, userTranslation) => {
-    try {
-      if (!userText || typeof userText !== 'string' || userText.trim().length === 0) {
-        throw new Error('User text is required');
-      }
-
-      const language = await databaseLayer.getCurrentLanguage();
-      
-      // Generate follow-up from text (no caching)
-      const followUp = await dialogService.generateFollowUpFromText(
-        userText,
-        userTranslation || '',
-        language
-      );
-
-      // Generate audio on-demand if continuation text exists
-      let continuationAudio: string | undefined;
-      if (followUp.text && followUp.text.trim().length > 0) {
-        try {
-          const currentLanguage = await databaseLayer.getCurrentLanguage();
-          const audioPath = await audioService.generateAudio(
-            followUp.text,
-            currentLanguage,
-            undefined,
-            undefined,
-            undefined,
-            undefined // No variant ID - this is for open-ended conversation
-          );
-          
-          if (audioPath) {
-            continuationAudio = audioPath;
-            console.log('[IPC] Generated continuation audio for open-ended dialog:', audioPath);
-          }
-        } catch (audioError) {
-          console.error('[IPC] Failed to generate continuation audio:', audioError);
-          // Continue without audio - non-critical
-        }
-      }
-      
-      return {
-        text: followUp.text,
-        translation: followUp.translation,
-        audio: continuationAudio
-      };
-    } catch (error) {
-      console.error('Error generating follow-up from text:', error);
-      throw new Error(`Failed to generate follow-up from text: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  });
-
   ipcMain.handle(IPC_CHANNELS.DIALOG.PREGENERATE_SESSION, async (event) => {
     try {
       // Pre-generate a single dialog session using batch method

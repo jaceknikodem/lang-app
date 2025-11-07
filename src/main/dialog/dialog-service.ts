@@ -223,40 +223,6 @@ export class DialogService {
   }
 
   /**
-   * Generate follow-up continuation from arbitrary text (for open-ended conversations)
-   * This doesn't require a variant ID and doesn't cache the result
-   */
-  async generateFollowUpFromText(
-    userText: string,
-    userTranslation: string,
-    language: string
-  ): Promise<{ text: string; translation: string }> {
-    if (!userText || userText.trim().length === 0) {
-      return { text: '', translation: '' };
-    }
-
-    // Get proficiency level for the language
-    let proficiencyLevel: string | undefined;
-    try {
-      const proficiencyKey = `language_proficiency_${language.toLowerCase()}`;
-      proficiencyLevel = await this.database.getSetting(proficiencyKey) || undefined;
-    } catch (error) {
-      console.warn('Failed to retrieve proficiency level for follow-up generation:', error);
-    }
-
-    // Use LLM client method which handles prompt creation, JSON parsing, and validation
-    // Don't cache - each conversation turn is unique
-    const result = await this.llmClient.generateFollowUp(
-      userText,
-      userTranslation,
-      language,
-      proficiencyLevel
-    );
-
-    return result;
-  }
-
-  /**
    * Pre-generate multiple dialog sessions (batch DB queries, controlled concurrent LLM calls)
    * Batches database queries for efficiency and uses controlled concurrency for LLM requests
    * to avoid flooding the LLM service while allowing parallel processing

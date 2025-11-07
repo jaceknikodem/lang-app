@@ -429,9 +429,6 @@ export class AudioService {
       const fileListContent = inputList.map(path => `file '${path.replace(/'/g, "'\\''")}'`).join('\n');
       writeFileSync(fileListPath, fileListContent);
       
-      // Log the concat list for debugging (first 500 chars)
-      console.log(`[Flow] Concat list (first 500 chars): ${fileListContent.substring(0, 500)}`);
-
       try {
         // Use ffmpeg concat filter instead of concat demuxer to handle mixed formats better
         // The concat filter properly handles format differences and ensures silence is included
