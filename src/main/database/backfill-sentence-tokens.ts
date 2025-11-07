@@ -66,7 +66,7 @@ export async function backfillSentenceTokens(options: BackfillOptions): Promise<
         }
 
         // Get all words in the same language
-        const allWords = await database.getAllWords(true, true, primaryWord.language);
+        const allWords = await database.getAllWords(primaryWord.language, true, true);
 
         // Precompute tokens with dictionary lookups
         const tokenizedTokens = await precomputeSentenceTokens({

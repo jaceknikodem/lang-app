@@ -14,12 +14,12 @@ declare global {
         updateWordStrength: (wordId: number, strength: number) => Promise<void>;
         markWordKnown: (wordId: number, known: boolean) => Promise<void>;
         markWordIgnored: (wordId: number, ignored: boolean) => Promise<void>;
-        getWordsToStudy: (limit: number) => Promise<Word[]>;
+        getWordsToStudy: (limit: number, language: string) => Promise<Word[]>;
         getWordById: (wordId: number) => Promise<Word | null>;
         getWordsByIds: (wordIds: number[]) => Promise<Word[]>;
-        getAllWords: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
-        getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
-        getWordsWithSentencesOrderedByStrength: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
+        getAllWords: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
+        getWordsWithSentences: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
+        getWordsWithSentencesOrderedByStrength: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
         getRecentStudySessions: (limit?: number) => Promise<Array<{id: number, wordsStudied: number, whenStudied: Date}>>;
         insertSentence: (
           wordId: number,
@@ -43,14 +43,14 @@ declare global {
         updateSentenceAudioPath: (sentenceId: number, audioPath: string, audioGenerationVoiceId?: string) => Promise<void>;
         incrementSentencePlayCount: (sentenceId: number) => Promise<void>;
         updateLastStudied: (wordId: number) => Promise<void>;
-        getStudyStats: () => Promise<StudyStats>;
+        getStudyStats: (language: string) => Promise<StudyStats>;
         recordStudySession: (wordsStudied: number) => Promise<void>;
         getCurrentLanguage: () => Promise<string>;
         setCurrentLanguage: (language: string) => Promise<void>;
         getAvailableLanguages: () => Promise<string[]>;
         getLanguageStats: () => Promise<Array<{language: string, totalWords: number, studiedWords: number, averagePronunciationScore: number | null, pronunciationAttemptCount: number}>>;
-        lookupDictionary: (word: string, language?: string) => Promise<DictionaryEntry[]>;
-        getNewWordCount: (language?: string) => Promise<number>;
+        lookupDictionary: (word: string, language: string) => Promise<DictionaryEntry[]>;
+        getNewWordCount: (language: string) => Promise<number>;
         resetLanguageProgress: (language: string) => Promise<void>;
       };
       llm: {
@@ -65,7 +65,7 @@ declare global {
         audioExists: (audioPath: string) => Promise<boolean>;
         normalizeAudioVolume: (audioPath: string, targetDb?: number) => Promise<string | null>;
         loadAudioBase64: (audioPath: string) => Promise<{ data: ArrayBuffer; mimeType: string } | null>;
-        regenerateAudio: (options: { text: string; language?: string; word?: string; wordId?: number; sentenceId?: number; variantId?: number; existingPath?: string }) => Promise<{ audioPath: string }>;
+        regenerateAudio: (options: { text: string; language: string; word?: string; wordId?: number; sentenceId?: number; variantId?: number; existingPath?: string }) => Promise<{ audioPath: string }>;
         startRecording: (options?: any) => Promise<any>;
         stopRecording: () => Promise<any>;
         cancelRecording: () => Promise<void>;
@@ -114,8 +114,19 @@ declare global {
         ) => () => void;
       };
       quiz: {
-        getWeakestWords: (limit: number) => Promise<Word[]>;
+        getWeakestWords: (limit: number, language: string) => Promise<Word[]>;
         getRandomSentenceForWord: (wordId: number) => Promise<Sentence | null>;
+      };
+      flow: {
+        getFlowSentences: (language: string) => Promise<Array<{
+          sentence: Sentence;
+          words: Word[];
+          beforeSentenceAudio?: string;
+          afterSentenceAudio?: string;
+          continuationAudios: string[];
+        }>>;
+        stitchAudio: (audioPaths: string[], language: string) => Promise<string>;
+        getFileStats: (filePath: string) => Promise<{ mtime: Date } | null>;
       };
       lifecycle: {
         createBackup: () => Promise<string>;

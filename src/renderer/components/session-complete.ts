@@ -269,7 +269,8 @@ export class SessionComplete extends LitElement {
 
   private async loadUpdatedStats() {
     try {
-      this.studyStats = await window.electronAPI.database.getStudyStats();
+      const language = await window.electronAPI.database.getCurrentLanguage();
+      this.studyStats = await window.electronAPI.database.getStudyStats(language);
     } catch (error) {
       console.error('Failed to load updated stats:', error);
     }

@@ -633,7 +633,8 @@ export class LearningMode extends LitElement {
     try {
       // Load all words (including known ones) for highlighting purposes
       // Filter by current language to avoid loading words from other languages
-      this.allWords = await window.electronAPI.database.getAllWords(true, false, this.currentLanguage ?? undefined);
+      const language = this.currentLanguage || await window.electronAPI.database.getCurrentLanguage();
+      this.allWords = await window.electronAPI.database.getAllWords(language, true, false);
       console.log('Loaded all words for highlighting:', this.allWords.length);
     } catch (error) {
       console.error('Failed to load all words:', error);
@@ -716,7 +717,8 @@ export class LearningMode extends LitElement {
 
       // Fallback: Get words that have sentences available for learning, ordered by strength (weakest first)
       // This handles cases like "Continue Learning" or "Practice Weak Words"
-      const wordsOrdered = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(true, false, this.currentLanguage ?? undefined);
+      const language = this.currentLanguage || await window.electronAPI.database.getCurrentLanguage();
+      const wordsOrdered = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(language, true, false);
       console.log(`getWordsWithSentencesOrderedByStrength returned ${wordsOrdered.length} words for language: ${this.currentLanguage}`);
       const sessionWordIds: number[] = [];
       const selectableWords: Word[] = [];
@@ -745,7 +747,8 @@ export class LearningMode extends LitElement {
       // If no words with sentences were found, check if there are any words at all for this language
       // This helps us show a better error message
       if (selectableWords.length === 0) {
-        const allWordsForLanguage = await window.electronAPI.database.getAllWords(true, false, this.currentLanguage ?? undefined);
+        const language = this.currentLanguage || await window.electronAPI.database.getCurrentLanguage();
+        const allWordsForLanguage = await window.electronAPI.database.getAllWords(language, true, false);
         console.log(`No words with sentences found. Total words for language ${this.currentLanguage}: ${allWordsForLanguage.length}`);
         // Store all words (even without sentences) so we can show a helpful message
         if (allWordsForLanguage.length > 0) {
@@ -956,10 +959,11 @@ export class LearningMode extends LitElement {
 
     try {
       const sessionCreatedAt = new Date(activeSession.createdAt);
+      const language = this.currentLanguage || await window.electronAPI.database.getCurrentLanguage();
       const wordsOrdered = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(
+        language,
         true,
-        false,
-        this.currentLanguage ?? undefined
+        false
       );
 
       const existingWordIds = new Set(activeSession.wordIds);

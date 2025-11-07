@@ -140,7 +140,7 @@ export class AudioService {
    * Generate audio for text with error handling and validation
    * Ensures the currently selected TTS engine is used for generation.
    */
-  async generateAudio(text: string, language?: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, voiceId?: string): Promise<string> {
+  async generateAudio(text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, voiceId?: string): Promise<string> {
     // Ensure we're using the currently selected TTS engine
     if (this.database) {
       await this.checkAndSwitchToAudioBackend(this.database);
@@ -152,11 +152,12 @@ export class AudioService {
         throw new Error('Text must be a non-empty string');
       }
 
-      // Language is now optional - will be retrieved from database if not provided
-      const targetLanguage = language ? language.toLowerCase() : undefined;
+      if (!language || typeof language !== 'string') {
+        throw new Error('Language must be a non-empty string');
+      }
 
       // Generate audio and return relative path
-      const audioPath = await this.audioGenerator.generateAudio(text.trim(), targetLanguage, word, wordId, sentenceId, variantId, voiceId);
+      const audioPath = await this.audioGenerator.generateAudio(text.trim(), language.toLowerCase(), word, wordId, sentenceId, variantId, voiceId);
 
       // Verify the file was actually created
       if (!await this.audioExists(audioPath)) {
@@ -576,7 +577,7 @@ export class AudioService {
    * Regenerate audio while ensuring the original file is only replaced on success.
    * Ensures the currently selected TTS engine is used for regeneration.
    */
-  async regenerateAudio(text: string, language?: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, existingPath?: string): Promise<string> {
+  async regenerateAudio(text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, existingPath?: string): Promise<string> {
     // Ensure we're using the currently selected TTS engine
     if (this.database) {
       await this.checkAndSwitchToAudioBackend(this.database);
@@ -623,7 +624,7 @@ export class AudioService {
    * Generate audio for a sentence and return the path
    * Convenience method for sentence-specific audio generation
    */
-  async generateSentenceAudio(sentence: string, language?: string, word?: string, wordId?: number, sentenceId?: number): Promise<string> {
+  async generateSentenceAudio(sentence: string, language: string, word?: string, wordId?: number, sentenceId?: number): Promise<string> {
     return this.generateAudio(sentence, language, word, wordId, sentenceId, undefined);
   }
 
@@ -686,7 +687,7 @@ export class AudioService {
    * Batch generate audio for multiple texts
    * Returns array of paths in same order as input
    */
-  async generateBatchAudio(texts: string[], language?: string, word?: string, wordId?: number, sentenceIds?: number[]): Promise<string[]> {
+  async generateBatchAudio(texts: string[], language: string, word?: string, wordId?: number, sentenceIds?: number[]): Promise<string[]> {
     const results: string[] = [];
 
     for (let i = 0; i < texts.length; i++) {

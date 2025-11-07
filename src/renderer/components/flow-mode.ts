@@ -130,7 +130,8 @@ export class FlowMode extends LitElement {
 
       // Only load sentences and stitch if cache is not valid
       if (needsStitching) {
-        const sentences = await window.electronAPI.flow.getFlowSentences();
+        const language = await window.electronAPI.database.getCurrentLanguage();
+        const sentences = await window.electronAPI.flow.getFlowSentences(language);
         this.flowSentences = sentences;
 
         // Collect all audio paths (limited to 200)
@@ -182,7 +183,9 @@ export class FlowMode extends LitElement {
         }
       } else {
         // If using cache, still load sentences for display purposes (but don't wait for it)
-        window.electronAPI.flow.getFlowSentences().then(sentences => {
+        window.electronAPI.database.getCurrentLanguage().then(language => {
+          return window.electronAPI.flow.getFlowSentences(language);
+        }).then(sentences => {
           this.flowSentences = sentences;
           this.requestUpdate();
         }).catch(err => {

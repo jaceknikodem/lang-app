@@ -71,7 +71,7 @@ export function setupIPCHandlers(
   setupQuizHandlers(databaseLayer);
 
   // SRS handlers
-  setupSRSHandlers(srsService);
+  setupSRSHandlers(srsService, databaseLayer);
 
   // Background job handlers
   setupJobHandlers(databaseLayer);
@@ -141,7 +141,10 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.GET_WORDS_TO_STUDY,
-    createIPCHandler(LimitSchema, (limit) => databaseLayer.getWordsToStudy(limit), 'get words to study')
+    createIPCHandler(LimitSchema, async (limit) => {
+      const language = await databaseLayer.getCurrentLanguage();
+      return databaseLayer.getWordsToStudy(limit, language);
+    }, 'get words to study')
   );
 
   ipcMain.handle(
@@ -260,7 +263,10 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
 
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.GET_STUDY_STATS,
-    createIPCHandler(undefined, () => databaseLayer.getStudyStats(), 'get study stats')
+    createIPCHandler(undefined, async () => {
+      const language = await databaseLayer.getCurrentLanguage();
+      return databaseLayer.getStudyStats(language);
+    }, 'get study stats')
   );
 
   ipcMain.handle(
@@ -271,12 +277,14 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.GET_ALL_WORDS,
     createIPCHandler(
-      [z.boolean().optional(), z.boolean().optional(), LanguageSchema.optional()],
-      (includeKnown, includeIgnored, language) => databaseLayer.getAllWords(
-        includeKnown !== undefined ? includeKnown : true,
-        includeIgnored !== undefined ? includeIgnored : false,
-        language
-      ),
+      [LanguageSchema, z.boolean().optional(), z.boolean().optional()],
+      async (language, includeKnown, includeIgnored) => {
+        return databaseLayer.getAllWords(
+          language,
+          includeKnown !== undefined ? includeKnown : true,
+          includeIgnored !== undefined ? includeIgnored : false
+        );
+      },
       'get all words'
     )
   );
@@ -284,12 +292,14 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES,
     createIPCHandler(
-      [z.boolean().optional(), z.boolean().optional(), LanguageSchema.optional()],
-      (includeKnown, includeIgnored, language) => databaseLayer.getWordsWithSentences(
-        includeKnown !== undefined ? includeKnown : true,
-        includeIgnored !== undefined ? includeIgnored : false,
-        language
-      ),
+      [LanguageSchema, z.boolean().optional(), z.boolean().optional()],
+      async (language, includeKnown, includeIgnored) => {
+        return databaseLayer.getWordsWithSentences(
+          language,
+          includeKnown !== undefined ? includeKnown : true,
+          includeIgnored !== undefined ? includeIgnored : false
+        );
+      },
       'get words with sentences'
     )
   );
@@ -297,12 +307,14 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
   ipcMain.handle(
     IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES_ORDERED_BY_STRENGTH,
     createIPCHandler(
-      [z.boolean().optional(), z.boolean().optional(), LanguageSchema.optional()],
-      (includeKnown, includeIgnored, language) => databaseLayer.getWordsWithSentencesOrderedByStrength(
-        includeKnown !== undefined ? includeKnown : true,
-        includeIgnored !== undefined ? includeIgnored : false,
-        language
-      ),
+      [LanguageSchema, z.boolean().optional(), z.boolean().optional()],
+      async (language, includeKnown, includeIgnored) => {
+        return databaseLayer.getWordsWithSentencesOrderedByStrength(
+          language,
+          includeKnown !== undefined ? includeKnown : true,
+          includeIgnored !== undefined ? includeIgnored : false
+        );
+      },
       'get words with sentences ordered by strength'
     )
   );
@@ -354,7 +366,10 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     IPC_CHANNELS.DATABASE.LOOKUP_DICTIONARY,
     createIPCHandler(
       [DictionaryWordSchema, LanguageSchema.optional()],
-      (word, language) => databaseLayer.lookupDictionary(word, language),
+      async (word, language) => {
+        const currentLanguage = language || await databaseLayer.getCurrentLanguage();
+        return databaseLayer.lookupDictionary(word, currentLanguage);
+      },
       'lookup dictionary entry'
     )
   );
@@ -363,7 +378,10 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     IPC_CHANNELS.DATABASE.GET_NEW_WORD_COUNT,
     createIPCHandler(
       LanguageSchema.optional(),
-      (language) => databaseLayer.getNewWordCount(language),
+      async (language) => {
+        const currentLanguage = language || await databaseLayer.getCurrentLanguage();
+        return databaseLayer.getNewWordCount(currentLanguage);
+      },
       'get new word count'
     )
   );
@@ -624,7 +642,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
   ipcMain.handle(IPC_CHANNELS.AUDIO.GENERATE_AUDIO, async (event, text, language, word, wordId, sentenceId, variantId) => {
     try {
       const validatedText = TextSchema.parse(text);
-      const validatedLanguage = language ? LanguageSchema.parse(language) : undefined;
+      const validatedLanguage = language ? LanguageSchema.parse(language) : (databaseLayer ? await databaseLayer.getCurrentLanguage() : 'spanish');
       const validatedWord = word ? TextSchema.parse(word) : undefined;
       const validatedWordId = wordId !== undefined ? z.number().int().parse(wordId) : undefined;
       const validatedSentenceId = sentenceId !== undefined ? z.number().int().positive().parse(sentenceId) : undefined;
@@ -731,9 +749,11 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
         existingPath: AudioPathSchema.optional()
       }).parse(payload ?? {});
 
+      const language = validatedPayload.language || (databaseLayer ? await databaseLayer.getCurrentLanguage() : 'spanish');
+
       const audioPath = await audioService.regenerateAudio(
         validatedPayload.text,
-        validatedPayload.language,
+        language,
         validatedPayload.word,
         validatedPayload.wordId,
         validatedPayload.sentenceId,
@@ -980,7 +1000,8 @@ function setupQuizHandlers(databaseLayer: SQLiteDatabaseLayer): void {
   ipcMain.handle(IPC_CHANNELS.QUIZ.GET_WEAKEST_WORDS, async (event, limit) => {
     try {
       const validatedLimit = LimitSchema.parse(limit);
-      return await databaseLayer.getWeakestWords(validatedLimit);
+      const language = await databaseLayer.getCurrentLanguage();
+      return await databaseLayer.getWeakestWords(validatedLimit, language);
     } catch (error) {
       console.error('Error getting weakest words:', error);
       throw wrapError(error, `Failed to get weakest words`);
@@ -1001,7 +1022,7 @@ function setupQuizHandlers(databaseLayer: SQLiteDatabaseLayer): void {
 /**
  * Set up SRS-related IPC handlers
  */
-function setupSRSHandlers(srsService: SRSService): void {
+function setupSRSHandlers(srsService: SRSService, databaseLayer: SQLiteDatabaseLayer): void {
   ipcMain.handle(IPC_CHANNELS.SRS.PROCESS_REVIEW, async (event, wordId, recall) => {
     try {
       const validatedWordId = WordIdSchema.parse(wordId);
@@ -1033,8 +1054,8 @@ function setupSRSHandlers(srsService: SRSService): void {
   ipcMain.handle(IPC_CHANNELS.SRS.GET_TODAYS_STUDY_WORDS, async (event, maxWords, language) => {
     try {
       const validatedMaxWords = maxWords ? LimitSchema.parse(maxWords) : undefined;
-      const validatedLanguage = language ? LanguageSchema.parse(language) : undefined;
-      return await srsService.getTodaysStudyWords(validatedMaxWords, validatedLanguage);
+      const validatedLanguage = language ? LanguageSchema.parse(language) : await databaseLayer.getCurrentLanguage();
+      return await srsService.getTodaysStudyWords(validatedLanguage, validatedMaxWords);
     } catch (error) {
       console.error('Error getting todays study words:', error);
       throw wrapError(error, `Failed to get todays study words`);
@@ -1043,7 +1064,7 @@ function setupSRSHandlers(srsService: SRSService): void {
 
   ipcMain.handle(IPC_CHANNELS.SRS.GET_DASHBOARD_STATS, async (event, language) => {
     try {
-      const validatedLanguage = language ? LanguageSchema.parse(language) : undefined;
+      const validatedLanguage = language ? LanguageSchema.parse(language) : await databaseLayer.getCurrentLanguage();
       return await srsService.getDashboardStats(validatedLanguage);
     } catch (error) {
       console.error('Error getting dashboard stats:', error);
@@ -1074,7 +1095,7 @@ function setupSRSHandlers(srsService: SRSService): void {
 
   ipcMain.handle(IPC_CHANNELS.SRS.GET_OVERDUE_WORDS, async (event, language) => {
     try {
-      const validatedLanguage = language ? LanguageSchema.parse(language) : undefined;
+      const validatedLanguage = language ? LanguageSchema.parse(language) : await databaseLayer.getCurrentLanguage();
       return await srsService.getOverdueWords(validatedLanguage);
     } catch (error) {
       console.error('Error getting overdue words:', error);
@@ -1084,7 +1105,7 @@ function setupSRSHandlers(srsService: SRSService): void {
 
   ipcMain.handle(IPC_CHANNELS.SRS.INITIALIZE_EXISTING_WORDS, async (event, language) => {
     try {
-      const validatedLanguage = language ? LanguageSchema.parse(language) : undefined;
+      const validatedLanguage = language ? LanguageSchema.parse(language) : await databaseLayer.getCurrentLanguage();
       return await srsService.initializeExistingWords(validatedLanguage);
     } catch (error) {
       console.error('Error initializing existing words:', error);
@@ -1402,7 +1423,7 @@ function setupDialogHandlers(
       
       // Get known words for variant generation
       const language = await databaseLayer.getCurrentLanguage();
-      const allWords = await databaseLayer.getAllWords(true, false, language);
+      const allWords = await databaseLayer.getAllWords(language, true, false);
       const dialogServiceConfig = dialogService as any; // Access private config
       const minWordStrength = dialogServiceConfig.config?.minWordStrength ?? 40;
       const maxKnownWords = dialogServiceConfig.config?.maxKnownWordsForVariants ?? 50;
@@ -1826,11 +1847,11 @@ function setupFlowHandlers(
   databaseLayer: SQLiteDatabaseLayer,
   audioService: AudioService
 ): void {
-  ipcMain.handle(IPC_CHANNELS.FLOW.GET_FLOW_SENTENCES, async (event) => {
+  ipcMain.handle(IPC_CHANNELS.FLOW.GET_FLOW_SENTENCES, async (event, language) => {
     try {
-      // Get current language explicitly to ensure correct filtering
-      const currentLanguage = await databaseLayer.getCurrentLanguage();
-      const flowSentences = await databaseLayer.getFlowSentences(currentLanguage);
+      // Validate and use provided language, or get current language if not provided
+      const validatedLanguage = language ? LanguageSchema.parse(language) : await databaseLayer.getCurrentLanguage();
+      const flowSentences = await databaseLayer.getFlowSentences(validatedLanguage);
       
       // Check which audio files actually exist and filter accordingly
       const result = await Promise.all(

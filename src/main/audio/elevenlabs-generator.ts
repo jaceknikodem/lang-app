@@ -61,7 +61,7 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
    * Generate audio file for given text using ElevenLabs API
    * Returns path to generated audio file
    */
-  async generateAudio(text: string, language?: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, voiceId?: string): Promise<string> {
+  async generateAudio(text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, voiceId?: string): Promise<string> {
     if (!text || text.trim().length === 0) {
       throw this.createAudioError('GENERATION_FAILED', 'Text cannot be empty');
     }
@@ -70,19 +70,8 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
       throw this.createAudioError('API_ERROR', 'ElevenLabs API key not configured');
     }
 
-    // Get language from database if not provided
-    let targetLanguage = language;
-    if (!targetLanguage && this.database) {
-      try {
-        targetLanguage = await this.database.getCurrentLanguage();
-      } catch (error) {
-        console.warn('Failed to get current language from database, using default');
-        targetLanguage = 'spanish';
-      }
-    }
-    targetLanguage = targetLanguage || 'spanish';
 
-    const audioPath = this.getAudioPath(text, targetLanguage, word, wordId, sentenceId, variantId);
+    const audioPath = this.getAudioPath(text, language, word, wordId, sentenceId, variantId);
 
     // Return existing file if it exists (caching)
     if (await this.audioExists(audioPath)) {
@@ -97,7 +86,7 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
       }
 
       // Get voice ID for the language (use provided voiceId if available, otherwise select randomly)
-      const finalVoiceId = voiceId || await this.getVoiceForLanguage(targetLanguage);
+      const finalVoiceId = voiceId || await this.getVoiceForLanguage(language);
       
       // Store the voiceID that was used for this generation
       this.lastUsedVoiceId = finalVoiceId;

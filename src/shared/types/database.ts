@@ -35,11 +35,11 @@ export interface DatabaseLayer {
   updateWordStrength(wordId: number, strength: number): Promise<void>;
   markWordKnown(wordId: number, known: boolean): Promise<void>;
   markWordIgnored(wordId: number, ignored: boolean): Promise<void>;
-  getWordsToStudy(limit: number, language?: string): Promise<Word[]>;
-  getWordsByStrength(minStrength: number, maxStrength: number, limit?: number, language?: string): Promise<Word[]>;
-  getAllWords(includeKnown?: boolean, includeIgnored?: boolean, language?: string, maxWords?: number): Promise<Word[]>;
-  getWordsWithSentences(includeKnown?: boolean, includeIgnored?: boolean, language?: string): Promise<Word[]>;
-  getWordsWithSentencesOrderedByStrength(includeKnown?: boolean, includeIgnored?: boolean, language?: string): Promise<Word[]>;
+  getWordsToStudy(limit: number, language: string): Promise<Word[]>;
+  getWordsByStrength(minStrength: number, maxStrength: number, language: string, limit?: number): Promise<Word[]>;
+  getAllWords(language: string, includeKnown?: boolean, includeIgnored?: boolean, maxWords?: number): Promise<Word[]>;
+  getWordsWithSentences(language: string, includeKnown?: boolean, includeIgnored?: boolean): Promise<Word[]>;
+  getWordsWithSentencesOrderedByStrength(language: string, includeKnown?: boolean, includeIgnored?: boolean): Promise<Word[]>;
   getWordById(wordId: number): Promise<Word | null>;
   getWordsByIds(wordIds: number[]): Promise<Word[]>;
   getKnownWordsForSentenceGeneration(language: string, limit?: number): Promise<string[]>;
@@ -62,10 +62,10 @@ export interface DatabaseLayer {
       fsrsLastRating?: number | null;
     }
   ): Promise<void>;
-  getWordsDueForReview(limit?: number, language?: string): Promise<Word[]>;
-  getWordsDueCount(language?: string): Promise<number>;
-  getWordsDueWithPriority(limit?: number, language?: string): Promise<Word[]>;
-  getSRSStats(language?: string): Promise<{
+  getWordsDueForReview(language: string, limit?: number): Promise<Word[]>;
+  getWordsDueCount(language: string): Promise<number>;
+  getWordsDueWithPriority(language: string, limit?: number): Promise<Word[]>;
+  getSRSStats(language: string): Promise<{
     totalWords: number;
     dueToday: number;
     overdue: number;
@@ -120,17 +120,17 @@ export interface DatabaseLayer {
   
   // Progress tracking
   updateLastStudied(wordId: number): Promise<void>;
-  getStudyStats(language?: string): Promise<StudyStats>;
+  getStudyStats(language: string): Promise<StudyStats>;
   recordStudySession(wordsStudied: number): Promise<void>;
   getRecentStudySessions(limit?: number): Promise<Array<{id: number, wordsStudied: number, whenStudied: Date}>>;
   
   // Quiz-specific operations
-  getWeakestWords(limit: number, language?: string): Promise<Word[]>;
+  getWeakestWords(limit: number, language: string): Promise<Word[]>;
   getRandomSentenceForWord(wordId: number): Promise<Sentence | null>;
   
   // Dialog-specific operations
-  getRandomDialogSentence(language?: string): Promise<Sentence | null>;
-  getRandomDialogSentences(count: number, language?: string): Promise<Sentence[]>;
+  getRandomDialogSentence(language: string): Promise<Sentence | null>;
+  getRandomDialogSentences(count: number, language: string): Promise<Sentence[]>;
   
   // Settings management
   getSetting(key: string): Promise<string | null>;
@@ -139,7 +139,7 @@ export interface DatabaseLayer {
   setCurrentLanguage(language: string): Promise<void>;
   getAvailableLanguages(): Promise<string[]>;
   getLanguageStats(): Promise<Array<{language: string, totalWords: number, studiedWords: number, averagePronunciationScore: number | null, pronunciationAttemptCount: number}>>;
-  lookupDictionary(word: string, language?: string): Promise<DictionaryEntry[]>;
+  lookupDictionary(word: string, language: string): Promise<DictionaryEntry[]>;
   updateWordProcessingStatus(wordId: number, status: WordProcessingStatus): Promise<void>;
   getWordProcessingInfo(wordId: number): Promise<{ processingStatus: WordProcessingStatus; sentenceCount: number } | null>;
   getWordGenerationQueueSummary(language?: string): Promise<{
@@ -159,7 +159,7 @@ export interface DatabaseLayer {
   failWordGenerationJob(jobId: number, error: string): Promise<void>;
 
   // Flow feature operations
-  getFlowSentences(language?: string): Promise<Array<{
+  getFlowSentences(language: string): Promise<Array<{
     sentence: Sentence;
     words: Word[];
     beforeSentenceAudio?: string;
@@ -168,12 +168,12 @@ export interface DatabaseLayer {
   }>>;
 
   // Scoring-specific operations
-  getNewWordCount(language?: string): Promise<number>;
-  getWeakWordCount(language?: string): Promise<number>;
-  getDialogueReadinessRatio(language?: string, minStrength?: number): Promise<number>;
-  getAveragePronunciationScore(language?: string): Promise<number>;
-  getAvailableSentencesCount(language?: string): Promise<number>;
-  getTimeSinceLastActivePractice(language?: string): Promise<number>;
+  getNewWordCount(language: string): Promise<number>;
+  getWeakWordCount(language: string): Promise<number>;
+  getDialogueReadinessRatio(language: string, minStrength?: number): Promise<number>;
+  getAveragePronunciationScore(language: string): Promise<number>;
+  getAvailableSentencesCount(language: string): Promise<number>;
+  getTimeSinceLastActivePractice(language: string): Promise<number>;
 
   // Database lifecycle
   initialize(): Promise<void>;

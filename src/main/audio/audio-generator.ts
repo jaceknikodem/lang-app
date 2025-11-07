@@ -39,24 +39,12 @@ export class TTSAudioGenerator extends BaseAudioGenerator {
    * Returns path to generated audio file
    * Note: voiceId parameter is ignored for system TTS
    */
-  async generateAudio(text: string, language?: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, voiceId?: string): Promise<string> {
+  async generateAudio(text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, voiceId?: string): Promise<string> {
     if (!text || text.trim().length === 0) {
       throw this.createAudioError('GENERATION_FAILED', 'Text cannot be empty');
     }
 
-    // Get language from database if not provided
-    let targetLanguage = language;
-    if (!targetLanguage && this.database) {
-      try {
-        targetLanguage = await this.database.getCurrentLanguage();
-      } catch (error) {
-        console.warn('Failed to get current language from database, using default');
-        targetLanguage = 'spanish';
-      }
-    }
-    targetLanguage = targetLanguage || 'spanish';
-
-    const audioPath = this.getAudioPath(text, targetLanguage, word, wordId, sentenceId, variantId);
+    const audioPath = this.getAudioPath(text, language, word, wordId, sentenceId, variantId);
 
     // Return existing file if it exists (caching)
     if (await this.audioExists(audioPath)) {
@@ -72,7 +60,7 @@ export class TTSAudioGenerator extends BaseAudioGenerator {
 
       // Build TTS command arguments
       const args = [
-        '-v', this.getVoiceForLanguage(targetLanguage),
+        '-v', this.getVoiceForLanguage(language),
         '-r', this.config.rate!.toString(),
         '-o', audioPath,
         text

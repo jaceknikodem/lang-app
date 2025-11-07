@@ -13,12 +13,12 @@ export interface IPCBridge {
     updateWordStrength: (wordId: number, strength: number) => Promise<void>;
     markWordKnown: (wordId: number, known: boolean) => Promise<void>;
     markWordIgnored: (wordId: number, ignored: boolean) => Promise<void>;
-    getWordsToStudy: (limit: number) => Promise<Word[]>;
+    getWordsToStudy: (limit: number, language: string) => Promise<Word[]>;
     getWordById: (wordId: number) => Promise<Word | null>;
     getWordsByIds: (wordIds: number[]) => Promise<Word[]>;
-    getAllWords: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
-    getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
-    getWordsWithSentencesOrderedByStrength: (includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
+    getAllWords: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
+    getWordsWithSentences: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
+    getWordsWithSentencesOrderedByStrength: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => Promise<Word[]>;
     getRecentStudySessions: (limit?: number) => Promise<Array<{ id: number, wordsStudied: number, whenStudied: Date }>>;
     insertSentence: (
       wordId: number,
@@ -59,8 +59,8 @@ export interface IPCBridge {
     setCurrentLanguage: (language: string) => Promise<void>;
     getAvailableLanguages: () => Promise<string[]>;
     getLanguageStats: () => Promise<Array<{ language: string, totalWords: number, studiedWords: number, averagePronunciationScore: number | null, pronunciationAttemptCount: number }>>;
-    lookupDictionary: (word: string, language?: string) => Promise<DictionaryEntry[]>;
-    getNewWordCount: (language?: string) => Promise<number>;
+    lookupDictionary: (word: string, language: string) => Promise<DictionaryEntry[]>;
+    getNewWordCount: (language: string) => Promise<number>;
     resetLanguageProgress: (language: string) => Promise<void>;
   };
 
@@ -73,8 +73,8 @@ export interface IPCBridge {
       responseTime?: number;
       difficulty?: 'easy' | 'medium' | 'hard';
     }>) => Promise<void>;
-    getTodaysStudyWords: (maxWords?: number, language?: string) => Promise<Word[]>;
-    getDashboardStats: (language?: string) => Promise<{
+    getTodaysStudyWords: (language: string, maxWords?: number) => Promise<Word[]>;
+    getDashboardStats: (language: string) => Promise<{
       totalWords: number;
       dueToday: number;
       overdue: number;
@@ -84,8 +84,8 @@ export interface IPCBridge {
     }>;
     markWordDifficulty: (wordId: number, difficulty: 'easy' | 'hard') => Promise<void>;
     resetWordProgress: (wordId: number) => Promise<void>;
-    getOverdueWords: (language?: string) => Promise<Word[]>;
-    initializeExistingWords: (language?: string) => Promise<number>;
+    getOverdueWords: (language: string) => Promise<Word[]>;
+    initializeExistingWords: (language: string) => Promise<number>;
   };
 
   // LLM operations
@@ -143,14 +143,14 @@ export interface IPCBridge {
 
   // Audio operations
     audio: {
-      generateAudio: (text: string, language?: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number) => Promise<string>;
+      generateAudio: (text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number) => Promise<string>;
       playAudio: (audioPath: string) => Promise<void>;
       stopAudio: () => Promise<void>;
       audioExists: (audioPath: string) => Promise<boolean>;
       normalizeAudioVolume: (audioPath: string, targetDb?: number) => Promise<string | null>;
       regenerateAudio: (options: {
         text: string;
-        language?: string;
+        language: string;
         word?: string;
         wordId?: number;
         sentenceId?: number;
@@ -214,7 +214,7 @@ export interface IPCBridge {
 
   // Flow operations
   flow: {
-    getFlowSentences: (language?: string) => Promise<Array<{
+    getFlowSentences: (language: string) => Promise<Array<{
       sentence: Sentence;
       words: Word[];
       beforeSentenceAudio?: string;

@@ -590,7 +590,7 @@ export class AppRoot extends LitElement {
   private async checkExistingWords() {
     this.sessionDataState = { 
       ...this.sessionDataState, 
-      hasExistingWords: await checkExistingWords(this.languageState.currentLanguage || undefined)
+      hasExistingWords: await checkExistingWords(this.languageState.currentLanguage || await window.electronAPI.database.getCurrentLanguage())
     };
     
     // Check proficiency level (will show selector if no words and no proficiency set)
@@ -640,7 +640,7 @@ export class AppRoot extends LitElement {
       }
 
       const language = this.languageState.currentLanguage || (await window.electronAPI.database.getCurrentLanguage());
-      const candidates = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(true, false, language);
+      const candidates = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(language, true, false);
 
       const sessionWordIds: number[] = [];
       for (const word of candidates) {
@@ -806,7 +806,7 @@ export class AppRoot extends LitElement {
         return;
       }
 
-      const allWords = await window.electronAPI.database.getAllWords(true, false, this.languageState.currentLanguage);
+      const allWords = await window.electronAPI.database.getAllWords(this.languageState.currentLanguage, true, false);
       this.sessionDataState = {
         ...this.sessionDataState,
         wordCategoryStats: calculateWordCategoryStats(allWords)
@@ -849,7 +849,8 @@ export class AppRoot extends LitElement {
       case 'learning':
         // Check if there are words with sentences available for review in the current language
         try {
-          const wordsWithSentences = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(true, false, this.languageState.currentLanguage || undefined);
+          const language = this.languageState.currentLanguage || await window.electronAPI.database.getCurrentLanguage();
+          const wordsWithSentences = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(language, true, false);
           if (wordsWithSentences.length > 0) {
             router.goToLearning();
           } else {
@@ -1007,7 +1008,7 @@ export class AppRoot extends LitElement {
       });
       
       // Check if we have fewer than 5 unreviewed words, and if so, add more
-      const unreviewedCount = await window.electronAPI.database.getNewWordCount(this.languageState.currentLanguage);
+      const unreviewedCount = await window.electronAPI.database.getNewWordCount(this.languageState.currentLanguage || await window.electronAPI.database.getCurrentLanguage());
       
       if (unreviewedCount < 5) {
         void this.handleAutoAddNew();

@@ -1530,7 +1530,8 @@ export class QuizMode extends LitElement {
   private async loadSelectedWords() {
     try {
       // Always load the weakest words from database for targeted practice
-      const words = await window.electronAPI.quiz.getWeakestWords(10);
+      const language = await window.electronAPI.database.getCurrentLanguage();
+      const words = await window.electronAPI.quiz.getWeakestWords(10, language);
       this.selectedWords = words;
       console.log('Loaded weakest words for quiz:', this.selectedWords.length);
     } catch (error) {

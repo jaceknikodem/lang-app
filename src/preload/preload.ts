@@ -25,12 +25,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORD_BY_ID, wordId),
     getWordsByIds: (wordIds: number[]) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_BY_IDS, wordIds),
-    getAllWords: (includeKnown?: boolean, includeIgnored?: boolean, language?: string) => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_ALL_WORDS, includeKnown, includeIgnored, language),
-    getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean, language?: string) => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES, includeKnown, includeIgnored, language),
-    getWordsWithSentencesOrderedByStrength: (includeKnown?: boolean, includeIgnored?: boolean, language?: string) => 
-      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES_ORDERED_BY_STRENGTH, includeKnown, includeIgnored, language),
+    getAllWords: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => 
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_ALL_WORDS, language, includeKnown, includeIgnored),
+    getWordsWithSentences: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => 
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES, language, includeKnown, includeIgnored),
+    getWordsWithSentencesOrderedByStrength: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => 
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES_ORDERED_BY_STRENGTH, language, includeKnown, includeIgnored),
     getRecentStudySessions: (limit?: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_RECENT_STUDY_SESSIONS, limit),
     insertSentence: (
@@ -98,9 +98,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_AVAILABLE_LANGUAGES),
     getLanguageStats: () => 
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_LANGUAGE_STATS),
-    lookupDictionary: (word: string, language?: string) =>
+    lookupDictionary: (word: string, language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.LOOKUP_DICTIONARY, word, language),
-    getNewWordCount: (language?: string) =>
+    getNewWordCount: (language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_NEW_WORD_COUNT, language),
     resetLanguageProgress: (language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.RESET_LANGUAGE_PROGRESS, language)
@@ -155,7 +155,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.NORMALIZE_AUDIO_VOLUME, audioPath, targetDb),
     loadAudioBase64: (audioPath: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.LOAD_AUDIO_BASE64, audioPath),
-    regenerateAudio: (options: { text: string; language?: string; word?: string; wordId?: number; sentenceId?: number; variantId?: number; existingPath?: string }) =>
+    regenerateAudio: (options: { text: string; language: string; word?: string; wordId?: number; sentenceId?: number; variantId?: number; existingPath?: string }) =>
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.REGENERATE_AUDIO, options),
     startRecording: (options?: any) => 
       ipcRenderer.invoke(IPC_CHANNELS.AUDIO.START_RECORDING, options),
@@ -207,7 +207,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Quiz operations
   quiz: {
-    getWeakestWords: (limit: number, language?: string) => 
+    getWeakestWords: (limit: number, language: string) => 
       ipcRenderer.invoke(IPC_CHANNELS.QUIZ.GET_WEAKEST_WORDS, limit, language),
     getRandomSentenceForWord: (wordId: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.QUIZ.GET_RANDOM_SENTENCE_FOR_WORD, wordId)
@@ -275,17 +275,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       difficulty?: 'easy' | 'medium' | 'hard';
     }>) => 
       ipcRenderer.invoke(IPC_CHANNELS.SRS.PROCESS_QUIZ_RESULTS, results),
-    getTodaysStudyWords: (maxWords?: number, language?: string) => 
+    getTodaysStudyWords: (language: string, maxWords?: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.SRS.GET_TODAYS_STUDY_WORDS, maxWords, language),
-    getDashboardStats: (language?: string) => 
+    getDashboardStats: (language: string) => 
       ipcRenderer.invoke(IPC_CHANNELS.SRS.GET_DASHBOARD_STATS, language),
     markWordDifficulty: (wordId: number, difficulty: 'easy' | 'hard') => 
       ipcRenderer.invoke(IPC_CHANNELS.SRS.MARK_WORD_DIFFICULTY, wordId, difficulty),
     resetWordProgress: (wordId: number) => 
       ipcRenderer.invoke(IPC_CHANNELS.SRS.RESET_WORD_PROGRESS, wordId),
-      getOverdueWords: (language?: string) => 
+      getOverdueWords: (language: string) => 
         ipcRenderer.invoke(IPC_CHANNELS.SRS.GET_OVERDUE_WORDS, language),
-      initializeExistingWords: (language?: string) => 
+      initializeExistingWords: (language: string) => 
         ipcRenderer.invoke(IPC_CHANNELS.SRS.INITIALIZE_EXISTING_WORDS, language)
     },
 
@@ -319,8 +319,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     // Flow operations
     flow: {
-      getFlowSentences: () =>
-        ipcRenderer.invoke(IPC_CHANNELS.FLOW.GET_FLOW_SENTENCES),
+      getFlowSentences: (language: string) =>
+        ipcRenderer.invoke(IPC_CHANNELS.FLOW.GET_FLOW_SENTENCES, language),
       stitchAudio: (audioPaths: string[], language: string) =>
         ipcRenderer.invoke(IPC_CHANNELS.FLOW.STITCH_AUDIO, audioPaths, language),
       getFileStats: (filePath: string) =>
@@ -387,12 +387,12 @@ declare global {
         updateWordStrength: (wordId: number, strength: number) => Promise<void>;
         markWordKnown: (wordId: number, known: boolean) => Promise<void>;
         markWordIgnored: (wordId: number, ignored: boolean) => Promise<void>;
-        getWordsToStudy: (limit: number, language?: string) => Promise<any[]>;
+        getWordsToStudy: (limit: number, language: string) => Promise<any[]>;
         getWordById: (wordId: number) => Promise<any | null>;
         getWordsByIds: (wordIds: number[]) => Promise<any[]>;
-        getAllWords: (includeKnown?: boolean, includeIgnored?: boolean, language?: string) => Promise<any[]>;
-        getWordsWithSentences: (includeKnown?: boolean, includeIgnored?: boolean, language?: string) => Promise<any[]>;
-        getWordsWithSentencesOrderedByStrength: (includeKnown?: boolean, includeIgnored?: boolean, language?: string) => Promise<any[]>;
+        getAllWords: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => Promise<any[]>;
+        getWordsWithSentences: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => Promise<any[]>;
+        getWordsWithSentencesOrderedByStrength: (language: string, includeKnown?: boolean, includeIgnored?: boolean) => Promise<any[]>;
         getRecentStudySessions: (limit?: number) => Promise<any[]>;
         insertSentence: (wordId: number, sentence: string, translation: string, audioPath: string, contextBefore?: string, contextAfter?: string, contextBeforeTranslation?: string, contextAfterTranslation?: string) => Promise<number>;
         getSentencesByWord: (wordId: number) => Promise<any[]>;
@@ -412,7 +412,7 @@ declare global {
           createdAt: Date;
         }>>;
         updateLastStudied: (wordId: number) => Promise<void>;
-        getStudyStats: (language?: string) => Promise<any>;
+        getStudyStats: (language: string) => Promise<any>;
         recordStudySession: (wordsStudied: number) => Promise<void>;
         getSetting: (key: string) => Promise<string | null>;
         setSetting: (key: string, value: string) => Promise<void>;
@@ -420,13 +420,13 @@ declare global {
         setCurrentLanguage: (language: string) => Promise<void>;
         getAvailableLanguages: () => Promise<string[]>;
         getLanguageStats: () => Promise<Array<{language: string, totalWords: number, studiedWords: number, averagePronunciationScore: number | null, pronunciationAttemptCount: number}>>;
-        lookupDictionary: (word: string, language?: string) => Promise<Array<{
+        lookupDictionary: (word: string, language: string) => Promise<Array<{
           word: string;
           pos: string;
           glosses: string[];
           lang: string;
         }>>;
-        getNewWordCount: (language?: string) => Promise<number>;
+        getNewWordCount: (language: string) => Promise<number>;
         resetLanguageProgress: (language: string) => Promise<void>;
       };
       llm: {
@@ -454,7 +454,7 @@ declare global {
         audioExists: (audioPath: string) => Promise<boolean>;
         normalizeAudioVolume: (audioPath: string, targetDb?: number) => Promise<string | null>;
         loadAudioBase64: (audioPath: string) => Promise<{ data: ArrayBuffer; mimeType: string } | null>;
-        regenerateAudio: (options: { text: string; language?: string; word?: string; wordId?: number; sentenceId?: number; variantId?: number; existingPath?: string }) => Promise<{ audioPath: string }>;
+        regenerateAudio: (options: { text: string; language: string; word?: string; wordId?: number; sentenceId?: number; variantId?: number; existingPath?: string }) => Promise<{ audioPath: string }>;
         startRecording: (options?: any) => Promise<any>;
         stopRecording: () => Promise<any>;
         cancelRecording: () => Promise<void>;
@@ -477,7 +477,7 @@ declare global {
         resetVoiceMappingsToDefaults: () => Promise<void>;
       };
       quiz: {
-        getWeakestWords: (limit: number, language?: string) => Promise<any[]>;
+        getWeakestWords: (limit: number, language: string) => Promise<any[]>;
         getRandomSentenceForWord: (wordId: number) => Promise<any | null>;
       };
       lifecycle: {
@@ -539,8 +539,8 @@ declare global {
           responseTime?: number;
           difficulty?: 'easy' | 'medium' | 'hard';
         }>) => Promise<void>;
-        getTodaysStudyWords: (maxWords?: number, language?: string) => Promise<any[]>;
-        getDashboardStats: (language?: string) => Promise<{
+        getTodaysStudyWords: (language: string, maxWords?: number) => Promise<any[]>;
+        getDashboardStats: (language: string) => Promise<{
           totalWords: number;
           dueToday: number;
           overdue: number;
@@ -550,8 +550,8 @@ declare global {
         }>;
         markWordDifficulty: (wordId: number, difficulty: 'easy' | 'hard') => Promise<void>;
         resetWordProgress: (wordId: number) => Promise<void>;
-        getOverdueWords: (language?: string) => Promise<any[]>;
-        initializeExistingWords: (language?: string) => Promise<number>;
+        getOverdueWords: (language: string) => Promise<any[]>;
+        initializeExistingWords: (language: string) => Promise<number>;
       };
       lemmatization: {
         getStatus: () => Promise<{ status: string; loadedModels: string[]; service: string } | null>;
@@ -568,7 +568,7 @@ declare global {
         pregenerateSessions: (count: number) => Promise<any[]>;
       };
       flow: {
-        getFlowSentences: () => Promise<Array<{
+        getFlowSentences: (language: string) => Promise<Array<{
           sentence: any;
           words: any[];
           beforeSentenceAudio?: string;

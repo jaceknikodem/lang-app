@@ -41,7 +41,7 @@ export async function loadAutoplayAudioSetting(): Promise<boolean> {
 /**
  * Check if existing words exist in database for a language
  */
-export async function checkExistingWords(language?: string): Promise<boolean> {
+export async function checkExistingWords(language: string): Promise<boolean> {
   try {
     // Use getStudyStats which is much faster than loading all words
     // It only returns a count, not the full word data
@@ -58,7 +58,8 @@ export async function checkExistingWords(language?: string): Promise<boolean> {
  */
 export async function checkFlowSentences(): Promise<boolean> {
   try {
-    const flowSentences = await window.electronAPI.flow.getFlowSentences();
+    const language = await window.electronAPI.database.getCurrentLanguage();
+    const flowSentences = await window.electronAPI.flow.getFlowSentences(language);
     
     // Collect all audio paths using the same logic as handleFlowPlay()
     const audioPaths: string[] = [];

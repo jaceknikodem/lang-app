@@ -50,7 +50,7 @@ export class ProficiencyService {
   ): Promise<number> {
     try {
       // Get all words for the language
-      const words = await this.database.getAllWords(false, false, language);
+      const words = await this.database.getAllWords(language, false, false);
       
       if (words.length === 0) {
         return 0;

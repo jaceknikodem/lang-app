@@ -1135,7 +1135,7 @@ export class SentenceViewer extends LitElement {
         const entries = await Promise.race([
           window.electronAPI.database.lookupDictionary(
             word,
-            languageOverride ?? this.targetWord?.language
+            languageOverride ?? this.targetWord?.language ?? await window.electronAPI.database.getCurrentLanguage()
           ),
           new Promise<never>((_, reject) => {
             setTimeout(() => {
@@ -1865,7 +1865,7 @@ export class SentenceViewer extends LitElement {
       }
 
       const oldPath = this.sentence.audioPath;
-      const language = this.targetWord?.language;
+      const language = this.targetWord?.language || await window.electronAPI.database.getCurrentLanguage();
       const word = this.targetWord?.word;
 
       console.info('Recreate audio: invoking regenerateAudio', { oldPath });
@@ -1884,10 +1884,7 @@ export class SentenceViewer extends LitElement {
         regeneratedPath = result?.audioPath;
       } else {
         console.warn('Recreate audio: regenerateAudio not available, using fallback flow');
-        const fallbackLanguage = language || this.targetWord?.language;
-        if (!fallbackLanguage) {
-          throw new Error('Unable to determine language for audio generation');
-        }
+        const fallbackLanguage = language || this.targetWord?.language || await window.electronAPI.database.getCurrentLanguage();
 
         const fallbackWord = `${word || this.targetWord?.word || 'sentence'}-regen-${Date.now()}`;
 

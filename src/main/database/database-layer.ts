@@ -538,14 +538,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get words to study, prioritizing SRS due words first, then by lowest strength
    */
-  async getWordsToStudy(limit: number, language?: string): Promise<Word[]> {
+  async getWordsToStudy(limit: number, language: string): Promise<Word[]> {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
-      
       // First, get words due for review (SRS priority)
-      const dueWords = await this.getWordsDueWithPriority(limit, currentLanguage);
+      const dueWords = await this.getWordsDueWithPriority(language, limit);
       
       // If we have enough due words, return them
       if (dueWords.length >= limit) {
@@ -565,7 +563,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         LIMIT ?
       `);
       
-      const rows = stmt.all(currentLanguage, now, remainingLimit) as any[];
+      const rows = stmt.all(language, now, remainingLimit) as any[];
       const additionalWords = rows.map(this.mapRowToWord);
       
       // Combine due words with additional words
@@ -578,12 +576,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get words by strength range for targeted practice
    */
-  async getWordsByStrength(minStrength: number, maxStrength: number, limit?: number, language?: string): Promise<Word[]> {
+  async getWordsByStrength(minStrength: number, maxStrength: number, language: string, limit?: number): Promise<Word[]> {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
-      
       let query = `
         SELECT * FROM words 
         WHERE known = FALSE AND ignored = FALSE 
@@ -596,7 +592,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       }
       
       const stmt = db.prepare(query);
-      const params = limit ? [minStrength, maxStrength, currentLanguage, limit] : [minStrength, maxStrength, currentLanguage];
+      const params = limit ? [minStrength, maxStrength, language, limit] : [minStrength, maxStrength, language];
       const rows = stmt.all(...params) as any[];
       
       return rows.map(this.mapRowToWord);
@@ -608,11 +604,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get words that have sentences available for learning
    */
-  async getWordsWithSentences(includeKnown: boolean = true, includeIgnored: boolean = false, language?: string): Promise<Word[]> {
+  async getWordsWithSentences(language: string, includeKnown: boolean = true, includeIgnored: boolean = false): Promise<Word[]> {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
       let whereConditions: string[] = [`w.language = ?`];
       
       if (!includeKnown) {
@@ -633,7 +628,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ORDER BY w.strength ASC, RANDOM()
       `);
       
-      const rows = stmt.all(currentLanguage) as any[];
+      const rows = stmt.all(language) as any[];
       const words = rows.map(this.mapRowToWord);
       
       return this.shuffleArray(words);
@@ -645,11 +640,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get words that have sentences available for review, ordered by last_studied (least recently studied first)
    */
-  async getWordsWithSentencesOrderedByStrength(includeKnown: boolean = true, includeIgnored: boolean = false, language?: string): Promise<Word[]> {
+  async getWordsWithSentencesOrderedByStrength(language: string, includeKnown: boolean = true, includeIgnored: boolean = false): Promise<Word[]> {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
       let whereConditions: string[] = [`w.language = ?`];
       
       if (!includeKnown) {
@@ -670,7 +664,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ORDER BY w.last_studied ASC NULLS FIRST
       `);
       
-      const rows = stmt.all(currentLanguage) as any[];
+      const rows = stmt.all(language) as any[];
       return rows.map(this.mapRowToWord);
     } catch (error) {
       throw wrapError(error, `Failed to get words with sentences ordered by strength`);
@@ -680,11 +674,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get all words with optional filtering and shuffling for learning
    */
-  async getAllWords(includeKnown: boolean = true, includeIgnored: boolean = false, language?: string): Promise<Word[]> {
+  async getAllWords(language: string, includeKnown: boolean = true, includeIgnored: boolean = false): Promise<Word[]> {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
       let whereConditions: string[] = [`language = ?`];
       
       if (!includeKnown) {
@@ -708,7 +701,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ${orderClause}
       `);
       
-      const rows = stmt.all(currentLanguage) as any[];
+      const rows = stmt.all(language) as any[];
       const words = rows.map(this.mapRowToWord);
       
       // Additional shuffling for learning words to ensure variety
@@ -1657,12 +1650,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get study statistics
    */
-  async getStudyStats(language?: string): Promise<StudyStats> {
+  async getStudyStats(language: string): Promise<StudyStats> {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
-      
       const statsStmt = db.prepare(`
         SELECT 
           COUNT(*) as totalWords,
@@ -1673,7 +1664,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         WHERE ignored = FALSE AND language = ?
       `);
       
-      const stats = statsStmt.get(currentLanguage) as any;
+      const stats = statsStmt.get(language) as any;
       
       return {
         totalWords: stats.totalWords || 0,
@@ -1735,14 +1726,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get weakest words for quiz generation, prioritizing SRS due words and lowest strength
    */
-  async getWeakestWords(limit: number, language?: string): Promise<Word[]> {
+  async getWeakestWords(limit: number, language: string): Promise<Word[]> {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
-      
       // Prioritize words due for review, then weakest words
-      const dueWords = await this.getWordsDueWithPriority(limit, currentLanguage);
+      const dueWords = await this.getWordsDueWithPriority(language, limit);
       
       if (dueWords.length >= limit) {
         return dueWords.slice(0, limit);
@@ -1768,7 +1757,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         LIMIT ?
       `);
       
-      const rows = stmt.all(currentLanguage, nowIso, cutoffTimeIso, cutoffTimeIso, remainingLimit) as any[];
+      const rows = stmt.all(language, nowIso, cutoffTimeIso, cutoffTimeIso, remainingLimit) as any[];
       const additionalWords = rows.map(this.mapRowToWord);
       
       return [...dueWords, ...additionalWords];
@@ -1819,7 +1808,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    * Get all sentences with audio for Flow feature
    * Includes sentences, connected words, before sentence audio paths, and continuation audio paths
    */
-      async getFlowSentences(language?: string): Promise<Array<{
+      async getFlowSentences(language: string): Promise<Array<{
         sentence: Sentence;
         words: Word[];
         beforeSentenceAudio?: string;
@@ -1829,8 +1818,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
-      
       // Get all sentences for the language that have audio (excluding ignored sentences)
       const stmt = db.prepare(`
         SELECT * 
@@ -1842,7 +1829,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ORDER BY id ASC
       `);
       
-      const sentenceRows = stmt.all(currentLanguage) as any[];
+      const sentenceRows = stmt.all(language) as any[];
       const sentences = sentenceRows.map(row => this.mapRowToSentence(row));
       
       const result: Array<{
@@ -1871,7 +1858,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
             SELECT * FROM words 
             WHERE id IN (${placeholders}) AND language = ?
           `);
-          const wordRows = wordsStmt.all(...wordIds.map(w => w.word_id), currentLanguage) as any[];
+          const wordRows = wordsStmt.all(...wordIds.map(w => w.word_id), language) as any[];
           for (const row of wordRows) {
             const word = this.mapRowToWord(row);
             words.push(word);
@@ -1882,7 +1869,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         // Always include the primary word (sentence.word_id) if it's in the correct language and not already included
         if (sentence.wordId && !wordIdSet.has(sentence.wordId)) {
           const primaryWord = await this.getWordById(sentence.wordId);
-          if (primaryWord && primaryWord.language === currentLanguage) {
+          if (primaryWord && primaryWord.language === language) {
             words.push(primaryWord);
           }
         }
@@ -1921,12 +1908,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    * Filters by: language, ignored=false, and contextBefore exists
    * All filtering and random selection happens at the database level for efficiency
    */
-  async getRandomDialogSentence(language?: string): Promise<Sentence | null> {
+  async getRandomDialogSentence(language: string): Promise<Sentence | null> {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
-      
       // Single query: join sentences to their primary word
       // Filter by: language, ignored = FALSE, contextBefore exists and is not empty
       // Randomly select one result
@@ -1942,7 +1927,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         LIMIT 1
       `);
       
-      const row = stmt.get(currentLanguage) as any;
+      const row = stmt.get(language) as any;
       
       if (!row) {
         return null;
@@ -1959,7 +1944,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    * Filters by: language, ignored=false, and contextBefore exists
    * All filtering and random selection happens at the database level for efficiency
    */
-  async getRandomDialogSentences(count: number, language?: string): Promise<Sentence[]> {
+  async getRandomDialogSentences(count: number, language: string): Promise<Sentence[]> {
     const db = this.getDb();
     
     try {
@@ -1967,8 +1952,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         return [];
       }
 
-      const currentLanguage = language || await this.getCurrentLanguage();
-      
       // Batch query: filter by language, ignored = FALSE, contextBefore exists and is not empty
       // Randomly select multiple results
       const stmt = db.prepare(`
@@ -1983,7 +1966,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         LIMIT ?
       `);
       
-      const rows = stmt.all(currentLanguage, count) as any[];
+      const rows = stmt.all(language, count) as any[];
       
       return rows.map(row => this.mapRowToSentence(row));
     } catch (error) {
@@ -2127,12 +2110,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Lookup dictionary entries for a word in the specified language
    */
-  async lookupDictionary(word: string, language?: string): Promise<DictionaryEntry[]> {
+  async lookupDictionary(word: string, language: string): Promise<DictionaryEntry[]> {
     const db = this.getDb();
 
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
-
       const stmt = db.prepare(`
         SELECT word, pos, glosses, lang
         FROM dict
@@ -2140,7 +2121,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ORDER BY pos ASC, word ASC
       `);
 
-      const rows = stmt.all(word, currentLanguage) as Array<{
+      const rows = stmt.all(word, language) as Array<{
         word: string;
         pos: string;
         glosses: string;
@@ -2465,11 +2446,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get words that are due for review (SRS-based selection)
    */
-  async getWordsDueForReview(limit?: number, language?: string): Promise<Word[]> {
+  async getWordsDueForReview(language: string, limit?: number): Promise<Word[]> {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
       const now = new Date().toISOString();
       
       let query = `
@@ -2484,7 +2464,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       }
       
       const stmt = db.prepare(query);
-      const params = limit ? [currentLanguage, now, limit] : [currentLanguage, now];
+      const params = limit ? [language, now, limit] : [language, now];
       const rows = stmt.all(...params) as any[];
       
       return rows.map(this.mapRowToWord);
@@ -2496,11 +2476,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get count of words due for review
    */
-  async getWordsDueCount(language?: string): Promise<number> {
+  async getWordsDueCount(language: string): Promise<number> {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
       const now = new Date().toISOString();
       
       const stmt = db.prepare(`
@@ -2509,7 +2488,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         AND language = ? AND next_due <= ?
       `);
       
-      const result = stmt.get(currentLanguage, now) as { count: number };
+      const result = stmt.get(language, now) as { count: number };
       return result.count;
     } catch (error) {
       throw wrapError(error, `Failed to get words due count`);
@@ -2519,11 +2498,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get words due for review with priority sorting for SRS
    */
-  async getWordsDueWithPriority(limit?: number, language?: string): Promise<Word[]> {
+  async getWordsDueWithPriority(language: string, limit?: number): Promise<Word[]> {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
       const now = new Date().toISOString();
       
       // Get all due words that have sentences (required for quiz mode)
@@ -2534,7 +2512,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         AND w.language = ? AND w.next_due <= ?
       `);
       
-      const rows = stmt.all(currentLanguage, now) as any[];
+      const rows = stmt.all(language, now) as any[];
       const words = rows.map(this.mapRowToWord);
       
       // Sort by SRS priority (overdue first, then by strength)
@@ -2561,7 +2539,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get SRS statistics for dashboard
    */
-  async getSRSStats(language?: string): Promise<{
+  async getSRSStats(language: string): Promise<{
     totalWords: number;
     dueToday: number;
     overdue: number;
@@ -2571,7 +2549,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
       const now = new Date().toISOString();
       const todayStr = endOfDay(new Date()).toISOString();
       
@@ -2586,7 +2563,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         WHERE ignored = FALSE AND known = FALSE AND language = ?
       `);
       
-      const result = stmt.get(todayStr, now, currentLanguage) as any;
+      const result = stmt.get(todayStr, now, language) as any;
       
       return {
         totalWords: result.totalWords || 0,
@@ -2953,12 +2930,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get count of new words (words where lastStudied IS NULL)
    */
-  async getNewWordCount(language?: string): Promise<number> {
+  async getNewWordCount(language: string): Promise<number> {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
-      
       const stmt = db.prepare(`
         SELECT COUNT(*) as count FROM words 
         WHERE language = ? 
@@ -2967,7 +2942,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         AND last_studied IS NULL
       `);
       
-      const result = stmt.get(currentLanguage) as { count: number };
+      const result = stmt.get(language) as { count: number };
       return result.count;
     } catch (error) {
       throw wrapError(error, `Failed to get new word count`);
@@ -2977,12 +2952,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get count of weak words (strength < 30)
    */
-  async getWeakWordCount(language?: string): Promise<number> {
+  async getWeakWordCount(language: string): Promise<number> {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
-      
       const stmt = db.prepare(`
         SELECT COUNT(*) as count FROM words 
         WHERE language = ? 
@@ -2991,7 +2964,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         AND strength < 30
       `);
       
-      const result = stmt.get(currentLanguage) as { count: number };
+      const result = stmt.get(language) as { count: number };
       return result.count;
     } catch (error) {
       throw wrapError(error, `Failed to get weak word count`);
@@ -3003,12 +2976,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    * A "cluster" is words associated with sentences that have contextBefore (dialog sentences)
    * Known vocab = words with known=true OR strength >= minStrength
    */
-  async getDialogueReadinessRatio(language?: string, minStrength: number = 40): Promise<number> {
+  async getDialogueReadinessRatio(language: string, minStrength: number = 40): Promise<number> {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
-      
       // Get total unique words associated with dialog sentences (sentences with contextBefore)
       const totalWordsStmt = db.prepare(`
         SELECT COUNT(DISTINCT w.id) as count
@@ -3021,7 +2992,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         AND TRIM(s.context_before) != ''
       `);
       
-      const totalResult = totalWordsStmt.get(currentLanguage) as { count: number };
+      const totalResult = totalWordsStmt.get(language) as { count: number };
       const totalWords = totalResult.count;
       
       if (totalWords === 0) {
@@ -3041,7 +3012,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         AND (w.known = TRUE OR w.strength >= ?)
       `);
       
-      const knownResult = knownWordsStmt.get(currentLanguage, minStrength) as { count: number };
+      const knownResult = knownWordsStmt.get(language, minStrength) as { count: number };
       const knownWords = knownResult.count;
       
       return knownWords / totalWords;
@@ -3054,12 +3025,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    * Get average pronunciation score (0-10 scale)
    * Calculated from pronunciation_attempts.similarity_score (0-1 scale), converted to 0-10
    */
-  async getAveragePronunciationScore(language?: string): Promise<number> {
+  async getAveragePronunciationScore(language: string): Promise<number> {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
-      
       // Get average similarity score from pronunciation_attempts
       // Join with sentences to filter by language
       const stmt = db.prepare(`
@@ -3069,7 +3038,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         WHERE s.language = ?
       `);
       
-      const result = stmt.get(currentLanguage) as { avg_score: number | null };
+      const result = stmt.get(language) as { avg_score: number | null };
       
       if (result.avg_score === null) {
         return 0; // No pronunciation attempts yet
@@ -3085,12 +3054,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get count of available sentences for Flow mode (sentences with audio)
    */
-  async getAvailableSentencesCount(language?: string): Promise<number> {
+  async getAvailableSentencesCount(language: string): Promise<number> {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
-      
       // Count sentences with audio for the language
       const stmt = db.prepare(`
         SELECT COUNT(*) as count
@@ -3100,7 +3067,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         AND TRIM(audio_path) != ''
       `);
       
-      const result = stmt.get(currentLanguage) as { count: number };
+      const result = stmt.get(language) as { count: number };
       return result.count;
     } catch (error) {
       throw wrapError(error, `Failed to get available sentences count`);
@@ -3113,11 +3080,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    * - Study sessions (quiz practice)
    * - Word last_review or last_studied (quiz/dialog practice)
    */
-  async getTimeSinceLastActivePractice(language?: string): Promise<number> {
+  async getTimeSinceLastActivePractice(language: string): Promise<number> {
     const db = this.getDb();
     
     try {
-      const currentLanguage = language || await this.getCurrentLanguage();
       const now = new Date();
       
       // Get most recent study session
@@ -3142,7 +3108,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         WHERE language = ?
         AND (last_review IS NOT NULL OR last_studied IS NOT NULL)
       `);
-      const wordResult = wordStmt.get(currentLanguage) as { last_practice: string | null };
+      const wordResult = wordStmt.get(language) as { last_practice: string | null };
       
       // Find the most recent timestamp
       let lastPractice: Date | null = null;

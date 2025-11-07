@@ -175,7 +175,7 @@ export class FrequencyWordManager {
             const wordEntry = wordList[position];
 
             // Check if word already exists in database
-            const existingWords = await database.getAllWords(true, true, language);
+            const existingWords = await database.getAllWords(language, true, true);
             const wordExists = existingWords.some(w => w.word.toLowerCase() === wordEntry.word.toLowerCase());
 
             if (!wordExists) {
@@ -200,7 +200,7 @@ export class FrequencyWordManager {
 
         try {
             // Get all words for this language from database
-            const existingWords = await database.getAllWords(true, true, language);
+            const existingWords = await database.getAllWords(language, true, true);
             const existingWordSet = new Set(existingWords.map(w => w.word.toLowerCase()));
 
             // Find the highest position of words that exist in database

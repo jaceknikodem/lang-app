@@ -283,7 +283,7 @@ export class WordGenerationRunner {
 
           // Precompute sentence tokens with dictionary lookups and lemmatization
           try {
-            const allWords = await this.database.getAllWords(false, false, language);
+            const allWords = await this.database.getAllWords(language, false, false);
             const tokenizedTokens = await precomputeSentenceTokens({
               sentence: sentence.sentence,
               targetWord: word,

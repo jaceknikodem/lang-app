@@ -107,7 +107,7 @@ export abstract class BaseAudioGenerator implements AudioGenerator {
   }
 
   // Abstract methods that must be implemented by subclasses
-  abstract generateAudio(text: string, language?: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, voiceId?: string): Promise<string>;
+  abstract generateAudio(text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, voiceId?: string): Promise<string>;
   protected abstract createAudioError(code: AudioError['code'], message: string, audioPath?: string, cause?: unknown): AudioError;
 }
 

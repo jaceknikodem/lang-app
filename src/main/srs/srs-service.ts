@@ -51,13 +51,13 @@ export class SRSService {
   /**
    * Get words for today's study session
    */
-  async getTodaysStudyWords(maxWords?: number, language?: string): Promise<Word[]> {
+  async getTodaysStudyWords(language: string, maxWords?: number): Promise<Word[]> {
     const dueCount = await this.database.getWordsDueCount(language);
     const recommendedBatch = SRSAlgorithm.getRecommendedBatchSize(dueCount);
     const limit = maxWords ? Math.min(maxWords, recommendedBatch) : recommendedBatch;
 
     const fetchLimit = Math.max(Math.min(limit * 3, limit + 50), limit);
-    const dueWords = await this.database.getWordsDueWithPriority(fetchLimit, language);
+    const dueWords = await this.database.getWordsDueWithPriority(language, fetchLimit);
 
     return this.engine.sortByPriority(dueWords, new Date()).slice(0, limit);
   }
@@ -65,7 +65,7 @@ export class SRSService {
   /**
    * Get SRS dashboard statistics
    */
-  async getDashboardStats(language?: string): Promise<{
+  async getDashboardStats(language: string): Promise<{
     totalWords: number;
     dueToday: number;
     overdue: number;
@@ -112,8 +112,8 @@ export class SRSService {
   /**
    * Get words that are overdue (for prioritization)
    */
-  async getOverdueWords(language?: string): Promise<Word[]> {
-    const allDue = await this.database.getWordsDueForReview(undefined, language);
+  async getOverdueWords(language: string): Promise<Word[]> {
+    const allDue = await this.database.getWordsDueForReview(language);
     const now = new Date();
 
     return allDue.filter(word => this.engine.isDue(word, now));
@@ -122,8 +122,8 @@ export class SRSService {
   /**
    * Bulk initialize SRS values for existing words (migration helper)
    */
-  async initializeExistingWords(language?: string): Promise<number> {
-    const words = await this.database.getAllWords(false, false, language);
+  async initializeExistingWords(language: string): Promise<number> {
+    const words = await this.database.getAllWords(language, false, false);
     const now = new Date();
     let updatedCount = 0;
 

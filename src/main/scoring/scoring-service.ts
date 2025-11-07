@@ -20,7 +20,7 @@ export class ScoringService {
    * Logic: score = max(0, 10 - 0.7 * new_word_count)
    * Meaning: score = 10 when zero new words (high need to add), drops to 0 at ~20 new words
    */
-  async calculateAddWordsScore(language?: string): Promise<number> {
+  async calculateAddWordsScore(language: string): Promise<number> {
     try {
       const newWordCount = await this.database.getNewWordCount(language);
       return Math.max(0, 10 - 0.7 * newWordCount);
@@ -36,7 +36,7 @@ export class ScoringService {
    * Logic: score = clamp((0.4 * new_word_count) + (0.25 * weak_word_count), 0, 10)
    * Meaning: prioritizes review when many new or shaky words exist
    */
-  async calculateReviewScore(language?: string): Promise<number> {
+  async calculateReviewScore(language: string): Promise<number> {
     try {
       const newWordCount = await this.database.getNewWordCount(language);
       const weakWordCount = await this.database.getWeakWordCount(language);
@@ -54,7 +54,7 @@ export class ScoringService {
    * Logic: score = min(10, due_word_count / 5)
    * Meaning: spikes when spaced-repetition items are due; falls when memory is fresh
    */
-  async calculateQuizScore(language?: string): Promise<number> {
+  async calculateQuizScore(language: string): Promise<number> {
     try {
       const dueWordCount = await this.database.getWordsDueCount(language);
       return Math.min(10, dueWordCount / 5);
@@ -70,7 +70,7 @@ export class ScoringService {
    * Logic: score = 10 * dialogue_readiness_ratio
    * Meaning: only activates when the learner knows nearly all words in a dialogue cluster
    */
-  async calculateDialogScore(language?: string): Promise<number> {
+  async calculateDialogScore(language: string): Promise<number> {
     try {
       const ratio = await this.database.getDialogueReadinessRatio(language, 50);
       return 10 * ratio;
@@ -86,7 +86,7 @@ export class ScoringService {
    * Logic: score = clamp((available_sentences_count / 10) + (avg_pronunciation_score - 7) - (time_since_last_quiz_or_dialog / 10), 0, 10)
    * Meaning: rises with content richness and pronunciation strength, but drops the longer it's been since any active practice
    */
-  async calculateFlowScore(language?: string): Promise<number> {
+  async calculateFlowScore(language: string): Promise<number> {
     try {
       const availableSentencesCount = await this.database.getAvailableSentencesCount(language);
       const avgPronunciationScore = await this.database.getAveragePronunciationScore(language);
@@ -102,7 +102,7 @@ export class ScoringService {
   /**
    * Calculate all mode scores
    */
-  async calculateAllScores(language?: string): Promise<ModeScores> {
+  async calculateAllScores(language: string): Promise<ModeScores> {
     const [addWords, review, quiz, dialog, flow] = await Promise.all([
       this.calculateAddWordsScore(language),
       this.calculateReviewScore(language),
@@ -140,7 +140,7 @@ export class ScoringService {
   }> {
     try {
       const currentMode = options.currentMode ?? undefined;
-      const language = options.language ?? undefined;
+      const language = options.language ?? await this.database.getCurrentLanguage();
       const initialTakeover = options.initialTakeover;
 
       // Calculate scores internally (never exposed)

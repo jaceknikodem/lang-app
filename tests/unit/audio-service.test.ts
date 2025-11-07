@@ -51,7 +51,7 @@ describe('Audio Service', () => {
       await expect(audioService.generateAudio('', 'english')).rejects.toThrow('Audio generation failed');
     });
 
-    it('should allow missing language and use defaults', async () => {
+    it('should require a valid language', async () => {
       const mockGenerator = {
         generateAudio: jest.fn().mockResolvedValue('/tmp/test-app-data/audio/hello.aiff'),
         playAudio: jest.fn().mockResolvedValue(undefined),
@@ -60,10 +60,7 @@ describe('Audio Service', () => {
       };
 
       const service = new AudioService(mockGenerator);
-      const result = await service.generateAudio('hello', '');
-
-      expect(result).toBe('hello.aiff');
-      expect(mockGenerator.generateAudio).toHaveBeenCalledWith('hello', undefined, undefined, undefined, undefined, undefined, undefined);
+      await expect(service.generateAudio('hello', '')).rejects.toThrow('Audio generation failed');
     });
 
     it('should handle text trimming', async () => {
