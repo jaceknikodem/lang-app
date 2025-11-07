@@ -34,6 +34,11 @@ describe('TTSAudioGenerator Path Generation', () => {
       expect(path).toBe(join(audioDir, 'spanish', 'word_1', 'sentence_5.aiff'));
     });
 
+    it('should generate path for english sentence audio', () => {
+      const path = (generator as any).getAudioPath('Hello world', 'spanish', 'english_sentence', 1, 5);
+      expect(path).toBe(join(audioDir, 'spanish', 'word_1', 'english_sentence_5.aiff'));
+    });
+
     it('should generate path for before sentence audio', () => {
       const path = (generator as any).getAudioPath('Hola', 'spanish', 'hola_before_sentence', 1, 5);
       expect(path).toBe(join(audioDir, 'spanish', 'word_1', 'before_sentence_5.aiff'));
@@ -115,19 +120,29 @@ describe('TTSAudioGenerator Path Generation', () => {
       expect((generator as any).getVoiceForLanguage('id')).toBe('Damayanti');
     });
 
+    it('should return correct voice for english', () => {
+      const voice = (generator as any).getVoiceForLanguage('english');
+      expect(voice).toBe('Alex');
+    });
+
+    it('should handle english language code (en)', () => {
+      expect((generator as any).getVoiceForLanguage('en')).toBe('Alex');
+    });
+
     it('should handle case-insensitive language names', () => {
       expect((generator as any).getVoiceForLanguage('SPANISH')).toBe('Eddy (Spanish (Mexico))');
       expect((generator as any).getVoiceForLanguage('Italian')).toBe('Alice');
+      expect((generator as any).getVoiceForLanguage('ENGLISH')).toBe('Alex');
     });
 
-    it('should default to spanish voice for unknown language', () => {
+    it('should default to english voice for unknown language', () => {
       const voice = (generator as any).getVoiceForLanguage('french');
-      expect(voice).toBe('Eddy (Spanish (Mexico))');
+      expect(voice).toBe('Alex');
     });
 
-    it('should default to spanish voice for empty string', () => {
+    it('should default to english voice for empty string', () => {
       const voice = (generator as any).getVoiceForLanguage('');
-      expect(voice).toBe('Eddy (Spanish (Mexico))');
+      expect(voice).toBe('Alex');
     });
   });
 });

@@ -325,6 +325,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke(IPC_CHANNELS.FLOW.GET_FLOW_SENTENCES, language),
       stitchAudio: (audioPaths: string[], language: string) =>
         ipcRenderer.invoke(IPC_CHANNELS.FLOW.STITCH_AUDIO, audioPaths, language),
+      stitchAudioWithEnglish: (audioPathPairs: Array<[string, string]>, language: string) =>
+        ipcRenderer.invoke(IPC_CHANNELS.FLOW.STITCH_AUDIO_WITH_ENGLISH, audioPathPairs, language),
       getFileStats: (filePath: string) =>
         ipcRenderer.invoke(IPC_CHANNELS.FLOW.GET_FILE_STATS, filePath)
     },

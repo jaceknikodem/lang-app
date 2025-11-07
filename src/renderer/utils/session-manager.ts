@@ -866,3 +866,8 @@ export class SessionManager {
 
 // Export singleton instance
 export const sessionManager = SessionManager.getInstance();
+
+// Expose to window for e2e tests
+if (typeof window !== 'undefined') {
+  (window as any).sessionManager = sessionManager;
+}

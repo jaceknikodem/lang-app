@@ -87,7 +87,9 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
       }
 
       // Get voice ID for the language (use provided voiceId if available, otherwise select randomly)
-      const finalVoiceId = voiceId || await this.getVoiceForLanguage(language);
+      // Use English voice if generating English sentence audio, otherwise use language-specific voice
+      const voiceLanguage = word === 'english_sentence' ? 'english' : language;
+      const finalVoiceId = voiceId || await this.getVoiceForLanguage(voiceLanguage);
       
       // Store the voiceID that was used for this generation
       this.lastUsedVoiceId = finalVoiceId;
@@ -182,6 +184,9 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     } else if (sentenceId !== undefined && word?.includes('_after_sentence')) {
       // After sentence audio: /audio/<lang>/word_<word_id>/after_sentence_<sentence_id>.<extension>
       return join(this.config.audioDirectory, language, `word_${wordId}`, `after_sentence_${sentenceId}${this.config.fileExtension}`);
+    } else if (sentenceId !== undefined && word === 'english_sentence') {
+      // English sentence audio: /audio/<lang>/word_<word_id>/english_sentence_<sentence_id>.<extension>
+      return join(this.config.audioDirectory, language, `word_${wordId}`, `english_sentence_${sentenceId}${this.config.fileExtension}`);
     } else if (sentenceId !== undefined) {
       // Sentence audio: /audio/<lang>/<word_id>/<sentence_id>.<extension>
       return join(this.config.audioDirectory, language, `word_${wordId}`, `sentence_${sentenceId}${this.config.fileExtension}`);

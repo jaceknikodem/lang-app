@@ -1640,7 +1640,7 @@ export class SentenceViewer extends LitElement {
           [rawWord.toLowerCase()],
           this.targetWord.language
         );
-        wordToAdd = lemmas[rawWord.toLowerCase()] || rawWord.replace(/\s+/g, ' ');
+        wordToAdd = (lemmas && lemmas.length > 0 ? lemmas[0] : null) || rawWord.replace(/\s+/g, ' ');
       } catch (error) {
         console.warn('Failed to lemmatize word (non-critical):', error);
         wordToAdd = rawWord.replace(/\s+/g, ' ');

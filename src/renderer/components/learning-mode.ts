@@ -1986,7 +1986,7 @@ export class LearningMode extends BaseComponent {
           if (sentence.contextAfter && sentence.id) {
             beforeSentencePromises.push(
               window.electronAPI.dialog.ensureContextSentences(sentence.id)
-                .then(contextAudio => contextAudio.afterSentenceAudio)
+                .then(contextAudio => contextAudio.afterSentenceAudio || null)
                 .catch(err => {
                   console.warn(`Failed to ensure after sentence audio for sentence ${sentence.id}:`, err);
                   return null;

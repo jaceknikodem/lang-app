@@ -35,6 +35,9 @@ export class FlowMode extends BaseComponent {
   @state()
   private stitchedAudioPath: string | null = null;
 
+  @state()
+  private stitchedAudioPathWithEnglish: string | null = null;
+
   private directKeyHandler?: (event: KeyboardEvent) => void;
   private audioElement: HTMLAudioElement | null = null;
   private playbackTimer: number | null = null;
@@ -99,45 +102,79 @@ export class FlowMode extends BaseComponent {
 
       // Check cache first before loading sentences
       let needsStitching = true;
+      let needsEnglishStitching = true;
       // Ensure we have a valid language before constructing the path
       if (!this.currentLanguage) {
         console.warn('[Flow] No current language available, cannot use cache');
         needsStitching = true;
+        needsEnglishStitching = true;
       } else {
         const languageSuffix = `_${this.currentLanguage}`;
         const defaultAudioPath = `audio/flow_stitched${languageSuffix}.mp3`;
+        const defaultEnglishAudioPath = `audio/flow_stitched_english_${this.currentLanguage}.mp3`;
         
-        // Check if cached file exists and is recent (within 2 hours)
-        // Always check the current language-specific path, not a previously cached path
-        const pathToCheck = defaultAudioPath;
-        const stats = await window.electronAPI.flow.getFileStats(pathToCheck);
+        // Check if cached files exist and are recent (within 2 hours)
+        const stats = await window.electronAPI.flow.getFileStats(defaultAudioPath);
+        const englishStats = await window.electronAPI.flow.getFileStats(defaultEnglishAudioPath);
+        
+        const twoHours = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+        
         if (stats) {
           const fileAge = Date.now() - stats.mtime.getTime();
-          const twoHours = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
           if (fileAge < twoHours) {
-            this.stitchedAudioPath = pathToCheck;
+            this.stitchedAudioPath = defaultAudioPath;
             needsStitching = false;
           }
         } else {
-          // If the language-specific cache doesn't exist, clear any previous path
           this.stitchedAudioPath = null;
+        }
+        
+        if (englishStats) {
+          const fileAge = Date.now() - englishStats.mtime.getTime();
+          if (fileAge < twoHours) {
+            this.stitchedAudioPathWithEnglish = defaultEnglishAudioPath;
+            needsEnglishStitching = false;
+          }
+        } else {
+          this.stitchedAudioPathWithEnglish = null;
         }
       }
 
       // Only load sentences and stitch if cache is not valid
-      if (needsStitching) {
+      if (needsStitching || needsEnglishStitching) {
         const language = await window.electronAPI.database.getCurrentLanguage();
         const sentences = await window.electronAPI.flow.getFlowSentences(language);
         this.flowSentences = sentences;
 
-        // Collect all audio paths (limited to 200)
+        // Collect all audio paths for regular stitching (limited to 200)
         const audioPaths: string[] = [];
+        // Collect audio path pairs for English stitching
+        const audioPathPairs: Array<[string, string]> = [];
+        
         for (const item of this.flowSentences) {
           if (item.beforeSentenceAudio) {
             audioPaths.push(item.beforeSentenceAudio);
           }
           if (item.sentence.audioPath) {
             audioPaths.push(item.sentence.audioPath);
+            
+            // For English stitching, construct English audio path
+            // English audio is stored as: <language>/word_<wordId>/english_sentence_<sentenceId>.<ext>
+            // We need to construct this from the sentence's audio path
+            if (item.sentence.audioPath) {
+              // Extract the directory and construct English path
+              const audioPathParts = item.sentence.audioPath.split('/');
+              if (audioPathParts.length >= 3) {
+                // Format: <lang>/word_<wordId>/sentence_<sentenceId>.<ext>
+                const lang = audioPathParts[0];
+                const wordDir = audioPathParts[1];
+                const sentenceFile = audioPathParts[2];
+                // Replace sentence_ with english_sentence_
+                const englishFile = sentenceFile.replace(/^sentence_/, 'english_sentence_');
+                const englishPath = `${lang}/${wordDir}/${englishFile}`;
+                audioPathPairs.push([englishPath, item.sentence.audioPath]);
+              }
+            }
           }
           if (item.afterSentenceAudio) {
             audioPaths.push(item.afterSentenceAudio);
@@ -154,8 +191,11 @@ export class FlowMode extends BaseComponent {
         if (audioPaths.length > 200) {
           audioPaths.splice(200);
         }
+        if (audioPathPairs.length > 200) {
+          audioPathPairs.splice(200);
+        }
 
-        if (audioPaths.length === 0) {
+        if (audioPaths.length === 0 && audioPathPairs.length === 0) {
           this.error = 'No audio files found. Please generate some sentences with audio first.';
           return;
         }
@@ -167,9 +207,21 @@ export class FlowMode extends BaseComponent {
           if (!this.currentLanguage) {
             throw new Error('Current language is required for flow mode audio stitching');
           }
-          this.stitchedAudioPath = await window.electronAPI.flow.stitchAudio(audioPaths, this.currentLanguage);
-          if (!this.stitchedAudioPath) {
-            this.error = 'Failed to stitch audio files. Please ensure ffmpeg is installed.';
+          
+          // Stitch regular audio file
+          if (needsStitching && audioPaths.length > 0) {
+            this.stitchedAudioPath = await window.electronAPI.flow.stitchAudio(audioPaths, this.currentLanguage);
+            if (!this.stitchedAudioPath) {
+              this.error = 'Failed to stitch audio files. Please ensure ffmpeg is installed.';
+            }
+          }
+          
+          // Stitch English audio file
+          if (needsEnglishStitching && audioPathPairs.length > 0) {
+            this.stitchedAudioPathWithEnglish = await window.electronAPI.flow.stitchAudioWithEnglish(audioPathPairs, this.currentLanguage);
+            if (!this.stitchedAudioPathWithEnglish) {
+              console.warn('[Flow] Failed to stitch audio files with English pattern. Will use regular audio only.');
+            }
           }
         } catch (err) {
           console.error('Error stitching audio:', err);
@@ -218,10 +270,10 @@ export class FlowMode extends BaseComponent {
       return;
     }
 
-    if (!this.stitchedAudioPath) {
+    if (!this.stitchedAudioPath && !this.stitchedAudioPathWithEnglish) {
       // If no audio path yet, start loading/stitching
       this.loadFlowSentences().then(() => {
-        if (this.stitchedAudioPath) {
+        if (this.stitchedAudioPath || this.stitchedAudioPathWithEnglish) {
           this.playAudio();
         }
       });
@@ -232,7 +284,23 @@ export class FlowMode extends BaseComponent {
   }
 
   private async playAudio() {
-    if (!this.stitchedAudioPath) {
+    // Randomly select between regular and English audio files
+    const availablePaths: string[] = [];
+    if (this.stitchedAudioPath) {
+      availablePaths.push(this.stitchedAudioPath);
+    }
+    if (this.stitchedAudioPathWithEnglish) {
+      availablePaths.push(this.stitchedAudioPathWithEnglish);
+    }
+    
+    if (availablePaths.length === 0) {
+      return;
+    }
+    
+    // Randomly select one of the available paths
+    const selectedPath = availablePaths[Math.floor(Math.random() * availablePaths.length)];
+    
+    if (!selectedPath) {
       return;
     }
 
@@ -284,7 +352,7 @@ export class FlowMode extends BaseComponent {
       }
 
       // Load audio file
-      const audioData = await window.electronAPI.audio.loadAudioBase64(this.stitchedAudioPath);
+      const audioData = await window.electronAPI.audio.loadAudioBase64(selectedPath);
       if (!audioData) {
         throw new Error('Failed to load audio file');
       }
@@ -426,7 +494,7 @@ export class FlowMode extends BaseComponent {
       event.stopPropagation();
       if (this.isPlaying) {
         this.pauseAudio();
-      } else if (this.stitchedAudioPath) {
+      } else if (this.stitchedAudioPath || this.stitchedAudioPathWithEnglish) {
         this.playAudio();
       }
       return;

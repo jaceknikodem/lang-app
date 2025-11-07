@@ -498,6 +498,263 @@ export class AudioService {
   }
 
   /**
+   * Stitch audio files together with alternating English and selected language pattern
+   * Pattern: sentence_1 (English) - 4-sec - sentence_1 (selected language) - 2-sec - sentence_2 (English) - 4-sec - sentence_2 (selected language)...
+   * Uses ffmpeg to concatenate audio files
+   * Returns path to the stitched audio file
+   * @param audioPathPairs - Array of [englishPath, selectedLanguagePath] pairs for each sentence
+   * @param language - Language code for cache per language (e.g., 'spanish', 'italian') - required
+   */
+  async stitchAudioWithEnglish(audioPathPairs: Array<[string, string]>, language: string): Promise<string | null> {
+    try {
+      if (!audioPathPairs || audioPathPairs.length === 0) {
+        return null;
+      }
+
+      // Filter out pairs where either path doesn't exist and resolve relative paths
+      const existingPairs: Array<[string, string]> = [];
+      for (const [englishPath, selectedLangPath] of audioPathPairs) {
+        const absoluteEnglishPath = AudioService.resolveAudioPath(englishPath);
+        const absoluteSelectedLangPath = AudioService.resolveAudioPath(selectedLangPath);
+        if (await this.audioExists(absoluteEnglishPath) && await this.audioExists(absoluteSelectedLangPath)) {
+          existingPairs.push([absoluteEnglishPath, absoluteSelectedLangPath]);
+        }
+      }
+
+      if (existingPairs.length === 0) {
+        return null;
+      }
+
+      // Limit to 200 pairs (400 files total)
+      if (existingPairs.length > 200) {
+        console.log(`Limiting audio pairs to 200 (had ${existingPairs.length})`);
+        existingPairs.splice(200);
+      }
+
+      // Create 4-second and 2-second silence audio files
+      const { execFile } = require('child_process');
+      const { promisify } = require('util');
+      const execFileAsync = promisify(execFile);
+      const { join } = require('path');
+      const { existsSync, mkdirSync, writeFileSync, unlinkSync } = require('fs');
+
+      const audioDir = join(app.getPath('userData'), 'audio');
+      const silence4SecPath = join(audioDir, 'silence_4sec.mp3');
+      const silence2SecPath = join(audioDir, 'silence_2sec.mp3');
+
+      // Create or regenerate 4-second silence file
+      if (existsSync(silence4SecPath)) {
+        try {
+          unlinkSync(silence4SecPath);
+        } catch (error) {
+          console.warn('Failed to delete old 4-second silence file:', error);
+        }
+      }
+
+      try {
+        if (!existsSync(audioDir)) {
+          mkdirSync(audioDir, { recursive: true });
+        }
+
+        console.log(`[Flow] Creating 4-second silence file: ${silence4SecPath}`);
+        await execFileAsync('ffmpeg', [
+          '-f', 'lavfi',
+          '-i', 'anullsrc=r=44100:cl=stereo',
+          '-t', '4',
+          '-c:a', 'libmp3lame',
+          '-b:a', '128k',
+          '-ar', '44100',
+          '-ac', '2',
+          '-y',
+          silence4SecPath
+        ], {
+          timeout: 5000,
+          maxBuffer: 1024 * 1024
+        });
+        
+        if (!existsSync(silence4SecPath)) {
+          console.error('[Flow] 4-second silence file was not created after ffmpeg command');
+          return null;
+        }
+        console.log(`[Flow] 4-second silence file created successfully: ${silence4SecPath}`);
+      } catch (error) {
+        console.error('Failed to create 4-second silence file:', error);
+        return null;
+      }
+
+      // Create or regenerate 2-second silence file
+      if (existsSync(silence2SecPath)) {
+        try {
+          unlinkSync(silence2SecPath);
+        } catch (error) {
+          console.warn('Failed to delete old 2-second silence file:', error);
+        }
+      }
+
+      try {
+        console.log(`[Flow] Creating 2-second silence file: ${silence2SecPath}`);
+        await execFileAsync('ffmpeg', [
+          '-f', 'lavfi',
+          '-i', 'anullsrc=r=44100:cl=stereo',
+          '-t', '2',
+          '-c:a', 'libmp3lame',
+          '-b:a', '128k',
+          '-ar', '44100',
+          '-ac', '2',
+          '-y',
+          silence2SecPath
+        ], {
+          timeout: 5000,
+          maxBuffer: 1024 * 1024
+        });
+        
+        if (!existsSync(silence2SecPath)) {
+          console.error('[Flow] 2-second silence file was not created after ffmpeg command');
+          return null;
+        }
+        console.log(`[Flow] 2-second silence file created successfully: ${silence2SecPath}`);
+      } catch (error) {
+        console.error('Failed to create 2-second silence file:', error);
+        return null;
+      }
+
+      // Create output file path with language suffix for per-language caching
+      const languageSuffix = `_english_${language}`;
+      const outputPath = join(audioDir, `flow_stitched${languageSuffix}.mp3`);
+
+      // Check if output file exists and is recent (within 2 hours) to use cache
+      const { stat, unlink } = require('fs').promises;
+      let usingCache = false;
+      try {
+        const stats = await stat(outputPath);
+        const fileAge = Date.now() - stats.mtime.getTime();
+        const twoHours = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+        if (fileAge < twoHours) {
+          usingCache = true;
+          console.log(`[Flow] Using cached stitched audio file with English (age: ${Math.round(fileAge / 1000 / 60)} minutes)`);
+          return AudioService.getRelativeAudioPath(outputPath);
+        } else {
+          // Cache expired, delete old file to regenerate
+          console.log(`[Flow] Cache expired (age: ${Math.round(fileAge / 1000 / 60)} minutes), will regenerate`);
+          try {
+            await unlink(outputPath);
+          } catch (e) {
+            // Ignore deletion errors
+          }
+        }
+      } catch (error) {
+        // File doesn't exist, need to create it
+      }
+
+      if (!usingCache) {
+        console.log(`[Flow] Creating new stitched audio file with English pattern (${existingPairs.length} sentence pairs)`);
+      }
+
+      // Verify silence files exist before building list
+      if (!existsSync(silence4SecPath) || !existsSync(silence2SecPath)) {
+        console.error(`[Flow] Silence files do not exist`);
+        return null;
+      }
+
+      // Build list of audio files to concatenate in alternating pattern
+      // Pattern: english_1 - 4sec - selected_1 - 2sec - english_2 - 4sec - selected_2 - 2sec - ...
+      const inputList: string[] = [];
+      for (let i = 0; i < existingPairs.length; i++) {
+        const [englishPath, selectedLangPath] = existingPairs[i];
+        
+        // Verify each audio file exists
+        if (!existsSync(englishPath) || !existsSync(selectedLangPath)) {
+          console.warn(`[Flow] Audio file pair does not exist, skipping pair ${i}`);
+          continue;
+        }
+        
+        // Add English audio
+        inputList.push(englishPath);
+        // Add 4-second silence after English (always, to separate from selected language)
+        inputList.push(silence4SecPath);
+        
+        // Add selected language audio
+        inputList.push(selectedLangPath);
+        // Add 2-second silence after selected language (except for last pair)
+        if (i < existingPairs.length - 1) {
+          inputList.push(silence2SecPath);
+        }
+      }
+
+      console.log(`[Flow] Built input list with ${inputList.length} files (${existingPairs.length * 2} audio + ${inputList.length - existingPairs.length * 2} silence)`);
+
+      // Create a temporary file list for ffmpeg concat demuxer
+      const fileListPath = join(audioDir, 'flow_concat_list_english.txt');
+      
+      // Write file list for concat demuxer (escape single quotes in paths)
+      const fileListContent = inputList.map(path => `file '${path.replace(/'/g, "'\\''")}'`).join('\n');
+      writeFileSync(fileListPath, fileListContent);
+      
+      try {
+        // Use ffmpeg concat filter to handle mixed formats better
+        console.log(`[Flow] Stitching audio files with English pattern (this may take a moment)...`);
+        
+        // Build filter complex: normalize all inputs to same format, then concat
+        const inputArgs: string[] = [];
+        const filterParts: string[] = [];
+        
+        // Add all inputs
+        for (let i = 0; i < inputList.length; i++) {
+          inputArgs.push('-i', inputList[i]);
+          filterParts.push(`[${i}:a]aresample=44100:resampler=soxr:ochl=stereo[a${i}]`);
+        }
+        
+        // Build concat filter
+        const concatInputs = inputList.map((_, i) => `[a${i}]`).join('');
+        filterParts.push(`${concatInputs}concat=n=${inputList.length}:v=0:a=1[out]`);
+        
+        const filterComplex = filterParts.join('; ');
+        
+        await execFileAsync('ffmpeg', [
+          ...inputArgs,
+          '-filter_complex', filterComplex,
+          '-map', '[out]',
+          '-c:a', 'libmp3lame', // Encode to MP3
+          '-b:a', '128k', // Bitrate
+          '-ar', '44100', // Sample rate
+          '-ac', '2', // Stereo
+          '-y',
+          outputPath
+        ], {
+          timeout: 120000, // 120 seconds timeout for long audio (re-encoding takes longer)
+          maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+        });
+        console.log(`[Flow] Audio stitching with English pattern complete: ${outputPath}`);
+
+        // Clean up temporary file list
+        try {
+          unlinkSync(fileListPath);
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+
+        // Verify output file was created and return relative path
+        if (await this.audioExists(outputPath)) {
+          return AudioService.getRelativeAudioPath(outputPath);
+        }
+      } catch (error) {
+        // Clean up temporary file list on error
+        try {
+          unlinkSync(fileListPath);
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+        throw error;
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error stitching audio with English pattern:', error);
+      return null;
+    }
+  }
+
+  /**
    * Check if audio file exists
    */
   async audioExists(audioPath: string): Promise<boolean> {

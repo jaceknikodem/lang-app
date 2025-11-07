@@ -222,7 +222,8 @@ export interface IPCBridge {
       afterSentenceAudio?: string;
       continuationAudios: string[];
     }>>;
-    stitchAudio: (audioPaths: string[]) => Promise<string>;
+    stitchAudio: (audioPaths: string[], language: string) => Promise<string>;
+    stitchAudioWithEnglish: (audioPathPairs: Array<[string, string]>, language: string) => Promise<string>;
     getFileStats: (filePath: string) => Promise<{ mtime: Date } | null>;
   };
 
@@ -378,6 +379,7 @@ export const IPC_CHANNELS = {
   FLOW: {
     GET_FLOW_SENTENCES: 'flow:getFlowSentences',
     STITCH_AUDIO: 'flow:stitchAudio',
+    STITCH_AUDIO_WITH_ENGLISH: 'flow:stitchAudioWithEnglish',
     GET_FILE_STATS: 'flow:getFileStats'
   },
   SCORING: {

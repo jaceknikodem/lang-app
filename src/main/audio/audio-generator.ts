@@ -60,8 +60,10 @@ export class TTSAudioGenerator extends BaseAudioGenerator {
       }
 
       // Build TTS command arguments
+      // Use English voice if generating English sentence audio, otherwise use language-specific voice
+      const voiceLanguage = word === 'english_sentence' ? 'english' : language;
       const args = [
-        '-v', this.getVoiceForLanguage(language),
+        '-v', this.getVoiceForLanguage(voiceLanguage),
         '-r', this.config.rate!.toString(),
         '-o', audioPath,
         text
@@ -109,6 +111,9 @@ export class TTSAudioGenerator extends BaseAudioGenerator {
     } else if (sentenceId !== undefined && word?.includes('_after_sentence')) {
       // After sentence audio: /audio/<lang>/word_<word_id>/after_sentence_<sentence_id>.<extension>
       return join(this.config.audioDirectory, language, `word_${wordId}`, `after_sentence_${sentenceId}${this.config.fileExtension}`);
+    } else if (sentenceId !== undefined && word === 'english_sentence') {
+      // English sentence audio: /audio/<lang>/word_<word_id>/english_sentence_<sentence_id>.<extension>
+      return join(this.config.audioDirectory, language, `word_${wordId}`, `english_sentence_${sentenceId}${this.config.fileExtension}`);
     } else if (sentenceId !== undefined) {
       // Sentence audio: /audio/<lang>/<word_id>/<sentence_id>.<extension>
       return join(this.config.audioDirectory, language, `word_${wordId}`, `sentence_${sentenceId}${this.config.fileExtension}`);
@@ -135,11 +140,12 @@ export class TTSAudioGenerator extends BaseAudioGenerator {
       'es': 'Eddy (Spanish (Mexico))',
       'polish': 'Zosia',
       'pl': 'Zosia',
+      'english': 'Alex',
+      'en': 'Alex',
     };
 
-    // Always return a non-English voice, defaulting to Spanish if no match found
-    // This ensures we never accidentally use the system default English voice
-    return voiceMap[language.toLowerCase()] || 'Eddy (Spanish (Mexico))';
+    // Return voice for language, defaulting to English if no match found
+    return voiceMap[language.toLowerCase()] || 'Alex';
   }
 
   /**

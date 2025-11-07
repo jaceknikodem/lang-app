@@ -332,16 +332,17 @@ app.whenReady().then(async () => {
     // Set up security policies
     await setupSecurity();
 
-    // Create the main window early - show UI while services initialize
-    // This provides better perceived performance
-    createWindow();
-
     // Initialize all services (some operations deferred to background)
     // Logger is initialized first within initializeServices()
     await initializeServices();
 
-    // Set up IPC handlers with initialized services
+    // Set up IPC handlers with initialized services BEFORE creating window
+    // This ensures handlers are registered before renderer process tries to use them
     setupIPCHandlers(databaseLayer!, llmClient!, contentGenerator!, audioService!, srsService!, lifecycleManager!, updateManager!, wordGenerationRunner, lemmatizationService);
+
+    // Create the main window after services and handlers are initialized
+    // This prevents "No handler registered" errors
+    createWindow();
 
     // Set up scoring handlers (called separately since scoring service is optional during IPC setup)
     if (scoringService) {

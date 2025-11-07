@@ -2054,6 +2054,24 @@ function setupFlowHandlers(
   );
 
   ipcMain.handle(
+    IPC_CHANNELS.FLOW.STITCH_AUDIO_WITH_ENGLISH,
+    createIPCHandler(
+      [z.array(z.tuple([z.string().min(1).max(500), z.string().min(1).max(500)])), LanguageSchema],
+      async (audioPathPairs, language) => {
+        // Don't log here - audioService.stitchAudioWithEnglish() will check cache first and log appropriately
+        const stitchedPath = await audioService.stitchAudioWithEnglish(audioPathPairs, language);
+        
+        if (!stitchedPath) {
+          throw new Error('Failed to stitch audio files with English pattern');
+        }
+        
+        return stitchedPath;
+      },
+      'stitch audio with English pattern'
+    )
+  );
+
+  ipcMain.handle(
     IPC_CHANNELS.FLOW.GET_FILE_STATS,
     createIPCHandler(
       z.string().min(1).max(500),

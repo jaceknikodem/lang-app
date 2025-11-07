@@ -255,6 +255,23 @@ export class WordGenerationRunner {
             }
           }
 
+          // Generate English audio for main sentence translation
+          // Store in the same directory as the selected language audio
+          if (audioPath && sentence.translation) {
+            try {
+              await this.audioService.generateAudio(
+                sentence.translation,
+                language, // Use the same language directory as the selected language
+                'english_sentence',
+                word.id,
+                sentenceId
+              );
+            } catch (error) {
+              console.warn('[WordGenerationRunner] Failed to generate English audio:', error);
+              // Non-fatal - continue even if English audio generation fails
+            }
+          }
+
           // Update sentence with audio path and metadata
           if (audioPath) {
             await this.database.updateSentenceAudioPath(sentenceId, audioPath, audioVoiceId);
