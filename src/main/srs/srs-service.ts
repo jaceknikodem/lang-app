@@ -169,7 +169,7 @@ export class SRSService {
   private async processReviewWithEngine(
     wordId: number,
     reviewResult: SRSReviewResult,
-    engine: SchedulerEngine,
+    _engine: SchedulerEngine,
     now: Date,
     isQuiz: boolean = false,
     language?: string,

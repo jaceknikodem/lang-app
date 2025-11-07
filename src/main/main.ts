@@ -472,7 +472,7 @@ app.on('before-quit', async (event) => {
 });
 
 // Security: Prevent new window creation
-app.on('web-contents-created', (event, contents) => {
+app.on('web-contents-created', (_event, contents) => {
   contents.setWindowOpenHandler(({ url }) => {
     // Prevent opening new windows
     const logger = getLogger();

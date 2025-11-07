@@ -1625,7 +1625,7 @@ function setupLemmatizationHandlers(lemmatizationService: LemmatizationService):
 function setupDialogHandlers(
   databaseLayer: SQLiteDatabaseLayer,
   llmClient: LLMClient,
-  contentGenerator: ContentGenerator,
+  _contentGenerator: ContentGenerator,
   audioService: AudioService
 ): void {
   const dialogService = new DialogService(databaseLayer, llmClient);
@@ -2204,10 +2204,8 @@ function setupFlowHandlers(databaseLayer: SQLiteDatabaseLayer, audioService: Aud
         // Don't log here - audioService.stitchAudioWithEnglish() will check cache first and log appropriately
         const stitchedPath = await audioService.stitchAudioWithEnglish(audioPathPairs, language);
 
-        if (!stitchedPath) {
-          throw new Error('Failed to stitch audio files with English pattern');
-        }
-
+        // Return null instead of throwing - the renderer handles null gracefully
+        // This can happen legitimately when no audio files are available
         return stitchedPath;
       },
       'stitch audio with English pattern'

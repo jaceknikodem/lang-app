@@ -26,7 +26,7 @@ export function createIPCHandler<TInput extends any[], TOutput>(
   handler: HandlerFunction<TInput, TOutput>,
   errorContext?: string
 ): (event: IpcMainInvokeEvent, ...args: any[]) => Promise<TOutput> {
-  return async (event: IpcMainInvokeEvent, ...args: any[]): Promise<TOutput> => {
+  return async (_event: IpcMainInvokeEvent, ...args: any[]): Promise<TOutput> => {
     try {
       let validatedArgs: any[];
 

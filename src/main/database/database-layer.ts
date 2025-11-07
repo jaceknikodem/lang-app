@@ -2163,9 +2163,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const pronunciationDataMap = new Map<string, { score: number; count: number }>();
       pronunciationStatsRows.forEach((row: Record<string, unknown>) => {
         if (row.averagePronunciationScore !== null) {
-          pronunciationDataMap.set(row.language, {
-            score: row.averagePronunciationScore,
-            count: row.pronunciationAttemptCount || 0,
+          pronunciationDataMap.set(row.language as string, {
+            score: row.averagePronunciationScore as number,
+            count: (row.pronunciationAttemptCount as number) || 0,
           });
         }
       });
@@ -2981,70 +2981,72 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
   private mapRowToWord(row: Record<string, unknown>): Word {
     return {
-      id: row.id,
-      word: row.word,
-      language: row.language,
-      translation: row.translation,
-      strength: row.strength,
+      id: row.id as number,
+      word: row.word as string,
+      language: row.language as string,
+      translation: row.translation as string,
+      strength: row.strength as number,
       known: Boolean(row.known),
       ignored: Boolean(row.ignored),
-      createdAt: new Date(row.created_at),
-      lastStudied: row.last_studied ? new Date(row.last_studied) : undefined,
+      createdAt: new Date(row.created_at as string | number | Date),
+      lastStudied: row.last_studied
+        ? new Date(row.last_studied as string | number | Date)
+        : undefined,
       // SRS fields
-      intervalDays: row.interval_days || 1,
-      easeFactor: row.ease_factor || 2.5,
-      lastReview: row.last_review ? new Date(row.last_review) : undefined,
-      nextDue: row.next_due ? new Date(row.next_due) : new Date(),
-      fsrsDifficulty: row.fsrs_difficulty ?? undefined,
-      fsrsStability: row.fsrs_stability ?? undefined,
-      fsrsLapses: row.fsrs_lapses ?? undefined,
-      fsrsLastRating: row.fsrs_last_rating ?? undefined,
-      processingStatus: row.processing_status ?? 'ready',
-      sentenceCount: row.sentence_count ?? 0,
-      topic: row.topic ?? undefined,
+      intervalDays: (row.interval_days as number) || 1,
+      easeFactor: (row.ease_factor as number) || 2.5,
+      lastReview: row.last_review ? new Date(row.last_review as string | number | Date) : undefined,
+      nextDue: row.next_due ? new Date(row.next_due as string | number | Date) : new Date(),
+      fsrsDifficulty: (row.fsrs_difficulty as number) ?? undefined,
+      fsrsStability: (row.fsrs_stability as number) ?? undefined,
+      fsrsLapses: (row.fsrs_lapses as number) ?? undefined,
+      fsrsLastRating: (row.fsrs_last_rating as number) ?? undefined,
+      processingStatus: (row.processing_status as WordProcessingStatus) ?? 'ready',
+      sentenceCount: (row.sentence_count as number) ?? 0,
+      topic: (row.topic as string) ?? undefined,
     };
   }
 
   private mapRowToSentence(row: Record<string, unknown>): Sentence {
     return {
-      id: row.id,
-      wordId: row.word_id,
-      language: row.language,
-      sentence: row.sentence,
-      sentenceParts: parseSentenceParts(row.sentence_parts),
-      tokenizedTokens: parseTokenizedTokens(row.sentence_tokens),
-      translation: row.translation,
-      audioPath: row.audio_path || '',
-      createdAt: new Date(row.created_at),
-      lastShown: row.last_shown ? new Date(row.last_shown) : undefined,
-      playCount: row.play_count || 0,
-      contextBefore: row.context_before || undefined,
-      contextAfter: row.context_after || undefined,
-      contextBeforeTranslation: row.context_before_translation || undefined,
-      contextAfterTranslation: row.context_after_translation || undefined,
-      sentenceGenerationModel: row.sentence_generation_model || undefined,
-      audioGenerationService: row.audio_generation_service || undefined,
-      audioGenerationModel: row.audio_generation_model || undefined,
-      audioGenerationVoiceId: row.audio_generation_voice_id || undefined,
-      beforeSentenceAudioPath: row.before_sentence_audio_path || undefined,
-      afterSentenceAudioPath: row.after_sentence_audio_path || undefined,
+      id: row.id as number,
+      wordId: row.word_id as number,
+      language: row.language as string,
+      sentence: row.sentence as string,
+      sentenceParts: parseSentenceParts(row.sentence_parts as string | null | undefined),
+      tokenizedTokens: parseTokenizedTokens(row.sentence_tokens as string | null | undefined),
+      translation: row.translation as string,
+      audioPath: (row.audio_path as string) || '',
+      createdAt: new Date(row.created_at as string | number | Date),
+      lastShown: row.last_shown ? new Date(row.last_shown as string | number | Date) : undefined,
+      playCount: (row.play_count as number) || 0,
+      contextBefore: (row.context_before as string) || undefined,
+      contextAfter: (row.context_after as string) || undefined,
+      contextBeforeTranslation: (row.context_before_translation as string) || undefined,
+      contextAfterTranslation: (row.context_after_translation as string) || undefined,
+      sentenceGenerationModel: (row.sentence_generation_model as string) || undefined,
+      audioGenerationService: (row.audio_generation_service as string) || undefined,
+      audioGenerationModel: (row.audio_generation_model as string) || undefined,
+      audioGenerationVoiceId: (row.audio_generation_voice_id as string) || undefined,
+      beforeSentenceAudioPath: (row.before_sentence_audio_path as string) || undefined,
+      afterSentenceAudioPath: (row.after_sentence_audio_path as string) || undefined,
       ignored: row.ignored === 1 || row.ignored === true,
     };
   }
 
   private mapRowToWordGenerationJob(row: Record<string, unknown>): WordGenerationJob {
     return {
-      id: row.id,
-      wordId: row.word_id,
-      language: row.language,
-      topic: row.topic ?? undefined,
-      desiredSentenceCount: row.desired_sentence_count ?? 3,
+      id: row.id as number,
+      wordId: row.word_id as number,
+      language: row.language as string,
+      topic: (row.topic as string) ?? undefined,
+      desiredSentenceCount: (row.desired_sentence_count as number) ?? 3,
       status: row.status as WordGenerationJobStatus,
-      attempts: row.attempts ?? 0,
-      lastError: row.last_error ?? undefined,
-      createdAt: row.created_at ? new Date(row.created_at) : new Date(),
-      updatedAt: row.updated_at ? new Date(row.updated_at) : new Date(),
-      startedAt: row.started_at ? new Date(row.started_at) : undefined,
+      attempts: (row.attempts as number) ?? 0,
+      lastError: (row.last_error as string) ?? undefined,
+      createdAt: row.created_at ? new Date(row.created_at as string | number | Date) : new Date(),
+      updatedAt: row.updated_at ? new Date(row.updated_at as string | number | Date) : new Date(),
+      startedAt: row.started_at ? new Date(row.started_at as string | number | Date) : undefined,
     };
   }
 

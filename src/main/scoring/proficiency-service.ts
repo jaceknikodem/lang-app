@@ -71,7 +71,7 @@ export class ProficiencyService {
         return sum + p.overallProficiency * frequencyWeight;
       }, 0);
 
-      const totalWeight = proficiencies.reduce((sum, p, i) => {
+      const totalWeight = proficiencies.reduce((sum, _p, i) => {
         const frequencyPosition = frequencyPositions[i];
         return sum + (frequencyPosition ? 1 / Math.log(frequencyPosition + 1) : 1);
       }, 0);
@@ -213,7 +213,7 @@ export class ProficiencyService {
 
       return rows.map((row: Record<string, unknown>) => ({
         playbackSpeed: row.playback_speed ?? 1.0,
-        timestamp: new Date(row.created_at).getTime(),
+        timestamp: new Date(row.created_at as string | number | Date).getTime(),
       }));
     } catch (error) {
       console.error('Error getting word playback data:', error);
