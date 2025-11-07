@@ -59,7 +59,19 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
         return [];
       }
 
-      return data.models.map((model: any) => model.name || '').filter(Boolean);
+      return data.models
+        .map((model: unknown) => {
+          if (
+            model &&
+            typeof model === 'object' &&
+            'name' in model &&
+            typeof model.name === 'string'
+          ) {
+            return model.name;
+          }
+          return '';
+        })
+        .filter(Boolean);
     } catch (error) {
       const logger = getLogger();
       logger.error({ error }, 'Error fetching available models');
@@ -143,7 +155,7 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
         const cleanResponse = cleanLLMResponse(data.response);
 
         // Parse JSON
-        let parsed: any;
+        let parsed: unknown;
         try {
           parsed = JSON.parse(cleanResponse);
         } catch {

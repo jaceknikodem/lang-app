@@ -1893,13 +1893,13 @@ export class SentenceViewer extends LitElement {
             composed: true,
           })
         );
-      } catch (err: any) {
+      } catch (err: unknown) {
         // Reset state on error
         this.localPlayingAudio = null;
         this.requestUpdate();
 
         // If error is because audio was stopped, don't log as error
-        if (err?.code === 'PLAYBACK_STOPPED') {
+        if (err && typeof err === 'object' && 'code' in err && err.code === 'PLAYBACK_STOPPED') {
           // Audio was intentionally stopped, ignore
           return;
         }

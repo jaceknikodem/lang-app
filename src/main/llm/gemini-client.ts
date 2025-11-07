@@ -180,8 +180,12 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
       if (errorJson.error?.details && Array.isArray(errorJson.error.details)) {
         // Find the RetryInfo entry
         const retryInfo = errorJson.error.details.find(
-          (detail: any) => detail['@type'] === 'type.googleapis.com/google.rpc.RetryInfo'
-        );
+          (detail: unknown) =>
+            detail &&
+            typeof detail === 'object' &&
+            '@type' in detail &&
+            detail['@type'] === 'type.googleapis.com/google.rpc.RetryInfo'
+        ) as { retryDelay?: string } | undefined;
 
         if (retryInfo?.retryDelay) {
           // Parse delay string like "23s" or "23.41586998s"
@@ -412,7 +416,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         const cleanResponse = cleanLLMResponse(candidate.content.parts[0].text);
 
         // Parse JSON
-        let parsed: any;
+        let parsed: unknown;
         try {
           parsed = JSON.parse(cleanResponse);
         } catch (parseError) {

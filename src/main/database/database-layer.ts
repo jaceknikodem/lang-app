@@ -21,6 +21,7 @@ import {
   CreateWordRequest,
   DictionaryEntry,
   DialogueVariant,
+  PrecomputedToken,
 } from '../../shared/types/core.js';
 import { DatabaseConnection } from './connection.js';
 import {
@@ -828,7 +829,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     // Get words (learning, known, and ignored) for the language, optionally filtered by topic and limited
     // This includes ignored words to ensure they are filtered out during generation
     let query = `SELECT word FROM words WHERE language = ?`;
-    const params: any[] = [language];
+    const params: unknown[] = [language];
 
     if (topic) {
       query += ` AND topic = ?`;
@@ -854,7 +855,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
 
     let query = `SELECT word FROM words WHERE language = ? AND ignored = TRUE`;
-    const params: any[] = [language];
+    const params: unknown[] = [language];
 
     if (topic) {
       query += ` AND topic = ?`;
@@ -895,7 +896,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       WHERE language = ? AND LOWER(word) IN (${placeholders})
     `;
 
-    const wordsParams: any[] = [language, ...normalizedWords];
+    const wordsParams: unknown[] = [language, ...normalizedWords];
 
     if (topic) {
       wordsQuery += ` AND topic = ?`;
@@ -918,7 +919,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       HAVING COUNT(*) >= 3
     `;
 
-    const neglectedParams: any[] = [language, ...normalizedWords];
+    const neglectedParams: unknown[] = [language, ...normalizedWords];
     const neglectedStmt = db.prepare(neglectedQuery);
     const neglectedRows = neglectedStmt.all(...neglectedParams) as Array<{ word: string }>;
     const neglectedWordsSet = new Set(neglectedRows.map((row) => row.word));
@@ -1045,7 +1046,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     audioGenerationService?: string,
     audioGenerationModel?: string,
     audioGenerationVoiceId?: string,
-    tokenizedTokens?: any[]
+    tokenizedTokens?: PrecomputedToken[]
   ): Promise<number> {
     const db = this.getDb();
 
@@ -1143,7 +1144,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           const parsedTokens = tokenizedTokens;
           const lemmas = new Set<string>();
 
-          parsedTokens.forEach((token: any) => {
+          parsedTokens.forEach((token: PrecomputedToken) => {
             if (token.lemma) {
               lemmas.add(token.lemma.toLowerCase().trim());
             } else if (token.dictionaryForm) {
@@ -1341,7 +1342,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    * Update sentence tokens (precomputed tokenization)
    * Also stores all lemmas in sentence_lemmas table for future word matching
    */
-  async updateSentenceTokens(sentenceId: number, tokens: any[]): Promise<void> {
+  async updateSentenceTokens(sentenceId: number, tokens: PrecomputedToken[]): Promise<void> {
     const db = this.getDb();
 
     try {
@@ -1365,7 +1366,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       const lemmas = new Set<string>();
 
-      parsedTokens.forEach((token: any) => {
+      parsedTokens.forEach((token: PrecomputedToken) => {
         // Collect lemmas (normalized)
         if (token.lemma) {
           lemmas.add(token.lemma.toLowerCase().trim());
@@ -2156,11 +2157,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         GROUP BY s.language
       `);
 
-      const pronunciationStatsRows = pronunciationStatsStmt.all() as any[];
+      const pronunciationStatsRows = pronunciationStatsStmt.all() as Array<Record<string, unknown>>;
 
       // Create a map of language -> pronunciation data for quick lookup
       const pronunciationDataMap = new Map<string, { score: number; count: number }>();
-      pronunciationStatsRows.forEach((row: any) => {
+      pronunciationStatsRows.forEach((row: Record<string, unknown>) => {
         if (row.averagePronunciationScore !== null) {
           pronunciationDataMap.set(row.language, {
             score: row.averagePronunciationScore,
@@ -2978,7 +2979,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
-  private mapRowToWord(row: any): Word {
+  private mapRowToWord(row: Record<string, unknown>): Word {
     return {
       id: row.id,
       word: row.word,
@@ -3004,7 +3005,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     };
   }
 
-  private mapRowToSentence(row: any): Sentence {
+  private mapRowToSentence(row: Record<string, unknown>): Sentence {
     return {
       id: row.id,
       wordId: row.word_id,
@@ -3031,7 +3032,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     };
   }
 
-  private mapRowToWordGenerationJob(row: any): WordGenerationJob {
+  private mapRowToWordGenerationJob(row: Record<string, unknown>): WordGenerationJob {
     return {
       id: row.id,
       wordId: row.word_id,

@@ -9,6 +9,7 @@ import {
   CreateWordRequest,
   DictionaryEntry,
   DialogueVariant,
+  PrecomputedToken,
 } from './core.js';
 
 export type WordProcessingStatus = 'queued' | 'processing' | 'ready' | 'failed';
@@ -117,7 +118,7 @@ export interface DatabaseLayer {
     audioGenerationService?: string,
     audioGenerationModel?: string,
     audioGenerationVoiceId?: string,
-    tokenizedTokens?: any[]
+    tokenizedTokens?: PrecomputedToken[]
   ): Promise<number>;
   getSentencesByWord(wordId: number): Promise<Sentence[]>;
   getSentencesByIds(sentenceIds: number[]): Promise<Sentence[]>;
@@ -131,7 +132,7 @@ export interface DatabaseLayer {
   ): Promise<void>;
   updateBeforeSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void>;
   updateAfterSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void>;
-  updateSentenceTokens(sentenceId: number, tokens: any[]): Promise<void>;
+  updateSentenceTokens(sentenceId: number, tokens: PrecomputedToken[]): Promise<void>;
   incrementSentencePlayCount(sentenceId: number): Promise<void>;
   recordPronunciationAttempt(
     sentenceId: number,

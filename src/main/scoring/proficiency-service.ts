@@ -211,7 +211,7 @@ export class ProficiencyService {
       const stmt = db.prepare(query);
       const rows = cutoffTime ? stmt.all(...sentenceIds, cutoffTime) : stmt.all(...sentenceIds);
 
-      return rows.map((row: any) => ({
+      return rows.map((row: Record<string, unknown>) => ({
         playbackSpeed: row.playback_speed ?? 1.0,
         timestamp: new Date(row.created_at).getTime(),
       }));

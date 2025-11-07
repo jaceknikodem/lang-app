@@ -6,6 +6,8 @@
 // We use console.warn here as a fallback since logger may not be available in all contexts
 // In test environments, this is acceptable
 
+import type { PrecomputedToken } from '../types/core.js';
+
 const SPLIT_REGEX = /(\s+|[.,!?;:])/;
 
 /**
@@ -51,7 +53,9 @@ export function parseSentenceParts(serialized: string | null | undefined): strin
 /**
  * Serialize tokenized tokens for storage in database.
  */
-export function serializeTokenizedTokens(tokens: any[] | null | undefined): string | null {
+export function serializeTokenizedTokens(
+  tokens: PrecomputedToken[] | null | undefined
+): string | null {
   if (!tokens || tokens.length === 0) {
     return null;
   }
@@ -67,7 +71,9 @@ export function serializeTokenizedTokens(tokens: any[] | null | undefined): stri
 /**
  * Parse stored tokenized tokens JSON.
  */
-export function parseTokenizedTokens(serialized: string | null | undefined): any[] | undefined {
+export function parseTokenizedTokens(
+  serialized: string | null | undefined
+): PrecomputedToken[] | undefined {
   if (!serialized) {
     return undefined;
   }

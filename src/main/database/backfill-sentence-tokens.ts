@@ -4,6 +4,7 @@
  */
 
 import { DatabaseLayer } from '../../shared/types/database.js';
+import { Sentence } from '../../shared/types/core.js';
 import { precomputeSentenceTokens } from './sentence-preprocessor.js';
 
 export interface BackfillOptions {
@@ -29,7 +30,7 @@ export async function backfillSentenceTokens(options: BackfillOptions): Promise<
 
   // Check if any sentences need tokenization before starting
   const sentencesNeedingTokens = allSentences.filter(
-    (sentence: any) => !sentence.tokenizedTokens || sentence.tokenizedTokens.length === 0
+    (sentence: Sentence) => !sentence.tokenizedTokens || sentence.tokenizedTokens.length === 0
   );
 
   if (sentencesNeedingTokens.length === 0) {

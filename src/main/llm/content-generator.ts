@@ -856,17 +856,30 @@ export class ContentGenerator {
       throw new Error(`Tatoeba API request failed: ${response.status} ${response.statusText}`);
     }
 
-    const data = (await response.json()) as { results?: any[] };
+    const data = (await response.json()) as { results?: unknown[] };
     const results = Array.isArray(data?.results) ? data.results.slice(0, fetchLimit) : [];
 
     return results
       .map((item): GeneratedSentence => {
-        const sentenceText = typeof item?.text === 'string' ? item.text : '';
+        // Type guard for item structure
+        const itemObj = item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
+        const sentenceText = typeof itemObj?.text === 'string' ? itemObj.text : '';
         const translationText =
-          typeof item?.translations?.[0]?.[0]?.text === 'string'
-            ? item.translations[0][0].text
+          Array.isArray(itemObj?.translations) &&
+          Array.isArray(itemObj.translations[0]) &&
+          itemObj.translations[0][0] &&
+          typeof itemObj.translations[0][0] === 'object' &&
+          'text' in itemObj.translations[0][0] &&
+          typeof itemObj.translations[0][0].text === 'string'
+            ? itemObj.translations[0][0].text
             : '';
-        const audioId = item?.audios?.[0]?.id;
+        const audioId =
+          Array.isArray(itemObj?.audios) &&
+          itemObj.audios[0] &&
+          typeof itemObj.audios[0] === 'object' &&
+          'id' in itemObj.audios[0]
+            ? itemObj.audios[0].id
+            : undefined;
         const audioUrl = audioId ? `https://tatoeba.org/en/audio/download/${audioId}` : undefined;
 
         return {

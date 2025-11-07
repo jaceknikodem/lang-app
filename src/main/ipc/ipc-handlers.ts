@@ -786,14 +786,24 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
         // Catch expected errors immediately with .catch() to prevent Electron logging
         try {
           return await audioService.playAudio(audioPath);
-        } catch (error: any) {
+        } catch (error: unknown) {
           // Silently handle PLAYBACK_STOPPED errors - they're expected when audio is stopped
-          if (error?.code === 'PLAYBACK_STOPPED') {
+          if (
+            error &&
+            typeof error === 'object' &&
+            'code' in error &&
+            error.code === 'PLAYBACK_STOPPED'
+          ) {
             // Return undefined instead of throwing to prevent Electron from logging the error
             return undefined;
           }
           // Silently handle FILE_NOT_FOUND errors - missing files are handled gracefully by the UI
-          if (error?.code === 'FILE_NOT_FOUND') {
+          if (
+            error &&
+            typeof error === 'object' &&
+            'code' in error &&
+            error.code === 'FILE_NOT_FOUND'
+          ) {
             // Return undefined instead of throwing to prevent Electron from logging the error
             return undefined;
           }
