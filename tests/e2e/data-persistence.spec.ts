@@ -224,6 +224,14 @@ test.describe('Data Persistence', () => {
     await page2.waitForLoadState('domcontentloaded');
     await page2.waitForTimeout(3000);
     
+    // Wait for session to be fully restored by checking if sessionManager is available
+    await page2.waitForFunction(() => {
+      return typeof (window as any).sessionManager !== 'undefined';
+    }, { timeout: 10000 });
+    
+    // Additional wait to ensure session is fully loaded
+    await page2.waitForTimeout(1000);
+    
     // Verify session was restored
     const session2 = await getSessionState(page2);
     expect(session2).toBeTruthy();
