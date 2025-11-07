@@ -111,11 +111,6 @@ export interface CreateWordRequest {
   topic?: string;
 }
 
-export interface AppState {
-  currentMode: 'learning' | 'quiz';
-  selectedTopic?: string;
-}
-
 export interface QuizSession {
   questions: QuizQuestion[];
   currentQuestionIndex: number;

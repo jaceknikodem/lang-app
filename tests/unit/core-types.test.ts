@@ -2,7 +2,7 @@
  * Basic tests for core type definitions
  */
 
-import { Word, Sentence, AppState, QuizSession } from '../../src/shared/types/core';
+import { Word, Sentence, QuizSession } from '../../src/shared/types/core';
 
 describe('Core Types', () => {
   test('Word interface should have required properties', () => {
@@ -40,16 +40,6 @@ describe('Core Types', () => {
     expect(sentence.wordId).toBe(1);
     expect(sentence.sentence).toBe('Hola, ¿cómo estás?');
     expect(sentence.language).toBe('spanish');
-  });
-
-  test('AppState interface should have required properties', () => {
-    const appState: AppState = {
-      currentMode: 'learning',
-      selectedTopic: 'food',
-    };
-
-    expect(appState.currentMode).toBe('learning');
-    expect(appState.selectedTopic).toBe('food');
   });
 
   test('QuizSession interface should have required properties', () => {

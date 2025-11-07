@@ -4,7 +4,6 @@
 
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { AppState } from '../../shared/types/core.js';
 import { router, RouteState, AppMode } from '../utils/router.js';
 import { sessionManager, SessionState } from '../utils/session-manager.js';
 import { sharedStyles } from '../styles/shared.js';
@@ -15,8 +14,8 @@ import { calculateWordCategoryStats } from '../utils/word-stats.js';
 import { checkElectronAPI, checkLLMAvailability, loadAutoplayAudioSetting, checkExistingWords, checkFlowSentences, checkProficiencyLevel, scheduleDeferred } from '../utils/app-initializer.js';
 import { transformDialogSessionData, queueDialogSessions } from '../utils/dialog-session-helpers.js';
 import type { ProficiencyLevel } from './language-proficiency-selector.js';
-import type { LanguageState, SessionDataState, UIState } from './app-root-state.js';
-import { createInitialLanguageState, createInitialSessionDataState, createInitialUIState } from './app-root-state.js';
+import type { LanguageDataState, UIState } from './app-root-state.js';
+import { createInitialLanguageDataState, createInitialUIState } from './app-root-state.js';
 import { AutopilotManager } from '../utils/autopilot-manager.js';
 import './topic-selector.js';
 import './word-selector.js';
@@ -34,21 +33,13 @@ export class AppRoot extends LitElement {
   private currentRoute: RouteState = { mode: 'learning' };
 
   @state()
-  private appState: AppState = {
-    currentMode: 'learning'
-  };
-
-  @state()
   private uiState: UIState = createInitialUIState();
 
   @state()
   private sessionState: SessionState | null = null;
 
   @state()
-  private languageState: LanguageState = createInitialLanguageState();
-
-  @state()
-  private sessionDataState: SessionDataState = createInitialSessionDataState();
+  private languageDataState: LanguageDataState = createInitialLanguageDataState();
 
   @state()
   private languageStats: Array<{language: string, totalWords: number, studiedWords: number, averagePronunciationScore: number | null, pronunciationAttemptCount: number}> = [];
@@ -488,7 +479,6 @@ export class AppRoot extends LitElement {
     // Subscribe to router changes
     this.routerUnsubscribe = router.subscribe((route) => {
       this.currentRoute = route;
-      this.updateAppState();
       this.updateSessionFromRoute();
       this.updateKeyboardContext();
     });
@@ -588,44 +578,44 @@ export class AppRoot extends LitElement {
   }
 
   private async checkExistingWords() {
-    this.sessionDataState = { 
-      ...this.sessionDataState, 
-      hasExistingWords: await checkExistingWords(this.languageState.currentLanguage || await window.electronAPI.database.getCurrentLanguage())
+    this.languageDataState = { 
+      ...this.languageDataState, 
+      hasExistingWords: await checkExistingWords(this.languageDataState.currentLanguage || await window.electronAPI.database.getCurrentLanguage())
     };
     
     // Check proficiency level (will show selector if no words and no proficiency set)
-    if (this.languageState.currentLanguage) {
+    if (this.languageDataState.currentLanguage) {
       await this.checkProficiencyLevelInternal();
     }
     
-    if (this.sessionDataState.hasExistingWords === false && router.isCurrentMode('learning')) {
+    if (this.languageDataState.hasExistingWords === false && router.isCurrentMode('learning')) {
       router.goToTopicSelection();
     }
   }
 
   private async checkProficiencyLevelInternal() {
-    if (!this.languageState.currentLanguage) {
+    if (!this.languageDataState.currentLanguage) {
       return;
     }
 
-    const proficiency = await checkProficiencyLevel(this.languageState.currentLanguage);
-    this.languageState = {
-      ...this.languageState,
+    const proficiency = await checkProficiencyLevel(this.languageDataState.currentLanguage);
+    this.languageDataState = {
+      ...this.languageDataState,
       currentProficiencyLevel: proficiency as ProficiencyLevel | null,
-      showProficiencySelector: !this.sessionDataState.hasExistingWords && !proficiency
+      showProficiencySelector: !this.languageDataState.hasExistingWords && !proficiency
     };
   }
 
   private async checkFlowSentences() {
-    this.sessionDataState = { 
-      ...this.sessionDataState, 
+    this.languageDataState = { 
+      ...this.languageDataState, 
       hasFlowSentences: await checkFlowSentences() 
     };
   }
 
   private async loadCurrentLanguage() {
     const language = await loadCurrentLanguageWithSession('spanish', true);
-    this.languageState = { ...this.languageState, currentLanguage: language };
+    this.languageDataState = { ...this.languageDataState, currentLanguage: language };
   }
 
   private async ensureLearningSession() {
@@ -635,11 +625,11 @@ export class AppRoot extends LitElement {
         return;
       }
 
-      if (this.sessionDataState.hasExistingWords === false) {
+      if (this.languageDataState.hasExistingWords === false) {
         return;
       }
 
-      const language = this.languageState.currentLanguage || (await window.electronAPI.database.getCurrentLanguage());
+      const language = this.languageDataState.currentLanguage || (await window.electronAPI.database.getCurrentLanguage());
       const candidates = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(language, true, false);
 
       const sessionWordIds: number[] = [];
@@ -681,7 +671,7 @@ export class AppRoot extends LitElement {
     const customEvent = event as CustomEvent<{ language?: string }>;
     const newLanguage = customEvent.detail?.language;
 
-    if (newLanguage && newLanguage === this.languageState.currentLanguage) {
+    if (newLanguage && newLanguage === this.languageDataState.currentLanguage) {
       return;
     }
 
@@ -717,11 +707,11 @@ export class AppRoot extends LitElement {
     const select = event.target as HTMLSelectElement;
     const selectedLanguage = select.value;
 
-    if (!selectedLanguage || selectedLanguage === this.languageState.currentLanguage) return;
+    if (!selectedLanguage || selectedLanguage === this.languageDataState.currentLanguage) return;
 
     try {
       await changeLanguage(selectedLanguage, async (newLanguage) => {
-        this.languageState = { ...this.languageState, currentLanguage: newLanguage };
+        this.languageDataState = { ...this.languageDataState, currentLanguage: newLanguage };
         // Reload language stats after language change
         await this.loadLanguageStats();
         this.sessionState = sessionManager.getCurrentSession();
@@ -747,23 +737,23 @@ export class AppRoot extends LitElement {
       });
     } catch (error) {
       console.error('Failed to change language:', error);
-      // Revert the selection
-      select.value = this.languageState.currentLanguage;
+        // Revert the selection
+      select.value = this.languageDataState.currentLanguage;
     }
   }
 
   private async handleProficiencySelected(event: CustomEvent<{ level: ProficiencyLevel }>) {
     const { level } = event.detail;
     
-    if (!this.languageState.currentLanguage) {
+    if (!this.languageDataState.currentLanguage) {
       return;
     }
 
     try {
-      const proficiencyKey = `language_proficiency_${this.languageState.currentLanguage}`;
+      const proficiencyKey = `language_proficiency_${this.languageDataState.currentLanguage}`;
       await window.electronAPI.database.setSetting(proficiencyKey, level);
-      this.languageState = {
-        ...this.languageState,
+      this.languageDataState = {
+        ...this.languageDataState,
         currentProficiencyLevel: level,
         showProficiencySelector: false
       };
@@ -775,7 +765,7 @@ export class AppRoot extends LitElement {
   private handleProficiencyCancelled() {
     // User cancelled, but we still don't want to show it again until next session
     // or they can dismiss it manually - for now, just hide it
-    this.languageState = { ...this.languageState, showProficiencySelector: false };
+    this.languageDataState = { ...this.languageDataState, showProficiencySelector: false };
   }
 
 
@@ -802,32 +792,21 @@ export class AppRoot extends LitElement {
 
   private async loadWordStats() {
     try {
-      if (!this.languageState.currentLanguage) {
+      if (!this.languageDataState.currentLanguage) {
         return;
       }
 
-      const allWords = await window.electronAPI.database.getAllWords(this.languageState.currentLanguage, true, false);
-      this.sessionDataState = {
-        ...this.sessionDataState,
+      const allWords = await window.electronAPI.database.getAllWords(this.languageDataState.currentLanguage, true, false);
+      this.languageDataState = {
+        ...this.languageDataState,
         wordCategoryStats: calculateWordCategoryStats(allWords)
       };
     } catch (error) {
       console.error('Failed to load word stats:', error);
-      this.sessionDataState = { ...this.sessionDataState, wordCategoryStats: null };
+      this.languageDataState = { ...this.languageDataState, wordCategoryStats: null };
     }
   }
 
-
-  private updateAppState() {
-    // Update legacy app state based on current route
-    const routeData = router.getRouteData();
-
-    this.appState = {
-      ...this.appState,
-      currentMode: this.currentRoute.mode === 'quiz' ? 'quiz' : 'learning',
-      selectedTopic: routeData?.topic
-    };
-  }
 
   private updateSessionFromRoute() {
     // Update session manager with current route state
@@ -849,7 +828,7 @@ export class AppRoot extends LitElement {
       case 'learning':
         // Check if there are words with sentences available for review in the current language
         try {
-          const language = this.languageState.currentLanguage || await window.electronAPI.database.getCurrentLanguage();
+          const language = this.languageDataState.currentLanguage || await window.electronAPI.database.getCurrentLanguage();
           const wordsWithSentences = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(language, true, false);
           if (wordsWithSentences.length > 0) {
             router.goToLearning();
@@ -889,7 +868,7 @@ export class AppRoot extends LitElement {
 
   async handleFlowPlay() {
     // Prevent playing if there are no flow sentences available
-    if (!this.sessionDataState.hasFlowSentences) {
+    if (!this.languageDataState.hasFlowSentences) {
       return;
     }
 
@@ -1003,12 +982,12 @@ export class AppRoot extends LitElement {
       // Get next mode and ranked modes from scoring service
       const result = await window.electronAPI.scoring.getNextMode({
         currentMode: currentScoringMode ?? null,
-        language: this.languageState.currentLanguage || null,
+        language: this.languageDataState.currentLanguage || null,
         initialTakeover: initialTakeover ?? false
       });
       
       // Check if we have fewer than 5 unreviewed words, and if so, add more
-      const unreviewedCount = await window.electronAPI.database.getNewWordCount(this.languageState.currentLanguage || await window.electronAPI.database.getCurrentLanguage());
+      const unreviewedCount = await window.electronAPI.database.getNewWordCount(this.languageDataState.currentLanguage || await window.electronAPI.database.getCurrentLanguage());
       
       if (unreviewedCount < 5) {
         void this.handleAutoAddNew();
@@ -1043,7 +1022,7 @@ export class AppRoot extends LitElement {
    */
   private async handleAutoAddNew(): Promise<void> {
     try {
-      const result = await autoAddNewWords(this.languageState.currentLanguage);
+      const result = await autoAddNewWords(this.languageDataState.currentLanguage);
       
       if (result.success) {
         // Reload stats and check existing words after adding
@@ -1075,7 +1054,7 @@ export class AppRoot extends LitElement {
         ...GlobalShortcuts.ESCAPE,
         action: () => {
           // Close proficiency pop-up if it's shown
-          if (this.languageState.showProficiencySelector) {
+          if (this.languageDataState.showProficiencySelector) {
             this.handleProficiencyCancelled();
           }
         },
@@ -1111,8 +1090,8 @@ export class AppRoot extends LitElement {
                 <button 
                   class="nav-button flow-button"
                   @click=${() => this.handleFlowPlay()}
-                  ?disabled=${!this.sessionDataState.hasFlowSentences}
-                  title=${this.sessionDataState.hasFlowSentences ? 'Get into the Flow' : 'Not enough sentences with audio available'}
+                  ?disabled=${!this.languageDataState.hasFlowSentences}
+                  title=${this.languageDataState.hasFlowSentences ? 'Get into the Flow' : 'Not enough sentences with audio available'}
                 >
                   ▶
                 </button>
@@ -1145,49 +1124,49 @@ export class AppRoot extends LitElement {
                   Dialog
                 </button>
               ` : ''}
-              ${this.languageState.currentLanguage ? html`
+              ${this.languageDataState.currentLanguage ? html`
                 <div class="language-dropdown">
                   <select 
                     class="language-select"
-                    .value=${this.languageState.currentLanguage}
+                    .value=${this.languageDataState.currentLanguage}
                     @change=${this.handleLanguageDropdownChange}
                     title="Select Language"
                   >
                     ${getSupportedLanguages().map(language => html`
-                      <option value=${language} ?selected=${language === this.languageState.currentLanguage}>
+                      <option value=${language} ?selected=${language === this.languageDataState.currentLanguage}>
                         ${getLanguageFlag(language)} ${capitalizeLanguage(language)}
                       </option>
                     `)}
                   </select>
                   ${(() => {
-                    const currentLangStats = this.languageStats.find(s => s.language === this.languageState.currentLanguage);
+                    const currentLangStats = this.languageStats.find(s => s.language === this.languageDataState.currentLanguage);
                     const pronunciationScore = currentLangStats?.averagePronunciationScore;
                     const pronunciationAttemptCount = currentLangStats?.pronunciationAttemptCount || 0;
-                    const proficiencyScore = this.proficiencyScores.get(this.languageState.currentLanguage);
-                    const hasStats = this.sessionDataState.wordCategoryStats || (pronunciationScore !== null && pronunciationScore !== undefined) || (proficiencyScore !== undefined && proficiencyScore !== null);
-                    const proficiencyLevelDisplay = this.languageState.currentProficiencyLevel 
-                      ? (this.languageState.currentProficiencyLevel === 'newbie' ? 'New' : this.languageState.currentProficiencyLevel.toUpperCase()).substring(0, 3)
+                    const proficiencyScore = this.proficiencyScores.get(this.languageDataState.currentLanguage);
+                    const hasStats = this.languageDataState.wordCategoryStats || (pronunciationScore !== null && pronunciationScore !== undefined) || (proficiencyScore !== undefined && proficiencyScore !== null);
+                    const proficiencyLevelDisplay = this.languageDataState.currentProficiencyLevel 
+                      ? (this.languageDataState.currentProficiencyLevel === 'newbie' ? 'New' : this.languageDataState.currentProficiencyLevel.toUpperCase()).substring(0, 3)
                       : null;
                     
                     if (!hasStats && !proficiencyLevelDisplay) return '';
                     
                     return html`
                       <div class="stats-display">
-                        ${this.sessionDataState.wordCategoryStats ? html`
+                        ${this.languageDataState.wordCategoryStats ? html`
                           <div class="stat-box known">
-                            <span class="stat-value">${this.sessionDataState.wordCategoryStats.known}</span>
+                            <span class="stat-value">${this.languageDataState.wordCategoryStats.known}</span>
                             <div class="tooltip">Known: confidently remembered (strength > 80)</div>
                           </div>
                           <div class="stat-box strong">
-                            <span class="stat-value">${this.sessionDataState.wordCategoryStats.strong}</span>
+                            <span class="stat-value">${this.languageDataState.wordCategoryStats.strong}</span>
                             <div class="tooltip">Strong: mostly remembered (30–80)</div>
                           </div>
                           <div class="stat-box weak">
-                            <span class="stat-value">${this.sessionDataState.wordCategoryStats.weak}</span>
+                            <span class="stat-value">${this.languageDataState.wordCategoryStats.weak}</span>
                             <div class="tooltip">Weak: shaky or forgotten (&lt;30)</div>
                           </div>
                           <div class="stat-box new">
-                            <span class="stat-value">${this.sessionDataState.wordCategoryStats.new}</span>
+                            <span class="stat-value">${this.languageDataState.wordCategoryStats.new}</span>
                             <div class="tooltip">New: not yet reviewed</div>
                           </div>
                         ` : ''}
@@ -1262,10 +1241,10 @@ export class AppRoot extends LitElement {
       <!-- Flow mode overlay - always rendered, appears on top when active -->
       <flow-mode></flow-mode>
 
-      ${this.languageState.showProficiencySelector ? html`
+      ${this.languageDataState.showProficiencySelector ? html`
         <language-proficiency-selector
-          .language=${this.languageState.currentLanguage}
-          .currentLevel=${this.languageState.currentProficiencyLevel}
+          .language=${this.languageDataState.currentLanguage}
+          .currentLevel=${this.languageDataState.currentProficiencyLevel}
           @proficiency-selected=${this.handleProficiencySelected}
           @proficiency-cancelled=${this.handleProficiencyCancelled}
         ></language-proficiency-selector>

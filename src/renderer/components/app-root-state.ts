@@ -4,13 +4,10 @@
 
 import type { ProficiencyLevel } from './language-proficiency-selector.js';
 
-export interface LanguageState {
+export interface LanguageDataState {
   currentLanguage: string;
   showProficiencySelector: boolean;
   currentProficiencyLevel: ProficiencyLevel | null;
-}
-
-export interface SessionDataState {
   hasExistingWords: boolean | null;
   hasFlowSentences: boolean;
   wordCategoryStats: { known: number; strong: number; weak: number; new: number } | null;
@@ -23,13 +20,10 @@ export interface UIState {
   autoplayAudioEnabled: boolean;
 }
 
-export const createInitialLanguageState = (): LanguageState => ({
+export const createInitialLanguageDataState = (): LanguageDataState => ({
   currentLanguage: '',
   showProficiencySelector: false,
-  currentProficiencyLevel: null
-});
-
-export const createInitialSessionDataState = (): SessionDataState => ({
+  currentProficiencyLevel: null,
   hasExistingWords: null,
   hasFlowSentences: false,
   wordCategoryStats: null
