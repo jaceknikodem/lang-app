@@ -9,7 +9,7 @@ import { sessionManager, SessionState } from '../utils/session-manager.js';
 import { sharedStyles } from '../styles/shared.js';
 import { keyboardManager, useKeyboardBindings, GlobalShortcuts } from '../utils/keyboard-manager.js';
 import { autoAddNewWords } from '../utils/auto-add-words.js';
-import { loadCurrentLanguageWithSession, changeLanguage, loadLemmatizationModel, capitalizeLanguage, getLanguageFlag, getSupportedLanguages } from '../utils/language-manager.js';
+import { loadCurrentLanguageWithSession, changeLanguage, capitalizeLanguage, getLanguageFlag, getSupportedLanguages } from '../utils/language-manager.js';
 import { calculateWordCategoryStats } from '../utils/word-stats.js';
 import { checkElectronAPI, checkLLMAvailability, loadAutoplayAudioSetting, checkExistingWords, checkFlowSentences, checkProficiencyLevel, scheduleDeferred } from '../utils/app-initializer.js';
 import { transformDialogSessionData, queueDialogSessions } from '../utils/dialog-session-helpers.js';

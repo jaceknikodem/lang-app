@@ -7,7 +7,7 @@ import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
-import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
+import { useKeyboardBindings, CommonKeys } from '../utils/keyboard-manager.js';
 import { loadCurrentLanguage, loadLemmatizationModel } from '../utils/language-manager.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
 import { BaseComponent } from './base-component.js';
@@ -240,7 +240,7 @@ export class TopicSelector extends BaseComponent {
     super.connectedCallback();
     await this.loadCurrentLanguage();
     await this.loadTopics();
-    this.selectRandomSuggestions();
+    await this.selectRandomSuggestions();
     this.setupKeyboardBindings();
   }
 
@@ -273,7 +273,7 @@ export class TopicSelector extends BaseComponent {
     this.topic = '';
     this.error = null;
     await this.loadTopics();
-    this.selectRandomSuggestions();
+    await this.selectRandomSuggestions();
     
     // Request update to reflect changes
     this.requestUpdate();
@@ -288,11 +288,35 @@ export class TopicSelector extends BaseComponent {
     }
   }
 
-  private selectRandomSuggestions() {
+  private async selectRandomSuggestions() {
     if (this.allTopicSuggestions.length === 0) {
       return;
     }
-    const shuffled = [...this.allTopicSuggestions].sort(() => Math.random() - 0.5);
+
+    // Get word counts by topic for the current language
+    let frequentlyUsedTopics: Set<string> = new Set();
+    if (this.currentLanguage) {
+      try {
+        const topicCounts = await window.electronAPI.database.getTopicWordCounts(this.currentLanguage);
+        // Get the top ~10 most used topics (or fewer if there aren't that many)
+        const topUsedTopics = topicCounts.slice(0, 10).map(tc => tc.topic);
+        frequentlyUsedTopics = new Set(topUsedTopics);
+      } catch (error) {
+        console.error('[TopicSelector] Error getting topic word counts:', error);
+        // Continue without filtering if there's an error
+      }
+    }
+
+    // Filter out frequently used topics
+    const availableTopics = this.allTopicSuggestions.filter(
+      topic => !frequentlyUsedTopics.has(topic)
+    );
+
+    // If we filtered out too many, fall back to all topics
+    const topicsToUse = availableTopics.length >= 3 ? availableTopics : this.allTopicSuggestions;
+
+    // Select 3 random suggestions
+    const shuffled = [...topicsToUse].sort(() => Math.random() - 0.5);
     this.suggestions = shuffled.slice(0, 3);
   }
 

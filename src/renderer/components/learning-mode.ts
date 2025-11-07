@@ -3,13 +3,13 @@
  */
 
 import { html, css } from 'lit';
-import { customElement, state, property } from 'lit/decorators.js';
+import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
 import { Word, Sentence } from '../../shared/types/core.js';
 import { STRENGTH_BOOST_CONFIG } from '../../shared/constants/index.js';
-import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
+import { useKeyboardBindings, GlobalShortcuts } from '../utils/keyboard-manager.js';
 import { loadCurrentLanguage, loadLemmatizationModel } from '../utils/language-manager.js';
 import { BaseComponent } from './base-component.js';
 import './sentence-viewer.js';

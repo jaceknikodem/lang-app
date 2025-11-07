@@ -397,6 +397,15 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       'reset language progress'
     )
   );
+
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_TOPIC_WORD_COUNTS,
+    createIPCHandler(
+      LanguageSchema,
+      (language) => databaseLayer.getTopicWordCounts(language),
+      'get topic word counts'
+    )
+  );
 }
 
 /**

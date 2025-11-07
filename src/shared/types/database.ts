@@ -182,6 +182,9 @@ export interface DatabaseLayer {
   // Language progress reset
   resetLanguageProgress(language: string): Promise<void>;
 
+  // Topic word counts
+  getTopicWordCounts(language: string): Promise<Array<{ topic: string; count: number }>>;
+
   // Tracking operations
   recordSRSAdjustment(data: {
     wordId: number;

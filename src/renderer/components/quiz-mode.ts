@@ -2,22 +2,22 @@
  * Quiz mode component for vocabulary assessment
  */
 
-import { html, css, nothing } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
-import { Word, Sentence, QuizQuestion, QuizSession, QuizResult } from '../../shared/types/core.js';
+import { html, css } from 'lit';
+import { customElement, state } from 'lit/decorators.js';
+import { Word, QuizQuestion, QuizSession, QuizResult } from '../../shared/types/core.js';
 import { STRENGTH_BOOST_CONFIG } from '../../shared/constants/index.js';
 import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { sessionManager, type QuizSessionState } from '../utils/session-manager.js';
-import { keyboardManager, useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
+import { useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 import { BaseComponent } from './base-component.js';
 import './session-complete.js';
 import './progress-bar.js';
 import type { SessionSummary } from './session-complete.js';
 import type { RecordingResult } from './audio-recorder.js';
-import type { RecordingOptions, RecordingSession } from '../../shared/types/audio.js';
+import type { RecordingOptions } from '../../shared/types/audio.js';
 import { checkProficiencyLevel } from '../utils/app-initializer.js';
-import { getSimilarityThresholds, getSimilarityClass, type ProficiencyLevel } from '../../shared/utils/similarity-threshold.js';
+import { getSimilarityClass, type ProficiencyLevel } from '../../shared/utils/similarity-threshold.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
 
 @customElement('quiz-mode')

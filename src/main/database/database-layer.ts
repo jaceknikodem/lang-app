@@ -2108,6 +2108,31 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
+   * Get word counts by topic for a given language
+   * Returns an array of topics with their word counts, sorted by count descending
+   */
+  async getTopicWordCounts(language: string): Promise<Array<{ topic: string; count: number }>> {
+    const db = this.getDb();
+    
+    try {
+      const stmt = db.prepare(`
+        SELECT 
+          topic,
+          COUNT(*) as count
+        FROM words
+        WHERE language = ? AND topic IS NOT NULL AND topic != ''
+        GROUP BY topic
+        ORDER BY count DESC
+      `);
+      
+      const rows = stmt.all(language) as Array<{ topic: string; count: number }>;
+      return rows;
+    } catch (error) {
+      throw wrapError(error, `Failed to get topic word counts`);
+    }
+  }
+
+  /**
    * Lookup dictionary entries for a word in the specified language
    */
   async lookupDictionary(word: string, language: string): Promise<DictionaryEntry[]> {
