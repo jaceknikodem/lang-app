@@ -125,9 +125,10 @@ export class ScoringService {
    * Returns the next mode to navigate to, along with a ranked list of all modes by score.
    * 
    * This method tracks the previous mode internally to prevent bouncing between modes.
-   * It excludes both the previous mode and current mode (if not initialTakeover) from selection,
-   * and only returns a mode if the highest scoring mode is at least 1 point better than the current mode
-   * (unless initialTakeover is true). Topic-selection is always excluded from navigation.
+   * It excludes the previous mode from selection, and only returns a mode if the highest scoring mode
+   * is different from the current mode and at least 1 point better (unless initialTakeover is true).
+   * Topic-selection is always excluded from navigation.
+   * The current mode is included in consideration, allowing users to stay in the same mode when it has the highest score.
    */
   async getNextMode(options: {
     currentMode: 'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow' | null;
@@ -160,17 +161,12 @@ export class ScoringService {
         : 0;
 
       // Build exclude modes list - always exclude previous mode and topic-selection
-      // On initial takeover, only exclude previous mode (allow current mode)
-      // Otherwise, exclude both current mode and previous mode
       // Always exclude topic-selection from navigation (we'll handle it separately via auto-add)
+      // Note: current mode is NOT excluded - we want to allow staying in the same mode if it has the highest score
       const excludeModes: Array<'topic-selection' | 'learning' | 'quiz' | 'dialog' | 'flow'> = ['topic-selection'];
       
       if (this.previousMode) {
         excludeModes.push(this.previousMode);
-      }
-      
-      if (!initialTakeover && currentMode) {
-        excludeModes.push(currentMode);
       }
 
       // Create ranked list of all modes by score (descending) - do this before filtering
@@ -211,10 +207,11 @@ export class ScoringService {
 
       // Determine if navigation should happen
       // On initial takeover, navigate if there's any mode with score > 0, regardless of current mode
-      // Otherwise, only navigate if highest mode score is at least 1 point higher than current mode score
+      // Otherwise, only navigate if highest mode is different from current mode AND score is at least 1 point higher
+      // This allows staying in the same mode when it has the highest score
       const shouldNavigate = initialTakeover
         ? (highestMode.score > 0 && highestMode.mode !== currentMode)
-        : (highestMode.score > 0 && scoreDifference >= 1);
+        : (highestMode.score > 0 && highestMode.mode !== currentMode && scoreDifference >= 1);
 
       // Only return the mode if navigation should happen
       if (!shouldNavigate) {
