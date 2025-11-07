@@ -2656,6 +2656,7 @@ export class LearningMode extends LitElement {
           .currentPlayingAudio=${this.currentPlayingAudio}
           .audioOnlyMode=${this.audioOnlyMode}
           .autoScrollEnabled=${this.autoScrollEnabled}
+          .currentSessionId=${this.currentSessionId}
           @word-clicked=${this.handleWordClicked}
           @mark-word-known=${this.handleMarkWordKnown}
           @mark-word-ignored=${this.handleMarkWordIgnored}

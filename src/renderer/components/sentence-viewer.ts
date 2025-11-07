@@ -45,6 +45,9 @@ export class SentenceViewer extends LitElement {
   @property({ type: Boolean })
   autoScrollEnabled = false;
 
+  @property({ type: Number })
+  currentSessionId?: number;
+
   @state()
   private isPlayingAudio = false;
   
@@ -1420,10 +1423,6 @@ export class SentenceViewer extends LitElement {
     const foundInDict = cachedEntries !== undefined && cachedEntries !== null && cachedEntries.length > 0;
 
     try {
-      // Get current session ID if available (optional)
-      let sessionId: number | undefined;
-      // Note: session tracking would need to be implemented separately if needed
-
       // Use lemmatized version if available, otherwise fall back to dictionary form or text
       const wordToRecord = wordInfo.lemma || wordInfo.dictionaryForm || wordInfo.text.trim();
 
@@ -1431,7 +1430,7 @@ export class SentenceViewer extends LitElement {
         word: wordToRecord,
         language: this.targetWord?.language || 'spanish',
         sentenceId: this.sentence?.id,
-        sessionId,
+        sessionId: this.currentSessionId,
         hoverDurationMs: duration,
         dictionaryKey,
         foundInDict
