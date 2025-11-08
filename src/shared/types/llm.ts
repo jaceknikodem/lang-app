@@ -38,13 +38,6 @@ export interface LLMClient {
     proficiencyLevel?: string
   ): Promise<Array<{ sentence: string; translation: string }>>;
   generateFollowUp(
-    sentence: string,
-    translation: string,
-    language: string,
-    proficiencyLevel?: string,
-    conversationHistory?: string[]
-  ): Promise<{ text: string; translation: string }>;
-  generateFollowUpFromHistory(
     conversationHistory: string[],
     language: string,
     proficiencyLevel?: string

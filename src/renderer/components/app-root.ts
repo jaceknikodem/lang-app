@@ -515,6 +515,9 @@ export class AppRoot extends LitElement {
     // Listen for word updates to refresh stats
     this.addEventListener('words-updated', this.handleWordsUpdated);
 
+    // Listen for dialog session completion to trigger pregeneration
+    window.addEventListener('dialog-session-complete', this.handleDialogSessionComplete);
+
     // Initialize current route
     this.currentRoute = router.getCurrentRoute();
     // Ensure keyboard context is set on initial load
@@ -543,6 +546,7 @@ export class AppRoot extends LitElement {
     }
     this.removeEventListener('language-changed', this.handleLanguageChanged);
     this.removeEventListener('words-updated', this.handleWordsUpdated);
+    window.removeEventListener('dialog-session-complete', this.handleDialogSessionComplete);
   }
 
   private async initializeApp() {
@@ -1392,6 +1396,16 @@ export class AppRoot extends LitElement {
         `;
     }
   }
+
+  /**
+   * Handle dialog session completion - trigger pregeneration of new sessions
+   */
+  private handleDialogSessionComplete = async (): Promise<void> => {
+    // Pre-generate new dialog sessions after summary is shown
+    scheduleDeferred(async () => {
+      await this.pregenerateDialogSession();
+    });
+  };
 
   /**
    * Pre-generate 5 dialog sessions and cache them in the session manager

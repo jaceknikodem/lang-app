@@ -227,7 +227,20 @@ export class DialogService {
       return { text: '', translation: '' };
     }
 
-    // Return cached continuation if available (only if no conversation history, as history changes the context)
+    // Build conversation history from variant sentence + any additional history
+    const fullHistory: string[] = [];
+
+    // If we have a variant sentence, include it in the history
+    if (variant.variantSentence) {
+      fullHistory.push(variant.variantSentence);
+    }
+
+    // Add any additional conversation history
+    if (conversationHistory && conversationHistory.length > 0) {
+      fullHistory.push(...conversationHistory);
+    }
+
+    // Return cached continuation if available (only if no additional conversation history, as history changes the context)
     if (
       variant.continuationText &&
       variant.continuationTranslation &&
@@ -241,16 +254,16 @@ export class DialogService {
 
     const proficiencyLevel = await this.getProficiencyLevel(language);
 
-    const result = await this.llmClient.generateFollowUp(
-      variant.variantSentence,
-      variant.variantTranslation,
-      language,
-      proficiencyLevel,
-      conversationHistory
-    );
+    // Use unified history-based approach
+    const result = await this.llmClient.generateFollowUp(fullHistory, language, proficiencyLevel);
 
     // Cache the continuation for this variant (use actual variant ID, not the pseudo ID)
-    if (result.text && result.translation) {
+    // Only cache if no additional conversation history was provided
+    if (
+      result.text &&
+      result.translation &&
+      (!conversationHistory || conversationHistory.length === 0)
+    ) {
       try {
         await this.database.updateDialogueVariantContinuation(
           variant.id,
@@ -262,32 +275,6 @@ export class DialogService {
       }
     }
 
-    return result;
-  }
-
-  /**
-   * Generate follow-up for free text (user's actual transcription)
-   * This is used when the user provides their own transcription instead of matching a variant
-   */
-  async generateFollowUpForFreeText(
-    conversationHistory: string[],
-    language: string
-  ): Promise<{ text: string; translation: string }> {
-    if (!conversationHistory || conversationHistory.length === 0) {
-      return { text: '', translation: '' };
-    }
-
-    const proficiencyLevel = await this.getProficiencyLevel(language);
-
-    // Use LLM client method which handles prompt creation, JSON parsing, and validation
-    // Pass conversation history as the primary input
-    const result = await this.llmClient.generateFollowUpFromHistory(
-      conversationHistory,
-      language,
-      proficiencyLevel
-    );
-
-    // Don't cache free text follow-ups since they're unique to each conversation history
     return result;
   }
 

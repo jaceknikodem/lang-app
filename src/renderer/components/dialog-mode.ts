@@ -109,6 +109,9 @@ export class DialogMode extends BaseComponent {
   private transcriptionAnalysis: TranscriptionAnalysis | null = null;
 
   @state()
+  private previousCorrections: string[] = []; // Store up to 3 previous corrections for topic-based flow
+
+  @state()
   private showCompletion = false;
 
   @state()
@@ -125,6 +128,7 @@ export class DialogMode extends BaseComponent {
   private keyboardUnsubscribe?: () => void;
   private currentProficiencyLevel: ProficiencyLevel | null = null;
   private dialogCount = 0; // Track number of dialogs completed in this session
+  private dialogsWithAudio = 0; // Track number of dialogs where user recorded audio
   private currentSessionId: number | undefined;
 
   protected override handleExternalLanguageChange = async (event: Event): Promise<void> => {
@@ -159,6 +163,7 @@ export class DialogMode extends BaseComponent {
     this.streamingTranscriptionText = null;
     this.recordedAudioPath = null;
     this.dialogCount = 0; // Reset dialog count on language change
+    this.dialogsWithAudio = 0; // Reset dialogs with audio count on language change
 
     // Reload dialog session for the new language
     await this.loadDialogSession();
@@ -169,10 +174,12 @@ export class DialogMode extends BaseComponent {
 
     // Reset dialog count and session start time when component is connected
     this.dialogCount = 0;
+    this.dialogsWithAudio = 0;
     this.sessionStartTime = Date.now();
     this.showCompletion = false;
     this.sessionSummary = null;
     this.initialTotalDialogs = 0; // Reset initial total
+    this.previousCorrections = []; // Reset previous corrections when starting new session
 
     // Load current language and proficiency level, and create dialog session for tracking
     window.electronAPI.database
@@ -1181,6 +1188,11 @@ export class DialogMode extends BaseComponent {
         }
       }
 
+      // Track that user recorded audio for this dialog
+      if (this.currentRecording?.filePath) {
+        this.dialogsWithAudio++;
+      }
+
       // For topic-based flow, run transcription analysis and follow-up generation in parallel
       if (this.isTopicBasedFlow) {
         const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
@@ -1203,6 +1215,15 @@ export class DialogMode extends BaseComponent {
         // Handle transcription analysis result
         if (transcriptionAnalysisResult.status === 'fulfilled') {
           this.transcriptionAnalysis = transcriptionAnalysisResult.value;
+
+          // Save correction if it exists (for topic-based flow)
+          if (this.transcriptionAnalysis?.correction) {
+            // Add to previous corrections (keep only last 3)
+            this.previousCorrections = [
+              this.transcriptionAnalysis.correction,
+              ...this.previousCorrections,
+            ].slice(0, 3);
+          }
         } else {
           logger.warn(
             { error: transcriptionAnalysisResult.reason },
@@ -1543,6 +1564,8 @@ export class DialogMode extends BaseComponent {
     this.followUpAudio = null;
     this.showFollowUp = false;
     this.recordedAudioPath = null;
+    this.transcriptionAnalysis = null;
+    // Keep previousCorrections - they persist across dialogs in the same session
 
     // Consume the current dialog session (mark it as used and advance to next)
     const currentSession = sessionManager.getCurrentDialogSession();
@@ -1616,13 +1639,20 @@ export class DialogMode extends BaseComponent {
 
       this.sessionSummary = {
         type: 'learning', // Use 'learning' type since dialog is a form of learning
-        wordsStudied: this.dialogCount,
+        wordsStudied: this.dialogsWithAudio, // Only count dialogs where user recorded audio
         timeSpent,
         completedWords,
         nextRecommendation,
       };
 
       this.showCompletion = true;
+
+      // Trigger pregeneration of new dialog sessions after showing summary
+      window.dispatchEvent(
+        new CustomEvent('dialog-session-complete', {
+          detail: { dialogCount: this.dialogCount },
+        })
+      );
     } catch (error) {
       logger.error({ error }, 'Failed to show session summary');
       // Fallback: navigate to topic selection
@@ -1763,6 +1793,37 @@ export class DialogMode extends BaseComponent {
         align-self: flex-start;
         background: var(--background-secondary);
         border-top-left-radius: 4px;
+      }
+
+      .previous-corrections {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-xs);
+        margin-top: var(--spacing-sm);
+        margin-bottom: var(--spacing-sm);
+        padding: var(--spacing-sm);
+        background: var(--background-secondary);
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+      }
+
+      .previous-correction-item {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--spacing-xs);
+        font-size: 13px;
+        color: var(--text-secondary);
+        line-height: 1.4;
+      }
+
+      .correction-label {
+        flex-shrink: 0;
+        font-size: 14px;
+      }
+
+      .correction-text {
+        flex: 1;
+        font-style: italic;
       }
 
       .bubble-right {
@@ -2481,6 +2542,20 @@ export class DialogMode extends BaseComponent {
                       : nothing}
                   </div>
                 </div>
+                ${this.isTopicBasedFlow && this.previousCorrections.length > 0
+                  ? html`
+                      <div class="previous-corrections">
+                        ${this.previousCorrections.map(
+                          (correction) => html`
+                            <div class="previous-correction-item">
+                              <span class="correction-label">💡</span>
+                              <span class="correction-text">${correction}</span>
+                            </div>
+                          `
+                        )}
+                      </div>
+                    `
+                  : nothing}
               `
             : nothing}
           ${this.transcriptionResult

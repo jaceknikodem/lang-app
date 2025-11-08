@@ -687,117 +687,14 @@ ${knownWords.length > 0 ? '7. Prefer using words from the provided list when pos
   }
 
   /**
-   * Generate follow-up continuation - shared implementation
-   */
-  async generateFollowUp(
-    sentence: string,
-    translation: string,
-    language: string,
-    proficiencyLevel?: string,
-    conversationHistory?: string[]
-  ): Promise<{ text: string; translation: string }> {
-    const prompt = this.createFollowUpPrompt(
-      sentence,
-      translation,
-      language,
-      proficiencyLevel,
-      conversationHistory
-    );
-
-    try {
-      const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
-
-      // Use Zod to parse and validate the response
-      const parseResult = FollowUpResponseSchema.safeParse(response);
-
-      if (!parseResult.success) {
-        this.logger.warn(
-          { issues: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) },
-          'Follow-up validation failed'
-        );
-        // Return empty object on validation failure instead of throwing
-        return { text: '', translation: '' };
-      }
-
-      // Zod already normalizes the data to { text: string, translation: string }
-      return parseResult.data;
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        this.logger.warn(
-          { error },
-          'Follow-up generation validation failed, returning empty result'
-        );
-        return { text: '', translation: '' };
-      }
-      // On any error, return empty result instead of throwing
-      this.logger.warn({ error }, 'Follow-up generation failed, returning empty result');
-      return { text: '', translation: '' };
-    }
-  }
-
-  /**
-   * Create prompt for follow-up continuation generation
-   */
-  protected createFollowUpPrompt(
-    sentence: string,
-    translation: string,
-    language: string,
-    proficiencyLevel?: string,
-    conversationHistory?: string[]
-  ): string {
-    const languageName = language.charAt(0).toUpperCase() + language.slice(1);
-
-    // Get sentence count based on proficiency level
-    const sentenceCount = this.getFollowUpSentenceCount(proficiencyLevel);
-    const sentenceText = sentenceCount === 1 ? 'sentence' : 'sentences';
-
-    // Create proficiency level guidance
-    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence');
-
-    let prompt = `Given this ${languageName} sentence and its English translation:
-
-"${sentence}"
-"${translation}"`;
-
-    // Add conversation history if provided
-    if (conversationHistory && conversationHistory.length > 0) {
-      prompt += `\n\nPrevious conversation context:\n${conversationHistory
-        .map((msg, index) => `${index + 1}. ${msg}`)
-        .join('\n')}`;
-    }
-
-    prompt += `\n\nGenerate a natural continuation of about ${sentenceCount} ${sentenceText} in ${languageName}. This should:
-1. NOT be a question
-2. Continue the thought or provide related context
-3. Be suitable for reading/listening practice
-4. Be natural and coherent${proficiencyText}
-${conversationHistory && conversationHistory.length > 0 ? '5. Take into account the previous conversation context' : ''}
-
-IMPORTANT: You must return BOTH the ${languageName} text AND its English translation.
-
-Preferred JSON format:
-{
-  "text": "${languageName} continuation text here",
-  "translation": "English translation here"
-}
-`;
-
-    return prompt;
-  }
-
-  /**
    * Generate follow-up continuation from conversation history (in foreign language)
    */
-  async generateFollowUpFromHistory(
+  async generateFollowUp(
     conversationHistory: string[],
     language: string,
     proficiencyLevel?: string
   ): Promise<{ text: string; translation: string }> {
-    const prompt = this.createFollowUpPromptFromHistory(
-      conversationHistory,
-      language,
-      proficiencyLevel
-    );
+    const prompt = this.createFollowUpPrompt(conversationHistory, language, proficiencyLevel);
 
     try {
       const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
@@ -835,7 +732,7 @@ Preferred JSON format:
   /**
    * Create prompt for follow-up continuation generation from conversation history
    */
-  protected createFollowUpPromptFromHistory(
+  protected createFollowUpPrompt(
     conversationHistory: string[],
     language: string,
     proficiencyLevel?: string

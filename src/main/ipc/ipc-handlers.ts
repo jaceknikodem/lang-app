@@ -1753,11 +1753,12 @@ function setupDialogHandlers(
       async (variantId, conversationHistory) => {
         const language = await databaseLayer.getCurrentLanguage();
 
-        // Generate follow-up - use free text function if conversation history provided, otherwise use cached/variant flow
-        const followUp =
-          conversationHistory && conversationHistory.length > 0
-            ? await dialogService.generateFollowUpForFreeText(conversationHistory, language)
-            : await dialogService.generateFollowUp(variantId, language, conversationHistory);
+        // Generate follow-up using unified history-based approach
+        const followUp = await dialogService.generateFollowUp(
+          variantId,
+          language,
+          conversationHistory
+        );
 
         // Generate audio on-demand if continuation text exists and no audio is cached yet
         // Only cache audio for actual variants (positive IDs), not pseudo-variants (negative IDs)
