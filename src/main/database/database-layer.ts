@@ -1887,6 +1887,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get all sentences with audio for Flow feature
    * Includes sentences, connected words, before sentence audio paths, and continuation audio paths
+   * If more than 100 sentences are available, randomly selects 100 of them
    */
   async getFlowSentences(language: string): Promise<
     Array<{
@@ -1900,7 +1901,23 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
 
     try {
-      // Get all sentences for the language that have audio (excluding ignored sentences)
+      // First, check how many sentences are available
+      const countStmt = db.prepare(`
+        SELECT COUNT(*) as count
+        FROM sentences
+        WHERE language = ?
+          AND audio_path IS NOT NULL
+          AND TRIM(audio_path) != ''
+          AND (ignored IS NULL OR ignored = FALSE)
+      `);
+      const countResult = countStmt.get(language) as { count: number };
+      const totalCount = countResult.count;
+
+      // If more than 100 sentences available, randomly select 100
+      // Otherwise, get all sentences
+      const orderBy = totalCount > 100 ? 'ORDER BY RANDOM()' : 'ORDER BY id ASC';
+      const limit = totalCount > 100 ? 'LIMIT 100' : '';
+
       const stmt = db.prepare(`
         SELECT * 
         FROM sentences
@@ -1908,7 +1925,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           AND audio_path IS NOT NULL
           AND TRIM(audio_path) != ''
           AND (ignored IS NULL OR ignored = FALSE)
-        ORDER BY id ASC
+        ${orderBy}
+        ${limit}
       `);
 
       const sentenceRows = stmt.all(language) as any[];
