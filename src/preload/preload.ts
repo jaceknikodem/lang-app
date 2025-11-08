@@ -139,6 +139,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.LOOKUP_DICTIONARY, word, language),
     getNewWordCount: (language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_NEW_WORD_COUNT, language),
+    getAvailableSentencesCount: (language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_AVAILABLE_SENTENCES_COUNT, language),
     resetLanguageProgress: (language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.RESET_LANGUAGE_PROGRESS, language),
     getTopicWordCounts: (language: string) =>
@@ -544,6 +546,7 @@ declare global {
           }>
         >;
         getNewWordCount: (language: string) => Promise<number>;
+        getAvailableSentencesCount: (language: string) => Promise<number>;
         resetLanguageProgress: (language: string) => Promise<void>;
         getTopicWordCounts: (language: string) => Promise<Array<{ topic: string; count: number }>>;
       };

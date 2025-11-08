@@ -504,6 +504,18 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
   );
 
   ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_AVAILABLE_SENTENCES_COUNT,
+    createIPCHandler(
+      LanguageSchema.optional(),
+      async (language) => {
+        const currentLanguage = language || (await databaseLayer.getCurrentLanguage());
+        return databaseLayer.getAvailableSentencesCount(currentLanguage);
+      },
+      'get available sentences count'
+    )
+  );
+
+  ipcMain.handle(
     IPC_CHANNELS.DATABASE.RESET_LANGUAGE_PROGRESS,
     createIPCHandler(
       LanguageSchema,

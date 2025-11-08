@@ -113,6 +113,7 @@ export interface IPCBridge {
     >;
     lookupDictionary: (word: string, language: string) => Promise<DictionaryEntry[]>;
     getNewWordCount: (language: string) => Promise<number>;
+    getAvailableSentencesCount: (language: string) => Promise<number>;
     resetLanguageProgress: (language: string) => Promise<void>;
     getTopicWordCounts: (language: string) => Promise<Array<{ topic: string; count: number }>>;
   };
@@ -375,6 +376,7 @@ export const IPC_CHANNELS = {
     GET_LANGUAGE_STATS: 'database:getLanguageStats',
     LOOKUP_DICTIONARY: 'database:lookupDictionary',
     GET_NEW_WORD_COUNT: 'database:getNewWordCount',
+    GET_AVAILABLE_SENTENCES_COUNT: 'database:getAvailableSentencesCount',
     RESET_LANGUAGE_PROGRESS: 'database:resetLanguageProgress',
     GET_TOPIC_WORD_COUNTS: 'database:getTopicWordCounts',
   },

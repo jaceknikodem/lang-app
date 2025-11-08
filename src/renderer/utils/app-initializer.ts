@@ -57,29 +57,16 @@ export async function checkExistingWords(language: string): Promise<boolean> {
 
 /**
  * Check if flow sentences with audio exist
+ * Returns true only if there are at least 10 sentences with audio available
  */
 export async function checkFlowSentences(): Promise<boolean> {
   try {
     const language = await window.electronAPI.database.getCurrentLanguage();
-    const flowSentences = await window.electronAPI.flow.getFlowSentences(language);
+    const availableSentencesCount =
+      await window.electronAPI.database.getAvailableSentencesCount(language);
 
-    // Collect all audio paths using the same logic as handleFlowPlay()
-    const audioPaths: string[] = [];
-    for (const item of flowSentences) {
-      if (item.beforeSentenceAudio) {
-        audioPaths.push(item.beforeSentenceAudio);
-      }
-      if (item.sentence.audioPath) {
-        audioPaths.push(item.sentence.audioPath);
-      }
-      if (item.afterSentenceAudio) {
-        audioPaths.push(item.afterSentenceAudio);
-      }
-      audioPaths.push(...item.continuationAudios);
-    }
-
-    // Only enable Flow button if we have at least one audio file
-    return audioPaths.length > 0;
+    // Only enable Flow button if we have at least 10 sentences with audio
+    return availableSentencesCount >= 10;
   } catch (error) {
     logger.error({ error }, 'Failed to check flow sentences');
     return false;

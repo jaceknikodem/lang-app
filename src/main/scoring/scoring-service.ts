@@ -89,10 +89,17 @@ export class ScoringService {
    * Inputs: available_sentences_count, avg_pronunciation_score (0-10 scale), time_since_last_active_practice (hours)
    * Logic: score = clamp((available_sentences_count / 10) + (avg_pronunciation_score - 7) - (time_since_last_quiz_or_dialog / 10), 0, 10)
    * Meaning: rises with content richness and pronunciation strength, but drops the longer it's been since any active practice
+   * Note: Returns 0 if there are fewer than 10 sentences available
    */
   async calculateFlowScore(language: string): Promise<number> {
     try {
       const availableSentencesCount = await this.database.getAvailableSentencesCount(language);
+
+      // Disable flow mode if there are fewer than 10 sentences
+      if (availableSentencesCount < 10) {
+        return 0;
+      }
+
       const avgPronunciationScore = await this.database.getAveragePronunciationScore(language);
       const timeSinceLastPractice = await this.database.getTimeSinceLastActivePractice(language);
       const score =
