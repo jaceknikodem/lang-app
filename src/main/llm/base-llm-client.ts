@@ -14,8 +14,10 @@ import {
   ContextSentenceResponseSchema,
   DialogueVariantResponseSchema,
   FollowUpResponseSchema,
+  TranscriptionAnalysisSchema,
 } from './schemas.js';
 import { z } from 'zod';
+import { TranscriptionAnalysis } from '../../shared/types/core.js';
 
 /**
  * Abstract base class for LLM clients that implements common functionality
@@ -691,9 +693,16 @@ ${knownWords.length > 0 ? '7. Prefer using words from the provided list when pos
     sentence: string,
     translation: string,
     language: string,
-    proficiencyLevel?: string
+    proficiencyLevel?: string,
+    conversationHistory?: string[]
   ): Promise<{ text: string; translation: string }> {
-    const prompt = this.createFollowUpPrompt(sentence, translation, language, proficiencyLevel);
+    const prompt = this.createFollowUpPrompt(
+      sentence,
+      translation,
+      language,
+      proficiencyLevel,
+      conversationHistory
+    );
 
     try {
       const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
@@ -733,6 +742,102 @@ ${knownWords.length > 0 ? '7. Prefer using words from the provided list when pos
     sentence: string,
     translation: string,
     language: string,
+    proficiencyLevel?: string,
+    conversationHistory?: string[]
+  ): string {
+    const languageName = language.charAt(0).toUpperCase() + language.slice(1);
+
+    // Get sentence count based on proficiency level
+    const sentenceCount = this.getFollowUpSentenceCount(proficiencyLevel);
+    const sentenceText = sentenceCount === 1 ? 'sentence' : 'sentences';
+
+    // Create proficiency level guidance
+    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence');
+
+    let prompt = `Given this ${languageName} sentence and its English translation:
+
+"${sentence}"
+"${translation}"`;
+
+    // Add conversation history if provided
+    if (conversationHistory && conversationHistory.length > 0) {
+      prompt += `\n\nPrevious conversation context:\n${conversationHistory
+        .map((msg, index) => `${index + 1}. ${msg}`)
+        .join('\n')}`;
+    }
+
+    prompt += `\n\nGenerate a natural continuation of about ${sentenceCount} ${sentenceText} in ${languageName}. This should:
+1. NOT be a question
+2. Continue the thought or provide related context
+3. Be suitable for reading/listening practice
+4. Be natural and coherent${proficiencyText}
+${conversationHistory && conversationHistory.length > 0 ? '5. Take into account the previous conversation context' : ''}
+
+IMPORTANT: You must return BOTH the ${languageName} text AND its English translation.
+
+Preferred JSON format:
+{
+  "text": "${languageName} continuation text here",
+  "translation": "English translation here"
+}
+`;
+
+    return prompt;
+  }
+
+  /**
+   * Generate follow-up continuation from conversation history (in foreign language)
+   */
+  async generateFollowUpFromHistory(
+    conversationHistory: string[],
+    language: string,
+    proficiencyLevel?: string
+  ): Promise<{ text: string; translation: string }> {
+    const prompt = this.createFollowUpPromptFromHistory(
+      conversationHistory,
+      language,
+      proficiencyLevel
+    );
+
+    try {
+      const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
+
+      // Use Zod to parse and validate the response
+      const parseResult = FollowUpResponseSchema.safeParse(response);
+
+      if (!parseResult.success) {
+        this.logger.warn(
+          {
+            issues: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
+          },
+          'Follow-up validation failed'
+        );
+        // Return empty object on validation failure instead of throwing
+        return { text: '', translation: '' };
+      }
+
+      // Zod already normalizes the data to { text: string, translation: string }
+      return parseResult.data;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        this.logger.warn(
+          { error },
+          'Follow-up generation validation failed, returning empty result'
+        );
+        return { text: '', translation: '' };
+      }
+      // On any error, return empty result instead of throwing
+      this.logger.warn({ error }, 'Follow-up generation failed, returning empty result');
+      return { text: '', translation: '' };
+    }
+  }
+
+  /**
+   * Create prompt for follow-up continuation generation from conversation history
+   */
+  protected createFollowUpPromptFromHistory(
+    conversationHistory: string[],
+    language: string,
     proficiencyLevel?: string
   ): string {
     const languageName = language.charAt(0).toUpperCase() + language.slice(1);
@@ -744,16 +849,16 @@ ${knownWords.length > 0 ? '7. Prefer using words from the provided list when pos
     // Create proficiency level guidance
     const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence');
 
-    return `Given this ${languageName} sentence and its English translation:
+    return `Given this ${languageName} conversation:
 
-"${sentence}"
-"${translation}"
+${conversationHistory.map((msg, index) => `${index + 1}. ${msg}`).join('\n')}
 
-Generate a natural continuation of about ${sentenceCount} ${sentenceText} in ${languageName}. This should:
+Generate a natural continuation of about ${sentenceCount} ${sentenceText} in ${languageName} that continues the conversation. This should:
 1. NOT be a question
 2. Continue the thought or provide related context
 3. Be suitable for reading/listening practice
 4. Be natural and coherent${proficiencyText}
+5. Take into account the previous conversation context
 
 IMPORTANT: You must return BOTH the ${languageName} text AND its English translation.
 
@@ -762,6 +867,89 @@ Preferred JSON format:
   "text": "${languageName} continuation text here",
   "translation": "English translation here"
 }
+`;
+  }
+
+  /**
+   * Analyze transcription for corrections and grammar explanations
+   */
+  async analyzeTranscription(
+    transcription: string,
+    language: string,
+    assistantSentence: string
+  ): Promise<TranscriptionAnalysis> {
+    const prompt = this.createTranscriptionAnalysisPrompt(
+      transcription,
+      language,
+      assistantSentence
+    );
+
+    try {
+      const response = await this.makeRequest(prompt, this.getSentenceGenerationModel());
+
+      // Use Zod to parse and validate the response
+      const parseResult = TranscriptionAnalysisSchema.safeParse(response);
+
+      if (!parseResult.success) {
+        this.logger.warn(
+          { issues: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) },
+          'Transcription analysis validation failed'
+        );
+        // Return default result on validation failure
+        return {
+          hasGrammarMistakes: false,
+        };
+      }
+
+      return parseResult.data;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        this.logger.warn(
+          { error },
+          'Transcription analysis validation failed, returning default result'
+        );
+        return {
+          hasGrammarMistakes: false,
+        };
+      }
+      // On any error, return default result instead of throwing
+      this.logger.warn({ error }, 'Transcription analysis failed, returning default result');
+      return {
+        hasGrammarMistakes: false,
+      };
+    }
+  }
+
+  /**
+   * Create prompt for transcription analysis
+   */
+  protected createTranscriptionAnalysisPrompt(
+    transcription: string,
+    language: string,
+    assistantSentence: string
+  ): string {
+    const languageName = language.charAt(0).toUpperCase() + language.slice(1);
+
+    return `Analyze this ${languageName} transcription from a language learner:
+
+"${transcription}"
+
+Context: The learner was responding to this ${languageName} sentence from the assistant:
+"${assistantSentence}"
+
+Provide:
+1. A correction suggestion if there are better ways to express this (format: "you can say this like that: ...")
+2. A grammar explanation if there are grammar mistakes detected
+3. Whether there are grammar mistakes (true/false)
+
+IMPORTANT: You must return JSON format:
+{
+  "correction": "optional correction suggestion",
+  "grammarExplanation": "optional grammar explanation if mistakes detected",
+  "hasGrammarMistakes": true or false
+}
+
+If there are no mistakes, you can omit correction and grammarExplanation, but always include hasGrammarMistakes.
 `;
   }
 

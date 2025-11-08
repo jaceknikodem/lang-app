@@ -173,6 +173,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // Ignore error - this is expected for existing databases with the column
     }
 
+    // Migration: Add related_words column to sentences table if it doesn't exist
+    try {
+      db.exec(`ALTER TABLE sentences ADD COLUMN related_words TEXT`);
+    } catch {
+      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
+      // Ignore error - this is expected for existing databases with the column
+    }
+
     // Migration: Add language column to sentences table if it doesn't exist
     try {
       db.exec(`ALTER TABLE sentences ADD COLUMN language TEXT`);
@@ -476,6 +484,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       )
       VALUES (?, ?, ?, ?, 20, 1, 2.5, ?)
     `);
+
+    console.log('[Database] Inserting word with topic:', wordData.topic);
+    console.log('[Database] Topic type:', typeof wordData.topic);
 
     const result = stmt.run(
       wordData.word,
@@ -2074,6 +2085,60 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
 
+  /**
+   * Get a random sentence with a topic (for topic-based dialog flow)
+   * Prefers sentences with non-zero audio playback (play_count > 0)
+   */
+  async getRandomSentenceWithTopic(language: string): Promise<Sentence | null> {
+    const db = this.getDb();
+
+    try {
+      // Query: Select random sentence where word.topic IS NOT NULL AND word.topic != ''
+      // Prefer sentences with non-zero audio playback (play_count > 0)
+      // Order by: play_count DESC, then random selection
+      const stmt = db.prepare(`
+        SELECT DISTINCT s.* 
+        FROM sentences s
+        INNER JOIN words w ON s.word_id = w.id
+        WHERE s.language = ?
+          AND w.ignored = FALSE
+          AND w.topic IS NOT NULL
+          AND TRIM(w.topic) != ''
+        ORDER BY s.play_count DESC, RANDOM()
+        LIMIT 1
+      `);
+
+      const row = stmt.get(language) as any;
+
+      if (!row) {
+        return null;
+      }
+
+      return this.mapRowToSentence(row);
+    } catch (error) {
+      throw wrapError(error, `Failed to get random sentence with topic`);
+    }
+  }
+
+  /**
+   * Update related words for a sentence
+   */
+  async updateSentenceRelatedWords(sentenceId: number, relatedWords: string[]): Promise<void> {
+    const db = this.getDb();
+
+    try {
+      const serialized = JSON.stringify(relatedWords);
+      const stmt = db.prepare('UPDATE sentences SET related_words = ? WHERE id = ?');
+      const result = stmt.run(serialized, sentenceId);
+
+      if (result.changes === 0) {
+        throw new Error(`Sentence with ID ${sentenceId} not found`);
+      }
+    } catch (error) {
+      throw wrapError(error, `Failed to update sentence related words`);
+    }
+  }
+
   // Settings management operations
 
   /**
@@ -3049,6 +3114,19 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   private mapRowToSentence(row: Record<string, unknown>): Sentence {
+    // Parse related_words JSON if present
+    let relatedWords: string[] | undefined;
+    if (row.related_words) {
+      try {
+        const parsed = JSON.parse(row.related_words as string);
+        if (Array.isArray(parsed)) {
+          relatedWords = parsed.map((w) => String(w));
+        }
+      } catch {
+        // Ignore JSON parsing errors
+      }
+    }
+
     return {
       id: row.id as number,
       wordId: row.word_id as number,
@@ -3072,6 +3150,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       beforeSentenceAudioPath: (row.before_sentence_audio_path as string) || undefined,
       afterSentenceAudioPath: (row.after_sentence_audio_path as string) || undefined,
       ignored: row.ignored === 1 || row.ignored === true,
+      relatedWords,
     };
   }
 

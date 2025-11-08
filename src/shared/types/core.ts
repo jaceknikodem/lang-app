@@ -57,6 +57,7 @@ export interface Sentence {
   beforeSentenceAudioPath?: string;
   afterSentenceAudioPath?: string;
   ignored?: boolean;
+  relatedWords?: string[];
 }
 
 /**
@@ -153,6 +154,12 @@ export interface DialogSession {
   beforeSentenceAudio?: string;
   afterSentenceAudio?: string;
   responseOptions: DialogResponseOption[];
+}
+
+export interface TranscriptionAnalysis {
+  correction?: string;
+  grammarExplanation?: string;
+  hasGrammarMistakes: boolean;
 }
 
 export interface ModeScores {

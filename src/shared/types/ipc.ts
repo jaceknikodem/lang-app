@@ -12,6 +12,7 @@ import {
   DictionaryEntry,
   DialogueVariant,
   DialogSession,
+  TranscriptionAnalysis,
 } from './core.js';
 import { JobWordInfo, WordProcessingStatus } from './database.js';
 import {
@@ -284,10 +285,18 @@ export interface IPCBridge {
   // Dialog operations
   dialog: {
     selectSentence: () => Promise<Sentence | null>;
+    selectSentenceWithTopic: () => Promise<Sentence | null>;
     generateVariants: (sentenceId: number) => Promise<DialogueVariant[]>;
+    generateRelatedWords: (sentenceId: number, topic: string) => Promise<string[]>;
     generateFollowUp: (
-      variantId: number
+      variantId: number,
+      conversationHistory?: string[]
     ) => Promise<{ text: string; translation: string; audio?: string }>;
+    analyzeTranscription: (
+      transcription: string,
+      language: string,
+      assistantSentence: string
+    ) => Promise<TranscriptionAnalysis>;
     ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
     ensureContextSentences: (
       sentenceId: number
@@ -466,8 +475,11 @@ export const IPC_CHANNELS = {
   },
   DIALOG: {
     SELECT_SENTENCE: 'dialog:selectSentence',
+    SELECT_SENTENCE_WITH_TOPIC: 'dialog:selectSentenceWithTopic',
     GENERATE_VARIANTS: 'dialog:generateVariants',
+    GENERATE_RELATED_WORDS: 'dialog:generateRelatedWords',
     GENERATE_FOLLOW_UP: 'dialog:generateFollowUp',
+    ANALYZE_TRANSCRIPTION: 'dialog:analyzeTranscription',
     ENSURE_BEFORE_SENTENCE_AUDIO: 'dialog:ensureBeforeSentenceAudio',
     ENSURE_CONTEXT_SENTENCES: 'dialog:ensureContextSentences',
     PREGENERATE_SESSION: 'dialog:pregenerateSession',

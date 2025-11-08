@@ -25,6 +25,7 @@ const CreateWordSchema = z.object({
   translation: z.string().min(1).max(200),
   language: z.string().min(2).max(10),
   audioPath: z.string().optional(),
+  topic: z.string().optional(),
 });
 
 const WordIdSchema = z.number().int().positive();
@@ -45,6 +46,7 @@ const TextSchema = z.string().min(1).max(1000);
 const TopicSchema = z.string().min(1).max(200);
 const AudioPathSchema = z.string().min(1).max(500);
 const DictionaryWordSchema = z.string().min(1).max(100);
+const ConversationHistorySchema = z.array(z.string().min(1).max(1000));
 
 /**
  * Set up all IPC handlers with proper validation and error handling
@@ -118,7 +120,12 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     IPC_CHANNELS.DATABASE.INSERT_WORD,
     createIPCHandler(
       CreateWordSchema,
-      (wordData) => databaseLayer.insertWord(wordData),
+      (wordData) => {
+        console.log('[IPC Handler] INSERT_WORD received wordData:', wordData);
+        console.log('[IPC Handler] wordData.topic:', wordData.topic);
+        console.log('[IPC Handler] wordData.topic type:', typeof wordData.topic);
+        return databaseLayer.insertWord(wordData);
+      },
       'insert word'
     )
   );
@@ -1663,10 +1670,10 @@ function setupLemmatizationHandlers(lemmatizationService: LemmatizationService):
 function setupDialogHandlers(
   databaseLayer: SQLiteDatabaseLayer,
   llmClient: LLMClient,
-  _contentGenerator: ContentGenerator,
+  contentGenerator: ContentGenerator,
   audioService: AudioService
 ): void {
-  const dialogService = new DialogService(databaseLayer, llmClient);
+  const dialogService = new DialogService(databaseLayer, llmClient, contentGenerator);
 
   ipcMain.handle(
     IPC_CHANNELS.DIALOG.SELECT_SENTENCE,
@@ -1677,6 +1684,18 @@ function setupDialogHandlers(
         return await dialogService.selectSentence(language);
       },
       'select sentence for dialog'
+    )
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.DIALOG.SELECT_SENTENCE_WITH_TOPIC,
+    createIPCHandler(
+      undefined,
+      async () => {
+        const language = await databaseLayer.getCurrentLanguage();
+        return await dialogService.selectSentenceWithTopic(language);
+      },
+      'select sentence with topic for dialog'
     )
   );
 
@@ -1718,14 +1737,40 @@ function setupDialogHandlers(
   );
 
   ipcMain.handle(
+    IPC_CHANNELS.DIALOG.GENERATE_RELATED_WORDS,
+    createIPCHandler(
+      [SentenceIdSchema, TopicSchema],
+      async (sentenceId, topic) => {
+        const language = await databaseLayer.getCurrentLanguage();
+        return await dialogService.generateAndFilterRelatedWords(topic, language, sentenceId);
+      },
+      'generate related words for topic'
+    )
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.DIALOG.ANALYZE_TRANSCRIPTION,
+    createIPCHandler(
+      [TextSchema, LanguageSchema, TextSchema],
+      async (transcription, language, assistantSentence) => {
+        return await llmClient.analyzeTranscription(transcription, language, assistantSentence);
+      },
+      'analyze transcription for corrections and grammar'
+    )
+  );
+
+  ipcMain.handle(
     IPC_CHANNELS.DIALOG.GENERATE_FOLLOW_UP,
     createIPCHandler(
-      VariantIdSchema, // Use VariantIdSchema to allow negative IDs
-      async (variantId) => {
+      [VariantIdSchema, ConversationHistorySchema.optional()], // Use VariantIdSchema to allow negative IDs, optional conversation history
+      async (variantId, conversationHistory) => {
         const language = await databaseLayer.getCurrentLanguage();
 
-        // Generate follow-up (will check cache and generate if needed)
-        const followUp = await dialogService.generateFollowUp(variantId, language);
+        // Generate follow-up - use free text function if conversation history provided, otherwise use cached/variant flow
+        const followUp =
+          conversationHistory && conversationHistory.length > 0
+            ? await dialogService.generateFollowUpForFreeText(conversationHistory, language)
+            : await dialogService.generateFollowUp(variantId, language, conversationHistory);
 
         // Generate audio on-demand if continuation text exists and no audio is cached yet
         // Only cache audio for actual variants (positive IDs), not pseudo-variants (negative IDs)

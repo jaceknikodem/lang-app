@@ -10,9 +10,11 @@ import {
   DialogueVariant,
   DialogSession,
   DialogResponseOption,
+  GeneratedWord,
 } from '../../shared/types/core.js';
 import { getLogger } from '../utils/logger.js';
 import { Logger } from '../../shared/utils/logger.js';
+import { ContentGenerator } from '../llm/content-generator.js';
 
 export interface DialogServiceConfig {
   minWordStrength?: number;
@@ -43,13 +45,20 @@ function shuffleAndTake<T>(array: T[], count: number = 2): T[] {
 export class DialogService {
   private database: DatabaseLayer;
   private llmClient: LLMClient;
+  private contentGenerator: ContentGenerator;
   private config: DialogServiceConfig;
   private readonly logger: Logger;
 
-  constructor(database: DatabaseLayer, llmClient: LLMClient, config?: DialogServiceConfig) {
+  constructor(
+    database: DatabaseLayer,
+    llmClient: LLMClient,
+    contentGenerator: ContentGenerator,
+    config?: DialogServiceConfig
+  ) {
     this.logger = getLogger();
     this.database = database;
     this.llmClient = llmClient;
+    this.contentGenerator = contentGenerator;
     this.config = {
       minWordStrength: config?.minWordStrength ?? 40,
       maxVariantsPerSentence: config?.maxVariantsPerSentence ?? 6,
@@ -65,6 +74,100 @@ export class DialogService {
     const sentence = await this.database.getRandomDialogSentence(language);
 
     return sentence;
+  }
+
+  /**
+   * Select a sentence with a topic for topic-based dialog flow
+   * Prefers sentences with non-zero audio playback
+   */
+  async selectSentenceWithTopic(language: string): Promise<Sentence | null> {
+    const sentence = await this.database.getRandomSentenceWithTopic(language);
+
+    return sentence;
+  }
+
+  /**
+   * Generate and filter related words for a topic
+   * Uses ContentGenerator logic, then applies additional filtering
+   */
+  async generateAndFilterRelatedWords(
+    topic: string,
+    language: string,
+    sentenceId: number
+  ): Promise<string[]> {
+    try {
+      // Check if related words are already cached
+      const sentence = await this.database.getSentenceById(sentenceId);
+      if (sentence?.relatedWords && sentence.relatedWords.length > 0) {
+        return sentence.relatedWords;
+      }
+
+      // Generate 20 words using ContentGenerator (reuses its logic)
+      const generatedWords = await this.contentGenerator.generateTopicVocabulary(
+        topic,
+        language,
+        20,
+        this.database
+      );
+
+      // Get all words from database to check their status
+      const allWords = await this.database.getAllWords(language, true, false);
+      const wordMap = new Map<string, { known: boolean; learning: boolean; ignored: boolean }>();
+      for (const word of allWords) {
+        const normalized = word.word.toLowerCase();
+        wordMap.set(normalized, {
+          known: word.known,
+          learning: !word.known && !word.ignored,
+          ignored: word.ignored,
+        });
+      }
+
+      // Filter the generated words
+      const filteredWords: GeneratedWord[] = [];
+      const remainingWords: GeneratedWord[] = [];
+
+      for (const word of generatedWords) {
+        const normalized = word.word.toLowerCase();
+        const status = wordMap.get(normalized);
+
+        if (status?.ignored) {
+          // Skip ignored words
+          continue;
+        }
+
+        if (status?.known || status?.learning) {
+          // Keep known and learning words
+          filteredWords.push(word);
+        } else {
+          // Keep track of remaining words for random selection
+          remainingWords.push(word);
+        }
+      }
+
+      // If we have less than 5 words, randomly select from remaining to reach 5
+      if (filteredWords.length < 5 && remainingWords.length > 0) {
+        const needed = 5 - filteredWords.length;
+        const shuffled = [...remainingWords].sort(() => Math.random() - 0.5);
+        filteredWords.push(...shuffled.slice(0, Math.min(needed, shuffled.length)));
+      }
+
+      // Extract just the word strings
+      const result = filteredWords.map((w) => w.word);
+
+      // Cache the result in the database
+      if (result.length > 0) {
+        try {
+          await this.database.updateSentenceRelatedWords(sentenceId, result);
+        } catch (error) {
+          this.logger.warn({ error, sentenceId }, 'Failed to cache related words');
+        }
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error({ error, topic, language, sentenceId }, 'Failed to generate related words');
+      throw error;
+    }
   }
 
   /**
@@ -150,22 +253,18 @@ export class DialogService {
   }
 
   /**
-   * Generate follow-up continuation text with translation (cached per variant)
+   * Helper method to get or create a variant from a variant ID
+   * Handles both regular variants (positive IDs) and pseudo-variants (negative IDs)
    */
-  async generateFollowUp(
-    variantId: number,
-    language: string
-  ): Promise<{ text: string; translation: string }> {
-    // Handle negative IDs (original sentence pseudo-variants)
+  private async getOrCreateVariant(variantId: number): Promise<DialogueVariant | null> {
     const isOriginalSentence = variantId < 0;
-    let variant: DialogueVariant | null = null;
 
     if (isOriginalSentence) {
       // For original sentence, create a variant entry if it doesn't exist
       const sentenceId = Math.abs(variantId);
       const sentence = await this.database.getSentenceById(sentenceId);
       if (!sentence) {
-        return { text: '', translation: '' };
+        return null;
       }
 
       // Check if a variant already exists for the original sentence
@@ -176,69 +275,112 @@ export class DialogService {
       );
 
       if (originalVariant) {
-        variant = originalVariant;
-      } else {
-        // Create a variant entry for the original sentence
-        const variantIdFromDb = await this.database.insertDialogueVariant(
-          sentenceId,
-          sentence.sentence,
-          sentence.translation
-        );
-        variant = await this.database.getDialogueVariantById(variantIdFromDb);
-        if (!variant) {
-          return { text: '', translation: '' };
-        }
+        return originalVariant;
       }
-    } else {
-      // Regular variant - get from database
-      variant = await this.database.getDialogueVariantById(variantId);
-      if (!variant) {
-        return { text: '', translation: '' };
-      }
+
+      // Create a variant entry for the original sentence
+      const variantIdFromDb = await this.database.insertDialogueVariant(
+        sentenceId,
+        sentence.sentence,
+        sentence.translation
+      );
+      return await this.database.getDialogueVariantById(variantIdFromDb);
     }
 
-    // Return cached continuation if available
-    if (variant.continuationText && variant.continuationTranslation) {
+    // Regular variant - get from database
+    return await this.database.getDialogueVariantById(variantId);
+  }
+
+  /**
+   * Helper method to get proficiency level for a language
+   */
+  private async getProficiencyLevel(language: string): Promise<string | undefined> {
+    try {
+      const proficiencyKey = `language_proficiency_${language.toLowerCase()}`;
+      return (await this.database.getSetting(proficiencyKey)) || undefined;
+    } catch (error) {
+      this.logger.warn(
+        { error, language },
+        'Failed to retrieve proficiency level for follow-up generation'
+      );
+      return undefined;
+    }
+  }
+
+  /**
+   * Generate follow-up continuation text with translation (cached per variant)
+   */
+  async generateFollowUp(
+    variantId: number,
+    language: string,
+    conversationHistory?: string[]
+  ): Promise<{ text: string; translation: string }> {
+    const variant = await this.getOrCreateVariant(variantId);
+    if (!variant) {
+      return { text: '', translation: '' };
+    }
+
+    // Return cached continuation if available (only if no conversation history, as history changes the context)
+    if (
+      variant.continuationText &&
+      variant.continuationTranslation &&
+      (!conversationHistory || conversationHistory.length === 0)
+    ) {
       return {
         text: variant.continuationText,
         translation: variant.continuationTranslation,
       };
     }
 
-    // Get proficiency level for the language
-    let proficiencyLevel: string | undefined;
-    try {
-      const proficiencyKey = `language_proficiency_${language.toLowerCase()}`;
-      proficiencyLevel = (await this.database.getSetting(proficiencyKey)) || undefined;
-    } catch (error) {
-      this.logger.warn(
-        { error, language },
-        'Failed to retrieve proficiency level for follow-up generation'
-      );
-    }
+    const proficiencyLevel = await this.getProficiencyLevel(language);
 
-    // Use LLM client method which handles prompt creation, JSON parsing, and validation
-    // Use the variant sentence as context (what the user said), not the original sentence
     const result = await this.llmClient.generateFollowUp(
       variant.variantSentence,
       variant.variantTranslation,
       language,
-      proficiencyLevel
+      proficiencyLevel,
+      conversationHistory
     );
 
     // Cache the continuation for this variant (use actual variant ID, not the pseudo ID)
     if (result.text && result.translation) {
       try {
         await this.database.updateDialogueVariantContinuation(
-          variant.id, // Use the actual database variant ID
+          variant.id,
           result.text,
           result.translation
         );
-      } catch {
-        // Continue even if caching fails
+      } catch (error) {
+        this.logger.warn({ error, variantId: variant.id }, 'Failed to cache continuation');
       }
     }
 
+    return result;
+  }
+
+  /**
+   * Generate follow-up for free text (user's actual transcription)
+   * This is used when the user provides their own transcription instead of matching a variant
+   */
+  async generateFollowUpForFreeText(
+    conversationHistory: string[],
+    language: string
+  ): Promise<{ text: string; translation: string }> {
+    if (!conversationHistory || conversationHistory.length === 0) {
+      return { text: '', translation: '' };
+    }
+
+    const proficiencyLevel = await this.getProficiencyLevel(language);
+
+    // Use LLM client method which handles prompt creation, JSON parsing, and validation
+    // Pass conversation history as the primary input
+    const result = await this.llmClient.generateFollowUpFromHistory(
+      conversationHistory,
+      language,
+      proficiencyLevel
+    );
+
+    // Don't cache free text follow-ups since they're unique to each conversation history
     return result;
   }
 

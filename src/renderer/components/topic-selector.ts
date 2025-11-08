@@ -363,6 +363,9 @@ export class TopicSelector extends BaseComponent {
 
       // Update session with topic
       const topicToSave = this.topic.trim() || undefined;
+      console.log('[TopicSelector] Original topic:', this.topic);
+      console.log('[TopicSelector] Topic trimmed:', this.topic.trim());
+      console.log('[TopicSelector] Topic to save:', topicToSave);
       if (topicToSave) {
         sessionManager.updateSelectedTopic(topicToSave);
       }
@@ -375,6 +378,7 @@ export class TopicSelector extends BaseComponent {
         generatedWords: words,
         language: this.currentLanguage,
       });
+      console.log('[TopicSelector] Navigated with topic:', topicToSave);
     } catch (error) {
       logger.error(
         { error, topic: this.topic, language: this.currentLanguage },

@@ -2,7 +2,7 @@
  * LLM client interfaces and types
  */
 
-import { GeneratedWord, GeneratedSentence } from './core.js';
+import { GeneratedWord, GeneratedSentence, TranscriptionAnalysis } from './core.js';
 
 export interface LLMClient {
   generateTopicWords(
@@ -41,8 +41,19 @@ export interface LLMClient {
     sentence: string,
     translation: string,
     language: string,
+    proficiencyLevel?: string,
+    conversationHistory?: string[]
+  ): Promise<{ text: string; translation: string }>;
+  generateFollowUpFromHistory(
+    conversationHistory: string[],
+    language: string,
     proficiencyLevel?: string
   ): Promise<{ text: string; translation: string }>;
+  analyzeTranscription(
+    transcription: string,
+    language: string,
+    assistantSentence: string
+  ): Promise<TranscriptionAnalysis>;
   generateResponse(prompt: string, model?: string): Promise<string>;
   isAvailable(): Promise<boolean>;
   getAvailableModels(): Promise<string[]>;

@@ -353,6 +353,14 @@ export class WordSelector extends LitElement {
     window.addEventListener('language-changed', this.handleExternalLanguageChange);
   }
 
+  updated(changedProperties: Map<string, any>) {
+    super.updated?.(changedProperties);
+    if (changedProperties.has('topic')) {
+      console.log('[WordSelector] Topic property updated:', this.topic);
+      console.log('[WordSelector] Topic type:', typeof this.topic);
+    }
+  }
+
   disconnectedCallback() {
     super.disconnectedCallback();
     if (this.keyboardUnsubscribe) {
@@ -602,8 +610,16 @@ export class WordSelector extends LitElement {
         'known words...'
       );
 
+      // Get topic from property or route data as fallback
+      const routeData = router.getRouteData();
+      const topic = this.topic || routeData?.topic;
+      console.log('[WordSelector] Topic value (this.topic):', this.topic);
+      console.log('[WordSelector] Topic from route data:', routeData?.topic);
+      console.log('[WordSelector] Using topic:', topic);
+      console.log('[WordSelector] Topic type:', typeof topic);
+
       // Set up processing session (language and topic)
-      await setupWordProcessingSession(this.language, this.topic);
+      await setupWordProcessingSession(this.language, topic);
 
       // Dispatch language changed event for UI updates
       this.dispatchEvent(
@@ -622,7 +638,7 @@ export class WordSelector extends LitElement {
       // Process selected words (insert and enqueue for generation)
       const selectedResult = await processSelectedWords(selectedWords, {
         language: this.language,
-        topic: this.topic,
+        topic: topic, // Use the topic variable instead of this.topic
         desiredSentenceCount: 3,
       });
 

@@ -417,7 +417,16 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         try {
           parsed = JSON.parse(cleanResponse);
         } catch (parseError) {
-          this.logger.error({ parseError, cleanResponse }, 'JSON parsing failed for response');
+          const errorMessage =
+            parseError instanceof Error ? parseError.message : String(parseError);
+          this.logger.error(
+            {
+              parseError: errorMessage,
+              parseErrorStack: parseError instanceof Error ? parseError.stack : undefined,
+              cleanResponse,
+            },
+            'JSON parsing failed for response'
+          );
           throw new Error(`Invalid JSON response: ${cleanResponse}...`);
         }
 

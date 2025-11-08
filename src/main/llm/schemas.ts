@@ -279,6 +279,17 @@ export const FollowUpResponseSchema = z
         text: cleanSpecialTokens(obj.text),
         translation: cleanSpecialTokens(obj.english),
       })),
+    // Handle array - try to extract text and translation from first object
+    z.array(z.any()).transform((arr) => {
+      if (arr.length > 0 && typeof arr[0] === 'object' && arr[0] !== null) {
+        const first = arr[0] as any;
+        const text = cleanSpecialTokens(String(first.text || first.continuation || ''));
+        const translation = cleanSpecialTokens(String(first.translation || first.english || ''));
+        return { text, translation };
+      }
+      // If array doesn't have expected structure, return empty
+      return { text: '', translation: '' };
+    }),
     // Generic record fallback - normalize all formats
     z.union([
       z.string().transform((str) => {
@@ -303,3 +314,18 @@ export const FollowUpResponseSchema = z
     ]),
   ])
   .refine((data) => data.translation.length > 0, { message: 'Translation is required' });
+
+// Transcription analysis schema for dialog practice
+export const TranscriptionAnalysisSchema = z.object({
+  correction: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((s) => (s ? cleanSpecialTokens(s) : undefined)),
+  grammarExplanation: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((s) => (s ? cleanSpecialTokens(s) : undefined)),
+  hasGrammarMistakes: z.boolean(),
+});

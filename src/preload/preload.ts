@@ -364,10 +364,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Dialog operations
   dialog: {
     selectSentence: () => ipcRenderer.invoke(IPC_CHANNELS.DIALOG.SELECT_SENTENCE),
+    selectSentenceWithTopic: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.DIALOG.SELECT_SENTENCE_WITH_TOPIC),
     generateVariants: (sentenceId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_VARIANTS, sentenceId),
-    generateFollowUp: (variantId: number) =>
-      ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_FOLLOW_UP, variantId),
+    generateRelatedWords: (sentenceId: number, topic: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_RELATED_WORDS, sentenceId, topic),
+    generateFollowUp: (variantId: number, conversationHistory?: string[]) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_FOLLOW_UP, variantId, conversationHistory),
+    analyzeTranscription: (transcription: string, language: string, assistantSentence: string) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.DIALOG.ANALYZE_TRANSCRIPTION,
+        transcription,
+        language,
+        assistantSentence
+      ),
     ensureBeforeSentenceAudio: (sentenceId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DIALOG.ENSURE_BEFORE_SENTENCE_AUDIO, sentenceId),
     ensureContextSentences: (sentenceId: number) =>

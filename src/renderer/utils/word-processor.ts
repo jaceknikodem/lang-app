@@ -28,6 +28,11 @@ export async function processSelectedWords(
   options: ProcessWordsOptions
 ): Promise<ProcessWordsResult> {
   const { language, topic, desiredSentenceCount = 3 } = options;
+  console.log('[WordProcessor] processSelectedWords called');
+  console.log('[WordProcessor] Options received:', { language, topic, desiredSentenceCount });
+  console.log('[WordProcessor] Topic value:', topic);
+  console.log('[WordProcessor] Topic type:', typeof topic);
+  console.log('[WordProcessor] Topic truthy?', !!topic);
   let queuedCount = 0;
   const failedWords: string[] = [];
   const queuedWordIds: number[] = [];
@@ -38,13 +43,17 @@ export async function processSelectedWords(
 
     try {
       // Insert word into database
-      console.log('Inserting word into database:', word.word);
-      const wordId = await window.electronAPI.database.insertWord({
+      console.log('[WordProcessor] Inserting word into database:', word.word);
+      console.log('[WordProcessor] Topic being passed to insertWord:', topic);
+      const wordData = {
         word: word.word,
         language: language,
         translation: word.translation,
         topic: topic,
-      });
+      };
+      console.log('[WordProcessor] WordData object:', wordData);
+      console.log('[WordProcessor] WordData.topic:', wordData.topic);
+      const wordId = await window.electronAPI.database.insertWord(wordData);
       console.log('Word inserted with ID:', wordId);
 
       // Enqueue for sentence generation

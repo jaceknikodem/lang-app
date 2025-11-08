@@ -111,7 +111,8 @@ export class AudioRecorder {
    */
   async stopRecording(): Promise<RecordingSession | null> {
     if (!this.currentSession?.isRecording) {
-      throw new Error('No recording in progress');
+      this.logger.warn('stopRecording called but no recording in progress');
+      return null;
     }
 
     try {

@@ -4,7 +4,7 @@
 
 import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { Sentence, DialogueVariant } from '../../shared/types/core.js';
+import { Sentence, DialogueVariant, TranscriptionAnalysis } from '../../shared/types/core.js';
 import { sharedStyles } from '../styles/shared.js';
 import { useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 import { sessionManager } from '../utils/session-manager.js';
@@ -98,6 +98,15 @@ export class DialogMode extends BaseComponent {
 
   @state()
   private isAudioPlaying = false;
+
+  @state()
+  private isTopicBasedFlow = false;
+
+  @state()
+  private transcriptionAnalysis: TranscriptionAnalysis | null = null;
+
+  @state()
+  private relatedWords: string[] = [];
 
   private recordingTimer: number | null = null;
   private recordingStatusCheckTimer: number | null = null;
@@ -250,6 +259,8 @@ export class DialogMode extends BaseComponent {
       this.followUpAudio = null;
       this.showFollowUp = false;
       this.transcriptionResult = null;
+      this.transcriptionAnalysis = null;
+      this.relatedWords = [];
       this.recordedAudioPath = null;
 
       // Check for cached dialog session first
@@ -355,13 +366,24 @@ export class DialogMode extends BaseComponent {
       // Reload autoplay setting to ensure it's up-to-date
       await this.loadAutoplaySetting();
 
-      // Step 1: Select a sentence with high word strengths
-      const sentence = await window.electronAPI.dialog.selectSentence();
+      // Randomly choose between old flow (variants) and new flow (topic-based/open-ended)
+      this.isTopicBasedFlow = Math.random() < 0.5;
+
+      let sentence: Sentence | null = null;
+
+      if (this.isTopicBasedFlow) {
+        // Step 1: Select a sentence with a topic
+        sentence = await window.electronAPI.dialog.selectSentenceWithTopic();
+      } else {
+        // Step 1: Select a sentence with high word strengths (old flow)
+        sentence = await window.electronAPI.dialog.selectSentence();
+      }
 
       if (!sentence) {
         console.log('[DialogMode] loadDialogSession - no sentence available');
         this.error = 'No sentences available for dialog practice. Please learn more words first.';
         this.isLoading = false;
+        // Show a retry button
         return;
       }
 
@@ -382,48 +404,85 @@ export class DialogMode extends BaseComponent {
         this.afterSentenceAudio = null;
       }
 
-      // Step 3: Generate response options (target + 2 variants)
-      try {
-        console.log('[DialogMode] loadDialogSession - generating variants', {
-          sentenceId: sentence.id,
-        });
-        const variants = await window.electronAPI.dialog.generateVariants(sentence.id);
+      // Step 3: Generate response options or related words based on flow type
+      if (this.isTopicBasedFlow) {
+        // Topic-based flow: Generate related words
+        // First check if sentence already has related words cached
+        if (sentence.relatedWords && sentence.relatedWords.length > 0) {
+          this.relatedWords = sentence.relatedWords;
+          console.log('[DialogMode] loadDialogSession - using cached related words', {
+            count: this.relatedWords.length,
+          });
+        } else {
+          // Generate and cache related words
+          try {
+            // Get topic from sentence's word
+            const word = await window.electronAPI.database.getWordById(sentence.wordId);
+            if (word?.topic) {
+              console.log('[DialogMode] loadDialogSession - generating related words', {
+                sentenceId: sentence.id,
+                topic: word.topic,
+              });
+              const relatedWords = await window.electronAPI.dialog.generateRelatedWords(
+                sentence.id,
+                word.topic
+              );
+              this.relatedWords = relatedWords || [];
+              console.log('[DialogMode] loadDialogSession - related words generated', {
+                count: this.relatedWords.length,
+              });
+            }
+          } catch (error) {
+            logger.warn({ error }, 'Failed to generate related words');
+            this.relatedWords = [];
+          }
+        }
+        // No variants for topic-based flow
+        this.responseOptions = [];
+      } else {
+        // Old flow: Generate variants
+        try {
+          console.log('[DialogMode] loadDialogSession - generating variants', {
+            sentenceId: sentence.id,
+          });
+          const variants = await window.electronAPI.dialog.generateVariants(sentence.id);
 
-        console.log('[DialogMode] loadDialogSession - variants generated', {
-          sentenceId: sentence.id,
-          variantsCount: variants.length,
-          variantIds: variants.map((v) => v.id),
-        });
+          console.log('[DialogMode] loadDialogSession - variants generated', {
+            sentenceId: sentence.id,
+            variantsCount: variants.length,
+            variantIds: variants.map((v) => v.id),
+          });
 
-        // Create a pseudo-variant for the original sentence (using negative ID to indicate it's the original)
-        const originalVariant: DialogueVariant = {
-          id: -sentence.id, // Negative ID to indicate it's the original sentence
-          sentenceId: sentence.id,
-          variantSentence: sentence.sentence,
-          variantTranslation: sentence.translation,
-          createdAt: new Date(),
-        };
-
-        // Combine target sentence with variants
-        this.responseOptions = [
-          originalVariant,
-          ...variants.slice(0, 2), // Take up to 2 variants
-        ];
-
-        // Shuffle options so target isn't always first
-        this.responseOptions.sort(() => Math.random() - 0.5);
-      } catch (error) {
-        logger.error({ error }, 'Failed to generate variants');
-        // Fallback: use only the target sentence
-        this.responseOptions = [
-          {
-            id: -sentence.id,
+          // Create a pseudo-variant for the original sentence (using negative ID to indicate it's the original)
+          const originalVariant: DialogueVariant = {
+            id: -sentence.id, // Negative ID to indicate it's the original sentence
             sentenceId: sentence.id,
             variantSentence: sentence.sentence,
             variantTranslation: sentence.translation,
             createdAt: new Date(),
-          },
-        ];
+          };
+
+          // Combine target sentence with variants
+          this.responseOptions = [
+            originalVariant,
+            ...variants.slice(0, 2), // Take up to 2 variants
+          ];
+
+          // Shuffle options so target isn't always first
+          this.responseOptions.sort(() => Math.random() - 0.5);
+        } catch (error) {
+          logger.error({ error }, 'Failed to generate variants');
+          // Fallback: use only the target sentence
+          this.responseOptions = [
+            {
+              id: -sentence.id,
+              sentenceId: sentence.id,
+              variantSentence: sentence.sentence,
+              variantTranslation: sentence.translation,
+              createdAt: new Date(),
+            },
+          ];
+        }
       }
 
       this.isLoading = false;
@@ -802,19 +861,27 @@ export class DialogMode extends BaseComponent {
   }
 
   private async toggleRecording() {
-    if (!this.speechRecognitionReady || !this.responseOptions.length) {
-      return;
-    }
-
     if (this.isRecording) {
+      // When stopping, we don't need to check speechRecognitionReady or responseOptions
       await this.stopRecording();
     } else {
+      // When starting, check prerequisites
+      if (
+        !this.speechRecognitionReady ||
+        (!this.isTopicBasedFlow && !this.responseOptions.length)
+      ) {
+        return;
+      }
       await this.startRecording();
     }
   }
 
   private async startRecording() {
-    if (this.isRecording || !this.speechRecognitionReady || !this.responseOptions.length) {
+    if (
+      this.isRecording ||
+      !this.speechRecognitionReady ||
+      (!this.isTopicBasedFlow && !this.responseOptions.length)
+    ) {
       return;
     }
 
@@ -858,11 +925,21 @@ export class DialogMode extends BaseComponent {
 
   private async stopRecording() {
     if (!this.isRecording) {
+      logger.debug('[DialogMode] stopRecording - not recording, returning');
       return;
     }
 
     try {
       const completedSession = await window.electronAPI.audio.stopRecording();
+
+      // Handle case where stopRecording returns null (no recording was in progress)
+      if (!completedSession) {
+        logger.warn('[DialogMode] stopRecording - no recording session returned');
+        this.isRecording = false;
+        this.clearRecordingTimer();
+        this.clearRecordingStatusCheck();
+        return;
+      }
       this.isRecording = false;
       this.clearRecordingTimer();
       this.clearRecordingStatusCheck();
@@ -878,6 +955,12 @@ export class DialogMode extends BaseComponent {
         // Calculate duration if available
         const duration =
           completedSession.duration || (Date.now() - completedSession.startTime) / 1000;
+
+        logger.debug('[DialogMode] stopRecording - recording completed', {
+          filePath,
+          duration: duration.toFixed(2),
+          isTopicBasedFlow: this.isTopicBasedFlow,
+        });
 
         this.currentRecording = {
           session: completedSession,
@@ -990,7 +1073,11 @@ export class DialogMode extends BaseComponent {
   }
 
   private async performSpeechRecognition() {
-    if (!this.currentRecording || !this.responseOptions.length || !this.speechRecognitionReady) {
+    if (
+      !this.currentRecording ||
+      (!this.isTopicBasedFlow && !this.responseOptions.length) ||
+      !this.speechRecognitionReady
+    ) {
       return;
     }
 
@@ -1009,45 +1096,63 @@ export class DialogMode extends BaseComponent {
         }
       );
 
-      // Compare with response options
-      // Compare with all three candidate sentences
-      const comparisons = await Promise.all(
-        this.responseOptions.map(async (option) => {
-          const comparison = await window.electronAPI.audio.compareTranscription(
-            transcription.text,
-            option.variantSentence,
-            this.currentProficiencyLevel
-          );
-          return {
-            option,
-            comparison,
-          };
-        })
-      );
+      // Compare with response options (only for old flow with variants)
+      if (this.isTopicBasedFlow) {
+        // Topic-based flow: No variants, just use the transcription
+        this.transcriptionResult = {
+          text: transcription.text,
+          similarity: 1.0, // No comparison for topic-based flow
+          normalizedTranscribed: transcription.text.toLowerCase(),
+          normalizedExpected: this.currentSentence?.sentence.toLowerCase() || '',
+          expectedWords: [],
+          transcribedWords: [],
+        };
+        this.selectedOption = null;
+      } else {
+        // Old flow: Compare with response options
+        // Compare with all three candidate sentences
+        const comparisons = await Promise.all(
+          this.responseOptions.map(async (option) => {
+            const comparison = await window.electronAPI.audio.compareTranscription(
+              transcription.text,
+              option.variantSentence,
+              this.currentProficiencyLevel
+            );
+            return {
+              option,
+              comparison,
+            };
+          })
+        );
 
-      // Find the best match
-      const bestMatch = comparisons.reduce((best, current) => {
-        return current.comparison.similarity > best.comparison.similarity ? current : best;
-      }, comparisons[0]);
+        // Find the best match
+        const bestMatch = comparisons.reduce((best, current) => {
+          return current.comparison.similarity > best.comparison.similarity ? current : best;
+        }, comparisons[0]);
 
-      this.transcriptionResult = {
-        text: transcription.text,
-        ...bestMatch.comparison,
-      };
-      this.selectedOption = bestMatch.option;
+        this.transcriptionResult = {
+          text: transcription.text,
+          ...bestMatch.comparison,
+        };
+        this.selectedOption = bestMatch.option;
+      }
 
       // Store the recorded audio path for later playback
       if (this.currentRecording) {
         this.recordedAudioPath = this.currentRecording.filePath;
       }
 
+      // Mark transcription as complete
+      this.isTranscribing = false;
+      this.streamingTranscriptionText = null;
+
       // Record pronunciation attempt in database (tracks full history)
-      if (this.currentSentence?.id) {
+      if (this.currentSentence?.id && !this.isTopicBasedFlow && this.selectedOption) {
         try {
           await window.electronAPI.database.recordPronunciationAttempt(
             this.currentSentence.id,
-            bestMatch.comparison.similarity,
-            bestMatch.option.variantSentence, // Expected text (the variant that matched)
+            this.transcriptionResult.similarity,
+            this.selectedOption.variantSentence, // Expected text (the variant that matched)
             transcription.text, // Transcribed text
             this.currentRecording?.filePath || null // Audio path
           );
@@ -1056,20 +1161,49 @@ export class DialogMode extends BaseComponent {
         }
       }
 
-      // If similarity is high enough (based on proficiency level), mark as success and continue
-      // (follow-up will be generated after transcription is marked as complete)
-      const thresholds = getSimilarityThresholds(this.currentProficiencyLevel);
-      if (bestMatch.comparison.similarity >= thresholds.successThreshold) {
-        // Mark transcription as complete first
-        this.isTranscribing = false;
-        this.streamingTranscriptionText = null;
+      // For topic-based flow, run transcription analysis and follow-up generation in parallel
+      if (this.isTopicBasedFlow) {
+        const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+        const assistantSentence = this.currentSentence?.sentence;
 
-        // Then generate follow-up continuation
-        await this.generateFollowUp();
+        // Start both LLM queries in parallel
+        const [transcriptionAnalysisResult, followUpResult] = await Promise.allSettled([
+          // Transcription analysis
+          assistantSentence
+            ? window.electronAPI.dialog.analyzeTranscription(
+                transcription.text,
+                currentLanguage,
+                assistantSentence
+              )
+            : Promise.resolve(null),
+          // Follow-up generation
+          this.generateFollowUp(),
+        ]);
+
+        // Handle transcription analysis result
+        if (transcriptionAnalysisResult.status === 'fulfilled') {
+          this.transcriptionAnalysis = transcriptionAnalysisResult.value;
+        } else {
+          logger.warn(
+            { error: transcriptionAnalysisResult.reason },
+            'Failed to analyze transcription'
+          );
+          this.transcriptionAnalysis = null;
+        }
+
+        // Follow-up generation handles its own errors internally
+        if (followUpResult.status === 'rejected') {
+          logger.warn({ error: followUpResult.reason }, 'Failed to generate follow-up');
+        }
       } else {
-        // Similarity too low - mark transcription as complete
-        this.isTranscribing = false;
-        this.streamingTranscriptionText = null;
+        // For old flow, clear transcription analysis
+        this.transcriptionAnalysis = null;
+
+        // Old flow: Only generate follow-up if similarity is high enough
+        const thresholds = getSimilarityThresholds(this.currentProficiencyLevel);
+        if (this.transcriptionResult.similarity >= thresholds.successThreshold) {
+          await this.generateFollowUp();
+        }
       }
       // If similarity is too low, show "Try Again" button next to the similarity badge
     } catch (error) {
@@ -1244,15 +1378,119 @@ export class DialogMode extends BaseComponent {
     `;
   }
 
+  /**
+   * Render transcription analysis (correction and grammar explanation)
+   */
+  private renderTranscriptionAnalysis(): TemplateResult {
+    if (!this.transcriptionAnalysis) {
+      return nothing;
+    }
+
+    const { correction, grammarExplanation, hasGrammarMistakes } = this.transcriptionAnalysis;
+
+    // Don't show if there's nothing to display
+    if (!correction && !grammarExplanation && !hasGrammarMistakes) {
+      return nothing;
+    }
+
+    return html`
+      <div class="transcription-analysis" style="margin-top: var(--spacing-sm);">
+        <div
+          style="
+            padding: var(--spacing-sm);
+            border-radius: 6px;
+            border: 1px solid rgba(0, 122, 255, 0.4);
+          "
+        >
+          <h4
+            style="
+              margin: 0 0 var(--spacing-xs) 0;
+              color: #007aff;
+              font-size: 13px;
+              font-weight: 700;
+            "
+          >
+            Feedback
+          </h4>
+          ${correction
+            ? html`
+                <div style="margin-bottom: var(--spacing-xs);">
+                  <strong
+                    style="color: #007aff; font-size: 12px; display: block; margin-bottom: 2px; font-weight: 700;"
+                    >Correction:</strong
+                  >
+                  <p style="margin: 0; font-size: 13px; line-height: 1.4; font-weight: 400;">
+                    ${correction}
+                  </p>
+                </div>
+              `
+            : nothing}
+          ${grammarExplanation && hasGrammarMistakes
+            ? html`
+                <div>
+                  <strong
+                    style="color: #007aff; font-size: 12px; display: block; margin-bottom: 2px; font-weight: 700;"
+                    >Grammar:</strong
+                  >
+                  <p style="margin: 0; font-size: 13px; line-height: 1.4; font-weight: 400;">
+                    ${grammarExplanation}
+                  </p>
+                </div>
+              `
+            : nothing}
+        </div>
+      </div>
+    `;
+  }
+
   private async generateFollowUp() {
-    if (!this.selectedOption || this.isGeneratingFollowUp) {
+    if (this.isGeneratingFollowUp) {
+      logger.debug('[DialogMode] generateFollowUp - already generating, returning');
+      return;
+    }
+
+    // For topic-based flow, we don't have a selectedOption, so we need to create a pseudo-variant
+    // For old flow, we need selectedOption
+    if (!this.isTopicBasedFlow && !this.selectedOption) {
+      logger.warn('[DialogMode] generateFollowUp - no selectedOption for old flow, returning');
+      return;
+    }
+
+    // Get the user's actual transcription
+    const userTranscription = this.transcriptionResult?.text;
+    if (!userTranscription) {
+      logger.warn('[DialogMode] generateFollowUp - no user transcription, returning');
       return;
     }
 
     try {
       this.isGeneratingFollowUp = true;
-      // Use the selected variant's ID to get/cache continuation
-      const followUp = await window.electronAPI.dialog.generateFollowUp(this.selectedOption.id);
+      // For topic-based flow, use the sentence ID as a negative ID (pseudo-variant)
+      // For old flow, use the selected variant's ID
+      const variantId = this.isTopicBasedFlow
+        ? -(this.currentSentence?.id || 0)
+        : this.selectedOption?.id || 0;
+
+      // Build conversation history from previous messages (in foreign language only)
+      const conversationHistory: string[] = [];
+      if (this.currentSentence?.contextBefore) {
+        conversationHistory.push(this.currentSentence.contextBefore);
+      }
+      if (this.currentSentence?.sentence) {
+        conversationHistory.push(this.currentSentence.sentence);
+      }
+      if (userTranscription) {
+        conversationHistory.push(userTranscription);
+      }
+      if (this.followUpText) {
+        conversationHistory.push(this.followUpText);
+      }
+
+      const followUp = await window.electronAPI.dialog.generateFollowUp(
+        variantId,
+        conversationHistory.length > 0 ? conversationHistory : undefined
+      );
+
       this.followUpText = followUp.text || '';
       this.followUpTranslation = followUp.translation || '';
       this.followUpAudio = followUp.audio || null;
@@ -1398,9 +1636,14 @@ export class DialogMode extends BaseComponent {
     router.goToTopicSelection();
   }
 
+  private async retryLoadDialog() {
+    this.error = null;
+    await this.loadDialogSession();
+  }
+
   private renderRecordingSection() {
-    // Show recording section when response options exist
-    if (!this.responseOptions.length) return '';
+    // Show recording section when response options exist (old flow) or for topic-based flow
+    if (!this.isTopicBasedFlow && !this.responseOptions.length) return '';
 
     // Only show if actively recording or transcribing
     if (!this.isRecording && !this.isTranscribing) {
@@ -2095,9 +2338,10 @@ export class DialogMode extends BaseComponent {
         <div class="dialog-container">
           <div class="error-container">
             <div class="error-message">${this.error}</div>
-            <button class="action-button primary" @click=${this.goToTopicSelection}>
-              Select Words
-            </button>
+            <div style="display: flex; gap: var(--spacing-md);">
+              <button class="action-button primary" @click=${this.retryLoadDialog}>Retry</button>
+              <button class="action-button" @click=${this.goToTopicSelection}>Select Words</button>
+            </div>
           </div>
         </div>
       `;
@@ -2144,7 +2388,8 @@ export class DialogMode extends BaseComponent {
                   </button>
                 `
               : nothing}
-            ${this.responseOptions.length > 0 && !this.transcriptionResult
+            ${(this.isTopicBasedFlow || this.responseOptions.length > 0) &&
+            !this.transcriptionResult
               ? html`
                   ${this.isRecording
                     ? html`
@@ -2192,16 +2437,60 @@ export class DialogMode extends BaseComponent {
                 </div>
               `
             : nothing}
-          ${this.transcriptionResult && this.selectedOption
+          ${this.isTopicBasedFlow && this.relatedWords.length > 0 && !this.transcriptionResult
+            ? html`
+                <div
+                  class="related-words-container"
+                  style="
+                    margin: var(--spacing-md) 0;
+                    padding: var(--spacing-md);
+                    border-radius: var(--border-radius);
+                  "
+                >
+                  <h4
+                    style="
+                      margin: 0 0 var(--spacing-sm) 0;
+                      color: #007aff;
+                      font-size: 15px;
+                      font-weight: 700;
+                    "
+                  >
+                    Related Words:
+                  </h4>
+                  <div
+                    style="
+                      display: flex;
+                      flex-wrap: wrap;
+                      gap: var(--spacing-xs);
+                    "
+                  >
+                    ${this.relatedWords.map(
+                      (word) => html`
+                        <span
+                          style="
+                            padding: var(--spacing-xs) var(--spacing-sm);
+                            border-radius: 4px;
+                            font-size: 13px;
+                            font-weight: 600;
+                          "
+                          >${word}</span
+                        >
+                      `
+                    )}
+                  </div>
+                </div>
+              `
+            : nothing}
+          ${this.transcriptionResult
             ? html`
                 ${this.renderUserBubble(
-                  this.selectedOption.variantSentence,
-                  this.selectedOption.variantTranslation || '',
-                  this.transcriptionResult.similarity,
-                  this.transcriptionResult.expectedWords
+                  this.transcriptionResult.text,
+                  this.isTopicBasedFlow ? '' : this.selectedOption?.variantTranslation || '',
+                  this.isTopicBasedFlow ? undefined : this.transcriptionResult.similarity,
+                  this.isTopicBasedFlow ? undefined : this.transcriptionResult.expectedWords
                 )}
               `
-            : this.responseOptions.length > 0 && !this.transcriptionResult
+            : !this.isTopicBasedFlow && this.responseOptions.length > 0 && !this.transcriptionResult
               ? html`
                   <div class="response-options">
                     ${this.responseOptions.map(
@@ -2245,6 +2534,9 @@ export class DialogMode extends BaseComponent {
         </div>
 
         ${this.renderRecordingSection()}
+        ${this.isTopicBasedFlow && this.transcriptionAnalysis
+          ? this.renderTranscriptionAnalysis()
+          : nothing}
         ${!this.isGeneratingFollowUp
           ? html`
               <button
