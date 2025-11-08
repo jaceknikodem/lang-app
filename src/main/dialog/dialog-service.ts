@@ -282,84 +282,140 @@ export class DialogService {
    * Pre-generate multiple dialog sessions (batch DB queries, controlled concurrent LLM calls)
    * Batches database queries for efficiency and uses controlled concurrency for LLM requests
    * to avoid flooding the LLM service while allowing parallel processing
+   * Randomly generates a mix of topic-based and variant-based sessions
    */
   async pregenerateSessions(count: number, language: string): Promise<DialogSession[]> {
     if (count <= 0) {
       return [];
     }
 
-    // Step 1: Batch query - get all sentences at once from database
-    const sentences = await this.database.getRandomDialogSentences(count, language);
-
-    if (sentences.length === 0) {
-      return [];
+    // Step 1: Determine flow type for each session (randomly choose topic-based or variant-based)
+    const sessionFlowTypes: boolean[] = [];
+    for (let i = 0; i < count; i++) {
+      sessionFlowTypes.push(Math.random() < 0.5); // true = topic-based, false = variant-based
     }
 
-    // Step 2: Extract known words once (used for all variant generations)
-    const knownWords = await this.database.getKnownWords(
-      language,
-      this.config.minWordStrength!,
-      this.config.maxKnownWordsForVariants!
-    );
+    // Step 2: Separate sessions by flow type for batch processing
+    const topicBasedIndices: number[] = [];
+    const variantBasedIndices: number[] = [];
+    sessionFlowTypes.forEach((isTopicBased, index) => {
+      if (isTopicBased) {
+        topicBasedIndices.push(index);
+      } else {
+        variantBasedIndices.push(index);
+      }
+    });
 
-    // Step 3: Batch query - get existing variants for all sentences at once
-    const sentenceIds = sentences.map((s) => s.id);
-    const allExistingVariantsMap = new Map<number, DialogueVariant[]>();
+    const sessions: DialogSession[] = new Array(count);
 
-    // Fetch existing variants for all sentences (can be done in parallel or batched)
-    await Promise.all(
-      sentenceIds.map(async (sentenceId) => {
-        const variants = await this.database.getDialogueVariantsBySentenceId(sentenceId);
-        allExistingVariantsMap.set(sentenceId, variants);
-      })
-    );
+    // Step 3: Process topic-based sessions
+    if (topicBasedIndices.length > 0) {
+      for (const index of topicBasedIndices) {
+        try {
+          const sentence = await this.database.getRandomSentenceWithTopic(language);
+          if (!sentence) {
+            // If no topic-based sentence available, skip this session
+            continue;
+          }
 
-    // Step 4: Process each sentence sequentially to avoid flooding the LLM service
-    const sessions: DialogSession[] = [];
-
-    for (const sentence of sentences) {
-      try {
-        // Generate variants (LLM call)
-        const existingVariants = allExistingVariantsMap.get(sentence.id) || [];
-        const variants = await this.generateDialogueVariants(
-          sentence,
-          existingVariants,
-          knownWords,
-          language
-        );
-
-        // Create pseudo-variant for original sentence
-        const originalVariant = {
-          id: -sentence.id,
-          sentenceId: sentence.id,
-          variantSentence: sentence.sentence,
-          variantTranslation: sentence.translation,
-          createdAt: new Date(),
-        };
-
-        // Combine response options
-        const responseOptions: DialogueVariant[] = shuffleAndTake(
-          [originalVariant, ...variants],
-          3 // original + up to 2 variants = 3 total
-        );
-
-        sessions.push({
-          sentenceId: sentence.id,
-          sentence: sentence.sentence,
-          translation: sentence.translation,
-          contextBefore: sentence.contextBefore,
-          contextBeforeTranslation: sentence.contextBeforeTranslation,
-          contextAfter: sentence.contextAfter,
-          contextAfterTranslation: sentence.contextAfterTranslation,
-          beforeSentenceAudio: undefined, // Will be set by IPC handler
-          afterSentenceAudio: undefined, // Will be set by IPC handler
-          responseOptions: responseOptions.map(toDialogResponseOption),
-        });
-      } catch {
-        // Continue with other sentences even if one fails
+          sessions[index] = {
+            sentenceId: sentence.id,
+            sentence: sentence.sentence,
+            translation: sentence.translation,
+            contextBefore: sentence.contextBefore,
+            contextBeforeTranslation: sentence.contextBeforeTranslation,
+            contextAfter: sentence.contextAfter,
+            contextAfterTranslation: sentence.contextAfterTranslation,
+            beforeSentenceAudio: undefined, // Will be set by IPC handler
+            afterSentenceAudio: undefined, // Will be set by IPC handler
+            responseOptions: [], // Topic-based sessions have no variants
+            isTopicBasedFlow: true,
+          };
+        } catch {
+          // Continue with other sessions even if one fails
+        }
       }
     }
 
-    return sessions;
+    // Step 4: Process variant-based sessions (batch query for efficiency)
+    if (variantBasedIndices.length > 0) {
+      // Batch query - get all variant-based sentences at once
+      const variantSentences = await this.database.getRandomDialogSentences(
+        variantBasedIndices.length,
+        language
+      );
+
+      if (variantSentences.length > 0) {
+        // Extract known words once (used for all variant generations)
+        const knownWords = await this.database.getKnownWords(
+          language,
+          this.config.minWordStrength!,
+          this.config.maxKnownWordsForVariants!
+        );
+
+        // Batch query - get existing variants for all sentences at once
+        const sentenceIds = variantSentences.map((s) => s.id);
+        const allExistingVariantsMap = new Map<number, DialogueVariant[]>();
+
+        // Fetch existing variants for all sentences (can be done in parallel)
+        await Promise.all(
+          sentenceIds.map(async (sentenceId) => {
+            const variants = await this.database.getDialogueVariantsBySentenceId(sentenceId);
+            allExistingVariantsMap.set(sentenceId, variants);
+          })
+        );
+
+        // Process each variant-based sentence sequentially to avoid flooding the LLM service
+        for (let i = 0; i < variantSentences.length && i < variantBasedIndices.length; i++) {
+          const sentence = variantSentences[i];
+          const index = variantBasedIndices[i];
+
+          try {
+            // Generate variants (LLM call)
+            const existingVariants = allExistingVariantsMap.get(sentence.id) || [];
+            const variants = await this.generateDialogueVariants(
+              sentence,
+              existingVariants,
+              knownWords,
+              language
+            );
+
+            // Create pseudo-variant for original sentence
+            const originalVariant = {
+              id: -sentence.id,
+              sentenceId: sentence.id,
+              variantSentence: sentence.sentence,
+              variantTranslation: sentence.translation,
+              createdAt: new Date(),
+            };
+
+            // Combine response options
+            const responseOptions: DialogueVariant[] = shuffleAndTake(
+              [originalVariant, ...variants],
+              3 // original + up to 2 variants = 3 total
+            );
+
+            sessions[index] = {
+              sentenceId: sentence.id,
+              sentence: sentence.sentence,
+              translation: sentence.translation,
+              contextBefore: sentence.contextBefore,
+              contextBeforeTranslation: sentence.contextBeforeTranslation,
+              contextAfter: sentence.contextAfter,
+              contextAfterTranslation: sentence.contextAfterTranslation,
+              beforeSentenceAudio: undefined, // Will be set by IPC handler
+              afterSentenceAudio: undefined, // Will be set by IPC handler
+              responseOptions: responseOptions.map(toDialogResponseOption),
+              isTopicBasedFlow: false,
+            };
+          } catch {
+            // Continue with other sentences even if one fails
+          }
+        }
+      }
+    }
+
+    // Filter out any undefined sessions (failed generations)
+    return sessions.filter((session): session is DialogSession => session !== undefined);
   }
 }

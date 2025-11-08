@@ -154,6 +154,7 @@ export interface DialogSession {
   beforeSentenceAudio?: string;
   afterSentenceAudio?: string;
   responseOptions: DialogResponseOption[];
+  isTopicBasedFlow?: boolean;
 }
 
 export interface TranscriptionAnalysis {

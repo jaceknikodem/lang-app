@@ -44,6 +44,7 @@ export interface DialogSessionState {
     createdAt: string;
   }>;
   createdAt: string;
+  isTopicBasedFlow?: boolean;
 }
 
 export interface SessionState {

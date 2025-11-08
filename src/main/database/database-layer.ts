@@ -364,6 +364,18 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       )
     `);
 
+    // Dialog corrections table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS dialog_corrections (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
+        session_id INTEGER REFERENCES learning_sessions(id),
+        correction_text TEXT NOT NULL,
+        language TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Neglected words tracking
     db.exec(`
       CREATE TABLE IF NOT EXISTS neglected_words (
@@ -446,6 +458,15 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     );
     db.exec(
       `CREATE INDEX IF NOT EXISTS idx_neglected_words_word_lang ON neglected_words(word, language)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_dialog_corrections_sentence_id ON dialog_corrections(sentence_id)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_dialog_corrections_session_id ON dialog_corrections(session_id)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_dialog_corrections_language ON dialog_corrections(language)`
     );
     db.exec(`CREATE INDEX IF NOT EXISTS idx_neglected_words_topic ON neglected_words(topic)`);
     db.exec(
@@ -2082,6 +2103,71 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       return rows.map((row) => this.mapRowToSentence(row));
     } catch (error) {
       throw wrapError(error, `Failed to get random dialog sentences`);
+    }
+  }
+
+  /**
+   * Insert a dialog correction
+   */
+  async insertDialogCorrection(data: {
+    sentenceId: number;
+    sessionId?: number;
+    correctionText: string;
+    language: string;
+  }): Promise<number> {
+    const db = this.getDb();
+
+    try {
+      const stmt = db.prepare(`
+        INSERT INTO dialog_corrections (sentence_id, session_id, correction_text, language)
+        VALUES (?, ?, ?, ?)
+      `);
+
+      const result = stmt.run(
+        data.sentenceId,
+        data.sessionId || null,
+        data.correctionText,
+        data.language
+      );
+
+      return result.lastInsertRowid as number;
+    } catch (error) {
+      throw wrapError(error, `Failed to insert dialog correction`);
+    }
+  }
+
+  /**
+   * Get dialog corrections for a sentence
+   */
+  async getDialogCorrections(
+    sentenceId: number,
+    language: string,
+    limit: number = 3
+  ): Promise<Array<{ id: number; correctionText: string; createdAt: Date }>> {
+    const db = this.getDb();
+
+    try {
+      const stmt = db.prepare(`
+        SELECT id, correction_text, created_at
+        FROM dialog_corrections
+        WHERE sentence_id = ? AND language = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+      `);
+
+      const rows = stmt.all(sentenceId, language, limit) as Array<{
+        id: number;
+        correction_text: string;
+        created_at: string;
+      }>;
+
+      return rows.map((row) => ({
+        id: row.id,
+        correctionText: row.correction_text,
+        createdAt: new Date(row.created_at),
+      }));
+    } catch (error) {
+      throw wrapError(error, `Failed to get dialog corrections`);
     }
   }
 

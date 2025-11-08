@@ -21,6 +21,7 @@ export interface DialogSessionData {
     variantTranslation: string;
     createdAt: string;
   }>;
+  isTopicBasedFlow?: boolean;
 }
 
 /**
@@ -60,6 +61,7 @@ export function transformDialogSessionData(
         createdAt: v.createdAt.toISOString(),
       })),
       createdAt: new Date().toISOString(),
+      isTopicBasedFlow: sessionData.isTopicBasedFlow,
     };
 
     return dialogSession;

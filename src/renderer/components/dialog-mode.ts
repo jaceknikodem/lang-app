@@ -3,6 +3,7 @@
  */
 
 import { html, css, nothing, type TemplateResult } from 'lit';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { customElement, state } from 'lit/decorators.js';
 import { Sentence, DialogueVariant, TranscriptionAnalysis, Word } from '../../shared/types/core.js';
 import type { SessionSummary } from './session-complete.js';
@@ -109,6 +110,11 @@ export class DialogMode extends BaseComponent {
   private transcriptionAnalysis: TranscriptionAnalysis | null = null;
 
   @state()
+  private isAnalyzingTranscription = false; // Track if transcription analysis is in progress
+
+  private transcriptionAnalysisSentenceId: number | null = null; // Track which sentence the analysis is for
+
+  @state()
   private previousCorrections: string[] = []; // Store up to 3 previous corrections for topic-based flow
 
   @state()
@@ -162,6 +168,9 @@ export class DialogMode extends BaseComponent {
     this.isTranscribing = false;
     this.streamingTranscriptionText = null;
     this.recordedAudioPath = null;
+    this.transcriptionAnalysis = null;
+    this.isAnalyzingTranscription = false;
+    this.transcriptionAnalysisSentenceId = null;
     this.dialogCount = 0; // Reset dialog count on language change
     this.dialogsWithAudio = 0; // Reset dialogs with audio count on language change
 
@@ -280,6 +289,8 @@ export class DialogMode extends BaseComponent {
       this.showFollowUp = false;
       this.transcriptionResult = null;
       this.transcriptionAnalysis = null;
+      this.isAnalyzingTranscription = false;
+      this.transcriptionAnalysisSentenceId = null;
       this.recordedAudioPath = null;
 
       // Check for cached dialog session first
@@ -299,6 +310,7 @@ export class DialogMode extends BaseComponent {
           sessionId: cachedSession.id,
           sentenceId: cachedSession.sentenceId,
           responseOptionsCount: cachedSession.responseOptions.length,
+          isTopicBasedFlow: cachedSession.isTopicBasedFlow,
         });
 
         // Reload autoplay setting to ensure it's up-to-date
@@ -334,10 +346,32 @@ export class DialogMode extends BaseComponent {
                 wordId: sentence.wordId,
                 language: currentLanguage,
                 responseOptionsCount: cachedSession.responseOptions.length,
+                isTopicBasedFlow: cachedSession.isTopicBasedFlow,
               });
               this.currentSentence = sentence;
               this.beforeSentenceAudio = cachedSession.beforeSentenceAudio || null;
               this.afterSentenceAudio = cachedSession.afterSentenceAudio || null;
+
+              // Set flow type from cached session
+              this.isTopicBasedFlow = cachedSession.isTopicBasedFlow ?? false;
+
+              // Load previous corrections from database for topic-based flow
+              if (this.isTopicBasedFlow) {
+                try {
+                  const language = await window.electronAPI.database.getCurrentLanguage();
+                  const corrections = await window.electronAPI.database.getDialogCorrections(
+                    sentence.id,
+                    language,
+                    3
+                  );
+                  this.previousCorrections = corrections
+                    .map((c) => c.correctionText)
+                    .filter((text) => text.length < 100);
+                } catch (error) {
+                  logger.warn({ error }, 'Failed to load dialog corrections from database');
+                  this.previousCorrections = [];
+                }
+              }
 
               // Convert cached response options back to DialogueVariant format
               this.responseOptions = cachedSession.responseOptions.map((v) => ({
@@ -450,6 +484,24 @@ export class DialogMode extends BaseComponent {
         wordId: sentence.wordId,
       });
       this.currentSentence = sentence;
+
+      // Load previous corrections from database for topic-based flow
+      if (this.isTopicBasedFlow) {
+        try {
+          const language = await window.electronAPI.database.getCurrentLanguage();
+          const corrections = await window.electronAPI.database.getDialogCorrections(
+            sentence.id,
+            language,
+            3
+          );
+          this.previousCorrections = corrections
+            .map((c) => c.correctionText)
+            .filter((text) => text.length < 100);
+        } catch (error) {
+          logger.warn({ error }, 'Failed to load dialog corrections from database');
+          this.previousCorrections = [];
+        }
+      }
 
       // Step 2: Prepare context sentences audio (beforeSentence and afterSentence)
       try {
@@ -1197,6 +1249,22 @@ export class DialogMode extends BaseComponent {
       if (this.isTopicBasedFlow) {
         const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
         const assistantSentence = this.currentSentence?.sentence;
+        const currentSentenceId = this.currentSentence?.id || null;
+
+        // Get the word's topic if available
+        let topic: string | undefined;
+        if (this.currentSentence?.wordId) {
+          try {
+            const word = await window.electronAPI.database.getWordById(this.currentSentence.wordId);
+            topic = word?.topic;
+          } catch (error) {
+            logger.warn({ error }, 'Failed to get word topic for transcription analysis');
+          }
+        }
+
+        // Track which sentence this analysis is for
+        this.transcriptionAnalysisSentenceId = currentSentenceId;
+        this.isAnalyzingTranscription = true;
 
         // Start both LLM queries in parallel
         const [transcriptionAnalysisResult, followUpResult] = await Promise.allSettled([
@@ -1205,31 +1273,36 @@ export class DialogMode extends BaseComponent {
             ? window.electronAPI.dialog.analyzeTranscription(
                 transcription.text,
                 currentLanguage,
-                assistantSentence
+                assistantSentence,
+                topic
               )
             : Promise.resolve(null),
           // Follow-up generation
           this.generateFollowUp(),
         ]);
 
-        // Handle transcription analysis result
-        if (transcriptionAnalysisResult.status === 'fulfilled') {
+        // Handle transcription analysis result - only if it's still for the current sentence
+        if (
+          transcriptionAnalysisResult.status === 'fulfilled' &&
+          this.transcriptionAnalysisSentenceId === currentSentenceId
+        ) {
           this.transcriptionAnalysis = transcriptionAnalysisResult.value;
+          this.isAnalyzingTranscription = false;
 
-          // Save correction if it exists (for topic-based flow)
-          if (this.transcriptionAnalysis?.correction) {
-            // Add to previous corrections (keep only last 3)
-            this.previousCorrections = [
-              this.transcriptionAnalysis.correction,
-              ...this.previousCorrections,
-            ].slice(0, 3);
-          }
+          // Don't add current correction to previousCorrections yet
+          // It will be added when moving to the next dialog to avoid displaying it twice
         } else {
-          logger.warn(
-            { error: transcriptionAnalysisResult.reason },
-            'Failed to analyze transcription'
-          );
-          this.transcriptionAnalysis = null;
+          if (transcriptionAnalysisResult.status === 'rejected') {
+            logger.warn(
+              { error: transcriptionAnalysisResult.reason },
+              'Failed to analyze transcription'
+            );
+          }
+          // Only clear if this result is for the current sentence
+          if (this.transcriptionAnalysisSentenceId === currentSentenceId) {
+            this.transcriptionAnalysis = null;
+            this.isAnalyzingTranscription = false;
+          }
         }
 
         // Follow-up generation handles its own errors internally
@@ -1420,9 +1493,100 @@ export class DialogMode extends BaseComponent {
   }
 
   /**
+   * Convert markdown to HTML (simple implementation for basic markdown features)
+   */
+  private markdownToHtml(markdown: string): string {
+    if (!markdown) return '';
+
+    let html = markdown;
+
+    // Escape HTML to prevent XSS first
+    html = html
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+    // Code: `text` (process before other formatting to avoid conflicts)
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // Bold: **text** or __text__ (process before italic)
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+
+    // Italic: *text* or _text_ (only if not part of bold)
+    // Match single asterisks/underscores that aren't part of double ones
+    html = html.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em>$1</em>');
+    html = html.replace(/(?<!_)_([^_]+?)_(?!_)/g, '<em>$1</em>');
+
+    // Process lists before line breaks
+    const lines = html.split('\n');
+    const processedLines: string[] = [];
+    let inList = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // Match list items: - or * at start of line (after optional whitespace)
+      const listMatch = line.match(/^(\s*)([-*])\s+(.+)$/);
+      if (listMatch) {
+        if (!inList) {
+          processedLines.push('<ul>');
+          inList = true;
+        }
+        processedLines.push(`<li>${listMatch[3]}</li>`);
+      } else {
+        if (inList) {
+          processedLines.push('</ul>');
+          inList = false;
+        }
+        processedLines.push(line);
+      }
+    }
+    if (inList) {
+      processedLines.push('</ul>');
+    }
+    html = processedLines.join('\n');
+
+    // Line breaks: \n -> <br>
+    html = html.replace(/\n/g, '<br>');
+
+    return html;
+  }
+
+  /**
    * Render transcription analysis (correction and grammar explanation)
    */
   private renderTranscriptionAnalysis(): TemplateResult {
+    // Show loading state if analysis is in progress
+    if (this.isAnalyzingTranscription) {
+      return html`
+        <div class="transcription-analysis" style="margin-top: var(--spacing-sm);">
+          <div
+            style="
+              padding: var(--spacing-sm);
+              border-radius: 6px;
+              border: 1px solid rgba(0, 122, 255, 0.4);
+            "
+          >
+            <h4
+              style="
+                margin: 0 0 var(--spacing-xs) 0;
+                color: #007aff;
+                font-size: 13px;
+                font-weight: 700;
+              "
+            >
+              Feedback
+            </h4>
+            <div style="font-size: 13px; color: var(--text-secondary); font-style: italic;">
+              Analyzing your response...
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     if (!this.transcriptionAnalysis) {
       return nothing;
     }
@@ -1473,9 +1637,9 @@ export class DialogMode extends BaseComponent {
                     style="color: #007aff; font-size: 12px; display: block; margin-bottom: 2px; font-weight: 700;"
                     >Grammar:</strong
                   >
-                  <p style="margin: 0; font-size: 13px; line-height: 1.4; font-weight: 400;">
-                    ${grammarExplanation}
-                  </p>
+                  <div style="margin: 0; font-size: 13px; line-height: 1.4; font-weight: 400;">
+                    ${unsafeHTML(this.markdownToHtml(grammarExplanation))}
+                  </div>
                 </div>
               `
             : nothing}
@@ -1557,6 +1721,29 @@ export class DialogMode extends BaseComponent {
   private async nextDialog() {
     console.log('[DialogMode] nextDialog - user clicked next, consuming current session');
 
+    // Move current correction to previousCorrections and save to database before resetting (for topic-based flow)
+    if (this.isTopicBasedFlow && this.transcriptionAnalysis?.correction && this.currentSentence) {
+      const correction = this.transcriptionAnalysis.correction;
+      // Only save corrections shorter than 100 characters
+      if (correction.length < 100) {
+        // Add to previous corrections (keep only last 3)
+        this.previousCorrections = [correction, ...this.previousCorrections].slice(0, 3);
+
+        // Save to database
+        try {
+          const language = await window.electronAPI.database.getCurrentLanguage();
+          await window.electronAPI.database.insertDialogCorrection({
+            sentenceId: this.currentSentence.id,
+            sessionId: this.currentSessionId,
+            correctionText: correction,
+            language,
+          });
+        } catch (error) {
+          logger.warn({ error }, 'Failed to save dialog correction to database');
+        }
+      }
+    }
+
     this.transcriptionResult = null;
     this.selectedOption = null;
     this.followUpText = '';
@@ -1565,6 +1752,8 @@ export class DialogMode extends BaseComponent {
     this.showFollowUp = false;
     this.recordedAudioPath = null;
     this.transcriptionAnalysis = null;
+    this.isAnalyzingTranscription = false;
+    this.transcriptionAnalysisSentenceId = null;
     // Keep previousCorrections - they persist across dialogs in the same session
 
     // Consume the current dialog session (mark it as used and advance to next)
@@ -2545,14 +2734,16 @@ export class DialogMode extends BaseComponent {
                 ${this.isTopicBasedFlow && this.previousCorrections.length > 0
                   ? html`
                       <div class="previous-corrections">
-                        ${this.previousCorrections.map(
-                          (correction) => html`
-                            <div class="previous-correction-item">
-                              <span class="correction-label">💡</span>
-                              <span class="correction-text">${correction}</span>
-                            </div>
-                          `
-                        )}
+                        ${this.previousCorrections
+                          .filter((correction) => correction.length < 100)
+                          .map(
+                            (correction) => html`
+                              <div class="previous-correction-item">
+                                <span class="correction-label">💡</span>
+                                <span class="correction-text">${correction}</span>
+                              </div>
+                            `
+                          )}
                       </div>
                     `
                   : nothing}

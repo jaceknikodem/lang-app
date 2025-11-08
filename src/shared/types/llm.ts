@@ -45,7 +45,8 @@ export interface LLMClient {
   analyzeTranscription(
     transcription: string,
     language: string,
-    assistantSentence: string
+    assistantSentence: string,
+    topic?: string
   ): Promise<TranscriptionAnalysis>;
   generateResponse(prompt: string, model?: string): Promise<string>;
   isAvailable(): Promise<boolean>;

@@ -121,6 +121,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ),
     getPronunciationHistory: (sentenceId: number, limit?: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_PRONUNCIATION_HISTORY, sentenceId, limit),
+    insertDialogCorrection: (data: {
+      sentenceId: number;
+      sessionId?: number;
+      correctionText: string;
+      language: string;
+    }) => ipcRenderer.invoke(IPC_CHANNELS.DATABASE.INSERT_DIALOG_CORRECTION, data),
+    getDialogCorrections: (sentenceId: number, language: string, limit?: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_DIALOG_CORRECTIONS, sentenceId, language, limit),
     updateLastStudied: (wordId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.UPDATE_LAST_STUDIED, wordId),
     getStudyStats: (language?: string) =>
@@ -370,12 +378,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_VARIANTS, sentenceId),
     generateFollowUp: (variantId: number, conversationHistory?: string[]) =>
       ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_FOLLOW_UP, variantId, conversationHistory),
-    analyzeTranscription: (transcription: string, language: string, assistantSentence: string) =>
+    analyzeTranscription: (
+      transcription: string,
+      language: string,
+      assistantSentence: string,
+      topic?: string
+    ) =>
       ipcRenderer.invoke(
         IPC_CHANNELS.DIALOG.ANALYZE_TRANSCRIPTION,
         transcription,
         language,
-        assistantSentence
+        assistantSentence,
+        topic
       ),
     ensureBeforeSentenceAudio: (sentenceId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DIALOG.ENSURE_BEFORE_SENTENCE_AUDIO, sentenceId),
@@ -526,6 +540,17 @@ declare global {
             createdAt: Date;
           }>
         >;
+        insertDialogCorrection: (data: {
+          sentenceId: number;
+          sessionId?: number;
+          correctionText: string;
+          language: string;
+        }) => Promise<number>;
+        getDialogCorrections: (
+          sentenceId: number,
+          language: string,
+          limit?: number
+        ) => Promise<Array<{ id: number; correctionText: string; createdAt: Date }>>;
         updateLastStudied: (wordId: number) => Promise<void>;
         getStudyStats: (language: string) => Promise<any>;
         recordStudySession: (wordsStudied: number) => Promise<void>;

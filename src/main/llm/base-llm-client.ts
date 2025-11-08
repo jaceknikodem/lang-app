@@ -773,12 +773,14 @@ Preferred JSON format:
   async analyzeTranscription(
     transcription: string,
     language: string,
-    assistantSentence: string
+    assistantSentence: string,
+    topic?: string
   ): Promise<TranscriptionAnalysis> {
     const prompt = this.createTranscriptionAnalysisPrompt(
       transcription,
       language,
-      assistantSentence
+      assistantSentence,
+      topic
     );
 
     try {
@@ -823,19 +825,24 @@ Preferred JSON format:
   protected createTranscriptionAnalysisPrompt(
     transcription: string,
     language: string,
-    assistantSentence: string
+    assistantSentence: string,
+    topic?: string
   ): string {
     const languageName = language.charAt(0).toUpperCase() + language.slice(1);
+
+    let topicContext = '';
+    if (topic) {
+      topicContext = `\nTopic: The conversation is about "${topic}". Use this context to provide more relevant feedback.\n`;
+    }
 
     return `Analyze this ${languageName} transcription from a language learner:
 
 "${transcription}"
 
 Context: The learner was responding to this ${languageName} sentence from the assistant:
-"${assistantSentence}"
-
+"${assistantSentence}"${topicContext}
 Provide:
-1. A correction suggestion if there are better ways to express this (format: "you can say this like that: ...")
+1. A correction suggestion if there are better ways to express this (just the corrected/better sentence, no explanation)
 2. A grammar explanation if there are grammar mistakes detected
 3. Whether there are grammar mistakes (true/false)
 

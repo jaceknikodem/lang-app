@@ -95,6 +95,17 @@ export interface IPCBridge {
         createdAt: Date;
       }>
     >;
+    insertDialogCorrection: (data: {
+      sentenceId: number;
+      sessionId?: number;
+      correctionText: string;
+      language: string;
+    }) => Promise<number>;
+    getDialogCorrections: (
+      sentenceId: number,
+      language: string,
+      limit?: number
+    ) => Promise<Array<{ id: number; correctionText: string; createdAt: Date }>>;
     updateLastStudied: (wordId: number) => Promise<void>;
     getStudyStats: () => Promise<StudyStats>;
     recordStudySession: (wordsStudied: number) => Promise<void>;
@@ -294,7 +305,8 @@ export interface IPCBridge {
     analyzeTranscription: (
       transcription: string,
       language: string,
-      assistantSentence: string
+      assistantSentence: string,
+      topic?: string
     ) => Promise<TranscriptionAnalysis>;
     ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
     ensureContextSentences: (
@@ -373,6 +385,8 @@ export const IPC_CHANNELS = {
     INCREMENT_SENTENCE_PLAY_COUNT: 'database:incrementSentencePlayCount',
     RECORD_PRONUNCIATION_ATTEMPT: 'database:recordPronunciationAttempt',
     GET_PRONUNCIATION_HISTORY: 'database:getPronunciationHistory',
+    INSERT_DIALOG_CORRECTION: 'database:insertDialogCorrection',
+    GET_DIALOG_CORRECTIONS: 'database:getDialogCorrections',
     UPDATE_LAST_STUDIED: 'database:updateLastStudied',
     GET_STUDY_STATS: 'database:getStudyStats',
     RECORD_STUDY_SESSION: 'database:recordStudySession',

@@ -343,6 +343,36 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
   );
 
   ipcMain.handle(
+    IPC_CHANNELS.DATABASE.INSERT_DIALOG_CORRECTION,
+    createIPCHandler(
+      [
+        z.object({
+          sentenceId: SentenceIdSchema,
+          sessionId: z.number().int().positive().optional(),
+          correctionText: z.string().min(1).max(500),
+          language: z.string().min(1),
+        }),
+      ],
+      (data) => databaseLayer.insertDialogCorrection(data),
+      'insert dialog correction'
+    )
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_DIALOG_CORRECTIONS,
+    createIPCHandler(
+      [SentenceIdSchema, z.string().min(1), z.number().int().positive().optional()],
+      (sentenceId, language, limit) =>
+        databaseLayer.getDialogCorrections(
+          sentenceId,
+          language,
+          limit !== undefined ? Math.max(1, Math.floor(limit)) : 3
+        ),
+      'get dialog corrections'
+    )
+  );
+
+  ipcMain.handle(
     IPC_CHANNELS.DATABASE.UPDATE_SENTENCE_AUDIO_PATH,
     createIPCHandler(
       [SentenceIdSchema, AudioPathSchema, z.string().optional()],
@@ -1738,9 +1768,14 @@ function setupDialogHandlers(
   ipcMain.handle(
     IPC_CHANNELS.DIALOG.ANALYZE_TRANSCRIPTION,
     createIPCHandler(
-      [TextSchema, LanguageSchema, TextSchema],
-      async (transcription, language, assistantSentence) => {
-        return await llmClient.analyzeTranscription(transcription, language, assistantSentence);
+      [TextSchema, LanguageSchema, TextSchema, z.string().optional()],
+      async (transcription, language, assistantSentence, topic) => {
+        return await llmClient.analyzeTranscription(
+          transcription,
+          language,
+          assistantSentence,
+          topic
+        );
       },
       'analyze transcription for corrections and grammar'
     )
