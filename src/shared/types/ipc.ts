@@ -287,7 +287,6 @@ export interface IPCBridge {
     selectSentence: () => Promise<Sentence | null>;
     selectSentenceWithTopic: () => Promise<Sentence | null>;
     generateVariants: (sentenceId: number) => Promise<DialogueVariant[]>;
-    generateRelatedWords: (sentenceId: number, topic: string) => Promise<string[]>;
     generateFollowUp: (
       variantId: number,
       conversationHistory?: string[]
@@ -477,7 +476,6 @@ export const IPC_CHANNELS = {
     SELECT_SENTENCE: 'dialog:selectSentence',
     SELECT_SENTENCE_WITH_TOPIC: 'dialog:selectSentenceWithTopic',
     GENERATE_VARIANTS: 'dialog:generateVariants',
-    GENERATE_RELATED_WORDS: 'dialog:generateRelatedWords',
     GENERATE_FOLLOW_UP: 'dialog:generateFollowUp',
     ANALYZE_TRANSCRIPTION: 'dialog:analyzeTranscription',
     ENSURE_BEFORE_SENTENCE_AUDIO: 'dialog:ensureBeforeSentenceAudio',

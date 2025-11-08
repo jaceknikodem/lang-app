@@ -4,7 +4,10 @@
 
 import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { Sentence, DialogueVariant, TranscriptionAnalysis } from '../../shared/types/core.js';
+import { Sentence, DialogueVariant, TranscriptionAnalysis, Word } from '../../shared/types/core.js';
+import type { SessionSummary } from './session-complete.js';
+import './session-complete.js';
+import './progress-bar.js';
 import { sharedStyles } from '../styles/shared.js';
 import { useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 import { sessionManager } from '../utils/session-manager.js';
@@ -106,7 +109,13 @@ export class DialogMode extends BaseComponent {
   private transcriptionAnalysis: TranscriptionAnalysis | null = null;
 
   @state()
-  private relatedWords: string[] = [];
+  private showCompletion = false;
+
+  @state()
+  private sessionSummary: SessionSummary | null = null;
+
+  private sessionStartTime = Date.now();
+  private initialTotalDialogs = 0; // Track initial total for progress calculation
 
   private recordingTimer: number | null = null;
   private recordingStatusCheckTimer: number | null = null;
@@ -158,8 +167,12 @@ export class DialogMode extends BaseComponent {
   connectedCallback() {
     super.connectedCallback();
 
-    // Reset dialog count when component is connected
+    // Reset dialog count and session start time when component is connected
     this.dialogCount = 0;
+    this.sessionStartTime = Date.now();
+    this.showCompletion = false;
+    this.sessionSummary = null;
+    this.initialTotalDialogs = 0; // Reset initial total
 
     // Load current language and proficiency level, and create dialog session for tracking
     window.electronAPI.database
@@ -260,11 +273,20 @@ export class DialogMode extends BaseComponent {
       this.showFollowUp = false;
       this.transcriptionResult = null;
       this.transcriptionAnalysis = null;
-      this.relatedWords = [];
       this.recordedAudioPath = null;
 
       // Check for cached dialog session first
       const cachedSession = sessionManager.getCurrentDialogSession();
+
+      // Track initial total dialogs if not already set
+      if (this.initialTotalDialogs === 0) {
+        const session = sessionManager.getCurrentSession();
+        this.initialTotalDialogs = session.dialogSessions?.length || 0;
+        console.log('[DialogMode] loadDialogSession - tracking initial total dialogs', {
+          initialTotal: this.initialTotalDialogs,
+        });
+      }
+
       if (cachedSession) {
         console.log('[DialogMode] loadDialogSession - using cached session from session manager', {
           sessionId: cachedSession.id,
@@ -360,6 +382,35 @@ export class DialogMode extends BaseComponent {
         }
       }
 
+      // No cached session - check if we should show summary or generate new one
+      const currentSession = sessionManager.getCurrentSession();
+      const hasNoMoreCachedSessions =
+        !currentSession.dialogSessions || currentSession.dialogSessions.length === 0;
+
+      // Check if currentDialogIndex is undefined (meaning we've consumed all sessions)
+      const indexIsUndefined = currentSession.currentDialogIndex === undefined;
+      const allSessionsConsumed =
+        hasNoMoreCachedSessions ||
+        (indexIsUndefined &&
+          currentSession.dialogSessions &&
+          currentSession.dialogSessions.length > 0);
+
+      // If we've completed at least one dialog and all sessions are consumed, show summary
+      if (allSessionsConsumed && this.dialogCount > 0) {
+        console.log(
+          '[DialogMode] loadDialogSession - all cached sessions exhausted, showing summary',
+          {
+            dialogCount: this.dialogCount,
+            hasNoMoreCachedSessions,
+            indexIsUndefined,
+            sessionLength: currentSession.dialogSessions?.length || 0,
+            currentIndex: currentSession.currentDialogIndex,
+          }
+        );
+        await this.showSessionSummary();
+        return;
+      }
+
       // No cached session - generate new one
       console.log('[DialogMode] loadDialogSession - no cached session, generating new');
 
@@ -404,40 +455,9 @@ export class DialogMode extends BaseComponent {
         this.afterSentenceAudio = null;
       }
 
-      // Step 3: Generate response options or related words based on flow type
+      // Step 3: Generate response options based on flow type
       if (this.isTopicBasedFlow) {
-        // Topic-based flow: Generate related words
-        // First check if sentence already has related words cached
-        if (sentence.relatedWords && sentence.relatedWords.length > 0) {
-          this.relatedWords = sentence.relatedWords;
-          console.log('[DialogMode] loadDialogSession - using cached related words', {
-            count: this.relatedWords.length,
-          });
-        } else {
-          // Generate and cache related words
-          try {
-            // Get topic from sentence's word
-            const word = await window.electronAPI.database.getWordById(sentence.wordId);
-            if (word?.topic) {
-              console.log('[DialogMode] loadDialogSession - generating related words', {
-                sentenceId: sentence.id,
-                topic: word.topic,
-              });
-              const relatedWords = await window.electronAPI.dialog.generateRelatedWords(
-                sentence.id,
-                word.topic
-              );
-              this.relatedWords = relatedWords || [];
-              console.log('[DialogMode] loadDialogSession - related words generated', {
-                count: this.relatedWords.length,
-              });
-            }
-          } catch (error) {
-            logger.warn({ error }, 'Failed to generate related words');
-            this.relatedWords = [];
-          }
-        }
-        // No variants for topic-based flow
+        // Topic-based flow: No variants needed
         this.responseOptions = [];
       } else {
         // Old flow: Generate variants
@@ -1537,7 +1557,31 @@ export class DialogMode extends BaseComponent {
     // Increment dialog count
     this.dialogCount++;
 
-    // Check if we've completed 5 dialogs
+    // Check if there are any more cached sessions before loading
+    const session = sessionManager.getCurrentSession();
+    const hasNoMoreCachedSessions = !session.dialogSessions || session.dialogSessions.length === 0;
+
+    // Check if currentDialogIndex is undefined (meaning we've consumed all sessions)
+    // This happens when we just consumed the last session
+    const indexIsUndefined = session.currentDialogIndex === undefined;
+    const allSessionsConsumed =
+      hasNoMoreCachedSessions ||
+      (indexIsUndefined && session.dialogSessions && session.dialogSessions.length > 0);
+
+    // If we've completed at least one dialog and all sessions are consumed, show summary
+    if (allSessionsConsumed && this.dialogCount > 0) {
+      console.log('[DialogMode] nextDialog - all cached sessions exhausted, showing summary', {
+        dialogCount: this.dialogCount,
+        hasNoMoreCachedSessions,
+        indexIsUndefined,
+        sessionLength: session.dialogSessions?.length || 0,
+        currentIndex: session.currentDialogIndex,
+      });
+      await this.showSessionSummary();
+      return;
+    }
+
+    // Check if we've completed 5 dialogs (only if we're continuing with more sessions)
     if (this.dialogCount >= 5) {
       // Dispatch event for autopilot to check scores after 5 dialogs are done
       window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
@@ -1547,84 +1591,42 @@ export class DialogMode extends BaseComponent {
 
     // Load the next session from the queue
     await this.loadDialogSession();
-
-    // Schedule a new dialog session to be generated asynchronously and added to the end of the queue
-    setImmediate(() => {
-      this.scheduleNewDialogSession().catch((error) => {
-        logger.error({ error }, 'Failed to schedule new dialog session');
-        // Non-critical error - continue without new session
-      });
-    });
   }
 
   /**
-   * Generate a new dialog session and add it to the end of the queue (FIFO)
+   * Show session summary when all cached dialogues are finished
    */
-  private async scheduleNewDialogSession(): Promise<void> {
+  private async showSessionSummary(): Promise<void> {
     try {
-      const sessionData = await window.electronAPI.dialog.pregenerateSession();
-      if (!sessionData) {
-        console.log('No dialog session could be pre-generated for queue (no sentences available)');
-        return;
-      }
+      this.isLoading = false;
 
-      // Convert response options dates from ISO strings back to Date objects
-      const responseOptions = sessionData.responseOptions.map(
-        (v: {
-          id: number;
-          sentenceId: number;
-          variantSentence: string;
-          variantTranslation: string;
-          createdAt: string;
-        }) => ({
-          id: v.id,
-          sentenceId: v.sentenceId,
-          variantSentence: v.variantSentence,
-          variantTranslation: v.variantTranslation,
-          createdAt: new Date(v.createdAt),
-        })
-      );
+      // Clear cached dialog sessions since we've finished them all
+      sessionManager.clearDialogSession();
+      console.log('[DialogMode] showSessionSummary - cleared cached dialog sessions');
 
-      // Create dialog session state
-      const dialogSession: import('../utils/session-manager.js').DialogSessionState = {
-        id: `dialog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        sentenceId: sessionData.sentenceId,
-        sentence: sessionData.sentence,
-        translation: sessionData.translation,
-        contextBefore: sessionData.contextBefore,
-        contextBeforeTranslation: sessionData.contextBeforeTranslation,
-        beforeSentenceAudio: sessionData.beforeSentenceAudio,
-        responseOptions: responseOptions.map(
-          (v: {
-            id: number;
-            sentenceId: number;
-            variantSentence: string;
-            variantTranslation: string;
-            createdAt: Date;
-          }) => ({
-            id: v.id,
-            sentenceId: v.sentenceId,
-            variantSentence: v.variantSentence,
-            variantTranslation: v.variantTranslation,
-            createdAt: v.createdAt.toISOString(),
-          })
-        ),
-        createdAt: new Date().toISOString(),
+      // Calculate time spent
+      const timeSpent = Math.round((Date.now() - this.sessionStartTime) / (1000 * 60)); // minutes
+
+      // Get completed words from the dialogs we've done
+      // For now, we'll use an empty array since we don't track individual words in dialog mode
+      const completedWords: Word[] = [];
+
+      // Determine next recommendation
+      const nextRecommendation: SessionSummary['nextRecommendation'] = 'new-topic';
+
+      this.sessionSummary = {
+        type: 'learning', // Use 'learning' type since dialog is a form of learning
+        wordsStudied: this.dialogCount,
+        timeSpent,
+        completedWords,
+        nextRecommendation,
       };
 
-      // Add to the end of the queue (FIFO - removes oldest if queue is full)
-      sessionManager.addDialogSession(dialogSession);
-      logger.info(
-        {
-          sessionId: dialogSession.id,
-          sentenceId: dialogSession.sentenceId,
-          variantsCount: dialogSession.responseOptions.length,
-        },
-        'New dialog session generated and added to queue'
-      );
+      this.showCompletion = true;
     } catch (error) {
-      logger.error({ error }, 'Failed to schedule new dialog session');
-      // Non-critical error - don't throw
+      logger.error({ error }, 'Failed to show session summary');
+      // Fallback: navigate to topic selection
+      router.goToTopicSelection();
     }
   }
 
@@ -1709,6 +1711,22 @@ export class DialogMode extends BaseComponent {
         gap: var(--spacing-md);
         max-width: 800px;
         margin: 0 auto;
+      }
+
+      .dialog-header {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: var(--spacing-md);
+        width: 100%;
+        max-width: 600px;
+      }
+
+      .dialog-progress {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        font-size: 14px;
+        color: var(--text-secondary);
       }
 
       .control-bar {
@@ -2333,6 +2351,15 @@ export class DialogMode extends BaseComponent {
   ];
 
   render() {
+    // Show completion screen if all cached dialogues are finished
+    if (this.showCompletion && this.sessionSummary) {
+      return html`
+        <div class="dialog-container">
+          <session-complete .sessionSummary=${this.sessionSummary}></session-complete>
+        </div>
+      `;
+    }
+
     if (this.error) {
       return html`
         <div class="dialog-container">
@@ -2358,8 +2385,27 @@ export class DialogMode extends BaseComponent {
       `;
     }
 
+    // Calculate progress using initial total (not current length which decreases)
+    const totalDialogs = this.initialTotalDialogs || 0;
+    const completedDialogs = this.dialogCount;
+    const progress = totalDialogs > 0 ? ((completedDialogs + 1) / totalDialogs) * 100 : 0;
+
     return html`
       <div class="dialog-container">
+        ${totalDialogs > 0
+          ? html`
+              <div class="dialog-header">
+                <div class="dialog-progress">
+                  <span>${completedDialogs + 1} / ${totalDialogs}</span>
+                  <progress-bar
+                    .value=${progress}
+                    height="4px"
+                    style="width: 150px;"
+                  ></progress-bar>
+                </div>
+              </div>
+            `
+          : nothing}
         <div class="control-bar">
           <div class="control-buttons">
             <div class="translations-toggle">
@@ -2433,50 +2479,6 @@ export class DialogMode extends BaseComponent {
                           </p>
                         `
                       : nothing}
-                  </div>
-                </div>
-              `
-            : nothing}
-          ${this.isTopicBasedFlow && this.relatedWords.length > 0 && !this.transcriptionResult
-            ? html`
-                <div
-                  class="related-words-container"
-                  style="
-                    margin: var(--spacing-md) 0;
-                    padding: var(--spacing-md);
-                    border-radius: var(--border-radius);
-                  "
-                >
-                  <h4
-                    style="
-                      margin: 0 0 var(--spacing-sm) 0;
-                      color: #007aff;
-                      font-size: 15px;
-                      font-weight: 700;
-                    "
-                  >
-                    Related Words:
-                  </h4>
-                  <div
-                    style="
-                      display: flex;
-                      flex-wrap: wrap;
-                      gap: var(--spacing-xs);
-                    "
-                  >
-                    ${this.relatedWords.map(
-                      (word) => html`
-                        <span
-                          style="
-                            padding: var(--spacing-xs) var(--spacing-sm);
-                            border-radius: 4px;
-                            font-size: 13px;
-                            font-weight: 600;
-                          "
-                          >${word}</span
-                        >
-                      `
-                    )}
                   </div>
                 </div>
               `

@@ -10,11 +10,9 @@ import {
   DialogueVariant,
   DialogSession,
   DialogResponseOption,
-  GeneratedWord,
 } from '../../shared/types/core.js';
 import { getLogger } from '../utils/logger.js';
 import { Logger } from '../../shared/utils/logger.js';
-import { ContentGenerator } from '../llm/content-generator.js';
 
 export interface DialogServiceConfig {
   minWordStrength?: number;
@@ -45,20 +43,13 @@ function shuffleAndTake<T>(array: T[], count: number = 2): T[] {
 export class DialogService {
   private database: DatabaseLayer;
   private llmClient: LLMClient;
-  private contentGenerator: ContentGenerator;
   private config: DialogServiceConfig;
   private readonly logger: Logger;
 
-  constructor(
-    database: DatabaseLayer,
-    llmClient: LLMClient,
-    contentGenerator: ContentGenerator,
-    config?: DialogServiceConfig
-  ) {
+  constructor(database: DatabaseLayer, llmClient: LLMClient, config?: DialogServiceConfig) {
     this.logger = getLogger();
     this.database = database;
     this.llmClient = llmClient;
-    this.contentGenerator = contentGenerator;
     this.config = {
       minWordStrength: config?.minWordStrength ?? 40,
       maxVariantsPerSentence: config?.maxVariantsPerSentence ?? 6,
@@ -84,90 +75,6 @@ export class DialogService {
     const sentence = await this.database.getRandomSentenceWithTopic(language);
 
     return sentence;
-  }
-
-  /**
-   * Generate and filter related words for a topic
-   * Uses ContentGenerator logic, then applies additional filtering
-   */
-  async generateAndFilterRelatedWords(
-    topic: string,
-    language: string,
-    sentenceId: number
-  ): Promise<string[]> {
-    try {
-      // Check if related words are already cached
-      const sentence = await this.database.getSentenceById(sentenceId);
-      if (sentence?.relatedWords && sentence.relatedWords.length > 0) {
-        return sentence.relatedWords;
-      }
-
-      // Generate 20 words using ContentGenerator (reuses its logic)
-      const generatedWords = await this.contentGenerator.generateTopicVocabulary(
-        topic,
-        language,
-        20,
-        this.database
-      );
-
-      // Get all words from database to check their status
-      const allWords = await this.database.getAllWords(language, true, false);
-      const wordMap = new Map<string, { known: boolean; learning: boolean; ignored: boolean }>();
-      for (const word of allWords) {
-        const normalized = word.word.toLowerCase();
-        wordMap.set(normalized, {
-          known: word.known,
-          learning: !word.known && !word.ignored,
-          ignored: word.ignored,
-        });
-      }
-
-      // Filter the generated words
-      const filteredWords: GeneratedWord[] = [];
-      const remainingWords: GeneratedWord[] = [];
-
-      for (const word of generatedWords) {
-        const normalized = word.word.toLowerCase();
-        const status = wordMap.get(normalized);
-
-        if (status?.ignored) {
-          // Skip ignored words
-          continue;
-        }
-
-        if (status?.known || status?.learning) {
-          // Keep known and learning words
-          filteredWords.push(word);
-        } else {
-          // Keep track of remaining words for random selection
-          remainingWords.push(word);
-        }
-      }
-
-      // If we have less than 5 words, randomly select from remaining to reach 5
-      if (filteredWords.length < 5 && remainingWords.length > 0) {
-        const needed = 5 - filteredWords.length;
-        const shuffled = [...remainingWords].sort(() => Math.random() - 0.5);
-        filteredWords.push(...shuffled.slice(0, Math.min(needed, shuffled.length)));
-      }
-
-      // Extract just the word strings
-      const result = filteredWords.map((w) => w.word);
-
-      // Cache the result in the database
-      if (result.length > 0) {
-        try {
-          await this.database.updateSentenceRelatedWords(sentenceId, result);
-        } catch (error) {
-          this.logger.warn({ error, sentenceId }, 'Failed to cache related words');
-        }
-      }
-
-      return result;
-    } catch (error) {
-      this.logger.error({ error, topic, language, sentenceId }, 'Failed to generate related words');
-      throw error;
-    }
   }
 
   /**
@@ -420,63 +327,51 @@ export class DialogService {
       })
     );
 
-    // Step 4: Process each sentence with controlled concurrency for LLM-dependent operations
-    // Limit to 1 concurrent LLM request to avoid flooding the service
-    // Simple queue to limit LLM calls to 1 concurrent request
-    let llmRequestQueue: Promise<any> = Promise.resolve();
-    const queueLlmRequest = <T>(fn: () => Promise<T>): Promise<T> => {
-      const current = llmRequestQueue.then(() => fn());
-      llmRequestQueue = current.catch(() => {});
-      return current;
-    };
+    // Step 4: Process each sentence sequentially to avoid flooding the LLM service
     const sessions: DialogSession[] = [];
 
-    await Promise.all(
-      sentences.map((sentence) =>
-        queueLlmRequest(async () => {
-          try {
-            // Generate variants (LLM call)
-            const existingVariants = allExistingVariantsMap.get(sentence.id) || [];
-            const variants = await this.generateDialogueVariants(
-              sentence,
-              existingVariants,
-              knownWords,
-              language
-            );
+    for (const sentence of sentences) {
+      try {
+        // Generate variants (LLM call)
+        const existingVariants = allExistingVariantsMap.get(sentence.id) || [];
+        const variants = await this.generateDialogueVariants(
+          sentence,
+          existingVariants,
+          knownWords,
+          language
+        );
 
-            // Create pseudo-variant for original sentence
-            const originalVariant = {
-              id: -sentence.id,
-              sentenceId: sentence.id,
-              variantSentence: sentence.sentence,
-              variantTranslation: sentence.translation,
-              createdAt: new Date(),
-            };
+        // Create pseudo-variant for original sentence
+        const originalVariant = {
+          id: -sentence.id,
+          sentenceId: sentence.id,
+          variantSentence: sentence.sentence,
+          variantTranslation: sentence.translation,
+          createdAt: new Date(),
+        };
 
-            // Combine response options
-            const responseOptions: DialogueVariant[] = shuffleAndTake(
-              [originalVariant, ...variants],
-              3 // original + up to 2 variants = 3 total
-            );
+        // Combine response options
+        const responseOptions: DialogueVariant[] = shuffleAndTake(
+          [originalVariant, ...variants],
+          3 // original + up to 2 variants = 3 total
+        );
 
-            sessions.push({
-              sentenceId: sentence.id,
-              sentence: sentence.sentence,
-              translation: sentence.translation,
-              contextBefore: sentence.contextBefore,
-              contextBeforeTranslation: sentence.contextBeforeTranslation,
-              contextAfter: sentence.contextAfter,
-              contextAfterTranslation: sentence.contextAfterTranslation,
-              beforeSentenceAudio: undefined, // Will be set by IPC handler
-              afterSentenceAudio: undefined, // Will be set by IPC handler
-              responseOptions: responseOptions.map(toDialogResponseOption),
-            });
-          } catch {
-            // Continue with other sentences even if one fails
-          }
-        })
-      )
-    );
+        sessions.push({
+          sentenceId: sentence.id,
+          sentence: sentence.sentence,
+          translation: sentence.translation,
+          contextBefore: sentence.contextBefore,
+          contextBeforeTranslation: sentence.contextBeforeTranslation,
+          contextAfter: sentence.contextAfter,
+          contextAfterTranslation: sentence.contextAfterTranslation,
+          beforeSentenceAudio: undefined, // Will be set by IPC handler
+          afterSentenceAudio: undefined, // Will be set by IPC handler
+          responseOptions: responseOptions.map(toDialogResponseOption),
+        });
+      } catch {
+        // Continue with other sentences even if one fails
+      }
+    }
 
     return sessions;
   }

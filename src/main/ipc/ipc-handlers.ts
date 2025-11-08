@@ -91,7 +91,7 @@ export function setupIPCHandlers(
   }
 
   // Dialog handlers
-  setupDialogHandlers(databaseLayer, llmClient, contentGenerator, audioService);
+  setupDialogHandlers(databaseLayer, llmClient, audioService);
 
   // Flow handlers
   setupFlowHandlers(databaseLayer, audioService);
@@ -1670,10 +1670,9 @@ function setupLemmatizationHandlers(lemmatizationService: LemmatizationService):
 function setupDialogHandlers(
   databaseLayer: SQLiteDatabaseLayer,
   llmClient: LLMClient,
-  contentGenerator: ContentGenerator,
   audioService: AudioService
 ): void {
-  const dialogService = new DialogService(databaseLayer, llmClient, contentGenerator);
+  const dialogService = new DialogService(databaseLayer, llmClient);
 
   ipcMain.handle(
     IPC_CHANNELS.DIALOG.SELECT_SENTENCE,
@@ -1737,18 +1736,6 @@ function setupDialogHandlers(
   );
 
   ipcMain.handle(
-    IPC_CHANNELS.DIALOG.GENERATE_RELATED_WORDS,
-    createIPCHandler(
-      [SentenceIdSchema, TopicSchema],
-      async (sentenceId, topic) => {
-        const language = await databaseLayer.getCurrentLanguage();
-        return await dialogService.generateAndFilterRelatedWords(topic, language, sentenceId);
-      },
-      'generate related words for topic'
-    )
-  );
-
-  ipcMain.handle(
     IPC_CHANNELS.DIALOG.ANALYZE_TRANSCRIPTION,
     createIPCHandler(
       [TextSchema, LanguageSchema, TextSchema],
@@ -1777,13 +1764,16 @@ function setupDialogHandlers(
         let continuationAudio: string | undefined;
         if (followUp.text && followUp.text.trim().length > 0 && variantId > 0) {
           try {
-            // Check if audio already exists in database
+            // Check if audio already exists in database and matches current text
             const variant = await databaseLayer.getDialogueVariantById(variantId);
-            if (variant && variant.continuationAudio) {
-              // Audio already exists, use cached path
+            const shouldUseCachedAudio =
+              variant && variant.continuationAudio && variant.continuationText === followUp.text; // Audio must match current text
+
+            if (shouldUseCachedAudio) {
+              // Audio already exists and matches current text, use cached path
               continuationAudio = variant.continuationAudio;
             } else {
-              // Generate audio on-demand
+              // Generate audio on-demand (either no cached audio, or text changed)
               const currentLanguage = await databaseLayer.getCurrentLanguage();
               const audioPath = await audioService.generateAudio(
                 followUp.text,

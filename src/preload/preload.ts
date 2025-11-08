@@ -368,8 +368,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.DIALOG.SELECT_SENTENCE_WITH_TOPIC),
     generateVariants: (sentenceId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_VARIANTS, sentenceId),
-    generateRelatedWords: (sentenceId: number, topic: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_RELATED_WORDS, sentenceId, topic),
     generateFollowUp: (variantId: number, conversationHistory?: string[]) =>
       ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_FOLLOW_UP, variantId, conversationHistory),
     analyzeTranscription: (transcription: string, language: string, assistantSentence: string) =>
