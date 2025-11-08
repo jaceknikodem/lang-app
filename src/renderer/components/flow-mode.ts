@@ -46,6 +46,9 @@ export class FlowMode extends BaseComponent {
   private totalPlaybackTime: number = 0; // Cumulative playback time in seconds
   private lastPauseTime: number | null = null;
   private pausedPosition: number = 0; // Position where audio was paused (in seconds)
+  private pauseEndTimestamps: number[] | null = null; // Pause end timestamps from JSON file
+  private currentAudioPath: string | null = null; // Track which audio file is currently playing
+  private previousPauseTimestamp: number | null = null; // Previous pause timestamp when pausing
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private dataArray: Uint8Array | null = null;
@@ -322,9 +325,16 @@ export class FlowMode extends BaseComponent {
     }
 
     try {
-      // If audio element exists and was paused, resume from pause position minus 0.5s (but not negative)
+      // If audio element exists and was paused, resume from previous pause or fall back to 0.5s
       if (this.audioElement && !this.isPlaying) {
-        const resumePosition = Math.max(0, this.pausedPosition - 0.5);
+        let resumePosition: number;
+        if (this.previousPauseTimestamp !== null) {
+          // Use previous pause timestamp if available
+          resumePosition = this.previousPauseTimestamp;
+        } else {
+          // Fall back to current logic: pause position minus 0.5s (but not negative)
+          resumePosition = Math.max(0, this.pausedPosition - 0.5);
+        }
         this.audioElement.currentTime = resumePosition;
 
         // Show overlay first so canvas is in DOM
@@ -370,11 +380,18 @@ export class FlowMode extends BaseComponent {
         this.stopAudio();
       }
 
-      // Load audio file
+      // Load audio file (this also loads pause timestamps if available)
       const audioData = await window.electronAPI.audio.loadAudioBase64(selectedPath);
       if (!audioData) {
         throw new Error('Failed to load audio file');
       }
+
+      // Store pause timestamps and current audio path
+      this.pauseEndTimestamps = audioData.pauseEndTimestamps ?? null;
+      this.currentAudioPath = selectedPath;
+      logger.debug(
+        `[Flow] Pause timestamps ${this.pauseEndTimestamps ? `loaded (${this.pauseEndTimestamps.length} pauses)` : 'not available'}`
+      );
 
       // Create blob URL
       const blob = new Blob([audioData.data], { type: audioData.mimeType });
@@ -383,8 +400,12 @@ export class FlowMode extends BaseComponent {
       // Create audio element
       this.audioElement = new Audio(blobUrl);
 
-      // Set current time to paused position if we have one (resume from pause)
-      if (this.pausedPosition > 0) {
+      // Set current time to previous pause or paused position if we have one (resume from pause)
+      if (this.previousPauseTimestamp !== null) {
+        // Use previous pause timestamp if available
+        this.audioElement.currentTime = this.previousPauseTimestamp;
+      } else if (this.pausedPosition > 0) {
+        // Fall back to paused position
         this.audioElement.currentTime = this.pausedPosition;
       }
 
@@ -449,6 +470,18 @@ export class FlowMode extends BaseComponent {
       // Store the current position for resuming later
       this.pausedPosition = this.audioElement.currentTime;
 
+      // Find previous pause timestamp if pause timestamps are available
+      this.previousPauseTimestamp = null;
+      if (this.pauseEndTimestamps && this.pauseEndTimestamps.length > 0) {
+        // Find the last pause end timestamp that is <= current position
+        for (let i = this.pauseEndTimestamps.length - 1; i >= 0; i--) {
+          if (this.pauseEndTimestamps[i] <= this.pausedPosition) {
+            this.previousPauseTimestamp = this.pauseEndTimestamps[i];
+            break;
+          }
+        }
+      }
+
       this.audioElement.pause();
       this.isPlaying = false;
       this.showOverlay = false;
@@ -495,6 +528,9 @@ export class FlowMode extends BaseComponent {
     this.totalPlaybackTime = 0;
     this.lastPauseTime = null;
     this.pausedPosition = 0; // Reset pause position when stopping
+    this.pauseEndTimestamps = null; // Reset pause timestamps when stopping
+    this.currentAudioPath = null; // Reset current audio path when stopping
+    this.previousPauseTimestamp = null; // Reset previous pause timestamp when stopping
   }
 
   private handleDirectKeyDown(event: KeyboardEvent): void {

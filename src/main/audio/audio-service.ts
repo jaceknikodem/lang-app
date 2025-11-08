@@ -905,8 +905,9 @@ export class AudioService {
    * Load audio file as ArrayBuffer for caching in renderer
    * Optimized: Returns ArrayBuffer directly (no base64 encoding overhead)
    * Also returns MIME type so renderer can create Blob URLs efficiently
+   * Also loads pause timestamps from JSON file if available (for flow mode)
    */
-  async loadAudioBase64(audioPath: string): Promise<{ data: ArrayBuffer; mimeType: string } | null> {
+  async loadAudioBase64(audioPath: string): Promise<{ data: ArrayBuffer; mimeType: string; pauseEndTimestamps?: number[] | null } | null> {
     try {
       if (!audioPath || typeof audioPath !== 'string') {
         this.logger.warn({ audioPath }, '[AudioService] Invalid audio path');
@@ -937,6 +938,22 @@ export class AudioService {
         mimeType = 'audio/aiff';
       }
 
+      // Try to load pause timestamps from corresponding JSON file
+      let pauseEndTimestamps: number[] | null = null;
+      try {
+        const pauseTimestampsPath = absolutePath.replace(/\.(mp3|wav|ogg|aac|flac|aiff|aif)$/i, '.json');
+        const pauseTimestampsData = await fsPromises.readFile(pauseTimestampsPath, 'utf-8');
+        pauseEndTimestamps = JSON.parse(pauseTimestampsData) as number[];
+        this.logger.debug({ pauseTimestampsPath, pauseCount: pauseEndTimestamps.length }, '[AudioService] Loaded pause timestamps');
+      } catch (pauseError) {
+        // JSON file doesn't exist or is invalid - this is expected for non-flow audio files
+        // Only log if it's not a file-not-found error
+        if (pauseError instanceof Error && 'code' in pauseError && (pauseError as any).code !== 'ENOENT') {
+          this.logger.debug({ error: pauseError, audioPath }, '[AudioService] Failed to load pause timestamps (non-critical)');
+        }
+        pauseEndTimestamps = null;
+      }
+
       // Return ArrayBuffer and MIME type - renderer will create Blob URL (faster than data URLs)
       // Convert Buffer to ArrayBuffer for IPC serialization (Electron uses structured clone which supports ArrayBuffer)
       // Create a new ArrayBuffer with the same data
@@ -946,7 +963,8 @@ export class AudioService {
       
       return {
         data: arrayBuffer,
-        mimeType
+        mimeType,
+        pauseEndTimestamps
       };
     } catch (error) {
       // If file doesn't exist, readFile throws - catch and return null
