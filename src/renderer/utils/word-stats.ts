@@ -2,6 +2,8 @@
  * Word statistics utilities
  */
 
+import { UI_CONFIG } from '../../shared/constants/index.js';
+
 export interface WordCategoryStats {
   known: number;
   strong: number;
@@ -14,20 +16,25 @@ export interface WordStatsThresholds {
   strong: number;
 }
 
-const DEFAULT_THRESHOLDS: WordStatsThresholds = {
-  weak: 30,
-  strong: 70,
-};
+/**
+ * Get default word stats thresholds from config
+ */
+function getDefaultThresholds(): WordStatsThresholds {
+  return {
+    weak: UI_CONFIG.WORD_STATS_THRESHOLDS.WEAK,
+    strong: UI_CONFIG.WORD_STATS_THRESHOLDS.STRONG,
+  };
+}
 
 /**
  * Calculate word category statistics from a list of words
  * @param words Array of words with strength and lastStudied properties
- * @param thresholds Optional thresholds for categorizing words (default: weak=30, strong=70)
+ * @param thresholds Optional thresholds for categorizing words (default: from config)
  * @returns Statistics object with counts for each category
  */
 export function calculateWordCategoryStats(
   words: Array<{ strength?: number | null; lastStudied?: Date | null }>,
-  thresholds: WordStatsThresholds = DEFAULT_THRESHOLDS
+  thresholds: WordStatsThresholds = getDefaultThresholds()
 ): WordCategoryStats {
   const stats: WordCategoryStats = {
     known: 0,

@@ -13,6 +13,7 @@ import { getErrorMessage } from '../../shared/utils/error.js';
 import { logger } from '../utils/logger.js';
 import { BaseComponent } from './base-component.js';
 import { getAvailableTopics } from '../utils/topic-utils.js';
+import { UI_CONFIG } from '../../shared/constants/index.js';
 
 @customElement('topic-selector')
 export class TopicSelector extends BaseComponent {
@@ -294,9 +295,10 @@ export class TopicSelector extends BaseComponent {
     // Get available topics, excluding frequently used ones
     const topicsToUse = await getAvailableTopics(this.allTopicSuggestions, this.currentLanguage);
 
-    // Select 3 random suggestions
+    // Select random suggestions based on config
+    const suggestionsCount = UI_CONFIG.TOPIC_SUGGESTIONS_COUNT;
     const shuffled = [...topicsToUse].sort(() => Math.random() - 0.5);
-    this.suggestions = shuffled.slice(0, 3);
+    this.suggestions = shuffled.slice(0, suggestionsCount);
   }
 
   private handleSuggestionClick(suggestion: string) {

@@ -382,6 +382,58 @@ const config = convict({
     },
   },
 
+  // UI Configuration
+  ui: {
+    topicSuggestionsCount: {
+      doc: 'Number of topic suggestions to show',
+      format: 'int',
+      default: 3,
+      env: 'UI_TOPIC_SUGGESTIONS_COUNT',
+    },
+    topicFilteringMinAvailable: {
+      doc: 'Minimum number of topics to keep after filtering',
+      format: 'int',
+      default: 3,
+      env: 'UI_TOPIC_FILTERING_MIN_AVAILABLE',
+    },
+    topicFilteringExcludeTopN: {
+      doc: 'Number of top-used topics to exclude from suggestions',
+      format: 'int',
+      default: 10,
+      env: 'UI_TOPIC_FILTERING_EXCLUDE_TOP_N',
+    },
+    strengthThresholdWeak: {
+      doc: 'Word strength threshold for weak category',
+      format: 'int',
+      default: 25,
+      env: 'UI_STRENGTH_THRESHOLD_WEAK',
+    },
+    strengthThresholdMedium: {
+      doc: 'Word strength threshold for medium category',
+      format: 'int',
+      default: 50,
+      env: 'UI_STRENGTH_THRESHOLD_MEDIUM',
+    },
+    strengthThresholdStrong: {
+      doc: 'Word strength threshold for strong category',
+      format: 'int',
+      default: 75,
+      env: 'UI_STRENGTH_THRESHOLD_STRONG',
+    },
+    wordStatsThresholdWeak: {
+      doc: 'Word statistics threshold for weak category',
+      format: 'int',
+      default: 30,
+      env: 'UI_WORD_STATS_THRESHOLD_WEAK',
+    },
+    wordStatsThresholdStrong: {
+      doc: 'Word statistics threshold for strong category',
+      format: 'int',
+      default: 70,
+      env: 'UI_WORD_STATS_THRESHOLD_STRONG',
+    },
+  },
+
   // Languages Configuration
   languages: {
     doc: 'Supported languages with their metadata',
@@ -508,6 +560,17 @@ export const strengthBoostConfig = {
 
 export const testingConfig = {
   e2eForceLocalServices: config.get('testing.e2eForceLocalServices'),
+};
+
+export const uiConfig = {
+  topicSuggestionsCount: config.get('ui.topicSuggestionsCount'),
+  topicFilteringMinAvailable: config.get('ui.topicFilteringMinAvailable'),
+  topicFilteringExcludeTopN: config.get('ui.topicFilteringExcludeTopN'),
+  strengthThresholdWeak: config.get('ui.strengthThresholdWeak'),
+  strengthThresholdMedium: config.get('ui.strengthThresholdMedium'),
+  strengthThresholdStrong: config.get('ui.strengthThresholdStrong'),
+  wordStatsThresholdWeak: config.get('ui.wordStatsThresholdWeak'),
+  wordStatsThresholdStrong: config.get('ui.wordStatsThresholdStrong'),
 };
 
 export const languagesConfig = config.get('languages') as Array<{

@@ -20,6 +20,7 @@ let appConfig: any = null;
 let llmConfig: any = null;
 let audioConfig: any = null;
 let strengthBoostConfig: any = null;
+let uiConfig: any = null;
 let supportedLanguagesFromConfig: readonly string[] | null = null;
 
 if (isNodeEnv) {
@@ -34,6 +35,7 @@ if (isNodeEnv) {
     llmConfig = config.llmConfig;
     audioConfig = config.audioConfig;
     strengthBoostConfig = config.strengthBoostConfig;
+    uiConfig = config.uiConfig;
 
     // Get supported languages from language config
     try {
@@ -146,6 +148,18 @@ export const AUDIO_CONFIG = {
   DEFAULT_RATE: audioConfig?.defaultRate ?? DEFAULT_AUDIO_CONFIG.defaultRate,
 } as const;
 
+// Default UI config values (used in renderer or if config fails to load)
+const DEFAULT_UI_CONFIG = {
+  topicSuggestionsCount: 3,
+  topicFilteringMinAvailable: 3,
+  topicFilteringExcludeTopN: 10,
+  strengthThresholdWeak: 25,
+  strengthThresholdMedium: 50,
+  strengthThresholdStrong: 75,
+  wordStatsThresholdWeak: 30,
+  wordStatsThresholdStrong: 70,
+};
+
 export const UI_CONFIG = {
   WORD_COLORS: {
     NEW: 'neutral',
@@ -154,9 +168,19 @@ export const UI_CONFIG = {
     IGNORED: 'grey',
   },
   STRENGTH_THRESHOLDS: {
-    WEAK: 25,
-    MEDIUM: 50,
-    STRONG: 75,
+    WEAK: uiConfig?.strengthThresholdWeak ?? DEFAULT_UI_CONFIG.strengthThresholdWeak,
+    MEDIUM: uiConfig?.strengthThresholdMedium ?? DEFAULT_UI_CONFIG.strengthThresholdMedium,
+    STRONG: uiConfig?.strengthThresholdStrong ?? DEFAULT_UI_CONFIG.strengthThresholdStrong,
+  },
+  TOPIC_SUGGESTIONS_COUNT:
+    uiConfig?.topicSuggestionsCount ?? DEFAULT_UI_CONFIG.topicSuggestionsCount,
+  TOPIC_FILTERING_MIN_AVAILABLE:
+    uiConfig?.topicFilteringMinAvailable ?? DEFAULT_UI_CONFIG.topicFilteringMinAvailable,
+  TOPIC_FILTERING_EXCLUDE_TOP_N:
+    uiConfig?.topicFilteringExcludeTopN ?? DEFAULT_UI_CONFIG.topicFilteringExcludeTopN,
+  WORD_STATS_THRESHOLDS: {
+    WEAK: uiConfig?.wordStatsThresholdWeak ?? DEFAULT_UI_CONFIG.wordStatsThresholdWeak,
+    STRONG: uiConfig?.wordStatsThresholdStrong ?? DEFAULT_UI_CONFIG.wordStatsThresholdStrong,
   },
 } as const;
 

@@ -3,23 +3,24 @@
  */
 
 import { logger } from './logger.js';
+import { UI_CONFIG } from '../../shared/constants/index.js';
 
 /**
  * Get available topics by filtering out frequently used topics.
- * Excludes the top ~10 most used topics to encourage variety.
+ * Excludes the top N most used topics to encourage variety.
  * Falls back to all topics if too many are filtered out.
  *
  * @param allTopics - All available topics
  * @param language - The target language for filtering
- * @param minAvailable - Minimum number of topics to keep after filtering (default: 3)
- * @param excludeTopN - Number of top-used topics to exclude (default: 10)
+ * @param minAvailable - Minimum number of topics to keep after filtering (default: from config)
+ * @param excludeTopN - Number of top-used topics to exclude (default: from config)
  * @returns Array of available topics (filtered or all if too few remain)
  */
 export async function getAvailableTopics(
   allTopics: string[],
   language: string | null,
-  minAvailable: number = 3,
-  excludeTopN: number = 10
+  minAvailable: number = UI_CONFIG.TOPIC_FILTERING_MIN_AVAILABLE,
+  excludeTopN: number = UI_CONFIG.TOPIC_FILTERING_EXCLUDE_TOP_N
 ): Promise<string[]> {
   if (allTopics.length === 0) {
     return [];

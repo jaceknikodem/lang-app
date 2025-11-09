@@ -96,6 +96,24 @@ excellent = 4
 # Force local services in E2E tests
 e2e_force_local_services = false
 
+[ui]
+# Topic selection
+# Number of topic suggestions to show
+topic_suggestions_count = 3
+# Minimum number of topics to keep after filtering
+topic_filtering_min_available = 3
+# Number of top-used topics to exclude from suggestions
+topic_filtering_exclude_top_n = 10
+
+# Word strength thresholds for UI display
+strength_threshold_weak = 25
+strength_threshold_medium = 50
+strength_threshold_strong = 75
+
+# Word statistics thresholds
+word_stats_threshold_weak = 30
+word_stats_threshold_strong = 70
+
 # Language Configuration
 # Centralized language metadata - single source of truth for all language-related mappings
 [[languages]]
