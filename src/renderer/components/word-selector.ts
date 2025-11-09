@@ -633,6 +633,7 @@ export class WordSelector extends LitElement {
       // Process known words first (simpler - no sentences needed)
       const knownResult = await processKnownWords(knownWords, {
         language: this.language,
+        addedVia: 'manual',
       });
 
       // Process selected words (insert and enqueue for generation)
@@ -640,6 +641,7 @@ export class WordSelector extends LitElement {
         language: this.language,
         topic: topic, // Use the topic variable instead of this.topic
         desiredSentenceCount: 3,
+        addedVia: 'manual',
       });
 
       const queuedCount = selectedResult.queuedCount;

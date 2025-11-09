@@ -11,6 +11,7 @@ export interface ProcessWordsOptions {
   language: string;
   topic?: string;
   desiredSentenceCount?: number;
+  addedVia?: 'manual' | 'auto' | 'context_menu';
 }
 
 export interface ProcessWordsResult {
@@ -27,9 +28,14 @@ export async function processSelectedWords(
   words: GeneratedWord[],
   options: ProcessWordsOptions
 ): Promise<ProcessWordsResult> {
-  const { language, topic, desiredSentenceCount = 3 } = options;
+  const { language, topic, desiredSentenceCount = 3, addedVia } = options;
   console.log('[WordProcessor] processSelectedWords called');
-  console.log('[WordProcessor] Options received:', { language, topic, desiredSentenceCount });
+  console.log('[WordProcessor] Options received:', {
+    language,
+    topic,
+    desiredSentenceCount,
+    addedVia,
+  });
   console.log('[WordProcessor] Topic value:', topic);
   console.log('[WordProcessor] Topic type:', typeof topic);
   console.log('[WordProcessor] Topic truthy?', !!topic);
@@ -50,6 +56,7 @@ export async function processSelectedWords(
         language: language,
         translation: word.translation,
         topic: topic,
+        addedVia: addedVia,
       };
       console.log('[WordProcessor] WordData object:', wordData);
       console.log('[WordProcessor] WordData.topic:', wordData.topic);
@@ -81,7 +88,7 @@ export async function processKnownWords(
   words: GeneratedWord[],
   options: ProcessWordsOptions
 ): Promise<ProcessWordsResult> {
-  const { language } = options;
+  const { language, addedVia } = options;
   let processedKnown = 0;
   const failedWords: string[] = [];
 
@@ -95,6 +102,7 @@ export async function processKnownWords(
         word: word.word,
         language: language,
         translation: word.translation,
+        addedVia: addedVia,
       });
 
       // Mark as known immediately

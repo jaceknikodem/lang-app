@@ -25,6 +25,7 @@ export interface Word {
   processingStatus?: 'queued' | 'processing' | 'ready' | 'failed';
   sentenceCount?: number;
   topic?: string; // Topic the word was generated for
+  addedVia?: string; // How the word was added: 'manual', 'auto', or 'context_menu'
 }
 
 export interface DictionaryEntry {
@@ -108,6 +109,7 @@ export interface CreateWordRequest {
   language: string;
   translation: string;
   topic?: string;
+  addedVia?: 'manual' | 'auto' | 'context_menu';
 }
 
 export interface QuizSession {

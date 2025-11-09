@@ -127,7 +127,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         fsrs_last_rating INTEGER,
         processing_status TEXT DEFAULT 'ready',
         sentence_count INTEGER DEFAULT 0,
-        topic TEXT
+        topic TEXT,
+        added_via TEXT
       )
     `);
 
@@ -322,6 +323,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // Ignore error - this is expected for existing databases with the column
     }
 
+    // Migration: Add added_via column to words table if it doesn't exist
+    try {
+      db.exec(`ALTER TABLE words ADD COLUMN added_via TEXT`);
+    } catch {
+      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
+      // Ignore error - this is expected for existing databases with the column
+    }
+
     // SRS adjustments tracking (quiz mode only)
     db.exec(`
       CREATE TABLE IF NOT EXISTS srs_adjustments (
@@ -500,10 +509,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
     const stmt = db.prepare(`
       INSERT INTO words (
-        word, language, translation, topic,
+        word, language, translation, topic, added_via,
         strength, interval_days, ease_factor, next_due
       )
-      VALUES (?, ?, ?, ?, 20, 1, 2.5, ?)
+      VALUES (?, ?, ?, ?, ?, 20, 1, 2.5, ?)
     `);
 
     console.log('[Database] Inserting word with topic:', wordData.topic);
@@ -514,6 +523,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       wordData.language,
       wordData.translation,
       wordData.topic || null,
+      wordData.addedVia || null,
       tomorrow.toISOString()
     );
 
@@ -3196,6 +3206,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       processingStatus: (row.processing_status as WordProcessingStatus) ?? 'ready',
       sentenceCount: (row.sentence_count as number) ?? 0,
       topic: (row.topic as string) ?? undefined,
+      addedVia: (row.added_via as string) ?? undefined,
     };
   }
 

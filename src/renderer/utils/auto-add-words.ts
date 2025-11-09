@@ -147,6 +147,7 @@ export async function autoAddNewWords(language?: string): Promise<AutoAddWordsRe
       language: targetLanguage,
       topic: selectedTopic,
       desiredSentenceCount: 3,
+      addedVia: 'auto',
     };
 
     const result = await processSelectedWords(selectedWords, options);

@@ -1748,6 +1748,7 @@ export class SentenceViewer extends LitElement {
         word: normalized,
         language: this.targetWord.language,
         translation,
+        addedVia: 'context_menu',
       });
 
       // Only generate sentences if requested (not for known/ignored words)
