@@ -4,7 +4,7 @@
 
 [services]
 # Whether to manage external services (whisper, lemmatization)
-manage_services = false
+manage_services = true
 # Maximum service restart attempts
 max_restarts = 10
 

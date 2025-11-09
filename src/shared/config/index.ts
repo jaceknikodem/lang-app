@@ -133,7 +133,7 @@ const config = convict({
     manageServices: {
       doc: 'Whether to manage external services (whisper, lemmatization)',
       format: Boolean,
-      default: false,
+      default: true,
       env: 'MANAGE_SERVICES',
     },
     whisper: {
