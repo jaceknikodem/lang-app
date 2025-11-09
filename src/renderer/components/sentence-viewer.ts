@@ -13,6 +13,7 @@ import { useKeyboardBindings } from '../utils/keyboard-manager.js';
 import { tokenizeSentenceWithDictionary } from '../utils/sentence-tokenizer.js';
 import type { TokenizedWord as WordInSentence } from '../utils/sentence-tokenizer.js';
 import { logger } from '../utils/logger.js';
+import { sessionManager } from '../utils/session-manager.js';
 
 @customElement('sentence-viewer')
 export class SentenceViewer extends LitElement {
@@ -49,6 +50,12 @@ export class SentenceViewer extends LitElement {
   @property({ type: Number })
   currentSessionId?: number;
 
+  @property({ type: Object })
+  audioCache?: Map<string, string>; // audioPath -> blob URL
+
+  @property({ type: Number })
+  playbackSpeed?: number; // Playback speed multiplier (defaults to 1.0)
+
   @state()
   private isPlayingAudio = false;
 
@@ -66,6 +73,9 @@ export class SentenceViewer extends LitElement {
 
   @state()
   private wordPopup: { wordInfo: WordInSentence; position: { x: number; y: number } } | null = null;
+
+  // Audio element for playing cached audio
+  private currentAudioElement: HTMLAudioElement | null = null;
 
   // Dictionary cache is not reactive to avoid unnecessary re-renders
   // Dictionary data is precomputed in tokens, so cache updates shouldn't trigger UI updates
@@ -243,6 +253,7 @@ export class SentenceViewer extends LitElement {
         border-radius: var(--border-radius-small);
         border-left: 2px solid var(--primary-color);
         transition: all 0.3s ease;
+        cursor: pointer;
       }
 
       .context-section.playing {
@@ -294,6 +305,7 @@ export class SentenceViewer extends LitElement {
         border-left: 2px solid var(--primary-color);
         transition: all 0.3s ease;
         box-sizing: border-box;
+        cursor: pointer;
       }
 
       .sentence-text.playing {
@@ -586,6 +598,8 @@ export class SentenceViewer extends LitElement {
     }
     document.removeEventListener('click', this.handleOutsideClick);
     document.removeEventListener('keydown', this.handleKeyDown);
+    // Clean up audio element
+    this.stopCachedAudio();
   }
 
   private handleOutsideClick = (event: MouseEvent) => {
@@ -1809,7 +1823,8 @@ export class SentenceViewer extends LitElement {
       return;
     }
 
-    this.isPlayingAudio = true;
+    // Don't set isPlayingAudio here - let playAudioWithCache() manage it
+    // This allows sequential playback of before/main/after audio segments
 
     try {
       // Parent component stops audio immediately before navigation,
@@ -1822,108 +1837,233 @@ export class SentenceViewer extends LitElement {
             this.sentence.id
           );
           if (beforeSentenceAudioPath) {
-            // Set local state to indicate before-sentence audio is playing
-            this.localPlayingAudio = 'before';
-            this.requestUpdate();
-
-            await window.electronAPI.audio.playAudio(beforeSentenceAudioPath);
-
-            // Reset state after before-sentence audio finishes
-            this.localPlayingAudio = null;
-            this.requestUpdate();
+            await this.playAudioWithCache(beforeSentenceAudioPath, 'before');
           }
         } catch (error) {
           logger.warn({ error }, 'Failed to play before sentence audio');
-          this.localPlayingAudio = null;
-          this.requestUpdate();
           // Continue with main sentence audio even if before sentence audio fails
         }
       }
 
-      // Set local state to indicate main sentence audio is playing
-      this.localPlayingAudio = 'main';
-      this.requestUpdate();
+      // Play main sentence audio
+      await this.playAudioWithCache(this.sentence.audioPath, 'main');
 
-      // Play audio and wait for completion (promise now resolves when audio finishes)
-      try {
-        await window.electronAPI.audio.playAudio(this.sentence.audioPath);
+      // Play after sentence audio if it exists
+      if (this.sentence.contextAfter && this.sentence.id) {
+        try {
+          const contextAudio = await window.electronAPI.dialog.ensureContextSentences(
+            this.sentence.id
+          );
+          const afterSentenceAudioPath = contextAudio.afterSentenceAudio;
+          if (afterSentenceAudioPath) {
+            await this.playAudioWithCache(afterSentenceAudioPath, 'after');
+          }
+        } catch (error) {
+          logger.warn({ error }, 'Failed to play after sentence audio');
+          // Continue even if after sentence audio fails
+        }
+      }
 
-        // Reset state after audio finishes
-        this.localPlayingAudio = null;
+      // Audio finished playing successfully
+      this.dispatchEvent(
+        new CustomEvent('sentence-audio-played', {
+          detail: {
+            sentenceId: this.sentence.id,
+            wordId: this.targetWord.id,
+          },
+          bubbles: true,
+          composed: true,
+        })
+      );
+
+      // Dispatch completion event
+      this.dispatchEvent(
+        new CustomEvent('sentence-audio-completed', {
+          detail: {
+            sentenceId: this.sentence.id,
+            wordId: this.targetWord.id,
+          },
+          bubbles: true,
+          composed: true,
+        })
+      );
+    } catch (error) {
+      logger.error({ error }, 'Failed to play audio');
+    }
+    // Note: No finally block needed - playAudioWithCache() manages isPlayingAudio state
+  }
+
+  /**
+   * Play audio with cache support and playback speed
+   * Uses HTML5 Audio API with cached blob URL if available, otherwise falls back to IPC
+   */
+  private async playAudioWithCache(
+    audioPath: string,
+    audioType: 'before' | 'main' | 'after'
+  ): Promise<void> {
+    if (this.isPlayingAudio || !audioPath) {
+      return;
+    }
+
+    this.isPlayingAudio = true;
+    const playbackSpeed = this.playbackSpeed ?? sessionManager.getPlaybackSpeed() ?? 1.0;
+
+    try {
+      // Try to use cached audio first (instant playback with speed control)
+      const cachedAudio = this.audioCache?.get(audioPath);
+      if (cachedAudio) {
+        // Stop any currently playing audio
+        this.stopCachedAudio();
+
+        // Use HTML5 Audio API to play from memory
+        this.currentAudioElement = new Audio(cachedAudio);
+        this.currentAudioElement.playbackRate = playbackSpeed;
+
+        // Set local state to indicate audio is playing
+        this.localPlayingAudio = audioType;
         this.requestUpdate();
 
-        // Play after sentence audio if it exists
-        if (this.sentence.contextAfter && this.sentence.id) {
-          try {
-            const contextAudio = await window.electronAPI.dialog.ensureContextSentences(
-              this.sentence.id
-            );
-            const afterSentenceAudioPath = contextAudio.afterSentenceAudio;
-            if (afterSentenceAudioPath) {
-              // Set local state to indicate after-sentence audio is playing
-              this.localPlayingAudio = 'after';
-              this.requestUpdate();
+        // Play audio and wait for completion
+        await new Promise<void>((resolve, reject) => {
+          if (!this.currentAudioElement) {
+            resolve();
+            return;
+          }
 
-              await window.electronAPI.audio.playAudio(afterSentenceAudioPath);
-
-              // Reset state after after-sentence audio finishes
-              this.localPlayingAudio = null;
-              this.requestUpdate();
-            }
-          } catch (error) {
-            logger.warn({ error }, 'Failed to play after sentence audio');
+          this.currentAudioElement.addEventListener('ended', () => {
+            this.currentAudioElement = null;
             this.localPlayingAudio = null;
             this.requestUpdate();
-            // Continue even if after sentence audio fails
-          }
-        }
+            resolve();
+          });
 
-        // Audio finished playing successfully
-        this.dispatchEvent(
-          new CustomEvent('sentence-audio-played', {
-            detail: {
-              sentenceId: this.sentence.id,
-              wordId: this.targetWord.id,
-            },
-            bubbles: true,
-            composed: true,
-          })
-        );
+          this.currentAudioElement.addEventListener('error', (e) => {
+            logger.warn({ error: e }, 'Error playing cached audio, falling back to IPC');
+            this.currentAudioElement = null;
+            this.localPlayingAudio = null;
+            this.requestUpdate();
+            reject(e);
+          });
 
-        // Dispatch completion event
-        this.dispatchEvent(
-          new CustomEvent('sentence-audio-completed', {
-            detail: {
-              sentenceId: this.sentence.id,
-              wordId: this.targetWord.id,
-            },
-            bubbles: true,
-            composed: true,
-          })
-        );
-      } catch (err: unknown) {
-        // Reset state on error
-        this.localPlayingAudio = null;
-        this.requestUpdate();
+          this.currentAudioElement.play().catch((err) => {
+            logger.warn({ error: err }, 'Failed to play cached audio, falling back to IPC');
+            this.currentAudioElement = null;
+            this.localPlayingAudio = null;
+            this.requestUpdate();
+            reject(err);
+          });
+        });
 
-        // If error is because audio was stopped, don't log as error
-        if (err && typeof err === 'object' && 'code' in err && err.code === 'PLAYBACK_STOPPED') {
-          // Audio was intentionally stopped, ignore
-          return;
-        }
-        logger.error({ error: err }, 'Failed to play audio');
+        return; // Success - audio played from cache
       }
-    } catch (error) {
+
+      // Fall back to IPC playback (no speed control)
+      this.localPlayingAudio = audioType;
+      this.requestUpdate();
+      await window.electronAPI.audio.playAudio(audioPath);
       this.localPlayingAudio = null;
       this.requestUpdate();
-      logger.error({ error }, 'Failed to play audio');
+    } catch (err: unknown) {
+      this.localPlayingAudio = null;
+      this.requestUpdate();
+
+      // If error is because audio was stopped, don't log as error
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'PLAYBACK_STOPPED') {
+        return;
+      }
+
+      const errorMessage =
+        audioType === 'before'
+          ? 'Failed to play before sentence audio'
+          : audioType === 'after'
+            ? 'Failed to play after sentence audio'
+            : 'Failed to play audio';
+
+      if (audioType === 'main') {
+        logger.error({ error: err }, errorMessage);
+      } else {
+        logger.warn({ error: err }, errorMessage);
+      }
     } finally {
-      // Reset after a short delay to prevent rapid clicking
       setTimeout(() => {
         this.isPlayingAudio = false;
       }, 100);
     }
   }
+
+  /**
+   * Stop any currently playing cached audio
+   */
+  private stopCachedAudio(): void {
+    if (this.currentAudioElement) {
+      this.currentAudioElement.pause();
+      this.currentAudioElement = null;
+    }
+  }
+
+  private handleContextBeforeClick = async (_e: MouseEvent) => {
+    // Only play before-sentence audio
+    if (!this.sentence.contextBefore || !this.sentence.id) {
+      return;
+    }
+
+    try {
+      const beforeSentenceAudioPath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(
+        this.sentence.id
+      );
+      if (beforeSentenceAudioPath) {
+        await this.playAudioWithCache(beforeSentenceAudioPath, 'before');
+      }
+    } catch (error) {
+      logger.warn({ error }, 'Failed to get before sentence audio');
+    }
+  };
+
+  private handleSentenceTextClick = async (e: MouseEvent) => {
+    // Only play main sentence audio if clicking on the sentence text itself (not on a word)
+    // Words have their own click handlers, so we check if the target is a word span
+    const target = e.target as HTMLElement | Node;
+
+    // If clicking on a word-in-sentence span or any element within it, don't play audio
+    // (let word handler do its thing)
+    if (target instanceof HTMLElement && target.closest('.word-in-sentence')) {
+      return;
+    }
+
+    // Also check if the click originated from within a word span by checking the composed path
+    const path = e.composedPath();
+    if (
+      path.some(
+        (node) => node instanceof HTMLElement && node.classList?.contains('word-in-sentence')
+      )
+    ) {
+      return;
+    }
+
+    // If clicking on whitespace/punctuation or the container itself, play only main sentence audio
+    if (!this.sentence.audioPath) {
+      return;
+    }
+
+    await this.playAudioWithCache(this.sentence.audioPath, 'main');
+  };
+
+  private handleContextAfterClick = async (_e: MouseEvent) => {
+    // Only play after-sentence audio
+    if (!this.sentence.contextAfter || !this.sentence.id) {
+      return;
+    }
+
+    try {
+      const contextAudio = await window.electronAPI.dialog.ensureContextSentences(this.sentence.id);
+      const afterSentenceAudioPath = contextAudio.afterSentenceAudio;
+      if (afterSentenceAudioPath) {
+        await this.playAudioWithCache(afterSentenceAudioPath, 'after');
+      }
+    } catch (error) {
+      logger.warn({ error }, 'Failed to get after sentence audio');
+    }
+  };
 
   private async handleRecreateAudio() {
     if (this.isRegeneratingAudio || !this.sentence?.sentence) {
@@ -2192,6 +2332,7 @@ export class SentenceViewer extends LitElement {
             ? html`
                 <div
                   class="context-section ${this.localPlayingAudio === 'before' ? 'playing' : ''}"
+                  @click=${this.handleContextBeforeClick}
                 >
                   <div class="context-text">${this.sentence.contextBefore}</div>
                   <div class="context-translation ${this.audioOnlyMode ? 'hidden' : ''}">
@@ -2201,7 +2342,10 @@ export class SentenceViewer extends LitElement {
               `
             : ''}
 
-          <div class="sentence-text ${this.localPlayingAudio === 'main' ? 'playing' : ''}">
+          <div
+            class="sentence-text ${this.localPlayingAudio === 'main' ? 'playing' : ''}"
+            @click=${this.handleSentenceTextClick}
+          >
             ${this.parsedWords.map((wordInfo) => {
               // For whitespace and punctuation, render without word styling
               if (/^\s+$/.test(wordInfo.text) || /^[.,!?;:]+$/.test(wordInfo.text)) {
@@ -2320,7 +2464,10 @@ export class SentenceViewer extends LitElement {
 
           ${this.sentence.contextAfter
             ? html`
-                <div class="context-section ${this.localPlayingAudio === 'after' ? 'playing' : ''}">
+                <div
+                  class="context-section ${this.localPlayingAudio === 'after' ? 'playing' : ''}"
+                  @click=${this.handleContextAfterClick}
+                >
                   <div class="context-text">${this.sentence.contextAfter}</div>
                   <div class="context-translation ${this.audioOnlyMode ? 'hidden' : ''}">
                     ${this.sentence.contextAfterTranslation}

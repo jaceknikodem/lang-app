@@ -2912,11 +2912,11 @@ export class LearningMode extends BaseComponent {
               <div class="playback-speed-control">
                 <div class="playback-speed-buttons">
                   <button
-                    class="playback-speed-button ${this.playbackSpeed === 0.8 ? 'active' : ''}"
-                    @click=${() => this.setPlaybackSpeed(0.8)}
-                    title="0.8x speed"
+                    class="playback-speed-button ${this.playbackSpeed === 0.7 ? 'active' : ''}"
+                    @click=${() => this.setPlaybackSpeed(0.7)}
+                    title="0.7x speed"
                   >
-                    0.8x
+                    0.7x
                   </button>
                   <button
                     class="playback-speed-button ${this.playbackSpeed === 1.0 ? 'active' : ''}"
@@ -2933,11 +2933,11 @@ export class LearningMode extends BaseComponent {
                     1.2x
                   </button>
                   <button
-                    class="playback-speed-button ${this.playbackSpeed === 1.4 ? 'active' : ''}"
-                    @click=${() => this.setPlaybackSpeed(1.4)}
-                    title="1.4x speed"
+                    class="playback-speed-button ${this.playbackSpeed === 1.5 ? 'active' : ''}"
+                    @click=${() => this.setPlaybackSpeed(1.5)}
+                    title="1.5x speed"
                   >
-                    1.4x
+                    1.5x
                   </button>
                 </div>
               </div>
@@ -2990,6 +2990,8 @@ export class LearningMode extends BaseComponent {
           .audioOnlyMode=${this.audioOnlyMode}
           .autoScrollEnabled=${this.autoScrollEnabled}
           .currentSessionId=${this.currentSessionId}
+          .audioCache=${this.audioCache}
+          .playbackSpeed=${this.playbackSpeed}
           @word-clicked=${this.handleWordClicked}
           @mark-word-known=${this.handleMarkWordKnown}
           @mark-word-ignored=${this.handleMarkWordIgnored}
