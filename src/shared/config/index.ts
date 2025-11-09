@@ -381,6 +381,58 @@ const config = convict({
       env: 'E2E_FORCE_LOCAL_SERVICES',
     },
   },
+
+  // Languages Configuration
+  languages: {
+    doc: 'Supported languages with their metadata',
+    format: Array,
+    default: [],
+    items: {
+      code: {
+        doc: '2-letter ISO language code',
+        format: String,
+        default: '',
+      },
+      name: {
+        doc: 'Internal language name',
+        format: String,
+        default: '',
+      },
+      displayName: {
+        doc: 'UI display name',
+        format: String,
+        default: '',
+      },
+      tatoebaCode: {
+        doc: 'Tatoeba API language code',
+        format: String,
+        default: '',
+      },
+      lemmatizationCode: {
+        doc: 'Lemmatization service language code',
+        format: String,
+        default: '',
+      },
+      speechRecognitionCode: {
+        doc: 'Speech recognition language code',
+        format: String,
+        default: '',
+      },
+      elevenlabsVoiceIds: {
+        doc: 'Array of ElevenLabs voice IDs',
+        format: Array,
+        default: [],
+        items: {
+          format: String,
+        },
+      },
+      audioGeneratorVoice: {
+        doc: 'macOS say command voice name',
+        format: String,
+        default: '',
+      },
+    },
+  },
 });
 
 // Load TOML data into convict (if file exists)
@@ -436,7 +488,6 @@ export const appConfig = {
   minWordStrength: config.get('app.minWordStrength'),
   quizWordLimit: config.get('app.quizWordLimit'),
   openDevtools: config.get('app.openDevtools'),
-  supportedLanguages: ['spanish', 'italian', 'portuguese', 'polish', 'indonesian'] as const,
 };
 
 export const audioConfig = {
@@ -458,6 +509,17 @@ export const strengthBoostConfig = {
 export const testingConfig = {
   e2eForceLocalServices: config.get('testing.e2eForceLocalServices'),
 };
+
+export const languagesConfig = config.get('languages') as Array<{
+  code: string;
+  name: string;
+  displayName: string;
+  tatoebaCode: string;
+  lemmatizationCode: string;
+  speechRecognitionCode: string;
+  elevenlabsVoiceIds: string[];
+  audioGeneratorVoice: string;
+}>;
 
 // Export environment
 export const env = config.get('env');

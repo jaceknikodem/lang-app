@@ -96,3 +96,55 @@ excellent = 4
 # Force local services in E2E tests
 e2e_force_local_services = false
 
+# Language Configuration
+# Centralized language metadata - single source of truth for all language-related mappings
+[[languages]]
+code = "es"
+name = "spanish"
+display_name = "Spanish"
+tatoeba_code = "spa"
+lemmatization_code = "es"
+speech_recognition_code = "es"
+elevenlabs_voice_ids = ["Nh2zY9kknu6z4pZy6FhD", "P951amuWPNCJ0L15rFyC"]
+audio_generator_voice = "Eddy (Spanish (Mexico))"
+
+[[languages]]
+code = "it"
+name = "italian"
+display_name = "Italian"
+tatoeba_code = "ita"
+lemmatization_code = "it"
+speech_recognition_code = "it"
+elevenlabs_voice_ids = ["oCS6WHyqobqW2UapCSHl", "CiwzbDpaN3pQXjTgx3ML", "P951amuWPNCJ0L15rFyC"]
+audio_generator_voice = "Alice"
+
+[[languages]]
+code = "pt"
+name = "portuguese"
+display_name = "Portuguese"
+tatoeba_code = "por"
+lemmatization_code = "pt"
+speech_recognition_code = "pt"
+elevenlabs_voice_ids = ["GDzHdQOi6jjf8zaXhCYD", "9pDzHy2OpOgeXM8SeL0t"]
+audio_generator_voice = "Luciana"
+
+[[languages]]
+code = "pl"
+name = "polish"
+display_name = "Polish"
+tatoeba_code = "pol"
+lemmatization_code = "pl"
+speech_recognition_code = "pl"
+elevenlabs_voice_ids = ["wyWA56cQNU2KqUW4eCsI", "g8ZOdhoD9R6eYKPTjKbE", "CiwzbDpaN3pQXjTgx3ML"]
+audio_generator_voice = "Zosia"
+
+[[languages]]
+code = "id"
+name = "indonesian"
+display_name = "Indonesian"
+tatoeba_code = "ind"
+lemmatization_code = "id"
+speech_recognition_code = "id"
+elevenlabs_voice_ids = ["plgKUYgnlZ1DCNh54DwJ", "I7sakys8pBZ1Z5f0UhT9"]
+audio_generator_voice = "Damayanti"
+

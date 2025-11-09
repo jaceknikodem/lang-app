@@ -20,6 +20,7 @@ let appConfig: any = null;
 let llmConfig: any = null;
 let audioConfig: any = null;
 let strengthBoostConfig: any = null;
+let supportedLanguagesFromConfig: readonly string[] | null = null;
 
 if (isNodeEnv) {
   try {
@@ -33,6 +34,17 @@ if (isNodeEnv) {
     llmConfig = config.llmConfig;
     audioConfig = config.audioConfig;
     strengthBoostConfig = config.strengthBoostConfig;
+
+    // Get supported languages from language config
+    try {
+      const { getSupportedLanguages } = requireFunc(nodeRequire, '../utils/language-config.js');
+      const languages = getSupportedLanguages();
+      if (languages && languages.length > 0) {
+        supportedLanguagesFromConfig = languages as readonly string[];
+      }
+    } catch {
+      // Fallback to defaults if language config not available
+    }
   } catch (error) {
     // If config loading fails, use defaults
     // Only log in Node.js environment (not in browser)
@@ -100,7 +112,10 @@ export const APP_CONFIG = {
   MAX_WORD_STRENGTH: appConfig?.maxWordStrength ?? DEFAULT_APP_CONFIG.maxWordStrength,
   MIN_WORD_STRENGTH: appConfig?.minWordStrength ?? DEFAULT_APP_CONFIG.minWordStrength,
   QUIZ_WORD_LIMIT: appConfig?.quizWordLimit ?? DEFAULT_APP_CONFIG.quizWordLimit,
-  SUPPORTED_LANGUAGES: appConfig?.supportedLanguages ?? DEFAULT_APP_CONFIG.supportedLanguages,
+  SUPPORTED_LANGUAGES:
+    supportedLanguagesFromConfig ??
+    appConfig?.supportedLanguages ??
+    DEFAULT_APP_CONFIG.supportedLanguages,
 } as const;
 
 export const LLM_CONFIG = {
