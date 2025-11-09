@@ -1151,7 +1151,7 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
   ipcMain.handle(
     IPC_CHANNELS.AUDIO.COMPARE_TRANSCRIPTION,
     createIPCHandler(
-      [TextSchema, TextSchema, z.string().optional()],
+      [TextSchema, TextSchema, z.string().nullable().optional()],
       async (transcribed, expected, proficiencyLevel) => {
         return await audioService.compareTranscription(transcribed, expected, proficiencyLevel);
       },

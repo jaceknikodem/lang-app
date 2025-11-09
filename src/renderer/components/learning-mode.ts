@@ -159,6 +159,9 @@ export class LearningMode extends BaseComponent {
 
       // Refresh queue summary
       await this.refreshQueueSummary();
+
+      // Explicitly request update to ensure component re-renders with new language data
+      this.requestUpdate();
     } catch (error) {
       logger.error({ error }, 'Failed to reload data after language change');
     }
@@ -2740,7 +2743,7 @@ export class LearningMode extends BaseComponent {
       if (!words.length) {
         return '';
       }
-      const names = words.map((item) => `“${item.word}”`);
+      const names = words.map((item) => `"${item.word}"`);
       if (names.length <= max) {
         return names.join(', ');
       }
