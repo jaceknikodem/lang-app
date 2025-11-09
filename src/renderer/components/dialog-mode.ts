@@ -1619,14 +1619,22 @@ export class DialogMode extends BaseComponent {
           </h4>
           ${correction
             ? html`
-                <div style="margin-bottom: var(--spacing-xs);">
-                  <strong
-                    style="color: #007aff; font-size: 12px; display: block; margin-bottom: 2px; font-weight: 700;"
-                    >Correction:</strong
-                  >
-                  <p style="margin: 0; font-size: 13px; line-height: 1.4; font-weight: 400;">
-                    ${correction}
-                  </p>
+                <div
+                  class="correction-single-line"
+                  style="
+                    margin-bottom: ${grammarExplanation && hasGrammarMistakes
+                    ? 'var(--spacing-xs)'
+                    : '0'};
+                    padding: 4px 8px;
+                    background: rgba(0, 0, 0, 0.03);
+                    border-radius: 4px;
+                    font-size: 12px;
+                    color: var(--text-secondary);
+                    font-style: italic;
+                    line-height: 1.4;
+                  "
+                >
+                  ${correction}
                 </div>
               `
             : nothing}

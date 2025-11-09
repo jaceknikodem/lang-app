@@ -12,6 +12,7 @@ import { loadCurrentLanguage, loadLemmatizationModel } from '../utils/language-m
 import { getErrorMessage } from '../../shared/utils/error.js';
 import { logger } from '../utils/logger.js';
 import { BaseComponent } from './base-component.js';
+import { getAvailableTopics } from '../utils/topic-utils.js';
 
 @customElement('topic-selector')
 export class TopicSelector extends BaseComponent {
@@ -290,29 +291,8 @@ export class TopicSelector extends BaseComponent {
       return;
     }
 
-    // Get word counts by topic for the current language
-    let frequentlyUsedTopics: Set<string> = new Set();
-    if (this.currentLanguage) {
-      try {
-        const topicCounts = await window.electronAPI.database.getTopicWordCounts(
-          this.currentLanguage
-        );
-        // Get the top ~10 most used topics (or fewer if there aren't that many)
-        const topUsedTopics = topicCounts.slice(0, 10).map((tc) => tc.topic);
-        frequentlyUsedTopics = new Set(topUsedTopics);
-      } catch (error) {
-        logger.error({ error }, '[TopicSelector] Error getting topic word counts');
-        // Continue without filtering if there's an error
-      }
-    }
-
-    // Filter out frequently used topics
-    const availableTopics = this.allTopicSuggestions.filter(
-      (topic) => !frequentlyUsedTopics.has(topic)
-    );
-
-    // If we filtered out too many, fall back to all topics
-    const topicsToUse = availableTopics.length >= 3 ? availableTopics : this.allTopicSuggestions;
+    // Get available topics, excluding frequently used ones
+    const topicsToUse = await getAvailableTopics(this.allTopicSuggestions, this.currentLanguage);
 
     // Select 3 random suggestions
     const shuffled = [...topicsToUse].sort(() => Math.random() - 0.5);

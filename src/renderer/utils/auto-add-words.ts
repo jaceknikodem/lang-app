@@ -1,6 +1,6 @@
 /**
  * Utility function to automatically add new words:
- * 1. Randomly selects a topic from predefined topics
+ * 1. Selects a topic from predefined topics, excluding frequently used topics
  * 2. Generates words for that topic
  * 3. Selects 5 words preferring top/frequent words
  * 4. Processes words using shared word processing utilities
@@ -14,6 +14,7 @@ import {
   setupWordProcessingSession,
   ProcessWordsOptions,
 } from './word-processor.js';
+import { selectRandomTopic } from './topic-utils.js';
 
 export interface AutoAddWordsResult {
   success: boolean;
@@ -94,9 +95,9 @@ export async function autoAddNewWords(language?: string): Promise<AutoAddWordsRe
       };
     }
 
-    // Step 1: Load topics and randomly select one
-    const topics = await window.electronAPI.topics.getTopics();
-    if (topics.length === 0) {
+    // Step 1: Select a topic, excluding frequently used topics
+    const selectedTopic = await selectRandomTopic(targetLanguage);
+    if (!selectedTopic) {
       return {
         success: false,
         topic: '',
@@ -104,8 +105,6 @@ export async function autoAddNewWords(language?: string): Promise<AutoAddWordsRe
         error: 'No topics available',
       };
     }
-    const randomIndex = Math.floor(Math.random() * topics.length);
-    const selectedTopic = topics[randomIndex];
 
     console.log(`[Auto Add] Selected topic: "${selectedTopic}"`);
 
