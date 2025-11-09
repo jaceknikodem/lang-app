@@ -63,8 +63,6 @@ const DEFAULT_APP_CONFIG = {
   defaultLanguage: 'spanish',
   defaultWordCount: 5,
   defaultSentenceCount: 3,
-  maxWordStrength: 100,
-  minWordStrength: 0,
   quizWordLimit: 10,
   supportedLanguages: ['spanish', 'italian', 'portuguese', 'polish', 'indonesian'] as const,
 };
@@ -111,8 +109,6 @@ export const APP_CONFIG = {
   DEFAULT_WORD_COUNT: appConfig?.defaultWordCount ?? DEFAULT_APP_CONFIG.defaultWordCount,
   DEFAULT_SENTENCE_COUNT:
     appConfig?.defaultSentenceCount ?? DEFAULT_APP_CONFIG.defaultSentenceCount,
-  MAX_WORD_STRENGTH: appConfig?.maxWordStrength ?? DEFAULT_APP_CONFIG.maxWordStrength,
-  MIN_WORD_STRENGTH: appConfig?.minWordStrength ?? DEFAULT_APP_CONFIG.minWordStrength,
   QUIZ_WORD_LIMIT: appConfig?.quizWordLimit ?? DEFAULT_APP_CONFIG.quizWordLimit,
   SUPPORTED_LANGUAGES:
     supportedLanguagesFromConfig ??

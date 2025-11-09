@@ -61,10 +61,6 @@ default_language = "spanish"
 default_word_count = 5
 # Default number of sentences to generate
 default_sentence_count = 3
-# Maximum word strength value
-max_word_strength = 100
-# Minimum word strength value
-min_word_strength = 0
 # Maximum words in quiz mode
 quiz_word_limit = 10
 # Automatically open DevTools on startup (development only)

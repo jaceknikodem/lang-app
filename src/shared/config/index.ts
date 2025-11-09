@@ -288,18 +288,6 @@ const config = convict({
       default: 3,
       env: 'APP_DEFAULT_SENTENCE_COUNT',
     },
-    maxWordStrength: {
-      doc: 'Maximum word strength value',
-      format: 'int',
-      default: 100,
-      env: 'APP_MAX_WORD_STRENGTH',
-    },
-    minWordStrength: {
-      doc: 'Minimum word strength value',
-      format: 'int',
-      default: 0,
-      env: 'APP_MIN_WORD_STRENGTH',
-    },
     quizWordLimit: {
       doc: 'Maximum words in quiz mode',
       format: 'int',
@@ -536,8 +524,6 @@ export const appConfig = {
   defaultLanguage: config.get('app.defaultLanguage'),
   defaultWordCount: config.get('app.defaultWordCount'),
   defaultSentenceCount: config.get('app.defaultSentenceCount'),
-  maxWordStrength: config.get('app.maxWordStrength'),
-  minWordStrength: config.get('app.minWordStrength'),
   quizWordLimit: config.get('app.quizWordLimit'),
   openDevtools: config.get('app.openDevtools'),
 };
