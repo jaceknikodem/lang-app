@@ -51,18 +51,12 @@ sentence_model = "gemini-2.5-flash"
 timeout = 30000
 
 [app]
-# SQLite database filename
-database_name = "language_learning.db"
-# Audio files directory
-audio_directory = "audio"
 # Default learning language
 default_language = "spanish"
 # Default number of words to generate
 default_word_count = 5
 # Default number of sentences to generate
 default_sentence_count = 3
-# Maximum words in quiz mode
-quiz_word_limit = 10
 # Automatically open DevTools on startup (development only)
 open_devtools = false
 
@@ -71,8 +65,6 @@ open_devtools = false
 file_extension = ".aiff"
 # Text-to-speech command
 tts_command = "say"
-# Default TTS speech rate
-default_rate = 160
 
 [strength_boost]
 # Strength boost when a sentence is played

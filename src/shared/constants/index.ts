@@ -58,12 +58,9 @@ if (isNodeEnv) {
 
 // Default values (used in renderer or if config fails to load)
 const DEFAULT_APP_CONFIG = {
-  databaseName: 'language_learning.db',
-  audioDirectory: 'audio',
   defaultLanguage: 'spanish',
   defaultWordCount: 5,
   defaultSentenceCount: 3,
-  quizWordLimit: 10,
   supportedLanguages: ['spanish', 'italian', 'portuguese', 'polish', 'indonesian'] as const,
 };
 
@@ -88,7 +85,6 @@ const DEFAULT_LLM_CONFIG = {
 const DEFAULT_AUDIO_CONFIG = {
   fileExtension: '.aiff',
   ttsCommand: 'say',
-  defaultRate: 160,
 };
 
 const DEFAULT_STRENGTH_BOOST_CONFIG = {
@@ -103,13 +99,10 @@ const DEFAULT_STRENGTH_BOOST_CONFIG = {
 
 // Re-export configs with uppercase names for backward compatibility
 export const APP_CONFIG = {
-  DATABASE_NAME: appConfig?.databaseName ?? DEFAULT_APP_CONFIG.databaseName,
-  AUDIO_DIRECTORY: appConfig?.audioDirectory ?? DEFAULT_APP_CONFIG.audioDirectory,
   DEFAULT_LANGUAGE: appConfig?.defaultLanguage ?? DEFAULT_APP_CONFIG.defaultLanguage,
   DEFAULT_WORD_COUNT: appConfig?.defaultWordCount ?? DEFAULT_APP_CONFIG.defaultWordCount,
   DEFAULT_SENTENCE_COUNT:
     appConfig?.defaultSentenceCount ?? DEFAULT_APP_CONFIG.defaultSentenceCount,
-  QUIZ_WORD_LIMIT: appConfig?.quizWordLimit ?? DEFAULT_APP_CONFIG.quizWordLimit,
   SUPPORTED_LANGUAGES:
     supportedLanguagesFromConfig ??
     appConfig?.supportedLanguages ??
@@ -141,7 +134,6 @@ export const LLM_CONFIG = {
 export const AUDIO_CONFIG = {
   FILE_EXTENSION: audioConfig?.fileExtension ?? DEFAULT_AUDIO_CONFIG.fileExtension,
   TTS_COMMAND: audioConfig?.ttsCommand ?? DEFAULT_AUDIO_CONFIG.ttsCommand,
-  DEFAULT_RATE: audioConfig?.defaultRate ?? DEFAULT_AUDIO_CONFIG.defaultRate,
 } as const;
 
 // Default UI config values (used in renderer or if config fails to load)

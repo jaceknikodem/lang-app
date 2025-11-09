@@ -258,18 +258,6 @@ const config = convict({
 
   // Application Configuration
   app: {
-    databaseName: {
-      doc: 'SQLite database filename',
-      format: String,
-      default: 'language_learning.db',
-      env: 'APP_DATABASE_NAME',
-    },
-    audioDirectory: {
-      doc: 'Audio files directory',
-      format: String,
-      default: 'audio',
-      env: 'APP_AUDIO_DIRECTORY',
-    },
     defaultLanguage: {
       doc: 'Default learning language',
       format: ['spanish', 'italian', 'portuguese', 'polish', 'indonesian'],
@@ -287,12 +275,6 @@ const config = convict({
       format: 'int',
       default: 3,
       env: 'APP_DEFAULT_SENTENCE_COUNT',
-    },
-    quizWordLimit: {
-      doc: 'Maximum words in quiz mode',
-      format: 'int',
-      default: 10,
-      env: 'APP_QUIZ_WORD_LIMIT',
     },
     openDevtools: {
       doc: 'Automatically open DevTools on startup',
@@ -315,12 +297,6 @@ const config = convict({
       format: String,
       default: 'say',
       env: 'AUDIO_TTS_COMMAND',
-    },
-    defaultRate: {
-      doc: 'Default TTS speech rate',
-      format: 'int',
-      default: 160,
-      env: 'AUDIO_DEFAULT_RATE',
     },
   },
 
@@ -519,19 +495,15 @@ export const llmConfig = {
 };
 
 export const appConfig = {
-  databaseName: config.get('app.databaseName'),
-  audioDirectory: config.get('app.audioDirectory'),
   defaultLanguage: config.get('app.defaultLanguage'),
   defaultWordCount: config.get('app.defaultWordCount'),
   defaultSentenceCount: config.get('app.defaultSentenceCount'),
-  quizWordLimit: config.get('app.quizWordLimit'),
   openDevtools: config.get('app.openDevtools'),
 };
 
 export const audioConfig = {
   fileExtension: config.get('audio.fileExtension'),
   ttsCommand: config.get('audio.ttsCommand'),
-  defaultRate: config.get('audio.defaultRate'),
 };
 
 export const strengthBoostConfig = {
