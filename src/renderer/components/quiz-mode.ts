@@ -96,6 +96,7 @@ export class QuizMode extends BaseComponent {
   private keyboardUnsubscribe?: () => void;
   private lastAutoplayKey: string | null = null;
   private currentSessionId: number | undefined;
+  private audioPlayedCount = 0; // Track number of audio playback events in this session
   private recordingTimer: number | null = null;
   private recordingStatusCheckTimer: number | null = null;
   private speechRecognitionCheckTimer: number | null = null;
@@ -1305,6 +1306,11 @@ export class QuizMode extends BaseComponent {
   disconnectedCallback() {
     super.disconnectedCallback();
 
+    // Update session if it exists and quiz isn't complete
+    if (this.currentSessionId && !this.quizSession?.isComplete) {
+      void this.updateSessionOnCompletion();
+    }
+
     // Clean up transcription progress listener
     if (this.transcriptionProgressUnsubscribe) {
       this.transcriptionProgressUnsubscribe();
@@ -1709,6 +1715,9 @@ export class QuizMode extends BaseComponent {
       // Record the study session in the database
       await window.electronAPI.database.recordStudySession(this.quizSession.totalQuestions);
 
+      // Update learning session with final counts
+      await this.updateSessionOnCompletion();
+
       // Mark quiz session as complete in session manager
       sessionManager.markQuizSessionComplete();
 
@@ -1727,6 +1736,20 @@ export class QuizMode extends BaseComponent {
       this.showQuizCompletion();
       // Still trigger autopilot check even on error
       window.dispatchEvent(new CustomEvent('autopilot-check-trigger'));
+    }
+  }
+
+  private async updateSessionOnCompletion() {
+    if (!this.currentSessionId || !this.quizSession) return;
+
+    try {
+      await window.electronAPI.tracking.updateSession(this.currentSessionId, {
+        wordCount: this.quizSession.totalQuestions,
+        sentenceCount: this.quizSession.totalQuestions,
+        audioPlayedCount: this.audioPlayedCount,
+      });
+    } catch (error) {
+      logger.warn({ error }, 'Failed to update session on completion');
     }
   }
 
@@ -1955,6 +1978,7 @@ export class QuizMode extends BaseComponent {
           }
           // Track audio playback event
           if (this.currentQuestion?.sentence.id && this.currentLanguage) {
+            this.audioPlayedCount++;
             void window.electronAPI.tracking
               .recordAudioPlayback({
                 sessionId: this.currentSessionId,
@@ -1990,6 +2014,7 @@ export class QuizMode extends BaseComponent {
               }
               // Track audio playback event
               if (this.currentQuestion?.sentence.id && this.currentLanguage) {
+                this.audioPlayedCount++;
                 void window.electronAPI.tracking
                   .recordAudioPlayback({
                     sessionId: this.currentSessionId,
@@ -2037,6 +2062,7 @@ export class QuizMode extends BaseComponent {
           }
           // Track audio playback event
           if (this.currentQuestion?.sentence.id && this.currentLanguage) {
+            this.audioPlayedCount++;
             void window.electronAPI.tracking
               .recordAudioPlayback({
                 sessionId: this.currentSessionId,

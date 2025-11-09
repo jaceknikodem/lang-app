@@ -61,14 +61,9 @@ Most dependencies are automatically installed by `./bootstrap.sh`. The bootstrap
 - **Lemmatization service**: Downloads models automatically
 
 
-The app automatically starts and manages whisper-server and stanza-service as child processes during runtime. Enable this with:
-```bash
-MANAGE_SERVICES=1 npm run dev
-```
-
 ## Setup
 
-1. Install Node.js 18+
+1. Install Node.js 22.19+ from https://nodejs.org/en/download
 2. Run the bootstrap script to install system dependencies, download models, and set up services: `./bootstrap.sh`
 
 ## Development

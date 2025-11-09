@@ -101,6 +101,7 @@ export class LearningMode extends BaseComponent {
   private currentSentenceDisplayLastSeen?: Date;
   private autoScrollTimer: number | null = null;
   private currentSessionId: number | undefined;
+  private audioPlayedCount = 0; // Track number of audio playback events in this session
 
   // Track which sentence last started playing audio (to detect if audio completed vs never started)
   private lastSentenceWithAudioStarted: number | null = null;
@@ -608,6 +609,11 @@ export class LearningMode extends BaseComponent {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+
+    // Update session if it exists and hasn't been completed
+    if (this.currentSessionId && !this.showCompletion) {
+      void this.updateSessionOnCompletion();
+    }
 
     // Clean up keyboard bindings
     if (this.keyboardUnsubscribe) {
@@ -1767,11 +1773,34 @@ export class LearningMode extends BaseComponent {
       // Record study session in database
       await window.electronAPI.database.recordStudySession(this.selectedWords.length);
 
+      // Update learning session with final counts
+      await this.updateSessionOnCompletion();
+
       // Clear the learning session so next time it will load fresh words from database
       sessionManager.clearLearningSession();
       logger.debug('Learning session cleared after completion');
     } catch (error) {
       logger.error({ error }, 'Failed to record learning session');
+    }
+  }
+
+  private async updateSessionOnCompletion() {
+    if (!this.currentSessionId) return;
+
+    try {
+      // Calculate total sentence count from wordsWithSentences
+      const sentenceCount = this.wordsWithSentences.reduce(
+        (total, word) => total + word.sentences.length,
+        0
+      );
+
+      await window.electronAPI.tracking.updateSession(this.currentSessionId, {
+        wordCount: this.selectedWords.length,
+        sentenceCount,
+        audioPlayedCount: this.audioPlayedCount,
+      });
+    } catch (error) {
+      logger.warn({ error }, 'Failed to update session on completion');
     }
   }
 
@@ -2375,6 +2404,7 @@ export class LearningMode extends BaseComponent {
           }
           // Track audio playback event
           if (currentSentence.id && this.currentLanguage) {
+            this.audioPlayedCount++;
             void window.electronAPI.tracking
               .recordAudioPlayback({
                 sessionId: this.currentSessionId,
@@ -2425,6 +2455,7 @@ export class LearningMode extends BaseComponent {
               }
               // Track audio playback event
               if (currentSentence.id && this.currentLanguage) {
+                this.audioPlayedCount++;
                 void window.electronAPI.tracking
                   .recordAudioPlayback({
                     sessionId: this.currentSessionId,
@@ -2477,6 +2508,7 @@ export class LearningMode extends BaseComponent {
           }
           // Track audio playback event
           if (currentSentence.id && this.currentLanguage) {
+            this.audioPlayedCount++;
             void window.electronAPI.tracking
               .recordAudioPlayback({
                 sessionId: this.currentSessionId,

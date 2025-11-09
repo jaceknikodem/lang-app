@@ -135,6 +135,7 @@ export class DialogMode extends BaseComponent {
   private currentProficiencyLevel: ProficiencyLevel | null = null;
   private dialogCount = 0; // Track number of dialogs completed in this session
   private dialogsWithAudio = 0; // Track number of dialogs where user recorded audio
+  private audioPlayedCount = 0; // Track number of audio playback events in this session
   private currentSessionId: number | undefined;
 
   protected override handleExternalLanguageChange = async (event: Event): Promise<void> => {
@@ -241,6 +242,11 @@ export class DialogMode extends BaseComponent {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+
+    // Update session if it exists and session hasn't been completed
+    if (this.currentSessionId && !this.showCompletion) {
+      void this.updateSessionOnCompletion();
+    }
 
     // Clean up transcription progress listener
     if (this.transcriptionProgressUnsubscribe) {
@@ -676,6 +682,7 @@ export class DialogMode extends BaseComponent {
             }
             // Track audio playback event
             if (this.currentSentence?.id && this.currentLanguage) {
+              this.audioPlayedCount++;
               void window.electronAPI.tracking
                 .recordAudioPlayback({
                   sessionId: this.currentSessionId,
@@ -773,6 +780,7 @@ export class DialogMode extends BaseComponent {
       }
       // Track audio playback event
       if (this.currentSentence?.id && this.currentLanguage) {
+        this.audioPlayedCount++;
         void window.electronAPI.tracking
           .recordAudioPlayback({
             sessionId: this.currentSessionId,
@@ -818,6 +826,7 @@ export class DialogMode extends BaseComponent {
       }
       // Track audio playback event
       if (this.currentSentence?.id && this.currentLanguage) {
+        this.audioPlayedCount++;
         void window.electronAPI.tracking
           .recordAudioPlayback({
             sessionId: this.currentSessionId,
@@ -1820,6 +1829,9 @@ export class DialogMode extends BaseComponent {
     try {
       this.isLoading = false;
 
+      // Update learning session with final counts
+      await this.updateSessionOnCompletion();
+
       // Clear cached dialog sessions since we've finished them all
       sessionManager.clearDialogSession();
       console.log('[DialogMode] showSessionSummary - cleared cached dialog sessions');
@@ -1854,6 +1866,20 @@ export class DialogMode extends BaseComponent {
       logger.error({ error }, 'Failed to show session summary');
       // Fallback: navigate to topic selection
       router.goToTopicSelection();
+    }
+  }
+
+  private async updateSessionOnCompletion() {
+    if (!this.currentSessionId) return;
+
+    try {
+      await window.electronAPI.tracking.updateSession(this.currentSessionId, {
+        wordCount: this.dialogsWithAudio,
+        sentenceCount: this.dialogCount,
+        audioPlayedCount: this.audioPlayedCount,
+      });
+    } catch (error) {
+      logger.warn({ error }, 'Failed to update session on completion');
     }
   }
 

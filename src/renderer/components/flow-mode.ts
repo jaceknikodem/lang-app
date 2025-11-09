@@ -55,6 +55,7 @@ export class FlowMode extends BaseComponent {
   private animationFrameId: number | null = null;
   private canvasElement: HTMLCanvasElement | null = null;
   private currentSessionId: number | undefined;
+  private audioPlayedCount = 0; // Track number of audio playback events in this session
 
   connectedCallback() {
     super.connectedCallback();
@@ -86,12 +87,52 @@ export class FlowMode extends BaseComponent {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+
+    // Update session if it exists
+    if (this.currentSessionId) {
+      void this.updateSessionOnCompletion();
+    }
+
     if (this.directKeyHandler) {
       document.removeEventListener('keydown', this.directKeyHandler, true);
     }
     // Ensure keyboard manager is re-enabled when component is destroyed
     keyboardManager.setEnabled(true);
     this.stopAudio();
+  }
+
+  private async updateSessionOnCompletion() {
+    if (!this.currentSessionId) return;
+
+    try {
+      // Calculate how many sentences were actually played based on pause timestamps
+      let sentencesPlayed = 0;
+
+      if (this.pauseEndTimestamps && this.pauseEndTimestamps.length > 0) {
+        // Get current playback position (either current time if playing, or paused position if paused)
+        const currentPosition = this.audioElement?.currentTime ?? this.pausedPosition;
+
+        // Count how many pause end timestamps (sentence boundaries) we've passed
+        // Each pause end timestamp represents the end of a sentence
+        sentencesPlayed = this.pauseEndTimestamps.filter(
+          (timestamp) => timestamp <= currentPosition
+        ).length;
+      } else {
+        // Fallback: if no pause timestamps available, use total sentences if audio was played
+        // This is less accurate but better than 0
+        if (this.audioElement && (this.audioElement.currentTime > 0 || this.pausedPosition > 0)) {
+          sentencesPlayed = this.flowSentences.length;
+        }
+      }
+
+      await window.electronAPI.tracking.updateSession(this.currentSessionId, {
+        wordCount: 0, // Flow mode doesn't track individual words
+        sentenceCount: sentencesPlayed,
+        audioPlayedCount: this.audioPlayedCount,
+      });
+    } catch (error) {
+      logger.warn({ error }, 'Failed to update session on completion');
+    }
   }
 
   private async loadFlowSentences() {
