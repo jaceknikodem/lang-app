@@ -1985,9 +1985,8 @@ export class SentenceViewer extends LitElement {
         logger.warn({ error: err }, errorMessage);
       }
     } finally {
-      setTimeout(() => {
-        this.isPlayingAudio = false;
-      }, 100);
+      // Reset the flag synchronously so sequential playback works correctly
+      this.isPlayingAudio = false;
     }
   }
 
