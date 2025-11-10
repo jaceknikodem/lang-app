@@ -232,37 +232,22 @@ export class ContentGenerator {
       `Selected ${nextWordEntries.length} words from frequency list`
     );
 
-    // Process word entries - use existing translations or generate them
+    // Process word entries - translations are always present in word lists
     const generatedWords: GeneratedWord[] = [];
 
     for (const wordEntry of nextWordEntries) {
-      try {
-        let translation = wordEntry.translation;
+      // Get frequency position and tier information
+      const frequencyPosition = wordEntry.position;
+      const frequencyTier = frequencyPosition
+        ? this.frequencyWordManager.getFrequencyTier(frequencyPosition)
+        : undefined;
 
-        // If no translation is available, use LLM to generate it
-        if (!translation) {
-          translation = await this.llmClient.translateWord(wordEntry.word, language);
-        }
-
-        // Get frequency position and tier information
-        const frequencyPosition = wordEntry.position;
-        const frequencyTier = frequencyPosition
-          ? this.frequencyWordManager.getFrequencyTier(frequencyPosition)
-          : undefined;
-
-        generatedWords.push({
-          word: wordEntry.word,
-          translation: translation,
-          frequencyPosition,
-          frequencyTier,
-        });
-      } catch (error) {
-        this.logger.warn(
-          { error, word: wordEntry.word },
-          `Failed to get translation for word "${wordEntry.word}"`
-        );
-        // Continue with other words even if one fails
-      }
+      generatedWords.push({
+        word: wordEntry.word,
+        translation: wordEntry.translation,
+        frequencyPosition,
+        frequencyTier,
+      });
     }
 
     if (generatedWords.length === 0) {

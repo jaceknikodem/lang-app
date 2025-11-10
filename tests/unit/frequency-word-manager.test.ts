@@ -2,7 +2,7 @@
  * Unit tests for FrequencyWordManager
  */
 
-import { FrequencyWordManager, WordEntry } from '../../src/main/llm/frequency-word-manager';
+import { FrequencyWordManager } from '../../src/main/llm/frequency-word-manager';
 import { DatabaseLayer } from '../../src/shared/types/database';
 import { join } from 'path';
 import * as os from 'os';
@@ -93,27 +93,41 @@ describe('FrequencyWordManager', () => {
   });
 
   describe('loadWordList', () => {
-    it('should parse word lists with various formats', async () => {
-      // Test basic format
-      readFileSync.mockReturnValue('hola\ncasa\nperro');
+    it('should parse word lists with semicolon format', async () => {
+      // Test word;translation format
+      readFileSync.mockReturnValue('hola;hello\ncasa;house');
       existsSync.mockReturnValue(true);
       await (manager as any).loadWordList('spanish');
       let wordList = (manager as any).wordLists.get('spanish');
-      expect(wordList[0]).toEqual({ word: 'hola', translation: null, position: 1 });
-
-      // Test word;translation format
-      readFileSync.mockReturnValue('hola;hello\ncasa;house');
-      await (manager as any).loadWordList('spanish');
-      wordList = (manager as any).wordLists.get('spanish');
       expect(wordList[0]).toEqual({ word: 'hola', translation: 'hello', position: 1 });
+      expect(wordList[1]).toEqual({ word: 'casa', translation: 'house', position: 2 });
 
-      // Test mixed formats and edge cases
-      readFileSync.mockReturnValue('  hola  ;  hello  \n\ncasa\n  \nperro;dog');
+      // Test edge cases with whitespace
+      readFileSync.mockReturnValue('  hola  ;  hello  \n\n  casa  ;  house  \n  \nperro;dog');
       await (manager as any).loadWordList('spanish');
       wordList = (manager as any).wordLists.get('spanish');
       expect(wordList[0].word).toBe('hola');
       expect(wordList[0].translation).toBe('hello');
-      expect(wordList.map((w: WordEntry) => w.word)).toEqual(['hola', 'casa', 'perro']);
+      expect(wordList[1].word).toBe('casa');
+      expect(wordList[1].translation).toBe('house');
+      expect(wordList[2].word).toBe('perro');
+      expect(wordList[2].translation).toBe('dog');
+    });
+
+    it('should throw error for lines without semicolon', async () => {
+      readFileSync.mockReturnValue('hola\ncasa;house');
+      existsSync.mockReturnValue(true);
+      await expect((manager as any).loadWordList('spanish')).rejects.toThrow(
+        'Invalid format at line 1: missing semicolon'
+      );
+    });
+
+    it('should throw error for lines with empty word or translation', async () => {
+      readFileSync.mockReturnValue(';hello\ncasa;\nperro;dog');
+      existsSync.mockReturnValue(true);
+      await expect((manager as any).loadWordList('spanish')).rejects.toThrow(
+        'Invalid format at line 1: word or translation is empty'
+      );
     });
 
     it('should throw error if file not found', async () => {
@@ -136,7 +150,7 @@ describe('FrequencyWordManager', () => {
     });
 
     it('should initialize position tracking', async () => {
-      const content = 'hola\ncasa\nperro';
+      const content = 'hola;hello\ncasa;house\nperro;dog';
       readFileSync.mockReturnValue(content);
       existsSync.mockReturnValue(true);
 
@@ -203,7 +217,7 @@ describe('FrequencyWordManager', () => {
     });
 
     it('should load word list if not already loaded', async () => {
-      const content = 'hola\ncasa\nperro';
+      const content = 'hola;hello\ncasa;house\nperro;dog';
       readFileSync.mockReturnValue(content);
       existsSync.mockReturnValue(true);
       mockDatabase.getAllWords = jest.fn().mockResolvedValue([]);
@@ -296,7 +310,7 @@ describe('FrequencyWordManager', () => {
     });
 
     it('should load word list if not already loaded', async () => {
-      const content = 'hola\ncasa\nperro';
+      const content = 'hola;hello\ncasa;house\nperro;dog';
       readFileSync.mockReturnValue(content);
       existsSync.mockReturnValue(true);
       mockDatabase.getAllWords = jest.fn().mockResolvedValue([]);

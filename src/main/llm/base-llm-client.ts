@@ -863,22 +863,6 @@ If there are no mistakes, you can omit correction and grammarExplanation, but al
   }
 
   /**
-   * Translate a word from the target language to English
-   */
-  async translateWord(word: string, language: string): Promise<string> {
-    const prompt = `Translate the ${language} word "${word}" to English. Respond with only the English translation, no additional text.`;
-
-    try {
-      // Use generateResponse for plain text responses
-      const response = await this.generateResponse(prompt, this.getWordGenerationModel());
-      return response.trim();
-    } catch (error) {
-      const err = ensureError(error);
-      throw this.createLLMError(err, `Failed to translate word "${word}"`);
-    }
-  }
-
-  /**
    * Explain the grammar of a word in a sentence
    */
   async explainGrammar(

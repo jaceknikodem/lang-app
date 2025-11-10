@@ -15,7 +15,7 @@ export interface FrequencyWordManagerConfig {
 
 export interface WordEntry {
   word: string;
-  translation: string | null;
+  translation: string;
   position?: number; // 1-based position in frequency list
 }
 
@@ -86,15 +86,20 @@ export class FrequencyWordManager {
         .map((line) => line.trim())
         .filter((line) => line.length > 0);
 
-      // Parse lines - support both formats: "word" and "word;translation"
+      // Parse lines - require "word;translation" format
       const wordEntries: WordEntry[] = lines.map((line, index) => {
-        if (line.includes(';')) {
-          const [word, translation] = line.split(';').map((part) => part.trim());
-          return { word, translation, position: index + 1 };
-        } else {
-          // Legacy format - word only (translation will need to be generated)
-          return { word: line, translation: null, position: index + 1 };
+        if (!line.includes(';')) {
+          throw new Error(
+            `Invalid format at line ${index + 1}: missing semicolon. Expected format: "word;translation"`
+          );
         }
+        const [word, translation] = line.split(';').map((part) => part.trim());
+        if (!word || !translation) {
+          throw new Error(
+            `Invalid format at line ${index + 1}: word or translation is empty. Expected format: "word;translation"`
+          );
+        }
+        return { word, translation, position: index + 1 };
       });
 
       this.wordLists.set(language, wordEntries);
@@ -104,10 +109,9 @@ export class FrequencyWordManager {
         this.wordPositions.set(language, 0);
       }
 
-      const withTranslations = wordEntries.filter((entry) => entry.translation !== null).length;
       this.logger.info(
-        { language, totalWords: wordEntries.length, withTranslations },
-        `Loaded ${wordEntries.length} words for ${language} (${withTranslations} with translations)`
+        { language, totalWords: wordEntries.length },
+        `Loaded ${wordEntries.length} words for ${language}`
       );
     } catch (error) {
       throw new Error(
