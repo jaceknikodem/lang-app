@@ -279,7 +279,7 @@ const config = convict({
     maxLearningWords: {
       doc: 'Maximum number of words allowed in a learning session',
       format: 'int',
-      default: 20,
+      default: 10,
       env: 'APP_MAX_LEARNING_WORDS',
     },
     openDevtools: {

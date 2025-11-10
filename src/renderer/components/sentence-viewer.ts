@@ -2475,12 +2475,12 @@ export class SentenceViewer extends LitElement {
             </span>
           </div>
 
-          ${this.sentence.audioPath
-            ? html`
-                <div
-                  class="flex gap-xs"
-                  style="display: flex; align-items: center; gap: var(--spacing-xs);"
-                >
+          <div
+            class="flex gap-xs"
+            style="display: flex; align-items: center; gap: var(--spacing-xs);"
+          >
+            ${this.sentence.audioPath
+              ? html`
                   <button
                     class="audio-button"
                     @click=${this.handlePlayAudio}
@@ -2489,17 +2489,17 @@ export class SentenceViewer extends LitElement {
                   >
                     <span aria-hidden="true">🔊</span>
                   </button>
-                  <button
-                    class="audio-button secondary"
-                    @click=${this.handleRecreateAudio}
-                    ?disabled=${audioPlayer.getState().isPlaying || this.isRegeneratingAudio}
-                    title="Recreate audio"
-                  >
-                    <span aria-hidden="true">♻</span>
-                  </button>
-                </div>
-              `
-            : ''}
+                `
+              : ''}
+            <button
+              class="audio-button secondary"
+              @click=${this.handleRecreateAudio}
+              ?disabled=${audioPlayer.getState().isPlaying || this.isRegeneratingAudio}
+              title="Recreate audio"
+            >
+              <span aria-hidden="true">♻</span>
+            </button>
+          </div>
         </div>
 
         <div class="sentence-content">
