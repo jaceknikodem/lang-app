@@ -712,9 +712,10 @@ function setupLLMHandlers(
           language,
           proficiencyLevel
         );
-        // Store the explanation in the database
+        // Store the explanation in the database and increment the count
         if (databaseLayer) {
           await databaseLayer.insertGrammarExplanation(wordId, sentenceId, explanation);
+          await databaseLayer.incrementGrammarExplanationCount(wordId);
         }
         return explanation;
       },

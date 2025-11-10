@@ -1825,8 +1825,7 @@ export class SentenceViewer extends LitElement {
         this.sentence.id
       );
 
-      // Increment grammar explanation count for the word
-      await window.electronAPI.database.incrementGrammarExplanationCount(this.targetWord.id);
+      // Grammar explanation is now stored and count incremented automatically by the IPC handler
 
       this.grammarExplanation = {
         word: wordText,
