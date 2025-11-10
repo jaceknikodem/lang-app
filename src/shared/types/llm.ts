@@ -48,6 +48,12 @@ export interface LLMClient {
     assistantSentence: string,
     topic?: string
   ): Promise<TranscriptionAnalysis>;
+  explainGrammar(
+    word: string,
+    sentence: string,
+    language: string,
+    proficiencyLevel?: string
+  ): Promise<string>;
   generateResponse(prompt: string, model?: string): Promise<string>;
   isAvailable(): Promise<boolean>;
   getAvailableModels(): Promise<string[]>;

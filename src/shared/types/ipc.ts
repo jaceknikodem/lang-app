@@ -172,6 +172,13 @@ export interface IPCBridge {
     setSentenceGenerationModel: (model: string) => Promise<void>;
     getWordGenerationModel: () => Promise<string>;
     getSentenceGenerationModel: () => Promise<string>;
+    generateResponse: (prompt: string, model?: string) => Promise<string>;
+    explainGrammar: (
+      word: string,
+      sentence: string,
+      language: string,
+      proficiencyLevel?: string
+    ) => Promise<string>;
     // Provider management
     getCurrentProvider: () => Promise<'ollama' | 'gemini'>;
     switchProvider: (provider: 'ollama' | 'gemini', geminiApiKey?: string) => Promise<void>;
@@ -308,6 +315,12 @@ export interface IPCBridge {
       assistantSentence: string,
       topic?: string
     ) => Promise<TranscriptionAnalysis>;
+    explainGrammar: (
+      word: string,
+      sentence: string,
+      language: string,
+      proficiencyLevel?: string
+    ) => Promise<string>;
     ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
     ensureContextSentences: (
       sentenceId: number
@@ -413,6 +426,8 @@ export const IPC_CHANNELS = {
     SET_SENTENCE_GENERATION_MODEL: 'llm:setSentenceGenerationModel',
     GET_WORD_GENERATION_MODEL: 'llm:getWordGenerationModel',
     GET_SENTENCE_GENERATION_MODEL: 'llm:getSentenceGenerationModel',
+    GENERATE_RESPONSE: 'llm:generateResponse',
+    EXPLAIN_GRAMMAR: 'llm:explainGrammar',
     // Provider management
     GET_CURRENT_PROVIDER: 'llm:getCurrentProvider',
     SWITCH_PROVIDER: 'llm:switchProvider',

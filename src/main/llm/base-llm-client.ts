@@ -3,7 +3,7 @@
  */
 
 import { GeneratedWord, GeneratedSentence } from '../../shared/types/core.js';
-import { LLMConfig, LLMError } from '../../shared/types/llm.js';
+import { LLMConfig, LLMError, LLMClient } from '../../shared/types/llm.js';
 import { LLM_CONFIG } from '../../shared/constants/index.js';
 import { ensureError } from '../../shared/utils/error.js';
 import { getLogger } from '../utils/logger.js';
@@ -855,6 +855,49 @@ IMPORTANT: You must return JSON format:
 
 If there are no mistakes, you can omit correction and grammarExplanation, but always include hasGrammarMistakes.
 `;
+  }
+
+  /**
+   * Explain the grammar of a word in a sentence
+   */
+  async explainGrammar(
+    word: string,
+    sentence: string,
+    language: string,
+    proficiencyLevel?: string
+  ): Promise<string> {
+    const prompt = this.createGrammarExplanationPrompt(word, sentence, language, proficiencyLevel);
+
+    try {
+      // Use generateResponse for plain text/markdown responses
+      // This method is implemented in concrete classes (OllamaClient, GeminiClient)
+      // We cast to LLMClient to access the generateResponse method
+      const response = await (this as unknown as LLMClient).generateResponse(
+        prompt,
+        this.getSentenceGenerationModel()
+      );
+      return response.trim();
+    } catch (error) {
+      const err = ensureError(error);
+      throw this.createLLMError(err, 'Failed to explain grammar');
+    }
+  }
+
+  /**
+   * Create prompt for grammar explanation
+   */
+  protected createGrammarExplanationPrompt(
+    word: string,
+    sentence: string,
+    language: string,
+    proficiencyLevel?: string
+  ): string {
+    const languageName = language.charAt(0).toUpperCase() + language.slice(1);
+    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence');
+
+    return `Explain the grammar of the word "${word}" in this ${languageName} sentence: "${sentence}"${proficiencyText}
+
+Provide a clear, educational, teacher-like explanation of the grammatical role and usage of this word. Adjust the complexity and depth of your explanation based on the user's proficiency level. Return your response in Markdown format. The explanation HAS TO BE IN ENGLISH`;
   }
 
   /**

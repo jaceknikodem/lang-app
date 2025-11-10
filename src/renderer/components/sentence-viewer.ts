@@ -3,6 +3,7 @@
  */
 
 import { LitElement, html, css, nothing } from 'lit';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { customElement, state, property } from 'lit/decorators.js';
 import { formatDistanceToNow } from 'date-fns';
 import { sharedStyles } from '../styles/shared.js';
@@ -15,6 +16,8 @@ import type { TokenizedWord as WordInSentence } from '../utils/sentence-tokenize
 import { logger } from '../utils/logger.js';
 import { sessionManager } from '../utils/session-manager.js';
 import { audioPlayer } from '../utils/audio-player-service.js';
+import { markdownToHtml } from '../utils/markdown-utils.js';
+import { checkProficiencyLevel } from '../utils/app-initializer.js';
 
 @customElement('sentence-viewer')
 export class SentenceViewer extends LitElement {
@@ -71,6 +74,12 @@ export class SentenceViewer extends LitElement {
 
   @state()
   private wordPopup: { wordInfo: WordInSentence; position: { x: number; y: number } } | null = null;
+
+  @state()
+  private grammarExplanation: { word: string; explanation: string } | null = null;
+
+  @state()
+  private isFetchingGrammar = false;
 
   // Dictionary cache is not reactive to avoid unnecessary re-renders
   // Dictionary data is precomputed in tokens, so cache updates shouldn't trigger UI updates
@@ -529,9 +538,101 @@ export class SentenceViewer extends LitElement {
         background: var(--primary-light);
       }
 
+      .word-popup-button.grammar {
+        color: var(--primary-color);
+      }
+
+      .word-popup-button.grammar:hover:not(:disabled) {
+        background: var(--primary-light);
+      }
+
       .word-popup-divider {
         height: 1px;
         background: var(--border-color);
+        margin: var(--spacing-xs) 0;
+      }
+
+      .grammar-loading-box {
+        margin-top: var(--spacing-md);
+        padding: var(--spacing-md);
+        border: 1px solid #ccc;
+        border-radius: var(--border-radius);
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        color: var(--text-secondary);
+      }
+
+      .grammar-explanation-box {
+        margin-top: var(--spacing-md);
+        padding: var(--spacing-md);
+        border: 1px solid #ccc;
+        border-radius: var(--border-radius);
+      }
+
+      .grammar-explanation-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--spacing-sm);
+      }
+
+      .grammar-explanation-header h4 {
+        margin: 0;
+        font-size: 16px;
+        color: var(--text-primary);
+      }
+
+      .grammar-close-btn {
+        background: transparent;
+        border: none;
+        font-size: 24px;
+        line-height: 1;
+        cursor: pointer;
+        color: var(--text-secondary);
+        padding: 0;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: all 0.2s ease;
+      }
+
+      .grammar-close-btn:hover {
+        background: var(--background-secondary);
+        color: var(--text-primary);
+      }
+
+      .grammar-explanation-content {
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--text-primary);
+      }
+
+      .grammar-explanation-content code {
+        background: var(--background-primary);
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-family: monospace;
+        font-size: 0.9em;
+      }
+
+      .grammar-explanation-content strong {
+        font-weight: 600;
+      }
+
+      .grammar-explanation-content em {
+        font-style: italic;
+      }
+
+      .grammar-explanation-content ul {
+        margin: var(--spacing-xs) 0;
+        padding-left: var(--spacing-lg);
+      }
+
+      .grammar-explanation-content li {
         margin: var(--spacing-xs) 0;
       }
 
@@ -1688,6 +1789,47 @@ export class SentenceViewer extends LitElement {
     this.closeWordPopup();
   }
 
+  private async handleExplainGrammar() {
+    if (!this.wordPopup) return;
+
+    const wordInfo = this.wordPopup.wordInfo;
+    const wordText = wordInfo.dictionaryForm?.trim() || wordInfo.text.trim();
+    const sentenceText = this.sentence.sentence;
+    const language = this.targetWord.language;
+
+    this.isFetchingGrammar = true;
+    this.closeWordPopup();
+
+    try {
+      // Get proficiency level for the language
+      const proficiencyLevel = await checkProficiencyLevel(language);
+
+      const explanation = await window.electronAPI.llm.explainGrammar(
+        wordText,
+        sentenceText,
+        language,
+        proficiencyLevel || undefined
+      );
+
+      this.grammarExplanation = {
+        word: wordText,
+        explanation: explanation,
+      };
+
+      this.requestUpdate();
+    } catch (error) {
+      logger.error({ error }, 'Failed to get explanation');
+      window.alert('Failed to get explanation. Please try again.');
+    } finally {
+      this.isFetchingGrammar = false;
+    }
+  }
+
+  private handleCloseGrammarExplanation() {
+    this.grammarExplanation = null;
+    this.requestUpdate();
+  }
+
   private async addWordFromSentence(
     wordInfo: WordInSentence,
     generateSentences: boolean = true
@@ -2393,6 +2535,20 @@ export class SentenceViewer extends LitElement {
                         `);
                       }
 
+                      // Add "Explain grammar" button (always available)
+                      if (buttons.length > 0) {
+                        buttons.push(html`<div class="word-popup-divider"></div>`);
+                      }
+                      buttons.push(html`
+                        <button
+                          class="word-popup-button grammar"
+                          @click=${this.handleExplainGrammar}
+                          ?disabled=${this.isProcessing || this.isFetchingGrammar}
+                        >
+                          ${this.isFetchingGrammar ? 'Loading...' : 'Explain grammar'}
+                        </button>
+                      `);
+
                       // If no buttons to show (word is already known/ignored and in learning set)
                       if (buttons.length === 0) {
                         buttons.push(html`
@@ -2483,6 +2639,33 @@ export class SentenceViewer extends LitElement {
             ${this.isLastSentence ? 'Finish' : 'Next'} <span class="keyboard-hint">(→)</span>
           </button>
         </div>
+
+        ${this.isFetchingGrammar
+          ? html`
+              <div class="grammar-loading-box">
+                <div class="spinner"></div>
+                <span>Loading explanation...</span>
+              </div>
+            `
+          : nothing}
+        ${this.grammarExplanation
+          ? html`
+              <div class="grammar-explanation-box">
+                <div class="grammar-explanation-header">
+                  <button
+                    class="grammar-close-btn"
+                    @click=${this.handleCloseGrammarExplanation}
+                    title="Close"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div class="grammar-explanation-content">
+                  ${unsafeHTML(markdownToHtml(this.grammarExplanation.explanation))}
+                </div>
+              </div>
+            `
+          : nothing}
       </div>
     `;
   }

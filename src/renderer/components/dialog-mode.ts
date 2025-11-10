@@ -23,6 +23,7 @@ import {
 import { getErrorMessage } from '../../shared/utils/error.js';
 import { BaseComponent } from './base-component.js';
 import { logger } from '../utils/logger.js';
+import { markdownToHtml } from '../utils/markdown-utils.js';
 
 // DialogueVariant is now imported from shared/types/core.js
 
@@ -1502,68 +1503,6 @@ export class DialogMode extends BaseComponent {
   }
 
   /**
-   * Convert markdown to HTML (simple implementation for basic markdown features)
-   */
-  private markdownToHtml(markdown: string): string {
-    if (!markdown) return '';
-
-    let html = markdown;
-
-    // Escape HTML to prevent XSS first
-    html = html
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-
-    // Code: `text` (process before other formatting to avoid conflicts)
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-    // Bold: **text** or __text__ (process before italic)
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-
-    // Italic: *text* or _text_ (only if not part of bold)
-    // Match single asterisks/underscores that aren't part of double ones
-    html = html.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em>$1</em>');
-    html = html.replace(/(?<!_)_([^_]+?)_(?!_)/g, '<em>$1</em>');
-
-    // Process lists before line breaks
-    const lines = html.split('\n');
-    const processedLines: string[] = [];
-    let inList = false;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      // Match list items: - or * at start of line (after optional whitespace)
-      const listMatch = line.match(/^(\s*)([-*])\s+(.+)$/);
-      if (listMatch) {
-        if (!inList) {
-          processedLines.push('<ul>');
-          inList = true;
-        }
-        processedLines.push(`<li>${listMatch[3]}</li>`);
-      } else {
-        if (inList) {
-          processedLines.push('</ul>');
-          inList = false;
-        }
-        processedLines.push(line);
-      }
-    }
-    if (inList) {
-      processedLines.push('</ul>');
-    }
-    html = processedLines.join('\n');
-
-    // Line breaks: \n -> <br>
-    html = html.replace(/\n/g, '<br>');
-
-    return html;
-  }
-
-  /**
    * Render transcription analysis (correction and grammar explanation)
    */
   private renderTranscriptionAnalysis(): TemplateResult {
@@ -1655,7 +1594,7 @@ export class DialogMode extends BaseComponent {
                     >Grammar:</strong
                   >
                   <div style="margin: 0; font-size: 13px; line-height: 1.4; font-weight: 400;">
-                    ${unsafeHTML(this.markdownToHtml(grammarExplanation))}
+                    ${unsafeHTML(markdownToHtml(grammarExplanation))}
                   </div>
                 </div>
               `
