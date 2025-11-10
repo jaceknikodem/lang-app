@@ -293,9 +293,9 @@ export interface IPCBridge {
     closeApp: () => Promise<void>;
   };
 
-  // Lemmatization operations (optional service - may not be available)
+  // Lemmatization operations
   lemmatization: {
-    getStatus: () => Promise<{ status: string; loadedModels: string[]; service: string } | null>;
+    getStatus: () => Promise<{ status: string; loadedModels: string[]; service: string }>;
     loadModel: (language: string) => Promise<void>;
     lemmatizeWords: (words: string[], language: string) => Promise<Record<string, string>>;
   };

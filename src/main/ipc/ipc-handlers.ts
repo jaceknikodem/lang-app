@@ -1663,14 +1663,7 @@ function setupLemmatizationHandlers(lemmatizationService: LemmatizationService):
     createIPCHandler(
       undefined,
       async () => {
-        try {
-          return await lemmatizationService.getStatus();
-        } catch (error) {
-          // Service is optional - return null status instead of throwing
-          const logger = getLogger();
-          logger.warn({ error }, '[Lemmatization] Error getting status (non-critical)');
-          return null;
-        }
+        return await lemmatizationService.getStatus();
       },
       'get lemmatization status'
     )
@@ -1681,14 +1674,7 @@ function setupLemmatizationHandlers(lemmatizationService: LemmatizationService):
     createIPCHandler(
       LanguageSchema,
       async (language) => {
-        try {
-          await lemmatizationService.loadModel(language);
-        } catch (error) {
-          // Service is optional - don't throw, just log
-          // loadModel already handles errors gracefully
-          const logger = getLogger();
-          logger.warn({ error }, '[Lemmatization] Error loading model (non-critical)');
-        }
+        await lemmatizationService.loadModel(language);
       },
       'load lemmatization model'
     )
@@ -1699,15 +1685,7 @@ function setupLemmatizationHandlers(lemmatizationService: LemmatizationService):
     createIPCHandler(
       [z.array(z.string().min(1).max(200)), LanguageSchema],
       async (words, language) => {
-        try {
-          return await lemmatizationService.lemmatizeWords(words, language);
-        } catch (error) {
-          // Service is optional - return empty object instead of throwing
-          // lemmatizeWords already handles errors gracefully and returns {}
-          const logger = getLogger();
-          logger.warn({ error }, '[Lemmatization] Error lemmatizing words (non-critical)');
-          return {};
-        }
+        return await lemmatizationService.lemmatizeWords(words, language);
       },
       'lemmatize words'
     )

@@ -257,41 +257,33 @@ export class ContentGenerator {
     // Step 1: Lemmatize the words
     let lemmatizedWords: GeneratedWord[] = generatedWords;
     if (this.lemmatizationService) {
-      try {
-        const wordsToLemmatize = generatedWords.map((w) => w.word);
-        const lemmas = await this.lemmatizationService.lemmatizeWords(
-          wordsToLemmatize,
+      const wordsToLemmatize = generatedWords.map((w) => w.word);
+      const lemmas = await this.lemmatizationService.lemmatizeWords(
+        wordsToLemmatize,
+        language.toLowerCase()
+      );
+
+      // Update words with their lemmas (use lemma if available, otherwise keep original)
+      lemmatizedWords = generatedWords.map((word) => {
+        const lemma = lemmas[word.word.toLowerCase()];
+        const finalWord = lemma || word.word;
+
+        // Re-check frequency position for lemmatized word
+        const frequencyPosition = this.frequencyWordManager.getWordFrequencyPosition(
+          finalWord,
           language.toLowerCase()
         );
+        const frequencyTier = frequencyPosition
+          ? this.frequencyWordManager.getFrequencyTier(frequencyPosition)
+          : undefined;
 
-        // Update words with their lemmas (use lemma if available, otherwise keep original)
-        lemmatizedWords = generatedWords.map((word) => {
-          const lemma = lemmas[word.word.toLowerCase()];
-          const finalWord = lemma || word.word;
-
-          // Re-check frequency position for lemmatized word
-          const frequencyPosition = this.frequencyWordManager.getWordFrequencyPosition(
-            finalWord,
-            language.toLowerCase()
-          );
-          const frequencyTier = frequencyPosition
-            ? this.frequencyWordManager.getFrequencyTier(frequencyPosition)
-            : undefined;
-
-          return {
-            ...word,
-            word: finalWord,
-            frequencyPosition: frequencyPosition || word.frequencyPosition, // Use new position if found, otherwise keep original
-            frequencyTier: frequencyTier || word.frequencyTier,
-          };
-        });
-      } catch (error) {
-        this.logger.warn(
-          { error },
-          '[ContentGenerator] Failed to lemmatize frequency-based words, using original words'
-        );
-        // Continue with original words if lemmatization fails
-      }
+        return {
+          ...word,
+          word: finalWord,
+          frequencyPosition: frequencyPosition || word.frequencyPosition, // Use new position if found, otherwise keep original
+          frequencyTier: frequencyTier || word.frequencyTier,
+        };
+      });
     }
 
     // Step 2: Filter based on proficiency level
@@ -372,28 +364,20 @@ export class ContentGenerator {
       // Step 1: Lemmatize the words
       let lemmatizedWords: GeneratedWord[] = validWords;
       if (this.lemmatizationService) {
-        try {
-          const wordsToLemmatize = validWords.map((w) => w.word);
-          const lemmas = await this.lemmatizationService.lemmatizeWords(
-            wordsToLemmatize,
-            targetLanguage.toLowerCase()
-          );
+        const wordsToLemmatize = validWords.map((w) => w.word);
+        const lemmas = await this.lemmatizationService.lemmatizeWords(
+          wordsToLemmatize,
+          targetLanguage.toLowerCase()
+        );
 
-          // Update words with their lemmas (use lemma if available, otherwise keep original)
-          lemmatizedWords = validWords.map((word) => {
-            const lemma = lemmas[word.word.toLowerCase()];
-            return {
-              ...word,
-              word: lemma || word.word, // Use lemma if available, otherwise keep original
-            };
-          });
-        } catch (error) {
-          this.logger.warn(
-            { error },
-            '[ContentGenerator] Failed to lemmatize words, using original words'
-          );
-          // Continue with original words if lemmatization fails
-        }
+        // Update words with their lemmas (use lemma if available, otherwise keep original)
+        lemmatizedWords = validWords.map((word) => {
+          const lemma = lemmas[word.word.toLowerCase()];
+          return {
+            ...word,
+            word: lemma || word.word, // Use lemma if available, otherwise keep original
+          };
+        });
       }
 
       // Step 2: Add frequency position information for lemmatized words
