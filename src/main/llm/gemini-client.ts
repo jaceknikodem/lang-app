@@ -364,172 +364,78 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
       },
     };
 
-    const maxRetries = this.config.maxRetries!;
-    const minTimeout = 1000; // 1 second minimum
-    const maxTimeout = 120000; // 2 minutes maximum
-    const factor = 2; // Exponential backoff factor
+    // Custom retry delay extractor for 429 rate limit errors
+    const customRetryDelayExtractor = (error: unknown): number | null => {
+      const errorWithStatus = error as Error & { status?: number; errorText?: string };
+      if (errorWithStatus.status === 429 && errorWithStatus.errorText) {
+        const retryDelayMs = this.extractRetryDelay(errorWithStatus.errorText);
 
-    let lastError: unknown;
-
-    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-      try {
-        const response = await axios.post<GeminiResponse>(
-          `${this.baseUrl}/${selectedModel}:generateContent?key=${this.apiKey}`,
-          requestBody,
-          {
-            timeout: this.config.timeout || 60000,
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            validateStatus: () => true, // Don't throw on any status
-          }
-        );
-
-        if (response.status !== 200) {
-          const errorText =
-            typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-          const error = new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
-          // Attach response status and errorText to error for retry logic
-          (error as any).status = response.status;
-          (error as any).errorText = errorText;
-          throw error;
-        }
-
-        const data = response.data;
-
-        if (!data.candidates || data.candidates.length === 0) {
-          throw new Error('No response candidates from Gemini');
-        }
-
-        const candidate = data.candidates[0];
-        if (
-          !candidate.content ||
-          !candidate.content.parts ||
-          candidate.content.parts.length === 0
-        ) {
-          throw new Error('Empty response from Gemini');
-        }
-
-        const cleanResponse = cleanLLMResponse(candidate.content.parts[0].text);
-
-        // Parse JSON
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(cleanResponse);
-        } catch (parseError) {
-          const errorMessage =
-            parseError instanceof Error ? parseError.message : String(parseError);
-          this.logger.error(
-            {
-              parseError: errorMessage,
-              parseErrorStack: parseError instanceof Error ? parseError.stack : undefined,
-              cleanResponse,
-            },
-            'JSON parsing failed for response'
+        // If retryDelay is null (>= 2 minutes), throw error to give up
+        if (retryDelayMs === null) {
+          throw super.createLLMError(
+            ensureError(error),
+            'Rate limit exceeded - retry delay too long',
+            'CONNECTION_ERROR',
+            false
           );
-          throw new Error(`Invalid JSON response: ${cleanResponse}...`);
         }
 
-        return parsed;
-      } catch (error: unknown) {
-        lastError = error;
-
-        // Don't retry on certain errors
-        if (error instanceof Error) {
-          // Timeout errors - don't retry
-          if (
-            axios.isAxiosError(error) &&
-            (error.code === 'ECONNABORTED' || error.message.includes('timeout'))
-          ) {
-            throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
-          }
-
-          // JSON parsing errors - don't retry (unless it's "Insufficient" which might be retryable)
-          if (error.message.includes('JSON') && !error.message.includes('Insufficient')) {
-            throw super.createLLMError(error, 'Invalid response format', 'INVALID_RESPONSE', false);
-          }
-
-          // If we've exhausted retries, throw the error
-          if (attempt > maxRetries) {
-            if (
-              axios.isAxiosError(error) &&
-              (error.code === 'ECONNABORTED' || error.message.includes('timeout'))
-            ) {
-              throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
-            }
-            throw super.createLLMError(
-              ensureError(error),
-              'Max retries exceeded',
-              'CONNECTION_ERROR',
-              false
-            );
-          }
-
-          // Check if this is a 429 error and extract retry delay
-          const errorWithStatus = error as Error & { status?: number; errorText?: string };
-          if (errorWithStatus.status === 429 && errorWithStatus.errorText) {
-            const retryDelayMs = this.extractRetryDelay(errorWithStatus.errorText);
-
-            // If retryDelay is null (>= 2 minutes), give up immediately
-            if (retryDelayMs === null) {
-              throw super.createLLMError(
-                error,
-                'Rate limit exceeded - retry delay too long',
-                'CONNECTION_ERROR',
-                false
-              );
-            }
-
-            // Use the extracted retry delay from the API
-            const seconds = Math.ceil(retryDelayMs / 1000);
-            this.logger.info(
-              { attemptNumber: attempt, retryDelay: seconds },
-              `Attempt ${attempt} failed with HTTP 429, retrying in ${seconds}s (as specified by API)...`
-            );
-            await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
-          } else {
-            // Use exponential backoff for other errors
-            const backoffSeconds = Math.min(
-              Math.max(Math.pow(factor, attempt - 1), minTimeout / 1000),
-              maxTimeout / 1000
-            );
-            this.logger.info(
-              { attemptNumber: attempt, retryDelay: backoffSeconds },
-              `Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`
-            );
-            await new Promise((resolve) => setTimeout(resolve, backoffSeconds * 1000));
-          }
-        } else {
-          // If we've exhausted retries, throw the error
-          if (attempt > maxRetries) {
-            throw super.createLLMError(
-              ensureError(error),
-              'Max retries exceeded',
-              'CONNECTION_ERROR',
-              false
-            );
-          }
-
-          // Use exponential backoff for unknown errors
-          const backoffSeconds = Math.min(
-            Math.max(Math.pow(factor, attempt - 1), minTimeout / 1000),
-            maxTimeout / 1000
-          );
-          this.logger.info(
-            { attemptNumber: attempt, retryDelay: backoffSeconds },
-            `Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`
-          );
-          await new Promise((resolve) => setTimeout(resolve, backoffSeconds * 1000));
-        }
+        return retryDelayMs;
       }
-    }
+      return null;
+    };
 
-    // Should never reach here, but TypeScript needs it
-    throw super.createLLMError(
-      ensureError(lastError),
-      'Max retries exceeded',
-      'CONNECTION_ERROR',
-      false
-    );
+    return this.retryWithBackoff(async () => {
+      const response = await axios.post<GeminiResponse>(
+        `${this.baseUrl}/${selectedModel}:generateContent?key=${this.apiKey}`,
+        requestBody,
+        {
+          timeout: this.config.timeout || 60000,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          validateStatus: () => true, // Don't throw on any status
+        }
+      );
+
+      if (response.status !== 200) {
+        const errorText =
+          typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+        const error = new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+        // Attach response status and errorText to error for retry logic
+        (error as any).status = response.status;
+        (error as any).errorText = errorText;
+        throw error;
+      }
+
+      const data = response.data;
+
+      if (!data.candidates || data.candidates.length === 0) {
+        throw new Error('No response candidates from Gemini');
+      }
+
+      const candidate = data.candidates[0];
+      if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+        throw new Error('Empty response from Gemini');
+      }
+
+      const cleanResponse = cleanLLMResponse(candidate.content.parts[0].text);
+
+      // Parse JSON
+      try {
+        return JSON.parse(cleanResponse);
+      } catch (parseError) {
+        const errorMessage = parseError instanceof Error ? parseError.message : String(parseError);
+        this.logger.error(
+          {
+            parseError: errorMessage,
+            parseErrorStack: parseError instanceof Error ? parseError.stack : undefined,
+            cleanResponse,
+          },
+          'JSON parsing failed for response'
+        );
+        throw new Error(`Invalid JSON response: ${cleanResponse}...`);
+      }
+    }, customRetryDelayExtractor);
   }
 }

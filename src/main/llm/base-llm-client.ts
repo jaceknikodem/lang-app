@@ -18,6 +18,7 @@ import {
 } from './schemas.js';
 import { z } from 'zod';
 import { TranscriptionAnalysis } from '../../shared/types/core.js';
+import axios from 'axios';
 
 /**
  * Abstract base class for LLM clients that implements common functionality
@@ -898,6 +899,104 @@ If there are no mistakes, you can omit correction and grammarExplanation, but al
     return `Explain the grammar of the word "${word}" in this ${languageName} sentence: "${sentence}"${proficiencyText}
 
 Provide a clear, educational, teacher-like explanation of the grammatical role and usage of this word. Adjust the complexity and depth of your explanation based on the user's proficiency level. Return your response in Markdown format. The explanation HAS TO BE IN ENGLISH`;
+  }
+
+  /**
+   * Retry helper with exponential backoff
+   * @param requestFn Function that performs the request and returns a Promise
+   * @param customRetryDelayExtractor Optional function to extract custom retry delay from error (returns ms or null)
+   * @returns Result of the request function
+   * @throws LLMError if all retries are exhausted or a non-retryable error occurs
+   */
+  protected async retryWithBackoff<T>(
+    requestFn: () => Promise<T>,
+    customRetryDelayExtractor?: (error: unknown) => number | null
+  ): Promise<T> {
+    const maxRetries = this.config.maxRetries!;
+    const minTimeout = 1000; // 1 second minimum
+    const maxTimeout = 120000; // 2 minutes maximum
+    const factor = 2; // Exponential backoff factor
+
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+      try {
+        return await requestFn();
+      } catch (error: unknown) {
+        lastError = error;
+
+        // Check for non-retryable errors
+        if (error instanceof Error) {
+          // Timeout errors - don't retry
+          if (
+            axios.isAxiosError(error) &&
+            (error.code === 'ECONNABORTED' || error.message.includes('timeout'))
+          ) {
+            throw this.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
+          }
+
+          // JSON parsing errors - don't retry (unless it's "Insufficient" which might be retryable)
+          if (error.message.includes('JSON') && !error.message.includes('Insufficient')) {
+            throw this.createLLMError(error, 'Invalid response format', 'INVALID_RESPONSE', false);
+          }
+        }
+
+        // If we've exhausted retries, throw the error
+        if (attempt > maxRetries) {
+          if (
+            lastError instanceof Error &&
+            axios.isAxiosError(lastError) &&
+            (lastError.code === 'ECONNABORTED' || lastError.message.includes('timeout'))
+          ) {
+            throw this.createLLMError(lastError, 'Request timeout', 'TIMEOUT', false);
+          }
+          throw this.createLLMError(
+            ensureError(lastError),
+            'Max retries exceeded',
+            'CONNECTION_ERROR',
+            false
+          );
+        }
+
+        // Calculate retry delay
+        let retryDelayMs: number | null = null;
+
+        // Try custom retry delay extractor first (e.g., for Gemini 429 errors)
+        if (customRetryDelayExtractor && error instanceof Error) {
+          retryDelayMs = customRetryDelayExtractor(error);
+        }
+
+        // If no custom delay, use exponential backoff
+        if (retryDelayMs === null) {
+          const backoffSeconds = Math.min(
+            Math.max(Math.pow(factor, attempt - 1), minTimeout / 1000),
+            maxTimeout / 1000
+          );
+          retryDelayMs = backoffSeconds * 1000;
+          this.logger.info(
+            { attemptNumber: attempt, retryDelay: backoffSeconds },
+            `Attempt ${attempt} failed, retrying in ${backoffSeconds}s...`
+          );
+        } else {
+          // Custom delay was extracted (e.g., from API response)
+          const seconds = Math.ceil(retryDelayMs / 1000);
+          this.logger.info(
+            { attemptNumber: attempt, retryDelay: seconds },
+            `Attempt ${attempt} failed, retrying in ${seconds}s (as specified by API)...`
+          );
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+      }
+    }
+
+    // Should never reach here, but TypeScript needs it
+    throw this.createLLMError(
+      ensureError(lastError),
+      'Max retries exceeded',
+      'CONNECTION_ERROR',
+      false
+    );
   }
 
   /**
