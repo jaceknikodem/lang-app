@@ -77,7 +77,7 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
     }
   }
 
-  async generateResponse(prompt: string, model?: string): Promise<string> {
+  protected async generateResponse(prompt: string, model?: string): Promise<string> {
     try {
       const requestBody: OllamaRequest = {
         model: model || this.config.model,

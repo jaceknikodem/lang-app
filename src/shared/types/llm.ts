@@ -54,7 +54,7 @@ export interface LLMClient {
     language: string,
     proficiencyLevel?: string
   ): Promise<string>;
-  generateResponse(prompt: string, model?: string): Promise<string>;
+  translateWord(word: string, language: string): Promise<string>;
   isAvailable(): Promise<boolean>;
   getAvailableModels(): Promise<string[]>;
   setModel(model: string): void;

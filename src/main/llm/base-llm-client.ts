@@ -3,7 +3,7 @@
  */
 
 import { GeneratedWord, GeneratedSentence } from '../../shared/types/core.js';
-import { LLMConfig, LLMError, LLMClient } from '../../shared/types/llm.js';
+import { LLMConfig, LLMError } from '../../shared/types/llm.js';
 import { LLM_CONFIG } from '../../shared/constants/index.js';
 import { ensureError } from '../../shared/utils/error.js';
 import { getLogger } from '../utils/logger.js';
@@ -70,6 +70,11 @@ export abstract class BaseLLMClient {
   getSentenceGenerationModel(): string {
     return this.config.sentenceGenerationModel ?? this.config.model;
   }
+
+  /**
+   * Abstract method for generating plain text responses - must be implemented by subclasses
+   */
+  protected abstract generateResponse(prompt: string, model?: string): Promise<string>;
 
   /**
    * Abstract method for making requests - must be implemented by subclasses
@@ -858,6 +863,22 @@ If there are no mistakes, you can omit correction and grammarExplanation, but al
   }
 
   /**
+   * Translate a word from the target language to English
+   */
+  async translateWord(word: string, language: string): Promise<string> {
+    const prompt = `Translate the ${language} word "${word}" to English. Respond with only the English translation, no additional text.`;
+
+    try {
+      // Use generateResponse for plain text responses
+      const response = await this.generateResponse(prompt, this.getWordGenerationModel());
+      return response.trim();
+    } catch (error) {
+      const err = ensureError(error);
+      throw this.createLLMError(err, `Failed to translate word "${word}"`);
+    }
+  }
+
+  /**
    * Explain the grammar of a word in a sentence
    */
   async explainGrammar(
@@ -870,12 +891,7 @@ If there are no mistakes, you can omit correction and grammarExplanation, but al
 
     try {
       // Use generateResponse for plain text/markdown responses
-      // This method is implemented in concrete classes (OllamaClient, GeminiClient)
-      // We cast to LLMClient to access the generateResponse method
-      const response = await (this as unknown as LLMClient).generateResponse(
-        prompt,
-        this.getSentenceGenerationModel()
-      );
+      const response = await this.generateResponse(prompt, this.getSentenceGenerationModel());
       return response.trim();
     } catch (error) {
       const err = ensureError(error);

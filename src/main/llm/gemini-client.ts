@@ -286,7 +286,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
     }
   }
 
-  async generateResponse(prompt: string, model?: string): Promise<string> {
+  protected async generateResponse(prompt: string, model?: string): Promise<string> {
     this.ensureApiKey();
 
     try {

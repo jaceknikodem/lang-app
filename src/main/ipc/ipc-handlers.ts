@@ -702,17 +702,6 @@ function setupLLMHandlers(
   );
 
   ipcMain.handle(
-    IPC_CHANNELS.LLM.GENERATE_RESPONSE,
-    createIPCHandler(
-      [z.string().min(1).max(10000), z.string().optional()],
-      async (prompt, model) => {
-        return await llmClient.generateResponse(prompt, model);
-      },
-      'generate response'
-    )
-  );
-
-  ipcMain.handle(
     IPC_CHANNELS.LLM.EXPLAIN_GRAMMAR,
     createIPCHandler(
       [TextSchema, TextSchema, LanguageSchema, z.string().optional()],

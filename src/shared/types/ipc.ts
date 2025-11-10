@@ -173,7 +173,6 @@ export interface IPCBridge {
     setSentenceGenerationModel: (model: string) => Promise<void>;
     getWordGenerationModel: () => Promise<string>;
     getSentenceGenerationModel: () => Promise<string>;
-    generateResponse: (prompt: string, model?: string) => Promise<string>;
     explainGrammar: (
       word: string,
       sentence: string,
@@ -428,7 +427,6 @@ export const IPC_CHANNELS = {
     SET_SENTENCE_GENERATION_MODEL: 'llm:setSentenceGenerationModel',
     GET_WORD_GENERATION_MODEL: 'llm:getWordGenerationModel',
     GET_SENTENCE_GENERATION_MODEL: 'llm:getSentenceGenerationModel',
-    GENERATE_RESPONSE: 'llm:generateResponse',
     EXPLAIN_GRAMMAR: 'llm:explainGrammar',
     // Provider management
     GET_CURRENT_PROVIDER: 'llm:getCurrentProvider',

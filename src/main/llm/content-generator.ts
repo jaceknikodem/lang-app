@@ -241,7 +241,7 @@ export class ContentGenerator {
 
         // If no translation is available, use LLM to generate it
         if (!translation) {
-          translation = await this.getWordTranslation(wordEntry.word, language);
+          translation = await this.llmClient.translateWord(wordEntry.word, language);
         }
 
         // Get frequency position and tier information
@@ -495,28 +495,6 @@ export class ContentGenerator {
       // Filter out words that are in the top N frequency words
       return word.frequencyPosition > maxFrequency;
     });
-  }
-
-  /**
-   * Get translation for a specific word using LLM
-   */
-  private async getWordTranslation(word: string, language: string): Promise<string> {
-    const isAvailable = await this.llmClient.isAvailable();
-    if (!isAvailable) {
-      throw new Error('LLM service is not available for translation');
-    }
-
-    // Use a simple prompt to get just the translation
-    const prompt = `Translate the ${language} word "${word}" to English. Respond with only the English translation, no additional text.`;
-
-    try {
-      // Use the word generation model for simple translations
-      const wordModel = this.llmClient.getWordGenerationModel();
-      const response = await this.llmClient.generateResponse(prompt, wordModel);
-      return response.trim();
-    } catch (error) {
-      throw wrapError(error, `Failed to translate word "${word}"`);
-    }
   }
 
   /**
