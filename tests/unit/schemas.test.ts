@@ -10,8 +10,6 @@ import {
   ContextSentenceResponseSchema,
   DialogueVariantResponseSchema,
   FollowUpResponseSchema,
-  LooseWordSchema,
-  LooseSentenceSchema,
 } from '../../src/main/llm/schemas';
 
 describe('GeneratedWordSchema', () => {
@@ -80,40 +78,6 @@ describe('GeneratedSentenceSchema', () => {
   });
 });
 
-describe('LooseWordSchema', () => {
-  it('should validate and trim whitespace', () => {
-    const input = { word: '  hola  ', translation: '  hello  ' };
-    expect(LooseWordSchema.parse(input)).toEqual({ word: 'hola', translation: 'hello' });
-  });
-
-  it('should handle strings that become empty after trimming', () => {
-    expect(() => LooseWordSchema.parse({ word: '   ', translation: 'hello' })).toThrow();
-  });
-});
-
-describe('LooseSentenceSchema', () => {
-  it('should validate and trim all fields', () => {
-    const input = {
-      sentence: '  Hola mundo  ',
-      translation: '  Hello world  ',
-      contextBefore: '  ¿Cómo estás?  ',
-      contextAfter: '  Bien  ',
-    };
-    const result = LooseSentenceSchema.parse(input);
-    expect(result.sentence).toBe('Hola mundo');
-    expect(result.translation).toBe('Hello world');
-    expect(result.contextBefore).toBe('¿Cómo estás?');
-    expect(result.contextAfter).toBe('Bien');
-  });
-
-  it('should handle optional fields being undefined', () => {
-    const input = { sentence: 'Hola', translation: 'Hello' };
-    const result = LooseSentenceSchema.parse(input);
-    expect(result.contextBefore).toBeUndefined();
-    expect(result.contextAfter).toBeUndefined();
-  });
-});
-
 describe('WordGenerationResponseSchema', () => {
   it('should accept array of GeneratedWordSchema objects', () => {
     const input = [
@@ -125,7 +89,7 @@ describe('WordGenerationResponseSchema', () => {
     expect(result[0]).toEqual({ word: 'hola', translation: 'hello' });
   });
 
-  it('should accept array of LooseWordSchema objects', () => {
+  it('should handle array with whitespace (via generic fallback)', () => {
     const input = [
       { word: '  hola  ', translation: '  hello  ' },
       { word: 'casa', translation: 'house' },

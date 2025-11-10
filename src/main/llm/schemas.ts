@@ -61,76 +61,16 @@ export const GeneratedSentenceSchema = z.object({
     .transform((s) => (s ? cleanSpecialTokens(s) : undefined)),
 });
 
-// Fallback schemas for when LLM returns unexpected formats
-export const LooseWordSchema = z
-  .object({
-    word: z
-      .string()
-      .transform((s) => cleanSpecialTokens(s))
-      .pipe(z.string().min(1)),
-    translation: z
-      .string()
-      .transform((s) => cleanSpecialTokens(s))
-      .pipe(z.string().min(1)),
-  })
-  .transform((obj) => ({
-    word: obj.word,
-    translation: obj.translation,
-  }));
-
-export const LooseSentenceSchema = z.object({
-  sentence: z
-    .string()
-    .transform((s) => cleanSpecialTokens(s))
-    .pipe(z.string().min(1)),
-  translation: z
-    .string()
-    .transform((s) => cleanSpecialTokens(s))
-    .pipe(z.string().min(1)),
-  contextBefore: z
-    .string()
-    .optional()
-    .transform((s) => (s ? cleanSpecialTokens(s) : undefined)),
-  contextAfter: z
-    .string()
-    .optional()
-    .transform((s) => (s ? cleanSpecialTokens(s) : undefined)),
-  contextBeforeTranslation: z
-    .string()
-    .optional()
-    .transform((s) => (s ? cleanSpecialTokens(s) : undefined)),
-  contextAfterTranslation: z
-    .string()
-    .optional()
-    .transform((s) => (s ? cleanSpecialTokens(s) : undefined)),
-});
-
 // Flexible response schemas that can handle various formats
 export const WordGenerationResponseSchema = z.union([
   z.array(GeneratedWordSchema),
-  z.array(LooseWordSchema), // Fallback for loose validation
   GeneratedWordSchema.transform((word) => [word]), // Single word -> array
-  LooseWordSchema.transform((word) => [word]), // Single loose word -> array
   z
     .object({
-      words: z.array(GeneratedWordSchema),
+      words: z.array(GeneratedWordSchema).optional(),
+      response: z.array(GeneratedWordSchema).optional(),
     })
-    .transform((obj) => obj.words),
-  z
-    .object({
-      words: z.array(LooseWordSchema),
-    })
-    .transform((obj) => obj.words),
-  z
-    .object({
-      response: z.array(GeneratedWordSchema),
-    })
-    .transform((obj) => obj.response),
-  z
-    .object({
-      response: z.array(LooseWordSchema),
-    })
-    .transform((obj) => obj.response),
+    .transform((obj) => obj.words || obj.response || []),
   // Handle any array of objects with word/translation properties
   z.array(z.record(z.any())).transform((arr) =>
     arr
@@ -140,33 +80,27 @@ export const WordGenerationResponseSchema = z.union([
         translation: cleanSpecialTokens(String(item.translation)),
       }))
   ),
+  // Handle objects with words/response properties that don't match strict schema
+  z.record(z.any()).transform((obj) => {
+    const arr = (obj.words || obj.response || []) as any[];
+    return arr
+      .filter((item: any) => item && item.word && item.translation)
+      .map((item: any) => ({
+        word: cleanSpecialTokens(String(item.word)),
+        translation: cleanSpecialTokens(String(item.translation)),
+      }));
+  }),
 ]);
 
 export const SentenceGenerationResponseSchema = z.union([
   z.array(GeneratedSentenceSchema),
-  z.array(LooseSentenceSchema), // Fallback for loose validation
   GeneratedSentenceSchema.transform((sentence) => [sentence]), // Single sentence -> array
-  LooseSentenceSchema.transform((sentence) => [sentence]), // Single loose sentence -> array
   z
     .object({
-      sentences: z.array(GeneratedSentenceSchema),
+      sentences: z.array(GeneratedSentenceSchema).optional(),
+      response: z.array(GeneratedSentenceSchema).optional(),
     })
-    .transform((obj) => obj.sentences),
-  z
-    .object({
-      sentences: z.array(LooseSentenceSchema),
-    })
-    .transform((obj) => obj.sentences),
-  z
-    .object({
-      response: z.array(GeneratedSentenceSchema),
-    })
-    .transform((obj) => obj.response),
-  z
-    .object({
-      response: z.array(LooseSentenceSchema),
-    })
-    .transform((obj) => obj.response),
+    .transform((obj) => obj.sentences || obj.response || []),
   // Handle any array of objects with sentence/translation properties
   z.array(z.record(z.any())).transform((arr) =>
     arr
@@ -174,8 +108,38 @@ export const SentenceGenerationResponseSchema = z.union([
       .map((item) => ({
         sentence: cleanSpecialTokens(String(item.sentence)),
         translation: cleanSpecialTokens(String(item.translation)),
+        contextBefore: item.contextBefore
+          ? cleanSpecialTokens(String(item.contextBefore))
+          : undefined,
+        contextAfter: item.contextAfter ? cleanSpecialTokens(String(item.contextAfter)) : undefined,
+        contextBeforeTranslation: item.contextBeforeTranslation
+          ? cleanSpecialTokens(String(item.contextBeforeTranslation))
+          : undefined,
+        contextAfterTranslation: item.contextAfterTranslation
+          ? cleanSpecialTokens(String(item.contextAfterTranslation))
+          : undefined,
       }))
   ),
+  // Handle objects with sentences/response properties that don't match strict schema
+  z.record(z.any()).transform((obj) => {
+    const arr = (obj.sentences || obj.response || []) as any[];
+    return arr
+      .filter((item: any) => item && item.sentence && item.translation)
+      .map((item: any) => ({
+        sentence: cleanSpecialTokens(String(item.sentence)),
+        translation: cleanSpecialTokens(String(item.translation)),
+        contextBefore: item.contextBefore
+          ? cleanSpecialTokens(String(item.contextBefore))
+          : undefined,
+        contextAfter: item.contextAfter ? cleanSpecialTokens(String(item.contextAfter)) : undefined,
+        contextBeforeTranslation: item.contextBeforeTranslation
+          ? cleanSpecialTokens(String(item.contextBeforeTranslation))
+          : undefined,
+        contextAfterTranslation: item.contextAfterTranslation
+          ? cleanSpecialTokens(String(item.contextAfterTranslation))
+          : undefined,
+      }));
+  }),
 ]);
 
 export const ContextSentenceSchema = z.object({
@@ -218,25 +182,18 @@ export const DialogueVariantResponseSchema = z.union([
     .transform((obj) => obj.variants),
   z.array(DialogueVariantItemSchema),
   DialogueVariantItemSchema.transform((v) => [v]),
+  // Generic record fallback - extract variants from various formats
   z.record(z.any()).transform((obj) => {
     // Try to extract variants from various formats
-    if (obj.variants && Array.isArray(obj.variants)) {
-      return obj.variants
-        .filter((item: any) => item.sentence && item.translation)
-        .map((item: any) => ({
-          sentence: cleanSpecialTokens(String(item.sentence)),
-          translation: cleanSpecialTokens(String(item.translation)),
-        }));
-    }
-    if (Array.isArray(obj)) {
-      return obj
-        .filter((item: any) => item.sentence && item.translation)
-        .map((item: any) => ({
-          sentence: cleanSpecialTokens(String(item.sentence)),
-          translation: cleanSpecialTokens(String(item.translation)),
-        }));
-    }
-    return [];
+    const variants = (
+      obj.variants && Array.isArray(obj.variants) ? obj.variants : Array.isArray(obj) ? obj : []
+    ) as any[];
+    return variants
+      .filter((item: any) => item.sentence && item.translation)
+      .map((item: any) => ({
+        sentence: cleanSpecialTokens(String(item.sentence)),
+        translation: cleanSpecialTokens(String(item.translation)),
+      }));
   }),
 ]);
 
@@ -291,27 +248,13 @@ export const FollowUpResponseSchema = z
       return { text: '', translation: '' };
     }),
     // Generic record fallback - normalize all formats
-    z.union([
-      z.string().transform((str) => {
-        const parts = str.split('\n\n');
-        if (parts.length >= 2) {
-          return {
-            text: cleanSpecialTokens(parts[0]),
-            translation: cleanSpecialTokens(parts.slice(1).join('\n')),
-          };
-        }
-        return { text: cleanSpecialTokens(str), translation: '' };
-      }),
-      z.record(z.any()).transform((obj) => {
-        const text = cleanSpecialTokens(
-          String((obj as any).text || (obj as any).continuation || '')
-        );
-        const translation = cleanSpecialTokens(
-          String((obj as any).translation || (obj as any).english || '')
-        );
-        return { text, translation };
-      }),
-    ]),
+    z.record(z.any()).transform((obj) => {
+      const text = cleanSpecialTokens(String((obj as any).text || (obj as any).continuation || ''));
+      const translation = cleanSpecialTokens(
+        String((obj as any).translation || (obj as any).english || '')
+      );
+      return { text, translation };
+    }),
   ])
   .refine((data) => data.translation.length > 0, { message: 'Translation is required' });
 
