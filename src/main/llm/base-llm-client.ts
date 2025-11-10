@@ -722,14 +722,7 @@ ${knownWords.length > 0 ? '7. Prefer using words from the provided list when pos
       // Zod already normalizes the data to { text: string, translation: string }
       return parseResult.data;
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        this.logger.warn(
-          { error },
-          'Follow-up generation validation failed, returning empty result'
-        );
-        return { text: '', translation: '' };
-      }
-      // On any error, return empty result instead of throwing
+      // On any error (including ZodError), return empty result instead of throwing
       this.logger.warn({ error }, 'Follow-up generation failed, returning empty result');
       return { text: '', translation: '' };
     }
@@ -902,6 +895,17 @@ Provide a clear, educational, teacher-like explanation of the grammatical role a
   }
 
   /**
+   * Check if an error is a timeout error
+   */
+  private isTimeoutError(error: unknown): boolean {
+    return (
+      error instanceof Error &&
+      axios.isAxiosError(error) &&
+      (error.code === 'ECONNABORTED' || error.message.includes('timeout'))
+    );
+  }
+
+  /**
    * Retry helper with exponential backoff
    * @param requestFn Function that performs the request and returns a Promise
    * @param customRetryDelayExtractor Optional function to extract custom retry delay from error (returns ms or null)
@@ -928,10 +932,7 @@ Provide a clear, educational, teacher-like explanation of the grammatical role a
         // Check for non-retryable errors
         if (error instanceof Error) {
           // Timeout errors - don't retry
-          if (
-            axios.isAxiosError(error) &&
-            (error.code === 'ECONNABORTED' || error.message.includes('timeout'))
-          ) {
+          if (this.isTimeoutError(error)) {
             throw this.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
           }
 
@@ -943,12 +944,8 @@ Provide a clear, educational, teacher-like explanation of the grammatical role a
 
         // If we've exhausted retries, throw the error
         if (attempt > maxRetries) {
-          if (
-            lastError instanceof Error &&
-            axios.isAxiosError(lastError) &&
-            (lastError.code === 'ECONNABORTED' || lastError.message.includes('timeout'))
-          ) {
-            throw this.createLLMError(lastError, 'Request timeout', 'TIMEOUT', false);
+          if (this.isTimeoutError(lastError)) {
+            throw this.createLLMError(ensureError(lastError), 'Request timeout', 'TIMEOUT', false);
           }
           throw this.createLLMError(
             ensureError(lastError),
