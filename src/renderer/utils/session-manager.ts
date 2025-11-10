@@ -127,7 +127,17 @@ export class SessionManager {
       const legacySession = this.sessionsByLanguage[LEGACY_LANGUAGE_KEY];
 
       if (legacySession) {
-        this.sessionsByLanguage[normalizedLanguage] = legacySession;
+        // Copy legacy session but clear language-specific data (learning session, etc.)
+        // to prevent word IDs from wrong language being carried over
+        this.sessionsByLanguage[normalizedLanguage] = {
+          ...legacySession,
+          learningSession: undefined,
+          learningProgress: undefined,
+          quizSession: undefined,
+          quizProgress: undefined,
+          dialogSessions: undefined,
+          currentDialogIndex: undefined,
+        };
         delete this.sessionsByLanguage[LEGACY_LANGUAGE_KEY];
       } else {
         this.sessionsByLanguage[normalizedLanguage] = this.createDefaultSession();
