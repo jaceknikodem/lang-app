@@ -11,6 +11,7 @@ import { router } from '../utils/router.js';
 import { sessionManager, type QuizSessionState } from '../utils/session-manager.js';
 import { useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 import { BaseComponent } from './base-component.js';
+import { audioPlayer } from '../utils/audio-player-service.js';
 import './session-complete.js';
 import './progress-bar.js';
 import type { SessionSummary } from './session-complete.js';
@@ -103,10 +104,9 @@ export class QuizMode extends BaseComponent {
 
   // Audio cache: Map of audioPath -> blob URL
   // Using Blob URLs instead of data URLs for better performance (no base64 encoding/decoding)
+  // Note: We keep this cache for preloading, but use audioPlayer for playback
   private audioCache: Map<string, string> = new Map(); // audioPath -> blob URL
   private blobUrlCache: Map<string, string> = new Map(); // audioPath -> blob URL (for cleanup)
-  // HTML5 Audio instances for playing cached audio
-  private currentAudioElement: HTMLAudioElement | null = null;
 
   private currentProficiencyLevel: ProficiencyLevel | null = null;
 
@@ -1942,7 +1942,7 @@ export class QuizMode extends BaseComponent {
   }
 
   /**
-   * Play audio using cached data if available, otherwise fall back to IPC
+   * Play audio using audio player service
    */
   private async playAudio() {
     if (!this.currentQuestion) return;
@@ -1956,144 +1956,49 @@ export class QuizMode extends BaseComponent {
       // Stop any currently playing audio
       this.stopCachedAudio();
 
-      // Try to use cached audio first (instant playback)
-      const cachedAudio = this.audioCache.get(audioPath);
-      if (cachedAudio) {
-        // Use HTML5 Audio API to play from memory
-        this.currentAudioElement = new Audio(cachedAudio);
-
-        // Handle errors and cleanup
-        this.currentAudioElement.addEventListener('ended', () => {
-          this.currentAudioElement = null;
-          // Track sentence play count
-          if (this.currentQuestion?.sentence.id) {
-            void window.electronAPI.database
-              .incrementSentencePlayCount(this.currentQuestion.sentence.id)
-              .catch((err) => {
-                logger.warn(
-                  { error: err, sentenceId: this.currentQuestion.sentence.id },
-                  'Failed to increment sentence play count'
-                );
-              });
-          }
-          // Track audio playback event
-          if (this.currentQuestion?.sentence.id && this.currentLanguage) {
-            this.audioPlayedCount++;
-            void window.electronAPI.tracking
-              .recordAudioPlayback({
-                sessionId: this.currentSessionId,
-                sentenceId: this.currentQuestion.sentence.id,
-                audioPath: audioPath,
-                language: this.currentLanguage,
-                mode: 'quiz',
-                playbackSpeed: 1.0, // Quiz mode doesn't have playback speed control
-              })
-              .catch((err: unknown) => {
-                logger.warn({ error: err }, 'Failed to record audio playback');
-              });
-          }
+      // Track audio playback immediately when scheduled (assume it will play)
+      if (this.currentQuestion?.sentence.id) {
+        const sentenceId = this.currentQuestion.sentence.id;
+        // Track sentence play count
+        void window.electronAPI.database.incrementSentencePlayCount(sentenceId).catch((err) => {
+          logger.warn({ error: err, sentenceId }, 'Failed to increment sentence play count');
         });
 
-        this.currentAudioElement.addEventListener('error', (e) => {
-          logger.warn({ error: e }, 'Error playing cached audio, falling back to IPC');
-          this.currentAudioElement = null;
-          // Fall back to IPC playback
-          void window.electronAPI.audio
-            .playAudio(audioPath)
-            .then(() => {
-              // Track sentence play count
-              if (this.currentQuestion?.sentence.id) {
-                void window.electronAPI.database
-                  .incrementSentencePlayCount(this.currentQuestion.sentence.id)
-                  .catch((err) => {
-                    logger.warn(
-                      { error: err, sentenceId: this.currentQuestion.sentence.id },
-                      'Failed to increment sentence play count'
-                    );
-                  });
-              }
-              // Track audio playback event
-              if (this.currentQuestion?.sentence.id && this.currentLanguage) {
-                this.audioPlayedCount++;
-                void window.electronAPI.tracking
-                  .recordAudioPlayback({
-                    sessionId: this.currentSessionId,
-                    sentenceId: this.currentQuestion.sentence.id,
-                    audioPath: audioPath,
-                    language: this.currentLanguage,
-                    mode: 'quiz',
-                    playbackSpeed: 1.0, // Quiz mode doesn't have playback speed control
-                  })
-                  .catch((err: unknown) => {
-                    logger.warn({ error: err }, 'Failed to record audio playback');
-                  });
-              }
+        // Track audio playback event
+        if (this.currentLanguage) {
+          this.audioPlayedCount++;
+          void window.electronAPI.tracking
+            .recordAudioPlayback({
+              sessionId: this.currentSessionId,
+              sentenceId: sentenceId,
+              audioPath: audioPath,
+              language: this.currentLanguage,
+              mode: 'quiz',
+              playbackSpeed: 1.0, // Quiz mode doesn't have playback speed control
             })
-            .catch((err) => {
-              logger.error({ error: err }, 'Failed to play audio via IPC');
+            .catch((err: unknown) => {
+              logger.warn({ error: err }, 'Failed to record audio playback');
             });
-        });
-
-        try {
-          await this.currentAudioElement.play();
-          return; // Success - audio playing from cache
-        } catch (playError) {
-          logger.warn({ error: playError }, 'Failed to play cached audio');
-          this.currentAudioElement = null;
-          // Fall through to IPC playback
         }
       }
 
-      // Not cached: Start IPC playback immediately (non-blocking, returns quickly)
-      // IPC playback starts immediately and plays in background
-      void window.electronAPI.audio
-        .playAudio(audioPath)
-        .then(() => {
-          // Track sentence play count
-          if (this.currentQuestion?.sentence.id) {
-            void window.electronAPI.database
-              .incrementSentencePlayCount(this.currentQuestion.sentence.id)
-              .catch((err) => {
-                logger.warn(
-                  { error: err, sentenceId: this.currentQuestion.sentence.id },
-                  'Failed to increment sentence play count'
-                );
-              });
-          }
-          // Track audio playback event
-          if (this.currentQuestion?.sentence.id && this.currentLanguage) {
-            this.audioPlayedCount++;
-            void window.electronAPI.tracking
-              .recordAudioPlayback({
-                sessionId: this.currentSessionId,
-                sentenceId: this.currentQuestion.sentence.id,
-                audioPath: audioPath,
-                language: this.currentLanguage,
-                mode: 'quiz',
-                playbackSpeed: 1.0, // Quiz mode doesn't have playback speed control
-              })
-              .catch((err: unknown) => {
-                logger.warn({ error: err }, 'Failed to record audio playback');
-              });
-          }
-        })
-        .catch((err) => {
-          logger.error({ error: err }, 'Failed to play audio via IPC');
-        });
+      // Play audio using audio player service
+      await audioPlayer.play(audioPath, {
+        playbackSpeed: 1.0, // Quiz mode doesn't have playback speed control
+        onError: (error: Error) => {
+          logger.error({ error }, 'Failed to play audio');
+        },
+      });
     } catch (error) {
       logger.error({ error }, 'Error playing audio');
     }
   }
 
   /**
-   * Stop currently playing cached audio
+   * Stop currently playing audio
    */
   private stopCachedAudio(): void {
-    if (this.currentAudioElement) {
-      this.currentAudioElement.pause();
-      this.currentAudioElement.currentTime = 0;
-      this.currentAudioElement = null;
-    }
+    audioPlayer.stop();
     // Also stop any IPC audio playback
     window.electronAPI.audio.stopAudio().catch(() => {
       // Ignore errors when stopping

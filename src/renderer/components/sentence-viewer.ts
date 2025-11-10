@@ -14,6 +14,7 @@ import { tokenizeSentenceWithDictionary } from '../utils/sentence-tokenizer.js';
 import type { TokenizedWord as WordInSentence } from '../utils/sentence-tokenizer.js';
 import { logger } from '../utils/logger.js';
 import { sessionManager } from '../utils/session-manager.js';
+import { audioPlayer } from '../utils/audio-player-service.js';
 
 @customElement('sentence-viewer')
 export class SentenceViewer extends LitElement {
@@ -57,9 +58,6 @@ export class SentenceViewer extends LitElement {
   playbackSpeed?: number; // Playback speed multiplier (defaults to 1.0)
 
   @state()
-  private isPlayingAudio = false;
-
-  @state()
   private localPlayingAudio: 'before' | 'main' | 'after' | null = null;
 
   @state()
@@ -73,9 +71,6 @@ export class SentenceViewer extends LitElement {
 
   @state()
   private wordPopup: { wordInfo: WordInSentence; position: { x: number; y: number } } | null = null;
-
-  // Audio element for playing cached audio
-  private currentAudioElement: HTMLAudioElement | null = null;
 
   // Dictionary cache is not reactive to avoid unnecessary re-renders
   // Dictionary data is precomputed in tokens, so cache updates shouldn't trigger UI updates
@@ -599,7 +594,7 @@ export class SentenceViewer extends LitElement {
     document.removeEventListener('click', this.handleOutsideClick);
     document.removeEventListener('keydown', this.handleKeyDown);
     // Clean up audio element
-    this.stopCachedAudio();
+    audioPlayer.stop();
   }
 
   private handleOutsideClick = (event: MouseEvent) => {
@@ -1713,8 +1708,8 @@ export class SentenceViewer extends LitElement {
           [rawWord.toLowerCase()],
           this.targetWord.language
         );
-        wordToAdd =
-          (lemmas && lemmas.length > 0 ? lemmas[0] : null) || rawWord.replace(/\s+/g, ' ');
+        const lemma = lemmas[rawWord.toLowerCase()];
+        wordToAdd = lemma || rawWord.replace(/\s+/g, ' ');
       } catch (error) {
         logger.warn({ error, rawWord }, 'Failed to lemmatize word (non-critical)');
         wordToAdd = rawWord.replace(/\s+/g, ' ');
@@ -1819,36 +1814,36 @@ export class SentenceViewer extends LitElement {
   }
 
   private async handlePlayAudio() {
-    if (this.isPlayingAudio || !this.sentence.audioPath) {
+    if (!this.sentence.audioPath) {
       return;
     }
 
-    // Don't set isPlayingAudio here - let playAudioWithCache() manage it
-    // This allows sequential playback of before/main/after audio segments
-
     try {
-      // Parent component stops audio immediately before navigation,
-      // so we can play directly without stopping again
+      // Build sequence of audio paths (before, main, after)
+      const audioPaths: string[] = [];
+      const audioTypes: ('before' | 'main' | 'after')[] = [];
 
-      // Play before sentence audio first if it exists
+      // Get before sentence audio if it exists
       if (this.sentence.contextBefore && this.sentence.id) {
         try {
           const beforeSentenceAudioPath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(
             this.sentence.id
           );
           if (beforeSentenceAudioPath) {
-            await this.playAudioWithCache(beforeSentenceAudioPath, 'before');
+            audioPaths.push(beforeSentenceAudioPath);
+            audioTypes.push('before');
           }
         } catch (error) {
-          logger.warn({ error }, 'Failed to play before sentence audio');
+          logger.warn({ error }, 'Failed to get before sentence audio');
           // Continue with main sentence audio even if before sentence audio fails
         }
       }
 
-      // Play main sentence audio
-      await this.playAudioWithCache(this.sentence.audioPath, 'main');
+      // Add main sentence audio
+      audioPaths.push(this.sentence.audioPath);
+      audioTypes.push('main');
 
-      // Play after sentence audio if it exists
+      // Get after sentence audio if it exists
       if (this.sentence.contextAfter && this.sentence.id) {
         try {
           const contextAudio = await window.electronAPI.dialog.ensureContextSentences(
@@ -1856,147 +1851,74 @@ export class SentenceViewer extends LitElement {
           );
           const afterSentenceAudioPath = contextAudio.afterSentenceAudio;
           if (afterSentenceAudioPath) {
-            await this.playAudioWithCache(afterSentenceAudioPath, 'after');
+            audioPaths.push(afterSentenceAudioPath);
+            audioTypes.push('after');
           }
         } catch (error) {
-          logger.warn({ error }, 'Failed to play after sentence audio');
+          logger.warn({ error }, 'Failed to get after sentence audio');
           // Continue even if after sentence audio fails
         }
       }
 
-      // Audio finished playing successfully
-      this.dispatchEvent(
-        new CustomEvent('sentence-audio-played', {
-          detail: {
-            sentenceId: this.sentence.id,
-            wordId: this.targetWord.id,
-          },
-          bubbles: true,
-          composed: true,
-        })
-      );
+      // Track which audio is currently playing for UI state
+      let currentIndex = 0;
+      const playbackSpeed = this.playbackSpeed ?? sessionManager.getPlaybackSpeed() ?? 1.0;
 
-      // Dispatch completion event
-      this.dispatchEvent(
-        new CustomEvent('sentence-audio-completed', {
-          detail: {
-            sentenceId: this.sentence.id,
-            wordId: this.targetWord.id,
-          },
-          bubbles: true,
-          composed: true,
-        })
-      );
+      // Set initial playing state
+      if (audioTypes.length > 0) {
+        this.localPlayingAudio = audioTypes[0];
+        this.requestUpdate();
+      }
+
+      // Play sequence
+      await audioPlayer.playSequence(audioPaths, {
+        playbackSpeed,
+        onEnded: () => {
+          // Move to next audio in sequence
+          currentIndex++;
+          if (currentIndex < audioTypes.length) {
+            // Update UI to show next audio is playing
+            this.localPlayingAudio = audioTypes[currentIndex];
+            this.requestUpdate();
+          } else {
+            // All audio finished
+            this.localPlayingAudio = null;
+            this.requestUpdate();
+
+            // Dispatch events
+            this.dispatchEvent(
+              new CustomEvent('sentence-audio-played', {
+                detail: {
+                  sentenceId: this.sentence.id,
+                  wordId: this.targetWord.id,
+                },
+                bubbles: true,
+                composed: true,
+              })
+            );
+
+            this.dispatchEvent(
+              new CustomEvent('sentence-audio-completed', {
+                detail: {
+                  sentenceId: this.sentence.id,
+                  wordId: this.targetWord.id,
+                },
+                bubbles: true,
+                composed: true,
+              })
+            );
+          }
+        },
+        onError: (error) => {
+          logger.error({ error }, 'Failed to play audio sequence');
+          this.localPlayingAudio = null;
+          this.requestUpdate();
+        },
+      });
     } catch (error) {
       logger.error({ error }, 'Failed to play audio');
-    }
-    // Note: No finally block needed - playAudioWithCache() manages isPlayingAudio state
-  }
-
-  /**
-   * Play audio with cache support and playback speed
-   * Uses HTML5 Audio API with cached blob URL if available, otherwise falls back to IPC
-   */
-  private async playAudioWithCache(
-    audioPath: string,
-    audioType: 'before' | 'main' | 'after'
-  ): Promise<void> {
-    if (this.isPlayingAudio || !audioPath) {
-      return;
-    }
-
-    this.isPlayingAudio = true;
-    const playbackSpeed = this.playbackSpeed ?? sessionManager.getPlaybackSpeed() ?? 1.0;
-
-    try {
-      // Try to use cached audio first (instant playback with speed control)
-      const cachedAudio = this.audioCache?.get(audioPath);
-      if (cachedAudio) {
-        // Stop any currently playing audio
-        this.stopCachedAudio();
-
-        // Use HTML5 Audio API to play from memory
-        this.currentAudioElement = new Audio(cachedAudio);
-        this.currentAudioElement.playbackRate = playbackSpeed;
-
-        // Set local state to indicate audio is playing
-        this.localPlayingAudio = audioType;
-        this.requestUpdate();
-
-        // Play audio and wait for completion
-        await new Promise<void>((resolve, reject) => {
-          if (!this.currentAudioElement) {
-            resolve();
-            return;
-          }
-
-          this.currentAudioElement.addEventListener('ended', () => {
-            this.currentAudioElement = null;
-            this.localPlayingAudio = null;
-            this.requestUpdate();
-            resolve();
-          });
-
-          this.currentAudioElement.addEventListener('error', (e) => {
-            logger.warn({ error: e }, 'Error playing cached audio, falling back to IPC');
-            this.currentAudioElement = null;
-            this.localPlayingAudio = null;
-            this.requestUpdate();
-            reject(e);
-          });
-
-          this.currentAudioElement.play().catch((err) => {
-            logger.warn({ error: err }, 'Failed to play cached audio, falling back to IPC');
-            this.currentAudioElement = null;
-            this.localPlayingAudio = null;
-            this.requestUpdate();
-            reject(err);
-          });
-        });
-
-        return; // Success - audio played from cache
-      }
-
-      // Fall back to IPC playback (no speed control)
-      this.localPlayingAudio = audioType;
-      this.requestUpdate();
-      await window.electronAPI.audio.playAudio(audioPath);
       this.localPlayingAudio = null;
       this.requestUpdate();
-    } catch (err: unknown) {
-      this.localPlayingAudio = null;
-      this.requestUpdate();
-
-      // If error is because audio was stopped, don't log as error
-      if (err && typeof err === 'object' && 'code' in err && err.code === 'PLAYBACK_STOPPED') {
-        return;
-      }
-
-      const errorMessage =
-        audioType === 'before'
-          ? 'Failed to play before sentence audio'
-          : audioType === 'after'
-            ? 'Failed to play after sentence audio'
-            : 'Failed to play audio';
-
-      if (audioType === 'main') {
-        logger.error({ error: err }, errorMessage);
-      } else {
-        logger.warn({ error: err }, errorMessage);
-      }
-    } finally {
-      // Reset the flag synchronously so sequential playback works correctly
-      this.isPlayingAudio = false;
-    }
-  }
-
-  /**
-   * Stop any currently playing cached audio
-   */
-  private stopCachedAudio(): void {
-    if (this.currentAudioElement) {
-      this.currentAudioElement.pause();
-      this.currentAudioElement = null;
     }
   }
 
@@ -2011,10 +1933,25 @@ export class SentenceViewer extends LitElement {
         this.sentence.id
       );
       if (beforeSentenceAudioPath) {
-        await this.playAudioWithCache(beforeSentenceAudioPath, 'before');
+        const playbackSpeed = this.playbackSpeed ?? sessionManager.getPlaybackSpeed() ?? 1.0;
+        this.localPlayingAudio = 'before';
+        this.requestUpdate();
+        await audioPlayer.play(beforeSentenceAudioPath, {
+          playbackSpeed,
+          onEnded: () => {
+            this.localPlayingAudio = null;
+            this.requestUpdate();
+          },
+          onError: () => {
+            this.localPlayingAudio = null;
+            this.requestUpdate();
+          },
+        });
       }
     } catch (error) {
       logger.warn({ error }, 'Failed to get before sentence audio');
+      this.localPlayingAudio = null;
+      this.requestUpdate();
     }
   };
 
@@ -2044,7 +1981,20 @@ export class SentenceViewer extends LitElement {
       return;
     }
 
-    await this.playAudioWithCache(this.sentence.audioPath, 'main');
+    const playbackSpeed = this.playbackSpeed ?? sessionManager.getPlaybackSpeed() ?? 1.0;
+    this.localPlayingAudio = 'main';
+    this.requestUpdate();
+    await audioPlayer.play(this.sentence.audioPath, {
+      playbackSpeed,
+      onEnded: () => {
+        this.localPlayingAudio = null;
+        this.requestUpdate();
+      },
+      onError: () => {
+        this.localPlayingAudio = null;
+        this.requestUpdate();
+      },
+    });
   };
 
   private handleContextAfterClick = async (_e: MouseEvent) => {
@@ -2057,10 +2007,25 @@ export class SentenceViewer extends LitElement {
       const contextAudio = await window.electronAPI.dialog.ensureContextSentences(this.sentence.id);
       const afterSentenceAudioPath = contextAudio.afterSentenceAudio;
       if (afterSentenceAudioPath) {
-        await this.playAudioWithCache(afterSentenceAudioPath, 'after');
+        const playbackSpeed = this.playbackSpeed ?? sessionManager.getPlaybackSpeed() ?? 1.0;
+        this.localPlayingAudio = 'after';
+        this.requestUpdate();
+        await audioPlayer.play(afterSentenceAudioPath, {
+          playbackSpeed,
+          onEnded: () => {
+            this.localPlayingAudio = null;
+            this.requestUpdate();
+          },
+          onError: () => {
+            this.localPlayingAudio = null;
+            this.requestUpdate();
+          },
+        });
       }
     } catch (error) {
       logger.warn({ error }, 'Failed to get after sentence audio');
+      this.localPlayingAudio = null;
+      this.requestUpdate();
     }
   };
 
@@ -2074,8 +2039,8 @@ export class SentenceViewer extends LitElement {
     try {
       // Ensure no audio is playing
       try {
+        audioPlayer.stop();
         await window.electronAPI.audio.stopAudio();
-        this.isPlayingAudio = false;
       } catch (e) {
         logger.warn({ error: e }, 'Stop audio before regenerate failed (non-fatal)');
       }
@@ -2172,28 +2137,22 @@ export class SentenceViewer extends LitElement {
       setTimeout(async () => {
         try {
           // Stop any currently playing audio to ensure we play only the new one
+          audioPlayer.stop();
           await window.electronAPI.audio.stopAudio();
-          this.isPlayingAudio = false;
 
           // Wait a bit more to ensure stop has completed
           await new Promise((resolve) => setTimeout(resolve, 50));
 
           // Play only the newly generated audio (not before sentence audio)
           if (regeneratedPath) {
-            this.isPlayingAudio = true;
-            try {
-              await window.electronAPI.audio.playAudio(regeneratedPath);
-            } finally {
-              // Reset after a short delay to prevent rapid clicking
-              setTimeout(() => {
-                this.isPlayingAudio = false;
-              }, 100);
-            }
+            const playbackSpeed = this.playbackSpeed ?? sessionManager.getPlaybackSpeed() ?? 1.0;
+            await audioPlayer.play(regeneratedPath, {
+              playbackSpeed,
+            });
           }
         } catch (playError) {
           logger.warn({ error: playError }, 'Failed to play newly regenerated audio');
           // Don't show error to user as regeneration succeeded
-          this.isPlayingAudio = false;
         }
       }, 100);
     } catch (error) {
@@ -2308,7 +2267,7 @@ export class SentenceViewer extends LitElement {
                   <button
                     class="audio-button"
                     @click=${this.handlePlayAudio}
-                    ?disabled=${this.isPlayingAudio || this.isRegeneratingAudio}
+                    ?disabled=${audioPlayer.getState().isPlaying || this.isRegeneratingAudio}
                     title="Play audio (Space)"
                   >
                     <span aria-hidden="true">🔊</span>
@@ -2316,7 +2275,7 @@ export class SentenceViewer extends LitElement {
                   <button
                     class="audio-button secondary"
                     @click=${this.handleRecreateAudio}
-                    ?disabled=${this.isPlayingAudio || this.isRegeneratingAudio}
+                    ?disabled=${audioPlayer.getState().isPlaying || this.isRegeneratingAudio}
                     title="Recreate audio"
                   >
                     <span aria-hidden="true">♻</span>

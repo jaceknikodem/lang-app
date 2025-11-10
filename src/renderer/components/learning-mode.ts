@@ -13,6 +13,7 @@ import { useKeyboardBindings, GlobalShortcuts } from '../utils/keyboard-manager.
 import { loadCurrentLanguage, loadLemmatizationModel } from '../utils/language-manager.js';
 import { BaseComponent } from './base-component.js';
 import { logger } from '../utils/logger.js';
+import { audioPlayer } from '../utils/audio-player-service.js';
 import './sentence-viewer.js';
 import './session-complete.js';
 import './progress-bar.js';
@@ -113,11 +114,9 @@ export class LearningMode extends BaseComponent {
 
   // Audio cache: Map of audioPath -> blob URL
   // Using Blob URLs instead of data URLs for better performance (no base64 encoding/decoding)
+  // Note: We keep this cache for preloading, but use audioPlayer for playback
   private audioCache: Map<string, string> = new Map(); // audioPath -> blob URL
   private blobUrlCache: Map<string, string> = new Map(); // audioPath -> blob URL (for cleanup)
-  // HTML5 Audio instances for playing cached audio
-  private currentAudioElement: HTMLAudioElement | null = null;
-  private beforeAudioElement: HTMLAudioElement | null = null;
 
   protected override handleExternalLanguageChange = async (event: Event): Promise<void> => {
     // Call base class handler first
@@ -1279,20 +1278,16 @@ export class LearningMode extends BaseComponent {
     // Save to session manager (per-language)
     sessionManager.setPlaybackSpeed(speed);
 
-    // Update currently playing audio if any
-    if (this.currentAudioElement) {
-      this.currentAudioElement.playbackRate = speed;
-    }
+    // Update audio player playback speed
+    audioPlayer.setPlaybackSpeed(speed);
   }
 
   private loadPlaybackSpeed(): void {
     // Load playback speed from session manager (per-language)
     this.playbackSpeed = sessionManager.getPlaybackSpeed();
 
-    // Update currently playing audio if any
-    if (this.currentAudioElement) {
-      this.currentAudioElement.playbackRate = this.playbackSpeed;
-    }
+    // Update audio player playback speed
+    audioPlayer.setPlaybackSpeed(this.playbackSpeed);
   }
 
   protected updated(changed: Map<string, unknown>) {
@@ -2170,186 +2165,6 @@ export class LearningMode extends BaseComponent {
   }
 
   /**
-   * Play before sentence audio if it exists
-   * Returns a promise that resolves when audio finishes playing (or immediately if no audio)
-   */
-  private async playBeforeSentenceAudio(sentence: Sentence): Promise<void> {
-    if (!sentence.contextBefore || !sentence.id) {
-      return; // No before sentence text
-    }
-
-    try {
-      // Ensure before sentence audio exists
-      const beforeSentenceAudioPath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(
-        sentence.id
-      );
-      if (!beforeSentenceAudioPath) {
-        return; // No audio generated
-      }
-
-      // Load into cache if not already cached
-      if (!this.audioCache.has(beforeSentenceAudioPath)) {
-        await this.loadAudioIntoCache(beforeSentenceAudioPath).catch((err) => {
-          logger.warn(
-            { error: err, audioPath: beforeSentenceAudioPath },
-            `Failed to load before sentence audio into cache`
-          );
-        });
-      }
-
-      // Set state to indicate before-sentence audio is playing
-      this.currentPlayingAudio = 'before';
-
-      // Play before sentence audio
-      const cachedBeforeAudio = this.audioCache.get(beforeSentenceAudioPath);
-      if (cachedBeforeAudio) {
-        // Use HTML5 Audio API to play from memory
-        this.beforeAudioElement = new Audio(cachedBeforeAudio);
-        this.beforeAudioElement.playbackRate = this.playbackSpeed;
-
-        // Wait for before sentence audio to finish
-        await new Promise<void>((resolve, reject) => {
-          this.beforeAudioElement!.addEventListener('ended', () => {
-            this.beforeAudioElement = null;
-            this.currentPlayingAudio = null;
-            // Don't track here - will be tracked once with main sentence audio
-            resolve();
-          });
-          this.beforeAudioElement!.addEventListener('error', (e) => {
-            logger.warn(
-              { error: e },
-              'Error playing before sentence cached audio, falling back to IPC'
-            );
-            this.beforeAudioElement = null;
-            // Fall back to IPC playback
-            window.electronAPI.audio
-              .playAudio(beforeSentenceAudioPath)
-              .then(() => {
-                this.currentPlayingAudio = null;
-                // Don't track here - will be tracked once with main sentence audio
-                resolve();
-              })
-              .catch(reject);
-          });
-          this.beforeAudioElement!.play().catch((playError) => {
-            logger.warn(
-              { error: playError },
-              'Failed to play before sentence cached audio, falling back to IPC'
-            );
-            this.beforeAudioElement = null;
-            // Fall back to IPC playback
-            window.electronAPI.audio
-              .playAudio(beforeSentenceAudioPath)
-              .then(() => {
-                this.currentPlayingAudio = null;
-                // Don't track here - will be tracked once with main sentence audio
-                resolve();
-              })
-              .catch(reject);
-          });
-        });
-      } else {
-        // Not cached: Use IPC playback
-        // Note: For IPC playback, we can't track exactly when it ends, so we'll assume it's done after a delay
-        await window.electronAPI.audio.playAudio(beforeSentenceAudioPath);
-        this.currentPlayingAudio = null;
-        // Don't track here - will be tracked once with main sentence audio
-      }
-    } catch (error) {
-      logger.warn({ error }, 'Failed to play before sentence audio');
-      this.currentPlayingAudio = null;
-      // Continue with main sentence audio even if before sentence audio fails
-    }
-  }
-
-  /**
-   * Play after sentence audio if it exists
-   * Returns a promise that resolves when audio finishes playing (or immediately if no audio)
-   */
-  private async playAfterSentenceAudio(sentence: Sentence): Promise<void> {
-    if (!sentence.contextAfter || !sentence.id) {
-      return; // No after sentence text
-    }
-
-    try {
-      // Ensure context sentences audio exists (includes afterSentence)
-      const contextAudio = await window.electronAPI.dialog.ensureContextSentences(sentence.id);
-      const afterSentenceAudioPath = contextAudio.afterSentenceAudio;
-      if (!afterSentenceAudioPath) {
-        return; // No audio generated
-      }
-
-      // Load into cache if not already cached
-      if (!this.audioCache.has(afterSentenceAudioPath)) {
-        await this.loadAudioIntoCache(afterSentenceAudioPath).catch((err) => {
-          logger.warn(
-            { error: err, audioPath: afterSentenceAudioPath },
-            `Failed to load after sentence audio into cache`
-          );
-        });
-      }
-
-      // Set state to indicate after-sentence audio is playing
-      this.currentPlayingAudio = 'after';
-
-      // Play after sentence audio
-      const cachedAfterAudio = this.audioCache.get(afterSentenceAudioPath);
-      if (cachedAfterAudio) {
-        // Use HTML5 Audio API to play from memory
-        this.beforeAudioElement = new Audio(cachedAfterAudio);
-        this.beforeAudioElement.playbackRate = this.playbackSpeed;
-
-        // Wait for after sentence audio to finish
-        await new Promise<void>((resolve, reject) => {
-          this.beforeAudioElement!.addEventListener('ended', () => {
-            this.beforeAudioElement = null;
-            this.currentPlayingAudio = null;
-            resolve();
-          });
-          this.beforeAudioElement!.addEventListener('error', (e) => {
-            logger.warn(
-              { error: e },
-              'Error playing after sentence cached audio, falling back to IPC'
-            );
-            this.beforeAudioElement = null;
-            // Fall back to IPC playback
-            window.electronAPI.audio
-              .playAudio(afterSentenceAudioPath)
-              .then(() => {
-                this.currentPlayingAudio = null;
-                resolve();
-              })
-              .catch(reject);
-          });
-          this.beforeAudioElement!.play().catch((playError) => {
-            logger.warn(
-              { error: playError },
-              'Failed to play after sentence cached audio, falling back to IPC'
-            );
-            this.beforeAudioElement = null;
-            // Fall back to IPC playback
-            window.electronAPI.audio
-              .playAudio(afterSentenceAudioPath)
-              .then(() => {
-                this.currentPlayingAudio = null;
-                resolve();
-              })
-              .catch(reject);
-          });
-        });
-      } else {
-        // Not cached: Use IPC playback
-        await window.electronAPI.audio.playAudio(afterSentenceAudioPath);
-        this.currentPlayingAudio = null;
-      }
-    } catch (error) {
-      logger.warn({ error }, 'Failed to play after sentence audio');
-      this.currentPlayingAudio = null;
-      // Continue even if after sentence audio fails
-    }
-  }
-
-  /**
    * Play audio immediately - don't wait for loading
    * When called manually (e.g., via space key), plays only the current sentence
    */
@@ -2365,64 +2180,111 @@ export class LearningMode extends BaseComponent {
     try {
       const currentAudioPath = currentSentence.audioPath;
 
-      // Stop any currently playing audio (both cached and IPC)
+      // Stop any currently playing audio
       await this.stopCachedAudio();
-
-      // Play before sentence audio first if it exists
-      await this.playBeforeSentenceAudio(currentSentence);
 
       // Track that audio has started for this sentence
       if (currentSentence.id) {
         this.lastSentenceWithAudioStarted = currentSentence.id;
       }
 
-      // Now play current sentence audio
-      // Set state to indicate main sentence audio is playing
-      this.currentPlayingAudio = 'main';
+      // Build sequence of audio paths (before, main, after)
+      const audioPaths: string[] = [];
+      const audioTypes: ('before' | 'main' | 'after')[] = [];
 
-      const cachedAudio = this.audioCache.get(currentAudioPath);
-      if (cachedAudio) {
-        // Use HTML5 Audio API to play from memory
-        this.currentAudioElement = new Audio(cachedAudio);
-
-        // Set playback speed
-        this.currentAudioElement.playbackRate = this.playbackSpeed;
-
-        // Handle errors and cleanup
-        this.currentAudioElement.addEventListener('ended', () => {
-          this.currentAudioElement = null;
-          this.currentPlayingAudio = null;
-          // Increment strength when audio finishes playing
-          void this.incrementStrengthForWord(currentWord.id);
-          // Track sentence play count
-          if (currentSentence.id) {
-            void window.electronAPI.database
-              .incrementSentencePlayCount(currentSentence.id)
-              .catch((err) => {
-                logger.warn(
-                  { error: err, sentenceId: currentSentence.id },
-                  'Failed to increment sentence play count'
-                );
-              });
+      // Get before sentence audio if it exists
+      if (currentSentence.contextBefore && currentSentence.id) {
+        try {
+          const beforeSentenceAudioPath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(
+            currentSentence.id
+          );
+          if (beforeSentenceAudioPath) {
+            audioPaths.push(beforeSentenceAudioPath);
+            audioTypes.push('before');
           }
-          // Track audio playback event
-          if (currentSentence.id && this.currentLanguage) {
-            this.audioPlayedCount++;
-            void window.electronAPI.tracking
-              .recordAudioPlayback({
-                sessionId: this.currentSessionId,
-                sentenceId: currentSentence.id,
-                audioPath: currentAudioPath,
-                language: this.currentLanguage,
-                mode: 'learning',
-                playbackSpeed: this.playbackSpeed,
-              })
-              .catch((err: unknown) => {
-                logger.warn({ error: err }, 'Failed to record audio playback');
-              });
+        } catch (error) {
+          logger.warn({ error }, 'Failed to get before sentence audio');
+        }
+      }
+
+      // Add main sentence audio
+      audioPaths.push(currentAudioPath);
+      audioTypes.push('main');
+
+      // Get after sentence audio if it exists
+      let afterSentenceAudioPath: string | undefined;
+      if (currentSentence.contextAfter && currentSentence.id) {
+        try {
+          const contextAudio = await window.electronAPI.dialog.ensureContextSentences(
+            currentSentence.id
+          );
+          afterSentenceAudioPath = contextAudio.afterSentenceAudio;
+          if (afterSentenceAudioPath) {
+            audioPaths.push(afterSentenceAudioPath);
+            audioTypes.push('after');
           }
-          // Play after sentence audio if it exists
-          void this.playAfterSentenceAudio(currentSentence).then(() => {
+        } catch (error) {
+          logger.warn({ error }, 'Failed to get after sentence audio');
+        }
+      }
+
+      // Track which audio is currently playing
+      let currentIndex = 0;
+      if (audioTypes.length > 0) {
+        this.currentPlayingAudio = audioTypes[0];
+      }
+
+      // Helper to track audio completion
+      const trackAudioCompletion = async () => {
+        // Increment strength when audio finishes playing
+        void this.incrementStrengthForWord(currentWord.id);
+        // Track sentence play count
+        if (currentSentence.id) {
+          void window.electronAPI.database
+            .incrementSentencePlayCount(currentSentence.id)
+            .catch((err) => {
+              logger.warn(
+                { error: err, sentenceId: currentSentence.id },
+                'Failed to increment sentence play count'
+              );
+            });
+        }
+        // Track audio playback event
+        if (currentSentence.id && this.currentLanguage) {
+          this.audioPlayedCount++;
+          void window.electronAPI.tracking
+            .recordAudioPlayback({
+              sessionId: this.currentSessionId,
+              sentenceId: currentSentence.id,
+              audioPath: currentAudioPath,
+              language: this.currentLanguage,
+              mode: 'learning',
+              playbackSpeed: this.playbackSpeed,
+            })
+            .catch((err: unknown) => {
+              logger.warn({ error: err }, 'Failed to record audio playback');
+            });
+        }
+      };
+
+      // Play sequence
+      await audioPlayer.playSequence(audioPaths, {
+        playbackSpeed: this.playbackSpeed,
+        onEnded: () => {
+          // Move to next audio in sequence
+          currentIndex++;
+          if (currentIndex < audioTypes.length) {
+            // Update UI to show next audio is playing
+            this.currentPlayingAudio = audioTypes[currentIndex];
+            this.requestUpdate();
+          } else {
+            // All audio finished
+            this.currentPlayingAudio = null;
+            this.requestUpdate();
+
+            // Track completion
+            void trackAudioCompletion();
+
             // Auto-scroll to next sentence after 1.5 seconds if enabled
             if (this.autoScrollEnabled) {
               this.clearAutoScrollTimer();
@@ -2433,139 +2295,37 @@ export class LearningMode extends BaseComponent {
                 this.autoScrollTimer = null;
               }, 1500); // 1.5 seconds delay
             }
-          });
-        });
-
-        this.currentAudioElement.addEventListener('error', (e) => {
-          logger.warn({ error: e }, 'Error playing cached audio, falling back to IPC');
-          this.currentAudioElement = null;
-          // Fall back to IPC playback
-          void window.electronAPI.audio
-            .playAudio(currentAudioPath)
-            .then(() => {
-              this.currentPlayingAudio = null;
-              void this.incrementStrengthForWord(currentWord.id);
-              // Track sentence play count
-              if (currentSentence.id) {
-                void window.electronAPI.database
-                  .incrementSentencePlayCount(currentSentence.id)
-                  .catch((err) => {
-                    logger.warn(
-                      { error: err, sentenceId: currentSentence.id },
-                      'Failed to increment sentence play count'
-                    );
-                  });
-              }
-              // Track audio playback event
-              if (currentSentence.id && this.currentLanguage) {
-                this.audioPlayedCount++;
-                void window.electronAPI.tracking
-                  .recordAudioPlayback({
-                    sessionId: this.currentSessionId,
-                    sentenceId: currentSentence.id,
-                    audioPath: currentAudioPath,
-                    language: this.currentLanguage,
-                    mode: 'learning',
-                    playbackSpeed: this.playbackSpeed,
-                  })
-                  .catch((err: unknown) => {
-                    logger.warn({ error: err }, 'Failed to record audio playback');
-                  });
-              }
-            })
-            .catch((err) => {
-              this.currentPlayingAudio = null;
-              logger.error({ error: err }, 'Failed to play audio via IPC');
-            });
-        });
-
-        try {
-          await this.currentAudioElement.play();
-          return; // Success - audio playing from cache
-        } catch (playError) {
-          logger.warn({ error: playError }, 'Failed to play cached audio');
-          this.currentAudioElement = null;
-          this.currentPlayingAudio = null;
-          // Fall through to IPC playback
-        }
-      }
-
-      // Not cached: Start IPC playback immediately (non-blocking, returns quickly)
-      // IPC playback starts immediately and plays in background
-      // Note: For IPC playback, we can't track exactly when it ends, so we'll reset state after a delay
-      void window.electronAPI.audio
-        .playAudio(currentAudioPath)
-        .then(() => {
-          this.currentPlayingAudio = null;
-          void this.incrementStrengthForWord(currentWord.id);
-          // Track sentence play count
-          if (currentSentence.id) {
-            void window.electronAPI.database
-              .incrementSentencePlayCount(currentSentence.id)
-              .catch((err) => {
-                logger.warn(
-                  { error: err, sentenceId: currentSentence.id },
-                  'Failed to increment sentence play count'
-                );
-              });
           }
-          // Track audio playback event
-          if (currentSentence.id && this.currentLanguage) {
-            this.audioPlayedCount++;
-            void window.electronAPI.tracking
-              .recordAudioPlayback({
-                sessionId: this.currentSessionId,
-                sentenceId: currentSentence.id,
-                audioPath: currentAudioPath,
-                language: this.currentLanguage,
-                mode: 'learning',
-                playbackSpeed: this.playbackSpeed,
-              })
-              .catch((err: unknown) => {
-                logger.warn({ error: err }, 'Failed to record audio playback');
-              });
-          }
-        })
-        .catch((err) => {
+        },
+        onError: (error) => {
+          logger.error({ error }, 'Failed to play audio sequence');
           this.currentPlayingAudio = null;
-          // Don't log PLAYBACK_STOPPED errors
-          if (err?.code !== 'PLAYBACK_STOPPED') {
-            logger.error({ error: err }, 'Failed to play audio via IPC');
-          }
-        });
+          this.requestUpdate();
+        },
+      });
 
-      // Load audio into cache in background for next time (non-blocking)
+      // Preload audio into cache in background for next time (non-blocking)
       if (!this.audioCache.has(currentAudioPath)) {
-        void this.loadAudioIntoCache(currentAudioPath).catch((err) => {
-          logger.warn(
-            { error: err, audioPath: currentAudioPath },
-            `Failed to load audio into cache`
-          );
+        void audioPlayer.preload(currentAudioPath).catch((err) => {
+          logger.warn({ error: err, audioPath: currentAudioPath }, `Failed to preload audio`);
         });
       }
     } catch (error) {
       logger.error({ error }, 'Failed to play audio');
+      this.currentPlayingAudio = null;
+      this.requestUpdate();
     }
   }
 
   /**
-   * Stop currently playing cached audio
+   * Stop currently playing audio
    */
   private async stopCachedAudio(): Promise<void> {
     // Clear auto-scroll timer when stopping audio
     this.clearAutoScrollTimer();
 
-    if (this.beforeAudioElement) {
-      this.beforeAudioElement.pause();
-      this.beforeAudioElement.currentTime = 0;
-      this.beforeAudioElement = null;
-    }
-
-    if (this.currentAudioElement) {
-      this.currentAudioElement.pause();
-      this.currentAudioElement.currentTime = 0;
-      this.currentAudioElement = null;
-    }
+    // Stop audio player
+    audioPlayer.stop();
 
     // Reset audio playing state
     this.currentPlayingAudio = null;
