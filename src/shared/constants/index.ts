@@ -61,6 +61,7 @@ const DEFAULT_APP_CONFIG = {
   defaultLanguage: 'spanish',
   defaultWordCount: 5,
   defaultSentenceCount: 3,
+  maxLearningWords: 20,
   supportedLanguages: ['spanish', 'italian', 'portuguese', 'polish', 'indonesian'] as const,
 };
 
@@ -103,6 +104,7 @@ export const APP_CONFIG = {
   DEFAULT_WORD_COUNT: appConfig?.defaultWordCount ?? DEFAULT_APP_CONFIG.defaultWordCount,
   DEFAULT_SENTENCE_COUNT:
     appConfig?.defaultSentenceCount ?? DEFAULT_APP_CONFIG.defaultSentenceCount,
+  MAX_LEARNING_WORDS: appConfig?.maxLearningWords ?? DEFAULT_APP_CONFIG.maxLearningWords,
   SUPPORTED_LANGUAGES:
     supportedLanguagesFromConfig ??
     appConfig?.supportedLanguages ??

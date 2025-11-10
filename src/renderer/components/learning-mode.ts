@@ -8,7 +8,7 @@ import { sharedStyles } from '../styles/shared.js';
 import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
 import { Word, Sentence } from '../../shared/types/core.js';
-import { STRENGTH_BOOST_CONFIG } from '../../shared/constants/index.js';
+import { STRENGTH_BOOST_CONFIG, APP_CONFIG } from '../../shared/constants/index.js';
 import { useKeyboardBindings, GlobalShortcuts } from '../utils/keyboard-manager.js';
 import { loadCurrentLanguage, loadLemmatizationModel } from '../utils/language-manager.js';
 import { BaseComponent } from './base-component.js';
@@ -686,7 +686,7 @@ export class LearningMode extends BaseComponent {
           limitedWords.push(word);
           seenIds.add(word.id);
 
-          if (limitedWords.length >= 20) {
+          if (limitedWords.length >= APP_CONFIG.MAX_LEARNING_WORDS) {
             break;
           }
         }
@@ -695,7 +695,7 @@ export class LearningMode extends BaseComponent {
         if (limitedWords.length > 0) {
           sessionManager.startNewLearningSession(
             limitedWords.map((word) => word.id),
-            Math.min(20, limitedWords.length)
+            Math.min(APP_CONFIG.MAX_LEARNING_WORDS, limitedWords.length)
           );
         }
         console.log('Using specific words from current session:', this.selectedWords.length);
@@ -764,14 +764,17 @@ export class LearningMode extends BaseComponent {
         selectableWords.push(word);
         sessionWordIds.push(word.id);
 
-        if (sessionWordIds.length >= 20) {
+        if (sessionWordIds.length >= APP_CONFIG.MAX_LEARNING_WORDS) {
           break;
         }
       }
 
       this.selectedWords = selectableWords;
       if (sessionWordIds.length) {
-        sessionManager.startNewLearningSession(sessionWordIds, Math.min(20, sessionWordIds.length));
+        sessionManager.startNewLearningSession(
+          sessionWordIds,
+          Math.min(APP_CONFIG.MAX_LEARNING_WORDS, sessionWordIds.length)
+        );
       }
 
       // If no words with sentences were found, check if there are any words at all for this language
@@ -789,7 +792,7 @@ export class LearningMode extends BaseComponent {
         );
         // Store all words (even without sentences) so we can show a helpful message
         if (allWordsForLanguage.length > 0) {
-          this.selectedWords = allWordsForLanguage.slice(0, 20); // Store up to 20 for display purposes
+          this.selectedWords = allWordsForLanguage.slice(0, APP_CONFIG.MAX_LEARNING_WORDS); // Store up to max for display purposes
         }
       }
 
@@ -974,7 +977,7 @@ export class LearningMode extends BaseComponent {
         if (wordIds.length > 0) {
           sessionManager.startNewLearningSession(
             wordIds,
-            Math.min(20, wordIds.length),
+            Math.min(APP_CONFIG.MAX_LEARNING_WORDS, wordIds.length),
             sentenceIds,
             audioPaths
           );

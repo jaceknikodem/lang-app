@@ -57,6 +57,8 @@ default_language = "spanish"
 default_word_count = 5
 # Default number of sentences to generate
 default_sentence_count = 3
+# Maximum number of words allowed in a learning session
+max_learning_words = 10
 # Automatically open DevTools on startup (development only)
 open_devtools = false
 

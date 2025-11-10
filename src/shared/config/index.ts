@@ -276,6 +276,12 @@ const config = convict({
       default: 3,
       env: 'APP_DEFAULT_SENTENCE_COUNT',
     },
+    maxLearningWords: {
+      doc: 'Maximum number of words allowed in a learning session',
+      format: 'int',
+      default: 20,
+      env: 'APP_MAX_LEARNING_WORDS',
+    },
     openDevtools: {
       doc: 'Automatically open DevTools on startup',
       format: Boolean,
@@ -498,6 +504,7 @@ export const appConfig = {
   defaultLanguage: config.get('app.defaultLanguage'),
   defaultWordCount: config.get('app.defaultWordCount'),
   defaultSentenceCount: config.get('app.defaultSentenceCount'),
+  maxLearningWords: config.get('app.maxLearningWords'),
   openDevtools: config.get('app.openDevtools'),
 };
 

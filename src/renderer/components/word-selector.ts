@@ -16,6 +16,7 @@ import {
 import { getErrorMessage } from '../../shared/utils/error.js';
 import { GeneratedWord, Word } from '../../shared/types/core.js';
 import { logger } from '../utils/logger.js';
+import { APP_CONFIG } from '../../shared/constants/index.js';
 
 interface SelectableWord extends GeneratedWord {
   selected: boolean;
@@ -510,7 +511,10 @@ export class WordSelector extends LitElement {
         if (readyWords.length > 0) {
           // Start a new learning session with the ready words
           const wordIds = readyWords.map((w) => w.id);
-          sessionManager.startNewLearningSession(wordIds, Math.min(20, wordIds.length));
+          sessionManager.startNewLearningSession(
+            wordIds,
+            Math.min(APP_CONFIG.MAX_LEARNING_WORDS, wordIds.length)
+          );
           logger.info(
             { readyWordsCount: readyWords.length },
             `Started learning session with ${readyWords.length} ready words`
@@ -592,8 +596,8 @@ export class WordSelector extends LitElement {
       return;
     }
 
-    if (selectedWords.length > 20) {
-      this.error = 'Please select no more than 20 words for optimal learning.';
+    if (selectedWords.length > APP_CONFIG.MAX_LEARNING_WORDS) {
+      this.error = `Please select no more than ${APP_CONFIG.MAX_LEARNING_WORDS} words for optimal learning.`;
       return;
     }
 
