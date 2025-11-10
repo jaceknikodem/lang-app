@@ -4,9 +4,11 @@
 
 import { getLogger } from '../utils/logger.js';
 import { Logger } from '../../shared/utils/logger.js';
+import { DatabaseLayer } from '../../shared/types/database.js';
 
 export interface LemmatizationServiceConfig {
   serverUrl?: string;
+  database?: DatabaseLayer;
 }
 
 export interface LemmatizationStatus {
@@ -26,10 +28,12 @@ export interface GetWordFrequenciesResponse {
 export class LemmatizationService {
   private serverUrl: string;
   private readonly logger: Logger;
+  private readonly database?: DatabaseLayer;
 
   constructor(config: LemmatizationServiceConfig = {}) {
     this.logger = getLogger();
     this.serverUrl = config.serverUrl || 'http://127.0.0.1:8888';
+    this.database = config.database;
   }
 
   /**
@@ -157,44 +161,97 @@ export class LemmatizationService {
 
   /**
    * Get Zipf frequencies for a list of words
+   * Checks cache first, then fetches only missing words from API
    */
   async getWordFrequencies(words: string[], language: string): Promise<Record<string, number>> {
     const languageCode = this.mapLanguageToCode(language);
+    const result: Record<string, number> = {};
 
-    this.logger.debug(
-      {
-        wordCount: words.length,
-        languageCode,
-        language,
-      },
-      '[Lemmatization] Calling freqword API'
-    );
+    // Step 1: Check cache if database is available
+    let cachedFrequencies: Record<string, number> = {};
+    let wordsToFetch: string[] = words;
 
-    const response = await fetch(`${this.serverUrl}/freqword`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        words: words,
-        language: languageCode,
-      }),
-      signal: AbortSignal.timeout(10000), // 10 second timeout
-    });
-
-    this.logger.debug(
-      { status: response.status, languageCode, language },
-      '[Lemmatization] freqword API response'
-    );
-
-    if (!response.ok) {
-      const errorData = await response
-        .json()
-        .catch(() => ({ detail: `HTTP error! status: ${response.status}` }));
-      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    if (this.database) {
+      try {
+        cachedFrequencies = await this.database.getZipfFrequencies(words, language);
+        // Identify words not in cache
+        wordsToFetch = words.filter((word) => !(word in cachedFrequencies));
+        this.logger.debug(
+          {
+            totalWords: words.length,
+            cachedWords: Object.keys(cachedFrequencies).length,
+            wordsToFetch: wordsToFetch.length,
+          },
+          '[Lemmatization] Cache check complete'
+        );
+      } catch (error) {
+        this.logger.warn({ error }, '[Lemmatization] Failed to check cache, fetching all words');
+        // If cache check fails, fetch all words
+        wordsToFetch = words;
+      }
     }
 
-    const data: GetWordFrequenciesResponse = await response.json();
-    return data.frequencies || {};
+    // Step 2: Fetch missing words from API
+    if (wordsToFetch.length > 0) {
+      this.logger.debug(
+        {
+          wordCount: wordsToFetch.length,
+          languageCode,
+          language,
+        },
+        '[Lemmatization] Calling freqword API for missing words'
+      );
+
+      const response = await fetch(`${this.serverUrl}/freqword`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          words: wordsToFetch,
+          language: languageCode,
+        }),
+        signal: AbortSignal.timeout(10000), // 10 second timeout
+      });
+
+      this.logger.debug(
+        { status: response.status, languageCode, language },
+        '[Lemmatization] freqword API response'
+      );
+
+      if (!response.ok) {
+        const errorData = await response
+          .json()
+          .catch(() => ({ detail: `HTTP error! status: ${response.status}` }));
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      }
+
+      const data: GetWordFrequenciesResponse = await response.json();
+      const fetchedFrequencies = data.frequencies || {};
+
+      // Step 3: Store fetched results in cache (only for words that exist in database)
+      if (this.database && Object.keys(fetchedFrequencies).length > 0) {
+        try {
+          await this.database.updateZipfFrequencies(fetchedFrequencies, language);
+          this.logger.debug(
+            { wordCount: Object.keys(fetchedFrequencies).length },
+            '[Lemmatization] Cached fetched frequencies'
+          );
+        } catch (error) {
+          this.logger.warn(
+            { error },
+            '[Lemmatization] Failed to cache frequencies, continuing anyway'
+          );
+        }
+      }
+
+      // Merge fetched frequencies into result
+      Object.assign(result, fetchedFrequencies);
+    }
+
+    // Step 4: Merge cached frequencies into result
+    Object.assign(result, cachedFrequencies);
+
+    return result;
   }
 }

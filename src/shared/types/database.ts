@@ -332,6 +332,10 @@ export interface DatabaseLayer {
     minHoverCount?: number,
     lookbackDays?: number
   ): Promise<number>;
+
+  // Zipf frequency caching
+  getZipfFrequencies(words: string[], language: string): Promise<Record<string, number>>;
+  updateZipfFrequencies(frequencies: Record<string, number>, language: string): Promise<void>;
 }
 
 export interface DatabaseConfig {

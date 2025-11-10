@@ -166,6 +166,7 @@ async function initializeServices(): Promise<void> {
     // Initialize lemmatization service (needed for ContentGenerator)
     lemmatizationService = new LemmatizationService({
       serverUrl: serviceConfig.lemmatization.serverUrl,
+      database: databaseLayer,
     });
     logger.info('Lemmatization service initialized successfully');
 

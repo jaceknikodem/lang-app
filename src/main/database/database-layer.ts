@@ -351,6 +351,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // Ignore error - this is expected for existing databases with the column
     }
 
+    // Migration: Add zipf_frequency column to words table if it doesn't exist
+    try {
+      db.exec(`ALTER TABLE words ADD COLUMN zipf_frequency REAL`);
+    } catch {
+      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
+      // Ignore error - this is expected for existing databases with the column
+    }
+
     // SRS adjustments tracking (quiz mode only)
     db.exec(`
       CREATE TABLE IF NOT EXISTS srs_adjustments (
@@ -3277,6 +3285,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       grammarExplanationCount: (row.grammar_explanation_count as number) ?? 0,
       topic: (row.topic as string) ?? undefined,
       addedVia: (row.added_via as string) ?? undefined,
+      zipfFrequency: (row.zipf_frequency as number) ?? undefined,
     };
   }
 
@@ -4078,6 +4087,78 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       return wordsAdded;
     } catch (error) {
       throw wrapError(error, `Failed to process frequently looked-up words`);
+    }
+  }
+
+  /**
+   * Get cached Zipf frequencies for words from the database
+   */
+  async getZipfFrequencies(words: string[], language: string): Promise<Record<string, number>> {
+    const db = this.getDb();
+
+    try {
+      if (words.length === 0) {
+        return {};
+      }
+
+      // Create placeholders for IN clause
+      const placeholders = words.map(() => '?').join(',');
+      const stmt = db.prepare(`
+        SELECT word, zipf_frequency 
+        FROM words 
+        WHERE word IN (${placeholders}) 
+        AND language = ? 
+        AND zipf_frequency IS NOT NULL
+      `);
+
+      const rows = stmt.all(...words, language) as Array<{ word: string; zipf_frequency: number }>;
+      const result: Record<string, number> = {};
+
+      for (const row of rows) {
+        result[row.word] = row.zipf_frequency;
+      }
+
+      return result;
+    } catch (error) {
+      throw wrapError(error, `Failed to get zipf frequencies`);
+    }
+  }
+
+  /**
+   * Update Zipf frequencies for words in the database
+   * Only updates words that exist in the table
+   */
+  async updateZipfFrequencies(
+    frequencies: Record<string, number>,
+    language: string
+  ): Promise<void> {
+    const db = this.getDb();
+
+    try {
+      if (Object.keys(frequencies).length === 0) {
+        return;
+      }
+
+      const updateStmt = db.prepare(`
+        UPDATE words 
+        SET zipf_frequency = ? 
+        WHERE word = ? AND language = ?
+      `);
+
+      const transaction = db.transaction((freqs: Record<string, number>) => {
+        for (const [word, frequency] of Object.entries(freqs)) {
+          updateStmt.run(frequency, word, language);
+        }
+      });
+
+      transaction(frequencies);
+
+      this.logger.debug(
+        { wordCount: Object.keys(frequencies).length, language },
+        '[updateZipfFrequencies] Updated zipf frequencies'
+      );
+    } catch (error) {
+      throw wrapError(error, `Failed to update zipf frequencies`);
     }
   }
 }
