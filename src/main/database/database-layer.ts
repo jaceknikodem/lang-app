@@ -127,6 +127,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         fsrs_last_rating INTEGER,
         processing_status TEXT DEFAULT 'ready',
         sentence_count INTEGER DEFAULT 0,
+        grammar_explanation_count INTEGER DEFAULT 0,
         topic TEXT,
         added_via TEXT
       )
@@ -219,6 +220,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     // Migration: Add ignored column to sentences table if it doesn't exist
     try {
       db.exec(`ALTER TABLE sentences ADD COLUMN ignored BOOLEAN DEFAULT FALSE`);
+    } catch {
+      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
+      // Ignore error - this is expected for existing databases with the column
+    }
+
+    // Migration: Add grammar_explanation_count column to words table if it doesn't exist
+    try {
+      db.exec(`ALTER TABLE words ADD COLUMN grammar_explanation_count INTEGER DEFAULT 0`);
     } catch {
       // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
       // Ignore error - this is expected for existing databases with the column
@@ -1473,6 +1482,27 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       }
     } catch (error) {
       throw wrapError(error, `Failed to increment sentence play count`);
+    }
+  }
+
+  /**
+   * Increment the grammar explanation count for a word
+   */
+  async incrementGrammarExplanationCount(wordId: number): Promise<void> {
+    const db = this.getDb();
+
+    try {
+      const stmt = db.prepare(`
+        UPDATE words
+        SET grammar_explanation_count = grammar_explanation_count + 1
+        WHERE id = ?
+      `);
+      const result = stmt.run(wordId);
+      if (result.changes === 0) {
+        throw new Error(`Word with ID ${wordId} not found`);
+      }
+    } catch (error) {
+      throw wrapError(error, `Failed to increment grammar explanation count`);
     }
   }
 
@@ -3205,6 +3235,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       fsrsLastRating: (row.fsrs_last_rating as number) ?? undefined,
       processingStatus: (row.processing_status as WordProcessingStatus) ?? 'ready',
       sentenceCount: (row.sentence_count as number) ?? 0,
+      grammarExplanationCount: (row.grammar_explanation_count as number) ?? 0,
       topic: (row.topic as string) ?? undefined,
       addedVia: (row.added_via as string) ?? undefined,
     };

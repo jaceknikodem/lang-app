@@ -134,6 +134,7 @@ export interface DatabaseLayer {
   updateAfterSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void>;
   updateSentenceTokens(sentenceId: number, tokens: PrecomputedToken[]): Promise<void>;
   incrementSentencePlayCount(sentenceId: number): Promise<void>;
+  incrementGrammarExplanationCount(wordId: number): Promise<void>;
   recordPronunciationAttempt(
     sentenceId: number,
     similarityScore: number,

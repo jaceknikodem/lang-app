@@ -24,6 +24,7 @@ export interface Word {
   fsrsLastRating?: number;
   processingStatus?: 'queued' | 'processing' | 'ready' | 'failed';
   sentenceCount?: number;
+  grammarExplanationCount?: number; // Number of times grammar explanation has been generated
   topic?: string; // Topic the word was generated for
   addedVia?: string; // How the word was added: 'manual', 'auto', or 'context_menu'
 }

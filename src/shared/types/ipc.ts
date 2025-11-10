@@ -76,6 +76,7 @@ export interface IPCBridge {
       audioGenerationVoiceId?: string
     ) => Promise<void>;
     incrementSentencePlayCount: (sentenceId: number) => Promise<void>;
+    incrementGrammarExplanationCount: (wordId: number) => Promise<void>;
     recordPronunciationAttempt: (
       sentenceId: number,
       similarityScore: number,
@@ -396,6 +397,7 @@ export const IPC_CHANNELS = {
     UPDATE_SENTENCE_LAST_SHOWN: 'database:updateSentenceLastShown',
     UPDATE_SENTENCE_AUDIO_PATH: 'database:updateSentenceAudioPath',
     INCREMENT_SENTENCE_PLAY_COUNT: 'database:incrementSentencePlayCount',
+    INCREMENT_GRAMMAR_EXPLANATION_COUNT: 'database:incrementGrammarExplanationCount',
     RECORD_PRONUNCIATION_ATTEMPT: 'database:recordPronunciationAttempt',
     GET_PRONUNCIATION_HISTORY: 'database:getPronunciationHistory',
     INSERT_DIALOG_CORRECTION: 'database:insertDialogCorrection',

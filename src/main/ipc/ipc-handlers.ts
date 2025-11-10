@@ -302,6 +302,15 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
   );
 
   ipcMain.handle(
+    IPC_CHANNELS.DATABASE.INCREMENT_GRAMMAR_EXPLANATION_COUNT,
+    createIPCHandler(
+      z.number().int().positive(),
+      (wordId) => databaseLayer.incrementGrammarExplanationCount(wordId),
+      'increment grammar explanation count'
+    )
+  );
+
+  ipcMain.handle(
     IPC_CHANNELS.DATABASE.RECORD_PRONUNCIATION_ATTEMPT,
     createIPCHandler(
       [

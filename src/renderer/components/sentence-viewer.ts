@@ -1811,6 +1811,9 @@ export class SentenceViewer extends LitElement {
         proficiencyLevel || undefined
       );
 
+      // Increment grammar explanation count for the word
+      await window.electronAPI.database.incrementGrammarExplanationCount(this.targetWord.id);
+
       this.grammarExplanation = {
         word: wordText,
         explanation: explanation,

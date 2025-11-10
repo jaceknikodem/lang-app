@@ -104,6 +104,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ),
     incrementSentencePlayCount: (sentenceId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.INCREMENT_SENTENCE_PLAY_COUNT, sentenceId),
+    incrementGrammarExplanationCount: (wordId: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.INCREMENT_GRAMMAR_EXPLANATION_COUNT, wordId),
     recordPronunciationAttempt: (
       sentenceId: number,
       similarityScore: number,
@@ -529,6 +531,7 @@ declare global {
         updateSentenceLastShown: (sentenceId: number) => Promise<void>;
         updateSentenceAudioPath: (sentenceId: number, audioPath: string) => Promise<void>;
         incrementSentencePlayCount: (sentenceId: number) => Promise<void>;
+        incrementGrammarExplanationCount: (wordId: number) => Promise<void>;
         recordPronunciationAttempt: (
           sentenceId: number,
           similarityScore: number,
