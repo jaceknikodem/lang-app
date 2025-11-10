@@ -386,6 +386,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.LEMMATIZATION.LOAD_MODEL, language),
     lemmatizeWords: (words: string[], language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.LEMMATIZATION.LEMMATIZE_WORDS, words, language),
+    getWordFrequencies: (words: string[], language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.LEMMATIZATION.GET_WORD_FREQUENCIES, words, language),
   },
 
   // Dialog operations
@@ -771,6 +773,7 @@ declare global {
         } | null>;
         loadModel: (language: string) => Promise<void>;
         lemmatizeWords: (words: string[], language: string) => Promise<Record<string, string>>;
+        getWordFrequencies: (words: string[], language: string) => Promise<Record<string, number>>;
       };
       dialog: {
         selectSentence: () => Promise<any | null>;

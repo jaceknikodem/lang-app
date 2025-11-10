@@ -52,6 +52,9 @@ export class WordSelector extends LitElement {
   @state()
   private queuedWordIds: number[] = []; // Track wordIds of queued words
 
+  @state()
+  private zipfFrequencies: Record<string, number> = {}; // word -> zipf frequency
+
   private keyboardUnsubscribe?: () => void;
   private autoNavigateTimeout?: number;
 
@@ -360,6 +363,10 @@ export class WordSelector extends LitElement {
       console.log('[WordSelector] Topic property updated:', this.topic);
       console.log('[WordSelector] Topic type:', typeof this.topic);
     }
+    if (changedProperties.has('generatedWords')) {
+      this.initializeWords();
+      this.fetchZipfFrequencies();
+    }
   }
 
   disconnectedCallback() {
@@ -379,7 +386,32 @@ export class WordSelector extends LitElement {
       ...word,
       selected: false, // Deselect all words by default
       markedAsKnown: false,
+      zipfFrequency: this.zipfFrequencies[word.word] || word.zipfFrequency,
     }));
+  }
+
+  private async fetchZipfFrequencies() {
+    if (this.generatedWords.length === 0) {
+      return;
+    }
+
+    try {
+      const words = this.generatedWords.map((w) => w.word);
+      const frequencies = await window.electronAPI.lemmatization.getWordFrequencies(
+        words,
+        this.language
+      );
+      this.zipfFrequencies = frequencies;
+      // Update selectableWords with zipf frequencies
+      this.selectableWords = this.selectableWords.map((word) => ({
+        ...word,
+        zipfFrequency: this.zipfFrequencies[word.word] || word.zipfFrequency,
+      }));
+      this.requestUpdate();
+    } catch (error) {
+      // Gracefully degrade - don't show zipf, but don't break the UI
+      console.warn('[WordSelector] Failed to fetch zipf frequencies:', error);
+    }
   }
 
   private handleExternalLanguageChange = async (event: Event) => {
@@ -841,8 +873,17 @@ export class WordSelector extends LitElement {
                 @click=${() => !this.wordsProcessed && this.toggleWordSelection(originalIndex)}
               >
                 <div class="word-actions">
-                  ${word.frequencyTier
-                    ? html` <span class="frequency-tier">${word.frequencyTier}</span> `
+                  ${word.zipfFrequency && word.zipfFrequency > 0
+                    ? html`
+                        <span
+                          class="frequency-tier"
+                          title="Zipf frequency: ${Math.round(
+                            word.zipfFrequency
+                          )}. Higher values (1-7) indicate more common words. A value of 6 means the word appears once per thousand words, while 3 means once per million."
+                        >
+                          ${Math.round(word.zipfFrequency)}
+                        </span>
+                      `
                     : ''}
                   ${!this.wordsProcessed
                     ? html`

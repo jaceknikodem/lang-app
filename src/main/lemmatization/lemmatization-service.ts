@@ -19,6 +19,10 @@ export interface LemmatizeWordsResponse {
   lemmas: Record<string, string>; // word -> lemma mapping
 }
 
+export interface GetWordFrequenciesResponse {
+  frequencies: Record<string, number>; // word -> zipf_frequency
+}
+
 export class LemmatizationService {
   private serverUrl: string;
   private readonly logger: Logger;
@@ -149,5 +153,48 @@ export class LemmatizationService {
 
     const data: LemmatizeWordsResponse = await response.json();
     return data.lemmas || {};
+  }
+
+  /**
+   * Get Zipf frequencies for a list of words
+   */
+  async getWordFrequencies(words: string[], language: string): Promise<Record<string, number>> {
+    const languageCode = this.mapLanguageToCode(language);
+
+    this.logger.debug(
+      {
+        wordCount: words.length,
+        languageCode,
+        language,
+      },
+      '[Lemmatization] Calling freqword API'
+    );
+
+    const response = await fetch(`${this.serverUrl}/freqword`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        words: words,
+        language: languageCode,
+      }),
+      signal: AbortSignal.timeout(10000), // 10 second timeout
+    });
+
+    this.logger.debug(
+      { status: response.status, languageCode, language },
+      '[Lemmatization] freqword API response'
+    );
+
+    if (!response.ok) {
+      const errorData = await response
+        .json()
+        .catch(() => ({ detail: `HTTP error! status: ${response.status}` }));
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    const data: GetWordFrequenciesResponse = await response.json();
+    return data.frequencies || {};
   }
 }

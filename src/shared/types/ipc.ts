@@ -300,6 +300,7 @@ export interface IPCBridge {
     getStatus: () => Promise<{ status: string; loadedModels: string[]; service: string }>;
     loadModel: (language: string) => Promise<void>;
     lemmatizeWords: (words: string[], language: string) => Promise<Record<string, string>>;
+    getWordFrequencies: (words: string[], language: string) => Promise<Record<string, number>>;
   };
 
   // Dialog operations
@@ -504,6 +505,7 @@ export const IPC_CHANNELS = {
     GET_STATUS: 'lemmatization:getStatus',
     LOAD_MODEL: 'lemmatization:loadModel',
     LEMMATIZE_WORDS: 'lemmatization:lemmatizeWords',
+    GET_WORD_FREQUENCIES: 'lemmatization:getWordFrequencies',
   },
   DIALOG: {
     SELECT_SENTENCE: 'dialog:selectSentence',

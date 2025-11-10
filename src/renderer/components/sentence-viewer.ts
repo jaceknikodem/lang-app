@@ -81,6 +81,9 @@ export class SentenceViewer extends LitElement {
   @state()
   private isFetchingGrammar = false;
 
+  @state()
+  private zipfFrequencies: Record<string, number> = {}; // word -> zipf frequency
+
   // Dictionary cache is not reactive to avoid unnecessary re-renders
   // Dictionary data is precomputed in tokens, so cache updates shouldn't trigger UI updates
   private dictionaryCache: Record<string, DictionaryEntry[] | null> = {};
@@ -798,6 +801,8 @@ export class SentenceViewer extends LitElement {
           const hasChanged = this.hasParsedWordsChanged(newParsedWords, this.parsedWords);
           if (hasChanged) {
             this.parsedWords = newParsedWords;
+            // Fetch zipf frequencies after parsedWords are set
+            void this.fetchZipfFrequencies();
           }
         } else if (allWordsChanged) {
           // Only word statuses might have changed - update without re-tokenizing
@@ -957,6 +962,8 @@ export class SentenceViewer extends LitElement {
 
     this.parsedWords = baseWords;
     await this.enhanceSentenceWithDictionary(requestId);
+    // Fetch zipf frequencies after parsedWords are set
+    void this.fetchZipfFrequencies();
   }
 
   /**
@@ -1416,6 +1423,34 @@ export class SentenceViewer extends LitElement {
     return text.substring(0, maxLength - 3) + '...';
   }
 
+  private async fetchZipfFrequencies() {
+    if (!this.sentence || !this.targetWord) {
+      return;
+    }
+
+    try {
+      // Extract unique words from parsed words
+      const words = this.parsedWords
+        .map((w) => w.dictionaryForm || w.text.trim())
+        .filter((w) => w && !/^\s+$/.test(w) && !/^[.,!?;:]+$/.test(w))
+        .filter((w, i, arr) => arr.indexOf(w) === i); // Get unique words
+
+      if (words.length === 0) {
+        return;
+      }
+
+      const frequencies = await window.electronAPI.lemmatization.getWordFrequencies(
+        words,
+        this.targetWord.language
+      );
+      this.zipfFrequencies = frequencies;
+      this.requestUpdate();
+    } catch (error) {
+      // Gracefully degrade - don't show zipf, but don't break the UI
+      console.warn('[SentenceViewer] Failed to fetch zipf frequencies:', error);
+    }
+  }
+
   private getWordTooltip(wordInfo: WordInSentence): string {
     // No tooltip for whitespace or punctuation
     if (/^\s+$/.test(wordInfo.text) || /^[.,!?;:]+$/.test(wordInfo.text)) {
@@ -1423,6 +1458,27 @@ export class SentenceViewer extends LitElement {
     }
 
     const parts: string[] = [];
+
+    // Show zipf frequency if available
+    const wordKey = wordInfo.dictionaryForm || wordInfo.text.trim();
+    const zipfFreq = this.zipfFrequencies[wordKey];
+    if (zipfFreq && zipfFreq > 0) {
+      const roundedZipf = Math.round(zipfFreq);
+      // Explain what Zipf frequency means
+      let zipfExplanation = '';
+      if (roundedZipf >= 6) {
+        zipfExplanation = ' (very common, ~1 per 1000 words)';
+      } else if (roundedZipf >= 5) {
+        zipfExplanation = ' (common, ~1 per 10k words)';
+      } else if (roundedZipf >= 4) {
+        zipfExplanation = ' (moderate, ~1 per 100k words)';
+      } else if (roundedZipf >= 3) {
+        zipfExplanation = ' (uncommon, ~1 per million words)';
+      } else {
+        zipfExplanation = ' (rare)';
+      }
+      parts.push(`Zipf: ${roundedZipf}${zipfExplanation}`);
+    }
 
     // Show lemma if available and different from the word
     if (wordInfo.lemma) {

@@ -93,6 +93,7 @@ export interface GeneratedWord {
   translation: string; // English translation
   frequencyPosition?: number; // 1-based position in frequency list
   frequencyTier?: string; // Human-readable tier like "top 100", "top 500"
+  zipfFrequency?: number; // Zipf frequency (typically 1-7)
 }
 
 export interface GeneratedSentence {

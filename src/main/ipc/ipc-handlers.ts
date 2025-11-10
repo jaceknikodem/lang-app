@@ -1701,6 +1701,17 @@ function setupLemmatizationHandlers(lemmatizationService: LemmatizationService):
       'lemmatize words'
     )
   );
+
+  ipcMain.handle(
+    IPC_CHANNELS.LEMMATIZATION.GET_WORD_FREQUENCIES,
+    createIPCHandler(
+      [z.array(z.string().min(1).max(200)), LanguageSchema],
+      async (words, language) => {
+        return await lemmatizationService.getWordFrequencies(words, language);
+      },
+      'get word frequencies'
+    )
+  );
 }
 
 /**
