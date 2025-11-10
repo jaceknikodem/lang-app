@@ -986,37 +986,49 @@ export class AudioService {
       await this.checkAndSwitchToAudioBackend(this.database);
     }
 
-      // Resolve existing path to absolute for file operations
-      const absoluteExistingPath = existingPath ? AudioService.resolveAudioPath(existingPath) : null;
-      let backupPath: string | null = null;
-    try {
-      if (absoluteExistingPath && await this.audioExists(absoluteExistingPath)) {
-        const parsed = parse(absoluteExistingPath);
-        backupPath = join(parsed.dir, `${parsed.name}.bak${parsed.ext}`);
-        // Remove any stale backup
-        await fsPromises.unlink(backupPath).catch(() => {});
-        await fsPromises.rename(absoluteExistingPath, backupPath);
-      }
+    // Resolve existing path to absolute for file operations
+    const absoluteExistingPath = existingPath ? AudioService.resolveAudioPath(existingPath) : null;
+    let backupPath: string | null = null;
 
+    // Check if existing file exists and create backup if needed
+    if (absoluteExistingPath && await this.audioExists(absoluteExistingPath)) {
+      const parsed = parse(absoluteExistingPath);
+      backupPath = join(parsed.dir, `${parsed.name}.bak${parsed.ext}`);
+      
+      // Remove any stale backup (log errors but don't fail)
+      try {
+        await fsPromises.unlink(backupPath);
+      } catch (error) {
+        // Only log if it's not a "file not found" error (expected for first-time backup)
+        if (error instanceof Error && 'code' in error && (error as any).code !== 'ENOENT') {
+          this.logger.warn({ error, backupPath }, 'Failed to remove stale backup file');
+        }
+      }
+      
+      await fsPromises.rename(absoluteExistingPath, backupPath);
+    }
+
+    try {
       const newPath = await this.generateAudio(text, language, word, wordId, sentenceId, variantId);
 
+      // Clean up backup on success (log errors but don't fail)
       if (backupPath) {
-        await fsPromises.unlink(backupPath).catch(() => {});
+        try {
+          await fsPromises.unlink(backupPath);
+        } catch (error) {
+          this.logger.warn({ error, backupPath }, 'Failed to clean up backup file after successful regeneration');
+        }
       }
 
       // Return relative path (generateAudio already returns relative path)
       return newPath;
     } catch (error) {
+      // Restore backup on failure if it exists
       if (backupPath && absoluteExistingPath) {
         try {
-          const newExists = await this.audioExists(absoluteExistingPath);
-          if (!newExists) {
-            await fsPromises.rename(backupPath, absoluteExistingPath);
-          } else {
-            await fsPromises.unlink(backupPath).catch(() => {});
-          }
+          await fsPromises.rename(backupPath, absoluteExistingPath);
         } catch (restoreError) {
-          this.logger.error({ error: restoreError, backupPath }, 'Failed to restore previous audio backup');
+          this.logger.error({ error: restoreError, backupPath, absoluteExistingPath }, 'Failed to restore previous audio backup');
         }
       }
       throw error;
