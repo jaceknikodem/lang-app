@@ -135,6 +135,11 @@ export interface DatabaseLayer {
   updateSentenceTokens(sentenceId: number, tokens: PrecomputedToken[]): Promise<void>;
   incrementSentencePlayCount(sentenceId: number): Promise<void>;
   incrementGrammarExplanationCount(wordId: number): Promise<void>;
+  insertGrammarExplanation(
+    wordId: number,
+    sentenceId: number,
+    explanation: string
+  ): Promise<number>;
   recordPronunciationAttempt(
     sentenceId: number,
     similarityScore: number,

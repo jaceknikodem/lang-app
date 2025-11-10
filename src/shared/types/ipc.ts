@@ -177,7 +177,9 @@ export interface IPCBridge {
       word: string,
       sentence: string,
       language: string,
-      proficiencyLevel?: string
+      proficiencyLevel: string | undefined,
+      wordId: number,
+      sentenceId: number
     ) => Promise<string>;
     // Provider management
     getCurrentProvider: () => Promise<'ollama' | 'gemini'>;
@@ -319,7 +321,9 @@ export interface IPCBridge {
       word: string,
       sentence: string,
       language: string,
-      proficiencyLevel?: string
+      proficiencyLevel: string | undefined,
+      wordId: number,
+      sentenceId: number
     ) => Promise<string>;
     ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
     ensureContextSentences: (

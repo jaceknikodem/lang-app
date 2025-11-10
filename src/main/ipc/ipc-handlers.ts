@@ -704,9 +704,19 @@ function setupLLMHandlers(
   ipcMain.handle(
     IPC_CHANNELS.LLM.EXPLAIN_GRAMMAR,
     createIPCHandler(
-      [TextSchema, TextSchema, LanguageSchema, z.string().optional()],
-      async (word, sentence, language, proficiencyLevel) => {
-        return await llmClient.explainGrammar(word, sentence, language, proficiencyLevel);
+      [TextSchema, TextSchema, LanguageSchema, z.string().optional(), z.number(), z.number()],
+      async (word, sentence, language, proficiencyLevel, wordId, sentenceId) => {
+        const explanation = await llmClient.explainGrammar(
+          word,
+          sentence,
+          language,
+          proficiencyLevel
+        );
+        // Store the explanation in the database
+        if (databaseLayer) {
+          await databaseLayer.insertGrammarExplanation(wordId, sentenceId, explanation);
+        }
+        return explanation;
       },
       'explain grammar'
     )

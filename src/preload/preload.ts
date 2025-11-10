@@ -174,13 +174,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getWordGenerationModel: () => ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_WORD_GENERATION_MODEL),
     getSentenceGenerationModel: () =>
       ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_SENTENCE_GENERATION_MODEL),
-    explainGrammar: (word: string, sentence: string, language: string, proficiencyLevel?: string) =>
+    explainGrammar: (
+      word: string,
+      sentence: string,
+      language: string,
+      proficiencyLevel: string | undefined,
+      wordId: number,
+      sentenceId: number
+    ) =>
       ipcRenderer.invoke(
         IPC_CHANNELS.LLM.EXPLAIN_GRAMMAR,
         word,
         sentence,
         language,
-        proficiencyLevel
+        proficiencyLevel,
+        wordId,
+        sentenceId
       ),
     // Provider management
     getCurrentProvider: () => ipcRenderer.invoke(IPC_CHANNELS.LLM.GET_CURRENT_PROVIDER),
@@ -610,7 +619,9 @@ declare global {
           word: string,
           sentence: string,
           language: string,
-          proficiencyLevel?: string
+          proficiencyLevel: string | undefined,
+          wordId: number,
+          sentenceId: number
         ) => Promise<string>;
         // Provider management
         getCurrentProvider: () => Promise<'ollama' | 'gemini'>;

@@ -1820,7 +1820,9 @@ export class SentenceViewer extends LitElement {
         wordText,
         sentenceText,
         language,
-        proficiencyLevel || undefined
+        proficiencyLevel || undefined,
+        this.targetWord.id,
+        this.sentence.id
       );
 
       // Increment grammar explanation count for the word

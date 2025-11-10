@@ -324,6 +324,17 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       )
     `);
 
+    // Grammar explanations table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS grammar_explanations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        word_id INTEGER NOT NULL REFERENCES words(id) ON DELETE CASCADE,
+        sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
+        explanation TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Migration: Add audio_path column to pronunciation_attempts table if it doesn't exist
     try {
       db.exec(`ALTER TABLE pronunciation_attempts ADD COLUMN audio_path TEXT`);
@@ -458,6 +469,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     );
     db.exec(
       `CREATE INDEX IF NOT EXISTS idx_pronunciation_attempts_created_at ON pronunciation_attempts(created_at)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_grammar_explanations_word_id ON grammar_explanations(word_id)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_grammar_explanations_sentence_id ON grammar_explanations(sentence_id)`
     );
     db.exec(`CREATE INDEX IF NOT EXISTS idx_srs_adjustments_word_id ON srs_adjustments(word_id)`);
     db.exec(
@@ -1503,6 +1520,28 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       }
     } catch (error) {
       throw wrapError(error, `Failed to increment grammar explanation count`);
+    }
+  }
+
+  /**
+   * Insert a grammar explanation for a word and sentence
+   */
+  async insertGrammarExplanation(
+    wordId: number,
+    sentenceId: number,
+    explanation: string
+  ): Promise<number> {
+    const db = this.getDb();
+
+    try {
+      const stmt = db.prepare(`
+        INSERT INTO grammar_explanations (word_id, sentence_id, explanation)
+        VALUES (?, ?, ?)
+      `);
+      const result = stmt.run(wordId, sentenceId, explanation);
+      return result.lastInsertRowid as number;
+    } catch (error) {
+      throw wrapError(error, `Failed to insert grammar explanation`);
     }
   }
 
