@@ -169,6 +169,65 @@ export class ServiceManager {
   }
 
   /**
+   * Simple delay helper for async operations
+   */
+  private async delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Handle service exit with simplified restart logic
+   */
+  private handleServiceExit(
+    service: ManagedService | null,
+    serviceName: string,
+    code: number | null,
+    signal: NodeJS.Signals | null,
+    restartFn: () => Promise<void>,
+    clearServiceFn: () => void
+  ): void {
+    // Early return if shutting down
+    if (this.isShuttingDown) {
+      return;
+    }
+
+    // Early return if service is null
+    if (!service) {
+      return;
+    }
+
+    // Log the exit
+    this.logger.warn(
+      { code, signal, service: serviceName },
+      `[ServiceManager] ${serviceName} exited`
+    );
+
+    // Early return if max restarts reached
+    if (service.restartCount >= this.maxRestarts) {
+      this.logger.error(
+        { maxRestarts: this.maxRestarts },
+        `[ServiceManager] Max restart attempts reached for ${serviceName}, giving up`
+      );
+      clearServiceFn();
+      return;
+    }
+
+    // Increment restart count and attempt restart
+    service.restartCount++;
+    this.logger.info(
+      { attempt: service.restartCount, maxRestarts: this.maxRestarts },
+      `[ServiceManager] Restarting ${serviceName}`
+    );
+
+    // Restart with delay using cleaner async pattern
+    this.delay(2000)
+      .then(() => restartFn())
+      .catch((err) => {
+        this.logger.error({ error: err }, `[ServiceManager] Failed to restart ${serviceName}`);
+      });
+  }
+
+  /**
    * Start whisper-server
    */
   private async startWhisperService(): Promise<void> {
@@ -239,42 +298,20 @@ export class ServiceManager {
 
       // Handle process exit
       whisperProcess.on('exit', (code, signal) => {
-        if (this.isShuttingDown) {
-          return;
-        }
-
-        this.logger.warn(
-          { code, signal, service: 'whisper-server' },
-          '[ServiceManager] whisper-server exited'
+        this.handleServiceExit(
+          this.whisperService,
+          'whisper-server',
+          code,
+          signal,
+          () => this.startWhisperService(),
+          () => {
+            this.whisperService = null;
+          }
         );
-
-        if (this.whisperService && this.whisperService.restartCount < this.maxRestarts) {
-          this.whisperService.restartCount++;
-          this.logger.info(
-            { attempt: this.whisperService.restartCount, maxRestarts: this.maxRestarts },
-            '[ServiceManager] Restarting whisper-server'
-          );
-
-          // Wait a bit before restarting
-          setTimeout(() => {
-            this.startWhisperService().catch((err) => {
-              this.logger.error(
-                { error: err },
-                '[ServiceManager] Failed to restart whisper-server'
-              );
-            });
-          }, 2000);
-        } else {
-          this.logger.error(
-            { maxRestarts: this.maxRestarts },
-            '[ServiceManager] Max restart attempts reached for whisper-server, giving up'
-          );
-          this.whisperService = null;
-        }
       });
 
       // Wait a bit to see if process starts successfully
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await this.delay(1000);
 
       // Verify process is still running
       if (whisperProcess.killed || whisperProcess.exitCode !== null) {
@@ -398,45 +435,20 @@ export class ServiceManager {
 
       // Handle process exit
       lemmatizationProcess.on('exit', (code, signal) => {
-        if (this.isShuttingDown) {
-          return;
-        }
-
-        this.logger.warn(
-          { code, signal, service: 'stanza-service' },
-          '[ServiceManager] stanza-service exited'
+        this.handleServiceExit(
+          this.lemmatizationService,
+          'stanza-service',
+          code,
+          signal,
+          () => this.startLemmatizationService(),
+          () => {
+            this.lemmatizationService = null;
+          }
         );
-
-        if (
-          this.lemmatizationService &&
-          this.lemmatizationService.restartCount < this.maxRestarts
-        ) {
-          this.lemmatizationService.restartCount++;
-          this.logger.info(
-            { attempt: this.lemmatizationService.restartCount, maxRestarts: this.maxRestarts },
-            '[ServiceManager] Restarting stanza-service'
-          );
-
-          // Wait a bit before restarting
-          setTimeout(() => {
-            this.startLemmatizationService().catch((err) => {
-              this.logger.error(
-                { error: err },
-                '[ServiceManager] Failed to restart stanza-service'
-              );
-            });
-          }, 2000);
-        } else {
-          this.logger.error(
-            { maxRestarts: this.maxRestarts },
-            '[ServiceManager] Max restart attempts reached for stanza-service, giving up'
-          );
-          this.lemmatizationService = null;
-        }
       });
 
       // Wait a bit to see if process starts successfully
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await this.delay(1000);
 
       // Verify process is still running
       if (lemmatizationProcess.killed || lemmatizationProcess.exitCode !== null) {
