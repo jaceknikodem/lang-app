@@ -148,7 +148,6 @@ export class AudioPlayerService {
             const err = error instanceof Error ? error : new Error(String(error));
             options.onError(err);
           }
-          logger.error({ error }, 'Failed to process audio queue');
         });
       },
     });
@@ -164,6 +163,7 @@ export class AudioPlayerService {
     }
 
     const nextPath = this.playbackQueue.shift()!;
+
     try {
       await this.play(nextPath, {
         ...options,
@@ -185,9 +185,6 @@ export class AudioPlayerService {
         options.onError(err);
       }
 
-      // Log the error for debugging
-      logger.error({ error, audioPath: nextPath }, 'Failed to play audio in queue');
-
       // Re-throw to allow caller to handle if needed
       throw error;
     }
@@ -205,8 +202,12 @@ export class AudioPlayerService {
 
     this.currentAudioPath = null;
     this.pausedPosition = 0;
-    this.playbackQueue = [];
-    this.isProcessingQueue = false;
+
+    // Only clear queue if not processing a sequence (to allow queue processing to continue)
+    if (!this.isProcessingQueue) {
+      this.playbackQueue = [];
+      this.isProcessingQueue = false;
+    }
 
     // Clear callbacks
     this.onEndedCallbacks.clear();
