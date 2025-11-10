@@ -71,18 +71,16 @@ export const WordGenerationResponseSchema = z.union([
       response: z.array(GeneratedWordSchema).optional(),
     })
     .transform((obj) => obj.words || obj.response || []),
-  // Handle any array of objects with word/translation properties
-  z.array(z.record(z.any())).transform((arr) =>
-    arr
-      .filter((item) => item.word && item.translation)
-      .map((item) => ({
-        word: cleanSpecialTokens(String(item.word)),
-        translation: cleanSpecialTokens(String(item.translation)),
-      }))
-  ),
-  // Handle objects with words/response properties that don't match strict schema
-  z.record(z.any()).transform((obj) => {
-    const arr = (obj.words || obj.response || []) as any[];
+  // Generic fallback: handles arrays, objects, and everything else
+  z.any().transform((input) => {
+    // Extract array from input (could be array or object with words/response)
+    let arr: any[] = [];
+    if (Array.isArray(input)) {
+      arr = input;
+    } else if (input && typeof input === 'object') {
+      arr = (input.words || input.response || []) as any[];
+    }
+    // Filter and map to word/translation format
     return arr
       .filter((item: any) => item && item.word && item.translation)
       .map((item: any) => ({
@@ -101,28 +99,16 @@ export const SentenceGenerationResponseSchema = z.union([
       response: z.array(GeneratedSentenceSchema).optional(),
     })
     .transform((obj) => obj.sentences || obj.response || []),
-  // Handle any array of objects with sentence/translation properties
-  z.array(z.record(z.any())).transform((arr) =>
-    arr
-      .filter((item) => item.sentence && item.translation)
-      .map((item) => ({
-        sentence: cleanSpecialTokens(String(item.sentence)),
-        translation: cleanSpecialTokens(String(item.translation)),
-        contextBefore: item.contextBefore
-          ? cleanSpecialTokens(String(item.contextBefore))
-          : undefined,
-        contextAfter: item.contextAfter ? cleanSpecialTokens(String(item.contextAfter)) : undefined,
-        contextBeforeTranslation: item.contextBeforeTranslation
-          ? cleanSpecialTokens(String(item.contextBeforeTranslation))
-          : undefined,
-        contextAfterTranslation: item.contextAfterTranslation
-          ? cleanSpecialTokens(String(item.contextAfterTranslation))
-          : undefined,
-      }))
-  ),
-  // Handle objects with sentences/response properties that don't match strict schema
-  z.record(z.any()).transform((obj) => {
-    const arr = (obj.sentences || obj.response || []) as any[];
+  // Generic fallback: handles arrays, objects, and everything else
+  z.any().transform((input) => {
+    // Extract array from input (could be array or object with sentences/response)
+    let arr: any[] = [];
+    if (Array.isArray(input)) {
+      arr = input;
+    } else if (input && typeof input === 'object') {
+      arr = (input.sentences || input.response || []) as any[];
+    }
+    // Filter and map to sentence/translation format with context fields
     return arr
       .filter((item: any) => item && item.sentence && item.translation)
       .map((item: any) => ({
@@ -211,31 +197,6 @@ export const FollowUpResponseSchema = z
       }
       return { text: cleanSpecialTokens(str), translation: '' };
     }),
-    // Handle object with text and translation
-    z.object({
-      text: z.string().transform(cleanSpecialTokens),
-      translation: z.string().transform(cleanSpecialTokens),
-    }),
-    // Handle object with continuation and translation (normalize continuation -> text)
-    z
-      .object({
-        continuation: z.string(),
-        translation: z.string(),
-      })
-      .transform((obj) => ({
-        text: cleanSpecialTokens(obj.continuation),
-        translation: cleanSpecialTokens(obj.translation),
-      })),
-    // Handle object with text and english (normalize english -> translation)
-    z
-      .object({
-        text: z.string(),
-        english: z.string(),
-      })
-      .transform((obj) => ({
-        text: cleanSpecialTokens(obj.text),
-        translation: cleanSpecialTokens(obj.english),
-      })),
     // Handle array - try to extract text and translation from first object
     z.array(z.any()).transform((arr) => {
       if (arr.length > 0 && typeof arr[0] === 'object' && arr[0] !== null) {
@@ -247,13 +208,20 @@ export const FollowUpResponseSchema = z
       // If array doesn't have expected structure, return empty
       return { text: '', translation: '' };
     }),
-    // Generic record fallback - normalize all formats
-    z.record(z.any()).transform((obj) => {
-      const text = cleanSpecialTokens(String((obj as any).text || (obj as any).continuation || ''));
-      const translation = cleanSpecialTokens(
-        String((obj as any).translation || (obj as any).english || '')
-      );
-      return { text, translation };
+    // Generic object fallback - handles all object variants (text/translation, continuation/translation, text/english, etc.)
+    z.any().transform((input) => {
+      if (input && typeof input === 'object' && !Array.isArray(input)) {
+        // Normalize property names: text/continuation -> text, translation/english -> translation
+        const text = cleanSpecialTokens(
+          String((input as any).text || (input as any).continuation || '')
+        );
+        const translation = cleanSpecialTokens(
+          String((input as any).translation || (input as any).english || '')
+        );
+        return { text, translation };
+      }
+      // Fallback for unexpected types
+      return { text: '', translation: '' };
     }),
   ])
   .refine((data) => data.translation.length > 0, { message: 'Translation is required' });
