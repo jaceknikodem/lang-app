@@ -91,6 +91,7 @@ export class SentenceViewer extends LitElement {
   private lastProcessedSentenceId?: number;
   private lastProcessedAllWordsHash?: string;
   private lastAllWordsArrayReference?: Word[]; // Track array reference to avoid re-parsing on same array
+  private lastGrammarSentenceId?: number; // Track last sentence ID that had grammar explanation
 
   private keyboardUnsubscribe?: () => void;
 
@@ -742,6 +743,17 @@ export class SentenceViewer extends LitElement {
     // Only re-parse if sentence actually changed (different ID) or allWords meaningfully changed
     const sentenceChanged = changedProperties.has('sentence');
     const allWordsChanged = changedProperties.has('allWords');
+
+    // Clear grammar explanation when sentence changes
+    if (sentenceChanged) {
+      const currentSentenceId = this.sentence?.id;
+      if (currentSentenceId !== this.lastGrammarSentenceId) {
+        // Sentence ID changed - clear grammar state
+        this.grammarExplanation = null;
+        this.isFetchingGrammar = false;
+        this.lastGrammarSentenceId = currentSentenceId;
+      }
+    }
 
     // Skip if only non-relevant properties changed (isFirstSentence, isLastSentence, isProcessing, displayLastSeen)
     const relevantPropertyChanged =
@@ -1818,6 +1830,9 @@ export class SentenceViewer extends LitElement {
         word: wordText,
         explanation: explanation,
       };
+
+      // Track that this sentence has grammar explanation
+      this.lastGrammarSentenceId = this.sentence?.id;
 
       this.requestUpdate();
     } catch (error) {
