@@ -891,7 +891,13 @@ If there are no mistakes, you can omit correction and grammarExplanation, but al
 
     return `Explain the grammar of the word "${word}" in this ${languageName} sentence: "${sentence}"${proficiencyText}
 
-Provide a clear, educational, teacher-like explanation of the grammatical role and usage of this word. Adjust the complexity and depth of your explanation based on the user's proficiency level. Return your response in Markdown format. The explanation HAS TO BE IN ENGLISH`;
+Provide a clear, educational, teacher-like explanation of the grammatical role and usage of this word. Adjust the complexity and depth of your explanation based on the user's proficiency level.
+DO NOT explain obvious things like what verbs are in general, or imperative is.
+Explain concept specific/unique to ${languageName}.
+DO NOT include "Summary" section, nor a greeting at the beginning.
+Provide similar examples of usage of the word in the sentence.
+
+Return your response in Markdown format. The explanation HAS TO BE IN ENGLISH`;
   }
 
   /**

@@ -141,7 +141,15 @@ export class AudioPlayerService {
         if (options.onEnded) {
           options.onEnded();
         }
-        this.processQueue(options);
+        // Call processQueue but handle errors since it's async and called from callback
+        this.processQueue(options).catch((error) => {
+          // If processQueue fails, call onError if provided
+          if (options.onError) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            options.onError(err);
+          }
+          logger.error({ error }, 'Failed to process audio queue');
+        });
       },
     });
   }
@@ -156,15 +164,33 @@ export class AudioPlayerService {
     }
 
     const nextPath = this.playbackQueue.shift()!;
-    await this.play(nextPath, {
-      ...options,
-      onEnded: () => {
-        if (options.onEnded) {
-          options.onEnded();
-        }
-        this.processQueue(options);
-      },
-    });
+    try {
+      await this.play(nextPath, {
+        ...options,
+        onEnded: () => {
+          if (options.onEnded) {
+            options.onEnded();
+          }
+          this.processQueue(options);
+        },
+      });
+    } catch (error) {
+      // Clear queue state on error
+      this.playbackQueue = [];
+      this.isProcessingQueue = false;
+
+      // Call onError callback if provided
+      if (options.onError) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        options.onError(err);
+      }
+
+      // Log the error for debugging
+      logger.error({ error, audioPath: nextPath }, 'Failed to play audio in queue');
+
+      // Re-throw to allow caller to handle if needed
+      throw error;
+    }
   }
 
   /**
