@@ -260,7 +260,7 @@ const config = convict({
   app: {
     defaultLanguage: {
       doc: 'Default learning language',
-      format: ['spanish', 'italian', 'portuguese', 'polish', 'indonesian'],
+      format: ['spanish', 'italian', 'portuguese', 'polish', 'indonesian', 'japanese'],
       default: 'spanish',
       env: 'APP_DEFAULT_LANGUAGE',
     },

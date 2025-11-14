@@ -714,7 +714,7 @@ export class SettingsPanel extends BaseComponent {
   }
 
   private getSupportedLanguages(): string[] {
-    return ['portuguese', 'italian', 'polish', 'spanish', 'indonesian'];
+    return ['portuguese', 'italian', 'polish', 'spanish', 'indonesian', 'japanese'];
   }
 
   private getLanguageDisplayName(language: string): string {
@@ -724,6 +724,7 @@ export class SettingsPanel extends BaseComponent {
       polish: 'Polish',
       spanish: 'Spanish',
       indonesian: 'Indonesian',
+      japanese: 'Japanese',
     };
     return names[language] || language;
   }

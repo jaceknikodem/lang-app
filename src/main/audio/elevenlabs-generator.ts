@@ -192,6 +192,8 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     'es': ['Nh2zY9kknu6z4pZy6FhD', 'P951amuWPNCJ0L15rFyC'],
     'indonesian': ['plgKUYgnlZ1DCNh54DwJ', 'I7sakys8pBZ1Z5f0UhT9'],
     'id': ['plgKUYgnlZ1DCNh54DwJ', 'I7sakys8pBZ1Z5f0UhT9'],
+    'japanese': ["9pDzHy2OpOgeXM8SeL0t"],
+    'ja': ["9pDzHy2OpOgeXM8SeL0t"],
     'english': ['wyWA56cQNU2KqUW4eCsI'],
     'en': ['wyWA56cQNU2KqUW4eCsI'],
   };
@@ -252,6 +254,7 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
       'polish': 'pl',
       'spanish': 'es',
       'indonesian': 'id',
+      'japanese': 'ja',
     };
     return langMap[language.toLowerCase()] || null;
   }

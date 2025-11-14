@@ -62,7 +62,14 @@ const DEFAULT_APP_CONFIG = {
   defaultWordCount: 5,
   defaultSentenceCount: 3,
   maxLearningWords: 20,
-  supportedLanguages: ['spanish', 'italian', 'portuguese', 'polish', 'indonesian'] as const,
+  supportedLanguages: [
+    'spanish',
+    'italian',
+    'portuguese',
+    'polish',
+    'indonesian',
+    'japanese',
+  ] as const,
 };
 
 const DEFAULT_LLM_CONFIG = {

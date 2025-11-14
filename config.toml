@@ -156,3 +156,13 @@ speech_recognition_code = "id"
 elevenlabs_voice_ids = ["plgKUYgnlZ1DCNh54DwJ", "I7sakys8pBZ1Z5f0UhT9"]
 audio_generator_voice = "Damayanti"
 
+[[languages]]
+code = "ja"
+name = "japanese"
+display_name = "Japanese"
+tatoeba_code = "jpn"
+lemmatization_code = "ja"
+speech_recognition_code = "ja"
+elevenlabs_voice_ids = ["9pDzHy2OpOgeXM8SeL0t"]
+audio_generator_voice = "Kyoko"
+

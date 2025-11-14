@@ -106,6 +106,7 @@ export function getLanguageFlag(language: string): string {
     portuguese: '🇵🇹',
     polish: '🇵🇱',
     indonesian: '🇮🇩',
+    japanese: '🇯🇵',
   };
   return flags[language] || '🌐';
 }
@@ -115,5 +116,5 @@ export function getLanguageFlag(language: string): string {
  * @returns Array of supported language codes
  */
 export function getSupportedLanguages(): string[] {
-  return ['italian', 'spanish', 'portuguese', 'polish', 'indonesian'];
+  return ['italian', 'spanish', 'portuguese', 'polish', 'indonesian', 'japanese'];
 }
