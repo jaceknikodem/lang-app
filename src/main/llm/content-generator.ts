@@ -633,11 +633,15 @@ export class ContentGenerator {
 
       // Generate only the needed number of sentences
       // Retries are now handled at the HTTP level in the LLM clients
+
+      // Randomly drop topic 50% of the time to introduce variety
+      const effectiveTopic = topic && Math.random() < 0.5 ? undefined : topic;
+
       const sentences = await this.llmClient.generateSentences(
         word.trim(),
         targetLanguage,
         needed,
-        topic,
+        effectiveTopic,
         proficiencyLevel
       );
 
