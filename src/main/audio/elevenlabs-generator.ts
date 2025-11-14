@@ -5,6 +5,7 @@ import { AudioConfig } from '../../shared/types/audio';
 import { DatabaseLayer } from '../../shared/types/database';
 import { createAudioError } from '../../shared/utils/error.js';
 import { BaseAudioGenerator } from './base-audio-generator';
+import { getElevenlabsVoiceIds, getLanguageCode, getLanguageName } from '../../shared/utils/language-config.js';
 
 // Simple queue to limit ElevenLabs API calls to 1 concurrent request
 let apiRequestQueue: Promise<any> = Promise.resolve();
@@ -48,8 +49,8 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
         this.logger.warn({ error }, 'Failed to load voice mappings during construction, using defaults');
       });
     } else {
-      // No database, use defaults immediately
-      this.voiceMap = { ...ElevenLabsAudioGenerator.DEFAULT_VOICE_MAP };
+      // No database, use defaults from config.toml immediately
+      this.voiceMap = ElevenLabsAudioGenerator.buildDefaultVoiceMap();
       this.voiceMapLoaded = true;
     }
   }
@@ -178,37 +179,44 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
   }
 
   /**
-   * Default voice IDs mapped by language
-   * Multiple voices per language for variety
-   */
-  private static readonly DEFAULT_VOICE_MAP: Record<string, string[]> = {
-    'portuguese': ['GDzHdQOi6jjf8zaXhCYD', '9pDzHy2OpOgeXM8SeL0t'],
-    'pt': ['GDzHdQOi6jjf8zaXhCYD', '9pDzHy2OpOgeXM8SeL0t'],
-    'italian': ['oCS6WHyqobqW2UapCSHl', 'CiwzbDpaN3pQXjTgx3ML', 'P951amuWPNCJ0L15rFyC'],
-    'it': ['oCS6WHyqobqW2UapCSHl', 'CiwzbDpaN3pQXjTgx3ML', 'P951amuWPNCJ0L15rFyC'],
-    'polish': ['wyWA56cQNU2KqUW4eCsI', 'g8ZOdhoD9R6eYKPTjKbE', 'CiwzbDpaN3pQXjTgx3ML'],
-    'pl': ['wyWA56cQNU2KqUW4eCsI', 'g8ZOdhoD9R6eYKPTjKbE', 'CiwzbDpaN3pQXjTgx3ML'],
-    'spanish': ['Nh2zY9kknu6z4pZy6FhD', 'P951amuWPNCJ0L15rFyC'],
-    'es': ['Nh2zY9kknu6z4pZy6FhD', 'P951amuWPNCJ0L15rFyC'],
-    'indonesian': ['plgKUYgnlZ1DCNh54DwJ', '9pDzHy2OpOgeXM8SeL0t', 'Nh2zY9kknu6z4pZy6FhD'],
-    'id': ['plgKUYgnlZ1DCNh54DwJ', '9pDzHy2OpOgeXM8SeL0t', 'Nh2zY9kknu6z4pZy6FhD'],
-    'japanese': ["9pDzHy2OpOgeXM8SeL0t", '3JDquces8E8bkmvbh6Bc'],
-    'ja': ["9pDzHy2OpOgeXM8SeL0t", '3JDquces8E8bkmvbh6Bc'],
-    'english': ['wyWA56cQNU2KqUW4eCsI'],
-    'en': ['wyWA56cQNU2KqUW4eCsI'],
-  };
-
-  /**
    * Generic voice ID for languages not in the map
    */
   private static readonly DEFAULT_VOICE = 'pNInz6obpgDQGcFmaJgB';
 
   /**
-   * Load voice mappings from database
+   * Build default voice map from config.toml
+   * This is the single source of truth for default voice IDs
+   */
+  private static buildDefaultVoiceMap(): Record<string, string[]> {
+    const voiceMap: Record<string, string[]> = {};
+    
+    // Supported languages from config
+    const languages = ['spanish', 'italian', 'portuguese', 'polish', 'indonesian', 'japanese', 'english'];
+    
+    for (const lang of languages) {
+      const voiceIds = getElevenlabsVoiceIds(lang);
+      if (voiceIds.length > 0) {
+        // Add both full name and code
+        voiceMap[lang] = voiceIds;
+        const code = getLanguageCode(lang);
+        if (code) {
+          voiceMap[code] = voiceIds;
+        }
+      }
+    }
+    
+    return voiceMap;
+  }
+
+  /**
+   * Load voice mappings with priority: Database settings > config.toml > fallback
    */
   private async loadVoiceMappings(): Promise<void> {
+    // Start with defaults from config.toml
+    const defaultVoiceMap = ElevenLabsAudioGenerator.buildDefaultVoiceMap();
+    
     if (!this.database) {
-      this.voiceMap = { ...ElevenLabsAudioGenerator.DEFAULT_VOICE_MAP };
+      this.voiceMap = defaultVoiceMap;
       this.voiceMapLoaded = true;
       return;
     }
@@ -217,9 +225,10 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
       const stored = await this.database.getSetting('elevenlabs_voice_ids');
       if (stored && stored.trim() && stored !== '{}') {
         const parsed = JSON.parse(stored);
-        // Merge with defaults for any missing languages
+        // Merge: config.toml defaults first, then database overrides
+        // Database settings take precedence (user customizations)
         this.voiceMap = {
-          ...ElevenLabsAudioGenerator.DEFAULT_VOICE_MAP,
+          ...defaultVoiceMap,
           ...parsed
         };
         // Ensure all language codes are also included (e.g., 'pt' and 'portuguese')
@@ -233,30 +242,23 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
           }
         }
       } else {
-        // No stored settings or empty, use defaults
-        this.voiceMap = { ...ElevenLabsAudioGenerator.DEFAULT_VOICE_MAP };
+        // No stored settings or empty, use defaults from config.toml
+        this.voiceMap = defaultVoiceMap;
       }
       this.voiceMapLoaded = true;
     } catch (error) {
-      this.logger.warn({ error }, 'Failed to load voice mappings from database, using defaults');
-      this.voiceMap = { ...ElevenLabsAudioGenerator.DEFAULT_VOICE_MAP };
+      this.logger.warn({ error }, 'Failed to load voice mappings from database, using defaults from config.toml');
+      this.voiceMap = defaultVoiceMap;
       this.voiceMapLoaded = true;
     }
   }
 
   /**
    * Get language code from full language name (e.g., 'portuguese' -> 'pt')
+   * Uses the shared language-config utility
    */
   private getLanguageCode(language: string): string | null {
-    const langMap: Record<string, string> = {
-      'portuguese': 'pt',
-      'italian': 'it',
-      'polish': 'pl',
-      'spanish': 'es',
-      'indonesian': 'id',
-      'japanese': 'ja',
-    };
-    return langMap[language.toLowerCase()] || null;
+    return getLanguageCode(language);
   }
 
   /**
@@ -299,20 +301,14 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
 
   /**
    * Get full language name from code (e.g., 'pt' -> 'portuguese')
+   * Uses the shared language-config utility
    */
   private getLanguageCodeFromCode(code: string): string | null {
-    const codeMap: Record<string, string> = {
-      'pt': 'portuguese',
-      'it': 'italian',
-      'pl': 'polish',
-      'es': 'spanish',
-      'id': 'indonesian',
-    };
-    return codeMap[code.toLowerCase()] || null;
+    return getLanguageName(code);
   }
 
   /**
-   * Reset voice mappings to defaults
+   * Reset voice mappings to defaults from config.toml
    */
   async resetVoiceMappingsToDefaults(): Promise<void> {
     if (!this.database) {
@@ -320,10 +316,10 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     }
 
     try {
-      // Delete the setting to use defaults
+      // Delete the setting to use defaults from config.toml
       await this.database.setSetting('elevenlabs_voice_ids', '');
       
-      // Reload to update the internal map with defaults
+      // Reload to update the internal map with defaults from config.toml
       await this.loadVoiceMappings();
     } catch (error) {
       throw new Error(`Failed to reset voice mappings: ${error instanceof Error ? error.message : 'Unknown error'}`);
