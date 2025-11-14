@@ -71,63 +71,73 @@ export async function precomputeSentenceTokens(
     return precomputed;
   });
 
-  // Lemmatize words if service is available
+  // Lemmatize words if service is available (skip for Japanese)
   if (params.lemmatizationService && language) {
-    try {
-      // Extract unique words that need lemmatization
-      const wordsToLemmatize: string[] = [];
-      const wordToTokenMap = new Map<string, number[]>();
+    // Skip lemmatization for Japanese
+    const normalizedLanguage = language.toLowerCase().trim();
+    if (normalizedLanguage === 'japanese' || normalizedLanguage === 'ja') {
+      const logger = getLogger();
+      logger.debug({ language }, '[Lemmatization] Skipping lemmatization for Japanese');
+    } else {
+      try {
+        // Extract unique words that need lemmatization
+        const wordsToLemmatize: string[] = [];
+        const wordToTokenMap = new Map<string, number[]>();
 
-      precomputedTokens.forEach((token, index) => {
-        if (token.dictionaryForm && !token.lemma) {
-          const cleanText = token.dictionaryForm.toLowerCase().trim();
-          if (cleanText) {
-            if (!wordToTokenMap.has(cleanText)) {
-              wordsToLemmatize.push(cleanText);
-              wordToTokenMap.set(cleanText, []);
+        precomputedTokens.forEach((token, index) => {
+          if (token.dictionaryForm && !token.lemma) {
+            const cleanText = token.dictionaryForm.toLowerCase().trim();
+            if (cleanText) {
+              if (!wordToTokenMap.has(cleanText)) {
+                wordsToLemmatize.push(cleanText);
+                wordToTokenMap.set(cleanText, []);
+              }
+              wordToTokenMap.get(cleanText)!.push(index);
             }
-            wordToTokenMap.get(cleanText)!.push(index);
-          }
-        }
-      });
-
-      if (wordsToLemmatize.length > 0) {
-        const logger = getLogger();
-        logger.debug(
-          {
-            wordCount: wordsToLemmatize.length,
-            language,
-          },
-          '[Lemmatization] Lemmatizing words during sentence preprocessing'
-        );
-        const lemmas = await params.lemmatizationService.lemmatizeWords(wordsToLemmatize, language);
-
-        // Apply lemmas to tokens
-        wordToTokenMap.forEach((indices, word) => {
-          const lemma = lemmas[word];
-          if (lemma) {
-            indices.forEach((index) => {
-              precomputedTokens[index].lemma = lemma;
-            });
           }
         });
 
-        const lemmaCount = Object.keys(lemmas).length;
-        logger.debug(
-          { lemmaCount, language },
-          '[Lemmatization] Applied lemmas to precomputed tokens'
+        if (wordsToLemmatize.length > 0) {
+          const logger = getLogger();
+          logger.debug(
+            {
+              wordCount: wordsToLemmatize.length,
+              language,
+            },
+            '[Lemmatization] Lemmatizing words during sentence preprocessing'
+          );
+          const lemmas = await params.lemmatizationService.lemmatizeWords(
+            wordsToLemmatize,
+            language
+          );
+
+          // Apply lemmas to tokens
+          wordToTokenMap.forEach((indices, word) => {
+            const lemma = lemmas[word];
+            if (lemma) {
+              indices.forEach((index) => {
+                precomputedTokens[index].lemma = lemma;
+              });
+            }
+          });
+
+          const lemmaCount = Object.keys(lemmas).length;
+          logger.debug(
+            { lemmaCount, language },
+            '[Lemmatization] Applied lemmas to precomputed tokens'
+          );
+        }
+      } catch (error) {
+        const logger = getLogger();
+        logger.warn(
+          {
+            error,
+            language,
+          },
+          '[Lemmatization] Failed to lemmatize words during preprocessing (non-critical)'
         );
+        // Continue without lemmas - sentence will still work
       }
-    } catch (error) {
-      const logger = getLogger();
-      logger.warn(
-        {
-          error,
-          language,
-        },
-        '[Lemmatization] Failed to lemmatize words during preprocessing (non-critical)'
-      );
-      // Continue without lemmas - sentence will still work
     }
   }
 
