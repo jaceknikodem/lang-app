@@ -21,6 +21,55 @@ import { TranscriptionAnalysis } from '../../shared/types/core.js';
 import axios from 'axios';
 
 /**
+ * Language-specific grammar descriptions for proficiency level guidance
+ * Structure: language -> proficiencyLevel -> sentence description
+ */
+export const languageGrammarDescriptions: Record<string, Record<string, string>> = {
+  italian: {
+    newbie:
+      'presente (essere/avere/regular verbs), simple S-V and S-V-O sentence patterns, fixed modal chunks (posso/devo/voglio), fixed reflexives (mi chiamo/si chiama), basic adjective-noun agreement patterns, basic connectors (e/ma/perché), and singular-plural endings (-o/-a/-i/-e)',
+    a1: 'presente (all persons), passato prossimo (recognition only), simple reflexive verbs, modal verbs + infinitive, basic imperatives (tu/voi), "andare a + infinitive" future form, common quantifiers (molto/poco/troppo), interrogatives (dove/quando/perché/quanto), and negation ("non + verb")',
+    a2: 'productive passato prossimo, recognition of imperfetto and futuro semplice, gerundio progressivo (sto + gerundio), basic condizionale presente (vorrei/potrei/mi piacerebbe), expanded reflexives (daily routine/emotions), direct object pronouns (lo/la/li/le in simple contexts), piacere forms (mi piace/mi piacciono/mi piacerebbe), temporal connectors (poi/mentre/prima di/dopo), and comparatives (più/meno… di).',
+    b1: 'productive imperfetto, recognition of trapassato prossimo and futuro anteriore, productive futuro semplice, full condizionale presente plus recognition of condizionale passato, recognition of congiuntivo presente, clitic combinations (ce l\'ho, me ne vado, glielo do), relative clauses with "che"/"cui," expanded connectors (però/quindi/comunque/anche se), and basic passive forms (è fatto/è stato scritto).',
+  },
+  spanish: {
+    newbie:
+      'presente (ser/estar/tener/haber/ir/hacer + regular verbs), simple S-V and S-V-O patterns, fixed modal chunks (puedo/debo/quiero), basic reflexives in fixed phrases (me llamo/se llama), gender-number agreement patterns, basic connectors (y/pero/porque), and plural endings (-s/-es)',
+    a1: 'presente (all persons), pretérito perfecto compuesto (he comido) for recognition only, basic reflexives (levantarse/llamarse), modal verbs + infinitive (puedo ir/tengo que estudiar), basic imperatives (tú/ustedes), periphrastic future “ir a + infinitive,” common quantifiers (mucho/poco/demasiado), question words (dónde/cuándo/por qué/cuánto), and negation (“no + verb”)',
+    a2: 'pretérito perfecto compuesto, recognition of pretérito imperfecto and pretérito indefinido, periphrastic progressive (“estar + gerundio”), basic condicional simple (me gustaría/podría), expanded reflexives (daily routine/emotions), direct object pronouns (lo/la/los/las) in simple contexts, gustar-type verbs (me gusta/me gustan/me gustaría), temporal connectors (luego/mientras/antes de/después de), and comparatives (más/menos… que)',
+    b1: 'pretérito imperfecto and pretérito indefinido, recognition of pluscuamperfecto (había hecho) and futuro perfecto, productive futuro simple, productive condicional simple plus recognition of condicional compuesto, recognition of presente de subjuntivo (quiero que vengas), clitic combinations (se lo doy/me lo llevo), relative clauses with “que/quien,” expanded connectors (sin embargo/por lo tanto/aunque), and basic passive structures (es hecho/ha sido escrito)',
+  },
+  portuguese: {
+    newbie:
+      'presente (ser/estar/ter/haver/regular verbs), simple S-V and S-V-O patterns, fixed modal-like chunks (pode/precisa/quer), basic reflexives with “se” in set phrases, gender/number agreement (-o/-a/-os/-as), basic connectors (e/mas/porque), and singular-plural endings',
+    a1: 'presente (all persons), pretérito perfeito (recognition only), simple pronominal verbs, modal structures with “poder/precisar/querer” + infinitive, basic imperatives (tu/você), “ir + infinitive” future form, common quantifiers (muito/pouco/bastante), WH-questions (onde/quando/por que/quanto), and negation with “não”.',
+    a2: 'pretérito perfeito, recognition of pretérito imperfeito and futuro do presente, progressive aspect with “estar + gerúndio”, basic condicional (“gostaria”, “poderia”), expanded pronominal verbs, direct object pronouns in simple contexts (o/a/os/as), constructions with “gostar de + infinitive/noun”, temporal connectors (depois/enquanto/antes de), and comparatives (mais/menos… que)',
+    b1: 'pretérito imperfeito, recognition of pretérito mais-que-perfeito and futuro composto, productive futuro do presente, full condicional presente plus recognition of condicional composto, recognition of subjuntivo presente, clitic and mesoclisis avoidance patterns with standard BP pronoun placement (me/te/se/nos/lhe etc.), relative clauses with “que/onde”, expanded connectors (porém/então/contudo/mesmo que), and basic passive forms (é feito/foi feito/está sendo feito)',
+  },
+  polish: {
+    newbie:
+      'basic present tense (być/mieć + common regular verbs), simple S-V-O patterns, fixed phrases/chunks (mam na imię…, proszę/dziękuję/przepraszam), basic personal pronouns (ja/ty/on/ona/my/wy), simple negation (nie + verb), and noun gender patterns (m/f/n in singular)',
+    a1: 'present tense (all persons), past tense (recognition only, masculine/feminine singular), verbal aspect exposure (imperfective only), basic cases in fixed patterns (accusative for objects, locative after w/na), modal verbs (mogę/chcę/muszę + infinitive), simple imperative (2nd person), common preposition + case chunks, and basic question forms (kto/co/gdzie/kiedy/dlaczego)',
+    a2: 'past tense (all genders/numbers), future tense (czas przyszły złożony: będę + infinitive), recognition of perfective/imperfective contrast, productive accusative/dative/locative usage in predictable patterns, verb-noun government patterns (lubię + accusative), reflexive verbs with “się,” motion verbs (iść/chodzić/jechać/jeździć), aspectual pairs exposure, and comparative forms (większy/mniejszy/lepszy)',
+    b1: 'future tense (simple perfective future), productive use of perfective/imperfective contrast, recognition of conditional forms (by/bym/byś), past conditional (would-have equivalents), instrumental and genitive case in common constructions, object/clause order flexibility, subordinate clauses with “że” and “żeby,” verbal prefixes (po-/wy-/prze-/do-/od-), and aspect-driven meaning shifts in narratives',
+  },
+  indonesian: {
+    newbie:
+      'simple S-V and S-V-O patterns, basic stative verbs/adjectives (besar/kecil/bagus), very common verbs (makan/minum/pergi/dateng), basic affix-less verbs (tidur/belajar), simple negation (tidak/bukan), basic time words (sekarang/nanti/kemarin), and common pronouns (saya/kamu/dia/kita/kami/mereka)',
+    a1: 'simple verb constructions without affixes, the me- prefix in its most common forms (makan→memakan, baca→membaca), the ber- prefix in everyday verbs (berjalan/berbicara), negation patterns (tidak vs bukan), simple question words (apa/siapa/di mana/kapan/kenapa/bagaimana), basic prepositions (di/ke/dari), possessives with -nya, and reduplication for plural or emphasis (anak-anak/pelan-pelan)',
+    a2: 'use of me- and ber- verbs, passive di- forms (dipakai/dibuat), ke-…-an nouns (kecelakaan/keadaan), simple modal verbs (bisa/harus/mau/perlu), aspect markers (sedang/sudah/belum/akan), comparison forms (lebih/kurang… daripada), clause connectors (karena/jadi/kalau/lalu/setelah), and embedded clauses using yang',
+    b1: 'varied affix combinations (per-…-an, pe-…, memper-…, memper-kan), full passive system (di-, ter- for accidental states), mid-complex clause structures (kalau/seandainya/meskipun), relative clauses with yang in more abstract contexts, aspectual nuance (telah/baru/tengah), object fronting patterns, me- verb phonological alternations (men-/mem-/meng-/meny-), and more advanced reduplication (meaning shifts, distributive uses)',
+  },
+  japanese: {
+    newbie:
+      'basic copula forms (です／ではありません), simple verb dictionary forms (食べる／行く), polite present forms (食べます／行きます), basic particles (は・が・を・に・で・と), simple noun-adjective patterns (大きい＋名詞／きれいな＋名詞), fixed expressions (これ／それ／あれ, いくら／どこ／いつ), and simple SOV sentence patterns',
+    a1: 'polite past forms (〜ました／〜ませんでした), te-form recognition (〜て／〜で), existence verbs (あります／います), basic motion grammar (〜へ行きます／〜から来ました), present progressive recognition (〜ています), counting expressions with common counters (〜つ／〜人), basic adjective past forms (暑かった／静かでした), and core particles in simple constructions (へ・から・まで)',
+    a2: 'te-form usage (requests 〜てください, linking actions 〜て、〜), informal/plain present and past forms (行く／行った), potential form (〜られる／〜できる), volitional recognition (〜ましょう／〜よう), basic conditional forms (〜たら／〜なら), giving/receiving (あげる／くれる／もらう), common aspect forms (〜ている for state vs action), and core sentence-final expressions (と思います／でしょう)',
+    b1: 'full plain-form conjugation, extended te-forms (〜てしまう／〜ておく), passive and causative recognition (〜られる, 〜させる), combined passive-causative recognition (〜させられる), advanced conditionals (〜ば／〜と), concessive forms (〜ても), relative clauses before nouns, nominalizers (こと／の), common modality (かもしれない／はずだ), and increasing use of discourse markers (しかし／それで／ところが)',
+  },
+};
+
+/**
  * Abstract base class for LLM clients that implements common functionality
  */
 export abstract class BaseLLMClient {
@@ -366,47 +415,34 @@ export abstract class BaseLLMClient {
   }
 
   /**
-   * Create proficiency level guidance text
+   * Create proficiency level guidance text with language-specific grammar descriptions
    */
   private createProficiencyGuidance(
     proficiencyLevel: string | undefined,
-    guidanceType: 'vocabulary' | 'sentence'
+    guidanceType: 'vocabulary' | 'sentence',
+    language: string
   ): string {
     if (!proficiencyLevel) {
       return '';
     }
 
-    let levelGuidance = '';
-    switch (proficiencyLevel) {
-      case 'newbie':
-        levelGuidance =
-          guidanceType === 'vocabulary'
-            ? 'Use very simple, basic words that beginners can understand'
-            : 'Use very simple sentence structures, basic grammar, and common words';
-        break;
-      case 'a1':
-        levelGuidance =
-          guidanceType === 'vocabulary'
-            ? 'Use simple, everyday words appropriate for A1 beginners'
-            : 'Use simple sentence structures appropriate for A1 beginners';
-        break;
-      case 'a2':
-        levelGuidance =
-          guidanceType === 'vocabulary'
-            ? 'Use common words appropriate for A2 elementary learners'
-            : 'Use common sentence structures appropriate for A2 elementary learners';
-        break;
-      case 'b1':
-        levelGuidance =
-          guidanceType === 'vocabulary'
-            ? 'Use intermediate vocabulary appropriate for B1 learners'
-            : 'Use intermediate sentence structures appropriate for B1 learners';
-        break;
+    // Vocabulary guidance is generic across all languages
+    if (guidanceType === 'vocabulary') {
+      const levelGuidance = `Use everyday words appropriate for ${proficiencyLevel.toUpperCase()} level`;
+      return `\nIMPORTANT: The user's proficiency level is ${proficiencyLevel.toUpperCase()}. Adjust vocabulary complexity accordingly: ${levelGuidance}`;
     }
 
-    const adjustmentType =
-      guidanceType === 'vocabulary' ? 'vocabulary complexity' : 'sentence complexity';
-    return `\nIMPORTANT: The user's proficiency level is ${proficiencyLevel.toUpperCase()}. Adjust ${adjustmentType} accordingly: ${levelGuidance}`;
+    // Sentence guidance is language-specific
+    const languageLower = language.toLowerCase();
+    const languageDescriptions = languageGrammarDescriptions[languageLower];
+
+    if (languageDescriptions && languageDescriptions[proficiencyLevel]) {
+      const levelGuidance = languageDescriptions[proficiencyLevel];
+      return `\nIMPORTANT: The user's proficiency level is ${proficiencyLevel.toUpperCase()}. Adjust sentence complexity accordingly: ${levelGuidance}`;
+    }
+
+    // Return empty string if no language-specific description exists
+    return '';
   }
 
   /**
@@ -450,7 +486,11 @@ export abstract class BaseLLMClient {
         : '';
 
     // Create proficiency level guidance
-    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'vocabulary');
+    const proficiencyText = this.createProficiencyGuidance(
+      proficiencyLevel,
+      'vocabulary',
+      language
+    );
 
     // Topic is always specified when this method is called
     return `CRITICAL: You must return exactly ${count} words in a JSON array. No more, no less.
@@ -511,7 +551,7 @@ Rules:
         : '';
 
     // Create proficiency level guidance
-    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence');
+    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence', language);
 
     return `CRITICAL: You must return exactly ${count} sentences in a JSON array. No more, no less.
 CRITICAL: Return ONLY the JSON array, no explanations or extra text.
@@ -551,7 +591,7 @@ Rules:
     proficiencyLevel?: string
   ): string {
     // Create proficiency level guidance
-    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence');
+    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence', language);
 
     return `CRITICAL: Return ONLY a JSON object, no explanations or extra text.
 
@@ -666,7 +706,7 @@ Rules:
         : '';
 
     // Create proficiency level guidance
-    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence');
+    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence', language);
 
     return `CRITICAL: You must return exactly ${count} ${languageName} response sentence(s) in a JSON array. No more, no less.
 CRITICAL: Return ONLY the JSON array, no explanations or extra text.
@@ -743,7 +783,7 @@ ${knownWords.length > 0 ? '7. Prefer using words from the provided list when pos
     const sentenceText = sentenceCount === 1 ? 'sentence' : 'sentences';
 
     // Create proficiency level guidance
-    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence');
+    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence', language);
 
     return `Given this ${languageName} conversation:
 
@@ -932,7 +972,7 @@ Romaji:`;
     proficiencyLevel?: string
   ): string {
     const languageName = language.charAt(0).toUpperCase() + language.slice(1);
-    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence');
+    const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence', language);
 
     return `Explain the grammar of the word "${word}" in this ${languageName} sentence: "${sentence}"${proficiencyText}
 
