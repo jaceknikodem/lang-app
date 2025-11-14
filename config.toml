@@ -153,7 +153,7 @@ display_name = "Indonesian"
 tatoeba_code = "ind"
 lemmatization_code = "id"
 speech_recognition_code = "id"
-elevenlabs_voice_ids = ["plgKUYgnlZ1DCNh54DwJ", "I7sakys8pBZ1Z5f0UhT9"]
+elevenlabs_voice_ids = ["plgKUYgnlZ1DCNh54DwJ", "9pDzHy2OpOgeXM8SeL0t", "Nh2zY9kknu6z4pZy6FhD"]
 audio_generator_voice = "Damayanti"
 
 [[languages]]
@@ -163,6 +163,6 @@ display_name = "Japanese"
 tatoeba_code = "jpn"
 lemmatization_code = "ja"
 speech_recognition_code = "ja"
-elevenlabs_voice_ids = ["9pDzHy2OpOgeXM8SeL0t"]
+elevenlabs_voice_ids = ["9pDzHy2OpOgeXM8SeL0t", "3JDquces8E8bkmvbh6Bc"]
 audio_generator_voice = "Kyoko"
 

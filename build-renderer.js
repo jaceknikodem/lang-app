@@ -30,6 +30,7 @@ async function buildRenderer() {
         'path',
         'stream',
         'util',
+        'kuromoji',
         // Config module is Node.js only
         '../config/index.js',
         '../../shared/config/index.js'

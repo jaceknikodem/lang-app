@@ -303,6 +303,13 @@ export interface IPCBridge {
     getWordFrequencies: (words: string[], language: string) => Promise<Record<string, number>>;
   };
 
+  // Japanese tokenization operations
+  japaneseTokenization: {
+    tokenize: (
+      sentence: string
+    ) => Promise<Array<{ text: string; type: 'word' | 'whitespace' | 'punctuation' }>>;
+  };
+
   // Dialog operations
   dialog: {
     selectSentence: () => Promise<Sentence | null>;
@@ -506,6 +513,9 @@ export const IPC_CHANNELS = {
     LOAD_MODEL: 'lemmatization:loadModel',
     LEMMATIZE_WORDS: 'lemmatization:lemmatizeWords',
     GET_WORD_FREQUENCIES: 'lemmatization:getWordFrequencies',
+  },
+  JAPANESE_TOKENIZATION: {
+    TOKENIZE: 'japanese-tokenization:tokenize',
   },
   DIALOG: {
     SELECT_SENTENCE: 'dialog:selectSentence',

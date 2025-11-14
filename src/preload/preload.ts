@@ -390,6 +390,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.LEMMATIZATION.GET_WORD_FREQUENCIES, words, language),
   },
 
+  // Japanese tokenization operations
+  japaneseTokenization: {
+    tokenize: (sentence: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.JAPANESE_TOKENIZATION.TOKENIZE, sentence),
+  },
+
   // Dialog operations
   dialog: {
     selectSentence: () => ipcRenderer.invoke(IPC_CHANNELS.DIALOG.SELECT_SENTENCE),

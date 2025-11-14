@@ -47,12 +47,14 @@ export class LemmatizationService {
       portuguese: 'pt',
       polish: 'pl',
       indonesian: 'id',
+      japanese: 'ja',
       // Also handle ISO codes directly
       es: 'es',
       it: 'it',
       pt: 'pt',
       pl: 'pl',
       id: 'id',
+      ja: 'ja',
     };
     return languageMap[normalized] || 'es'; // Default to Spanish
   }

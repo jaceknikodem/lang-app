@@ -12,6 +12,7 @@ import { LifecycleManager, UpdateManager } from '../lifecycle/index.js';
 import { SRSService } from '../srs/srs-service.js';
 import { WordGenerationRunner } from '../jobs/word-generation-runner.js';
 import { LemmatizationService } from '../lemmatization/index.js';
+import { tokenizeJapanese } from '../lemmatization/japanese-tokenizer.js';
 import { DialogService } from '../dialog/index.js';
 import { promises as fsPromises } from 'fs';
 import { join } from 'path';
@@ -88,6 +89,7 @@ export function setupIPCHandlers(
   // Lemmatization handlers
   if (lemmatizationService) {
     setupLemmatizationHandlers(lemmatizationService);
+    setupJapaneseTokenizationHandlers();
   }
 
   // Dialog handlers
@@ -1710,6 +1712,22 @@ function setupLemmatizationHandlers(lemmatizationService: LemmatizationService):
         return await lemmatizationService.getWordFrequencies(words, language);
       },
       'get word frequencies'
+    )
+  );
+}
+
+/**
+ * Set up Japanese tokenization-related IPC handlers
+ */
+function setupJapaneseTokenizationHandlers(): void {
+  ipcMain.handle(
+    IPC_CHANNELS.JAPANESE_TOKENIZATION.TOKENIZE,
+    createIPCHandler(
+      TextSchema,
+      async (sentence) => {
+        return await tokenizeJapanese(sentence);
+      },
+      'tokenize Japanese sentence'
     )
   );
 }

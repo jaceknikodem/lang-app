@@ -35,6 +35,99 @@ interface PhraseCandidate {
   wordCount: number;
 }
 
+/**
+ * Tokenize Japanese text
+ * In renderer: uses IPC to call the main process
+ * In main process: calls the tokenizer directly
+ */
+async function tokenizeJapanese(sentence: string): Promise<InternalToken[]> {
+  // Check if we're in the renderer process (browser) or main process (Node.js)
+  // In renderer process, always use IPC (this code path is what gets bundled)
+  if (typeof window !== 'undefined') {
+    try {
+      // Call the main process via IPC to tokenize Japanese text
+      // Type assertion needed because japaneseTokenization is added dynamically
+      const electronAPI = (window as any).electronAPI;
+      const tokens = await electronAPI.japaneseTokenization.tokenize(sentence);
+
+      // Convert the IPC response to InternalToken format
+      return tokens.map((token: { text: string; type: string }) => ({
+        text: token.text,
+        type: token.type as 'word' | 'whitespace' | 'punctuation',
+      }));
+    } catch (error) {
+      console.error('Failed to tokenize Japanese via IPC:', error);
+      // Fallback: simple character-based splitting for Japanese
+      return tokenizeJapaneseSimple(sentence);
+    }
+  }
+
+  // Main process code path (should never execute in renderer bundle)
+  // Use Function constructor to prevent esbuild from analyzing the require() call
+  try {
+    // Dynamically require to prevent bundler from analyzing this
+    // From dist/main/renderer/utils/ to dist/main/main/lemmatization/
+    // Path: ../../main/lemmatization/japanese-tokenizer.js
+    const nodeRequire =
+      typeof require !== 'undefined'
+        ? require
+        : (() => {
+            throw new Error('require is not available');
+          })();
+    // Use Function constructor to make path completely dynamic
+    // This prevents esbuild from trying to resolve the module
+    const requireFunc = new Function('require', 'path', 'return require(path)');
+    const modulePath = '../../main/lemmatization/japanese-tokenizer.js';
+    const module = requireFunc(nodeRequire, modulePath);
+    const tokenizeJapaneseMain: (text: string) => Promise<Array<{ text: string; type: string }>> =
+      module.tokenizeJapanese;
+
+    const tokens = await tokenizeJapaneseMain(sentence);
+    return tokens.map((token: { text: string; type: string }) => ({
+      text: token.text,
+      type: token.type as 'word' | 'whitespace' | 'punctuation',
+    }));
+  } catch (error) {
+    console.error('Failed to tokenize Japanese in main process:', error);
+    return tokenizeJapaneseSimple(sentence);
+  }
+}
+
+/**
+ * Simple fallback tokenization for Japanese (less accurate)
+ * Splits on Japanese punctuation and treats character sequences as words
+ */
+function tokenizeJapaneseSimple(sentence: string): InternalToken[] {
+  const tokens: InternalToken[] = [];
+
+  // Match Japanese characters (hiragana, katakana, kanji), punctuation, and whitespace
+  // Unicode ranges:
+  // Hiragana: \u3040-\u309F
+  // Katakana: \u30A0-\u30FF
+  // Kanji: \u4E00-\u9FAF
+  // Japanese punctuation: 。、！？：；
+  const regex =
+    /([\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+|[。、！？：；]+|[\s]+|[^\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF。、！？：；\s]+)/g;
+  let match;
+
+  while ((match = regex.exec(sentence)) !== null) {
+    const text = match[0];
+    if (/^\s+$/.test(text)) {
+      tokens.push({ text, type: 'whitespace' });
+    } else if (/^[。、！？：；]+$/.test(text)) {
+      tokens.push({ text, type: 'punctuation' });
+    } else if (/^[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+$/.test(text)) {
+      // Japanese characters - treat as word
+      tokens.push({ text, type: 'word' });
+    } else {
+      // Other characters (numbers, Latin, etc.)
+      tokens.push({ text, type: 'punctuation' });
+    }
+  }
+
+  return tokens.length > 0 ? tokens : [{ text: sentence, type: 'word' }];
+}
+
 export async function tokenizeSentenceWithDictionary(
   params: TokenizeSentenceParams,
   options: TokenizeSentenceOptions = {}
@@ -52,20 +145,30 @@ export async function tokenizeSentenceWithDictionary(
     return { words: [], cache: dictionaryCache };
   }
 
-  const parts = sentence.split(/(\s+|[.,!?;:])/);
-  const tokens: InternalToken[] = parts
-    .filter((part) => part !== '')
-    .map((part) => {
-      if (/^\s+$/.test(part)) {
-        return { text: part, type: 'whitespace' as const };
-      }
+  // Check if this is Japanese and use appropriate tokenization
+  let tokens: InternalToken[];
+  const isJapanese = fallbackLanguage === 'japanese' || fallbackLanguage === 'ja';
 
-      if (/^[.,!?;:]+$/.test(part)) {
-        return { text: part, type: 'punctuation' as const };
-      }
+  if (isJapanese) {
+    // Use kuromoji for Japanese tokenization
+    tokens = await tokenizeJapanese(sentence);
+  } else {
+    // Original logic for space-separated languages
+    const parts = sentence.split(/(\s+|[.,!?;:])/);
+    tokens = parts
+      .filter((part) => part !== '')
+      .map((part) => {
+        if (/^\s+$/.test(part)) {
+          return { text: part, type: 'whitespace' as const };
+        }
 
-      return { text: part, type: 'word' as const };
-    });
+        if (/^[.,!?;:]+$/.test(part)) {
+          return { text: part, type: 'punctuation' as const };
+        }
+
+        return { text: part, type: 'word' as const };
+      });
+  }
 
   const wordLookup = new Map<string, Word>();
   for (const word of allWords) {
