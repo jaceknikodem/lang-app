@@ -320,6 +320,24 @@ export class SentenceViewer extends LitElement {
         background: #e3f2fd;
       }
 
+      .sentence-pronunciation {
+        font-size: 13px;
+        color: var(--text-secondary);
+        font-style: normal;
+        line-height: 1.4;
+        margin-top: var(--spacing-xs);
+        opacity: 0.8;
+      }
+
+      .context-pronunciation {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-style: normal;
+        line-height: 1.4;
+        margin-top: var(--spacing-xs);
+        opacity: 0.8;
+      }
+
       .sentence-translation {
         font-size: 14px;
         color: var(--text-secondary);
@@ -1919,17 +1937,27 @@ export class SentenceViewer extends LitElement {
     if (wordInfo.lemma) {
       wordToAdd = wordInfo.lemma;
     } else {
-      // Fallback: try to lemmatize the word
-      try {
-        const lemmas = await window.electronAPI.lemmatization.lemmatizeWords(
-          [rawWord.toLowerCase()],
-          this.targetWord.language
-        );
-        const lemma = lemmas[rawWord.toLowerCase()];
-        wordToAdd = lemma || rawWord.replace(/\s+/g, ' ');
-      } catch (error) {
-        logger.warn({ error, rawWord }, 'Failed to lemmatize word (non-critical)');
+      // Skip lemmatization for Japanese
+      const isJapanese =
+        this.targetWord.language?.toLowerCase() === 'japanese' ||
+        this.targetWord.language?.toLowerCase() === 'ja';
+
+      if (isJapanese) {
+        // For Japanese, just use the raw word (no lemmatization)
         wordToAdd = rawWord.replace(/\s+/g, ' ');
+      } else {
+        // Fallback: try to lemmatize the word
+        try {
+          const lemmas = await window.electronAPI.lemmatization.lemmatizeWords(
+            [rawWord.toLowerCase()],
+            this.targetWord.language
+          );
+          const lemma = lemmas[rawWord.toLowerCase()];
+          wordToAdd = lemma || rawWord.replace(/\s+/g, ' ');
+        } catch (error) {
+          logger.warn({ error, rawWord }, 'Failed to lemmatize word (non-critical)');
+          wordToAdd = rawWord.replace(/\s+/g, ' ');
+        }
       }
     }
 
@@ -2448,6 +2476,19 @@ export class SentenceViewer extends LitElement {
 
   render() {
     const wordStrength = Math.round(this.targetWord?.strength ?? 0);
+
+    // Debug: Log pronunciation for Japanese sentences
+    if (
+      this.sentence &&
+      (this.sentence.language === 'japanese' || this.sentence.language === 'ja')
+    ) {
+      console.log('[SentenceViewer] Japanese sentence pronunciation:', {
+        hasPronunciation: !!this.sentence.pronunciation,
+        pronunciation: this.sentence.pronunciation,
+        hasContextBeforePronunciation: !!this.sentence.contextBeforePronunciation,
+        hasContextAfterPronunciation: !!this.sentence.contextAfterPronunciation,
+      });
+    }
     const lastSeenSource = this.displayLastSeen ?? this.sentence?.lastShown;
     const lastSeenText = this.formatTimeAgo(lastSeenSource);
 
@@ -2510,6 +2551,14 @@ export class SentenceViewer extends LitElement {
                   @click=${this.handleContextBeforeClick}
                 >
                   <div class="context-text">${this.sentence.contextBefore}</div>
+                  ${this.sentence.contextBeforePronunciation &&
+                  this.sentence.contextBeforePronunciation.trim()
+                    ? html`
+                        <div class="context-pronunciation">
+                          ${this.sentence.contextBeforePronunciation}
+                        </div>
+                      `
+                    : nothing}
                   <div class="context-translation ${this.audioOnlyMode ? 'hidden' : ''}">
                     ${this.sentence.contextBeforeTranslation}
                   </div>
@@ -2645,7 +2694,9 @@ export class SentenceViewer extends LitElement {
                   </div>
                 `
               : nothing}
-
+            ${this.sentence.pronunciation && this.sentence.pronunciation.trim()
+              ? html` <div class="sentence-pronunciation">${this.sentence.pronunciation}</div> `
+              : nothing}
             <div class="sentence-translation ${this.audioOnlyMode ? 'hidden' : ''}">
               ${this.sentence.translation}
             </div>
@@ -2658,6 +2709,14 @@ export class SentenceViewer extends LitElement {
                   @click=${this.handleContextAfterClick}
                 >
                   <div class="context-text">${this.sentence.contextAfter}</div>
+                  ${this.sentence.contextAfterPronunciation &&
+                  this.sentence.contextAfterPronunciation.trim()
+                    ? html`
+                        <div class="context-pronunciation">
+                          ${this.sentence.contextAfterPronunciation}
+                        </div>
+                      `
+                    : nothing}
                   <div class="context-translation ${this.audioOnlyMode ? 'hidden' : ''}">
                     ${this.sentence.contextAfterTranslation}
                   </div>

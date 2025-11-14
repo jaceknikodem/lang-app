@@ -88,6 +88,12 @@ async function getJapaneseTokenizer(): Promise<kuromoji.Tokenizer<kuromoji.Ipadi
  * Tokenize Japanese text using kuromoji
  */
 export async function tokenizeJapanese(sentence: string): Promise<TokenizedToken[]> {
+  // Disable kuromoji for now - use simple tokenization
+  // eslint-disable-next-line no-constant-condition
+  if (true) {
+    return tokenizeJapaneseSimple(sentence);
+  }
+
   try {
     const tokenizer = await getJapaneseTokenizer();
     const tokens = tokenizer.tokenize(sentence);

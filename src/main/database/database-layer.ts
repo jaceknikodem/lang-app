@@ -233,6 +233,26 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // Ignore error - this is expected for existing databases with the column
     }
 
+    // Migration: Add pronunciation columns to sentences table if they don't exist
+    try {
+      db.exec(`ALTER TABLE sentences ADD COLUMN pronunciation TEXT`);
+    } catch {
+      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
+      // Ignore error - this is expected for existing databases with the column
+    }
+    try {
+      db.exec(`ALTER TABLE sentences ADD COLUMN context_before_pronunciation TEXT`);
+    } catch {
+      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
+      // Ignore error - this is expected for existing databases with the column
+    }
+    try {
+      db.exec(`ALTER TABLE sentences ADD COLUMN context_after_pronunciation TEXT`);
+    } catch {
+      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
+      // Ignore error - this is expected for existing databases with the column
+    }
+
     // Progress table
     db.exec(`
       CREATE TABLE IF NOT EXISTS progress (
@@ -1127,7 +1147,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     audioGenerationService?: string,
     audioGenerationModel?: string,
     audioGenerationVoiceId?: string,
-    tokenizedTokens?: PrecomputedToken[]
+    tokenizedTokens?: PrecomputedToken[],
+    pronunciation?: string,
+    contextBeforePronunciation?: string,
+    contextAfterPronunciation?: string
   ): Promise<number> {
     const db = this.getDb();
 
@@ -1148,9 +1171,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           word_id, language, sentence, translation, audio_path,
           context_before, context_after, context_before_translation, context_after_translation,
           sentence_parts, sentence_generation_model, audio_generation_service, audio_generation_model,
-          audio_generation_voice_id, sentence_tokens
+          audio_generation_voice_id, sentence_tokens, pronunciation, context_before_pronunciation, context_after_pronunciation
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const result = stmt.run(
@@ -1168,7 +1191,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         audioGenerationService || null,
         audioGenerationModel || null,
         audioGenerationVoiceId || null,
-        serializedTokens
+        serializedTokens,
+        pronunciation || null,
+        contextBeforePronunciation || null,
+        contextAfterPronunciation || null
       );
 
       const sentenceId = result.lastInsertRowid as number;
@@ -3327,6 +3353,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       afterSentenceAudioPath: (row.after_sentence_audio_path as string) || undefined,
       ignored: row.ignored === 1 || row.ignored === true,
       relatedWords,
+      pronunciation: (row.pronunciation as string) || undefined,
+      contextBeforePronunciation: (row.context_before_pronunciation as string) || undefined,
+      contextAfterPronunciation: (row.context_after_pronunciation as string) || undefined,
     };
   }
 

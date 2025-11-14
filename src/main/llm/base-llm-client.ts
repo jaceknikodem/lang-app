@@ -857,6 +857,51 @@ If there are no mistakes, you can omit correction and grammarExplanation, but al
   }
 
   /**
+   * Convert a sentence to pronunciation (e.g., Romaji for Japanese)
+   * Returns space-separated pronunciation text
+   */
+  async convertToPronunciation(sentence: string, language: string): Promise<string> {
+    const prompt = this.createPronunciationPrompt(sentence, language);
+
+    // If prompt is empty (language not supported), return empty string
+    if (!prompt || !prompt.trim()) {
+      return '';
+    }
+
+    try {
+      // Use generateResponse for plain text responses
+      const response = await this.generateResponse(prompt, this.getSentenceGenerationModel());
+      return response.trim();
+    } catch (error) {
+      // On error, return empty string (graceful degradation)
+      this.logger.warn({ error, sentence, language }, 'Failed to convert to pronunciation');
+      return '';
+    }
+  }
+
+  /**
+   * Create prompt for pronunciation conversion
+   */
+  protected createPronunciationPrompt(sentence: string, language: string): string {
+    if (language.toLowerCase() === 'japanese' || language.toLowerCase() === 'ja') {
+      return `Convert this Japanese sentence to Romaji (romanized Japanese). Return ONLY the space-separated Romaji text, nothing else.
+
+Japanese sentence: "${sentence}"
+
+Rules:
+1. Convert all Kanji and Kana to Romaji
+2. Use space-separated format (e.g., "watashi wa gakusei desu" not "watashiwa gakuseidesu")
+3. Preserve punctuation marks as-is
+4. Return ONLY the Romaji text, no explanations or additional text
+
+Romaji:`;
+    }
+
+    // For other languages, return empty string (can be extended later)
+    return '';
+  }
+
+  /**
    * Explain the grammar of a word in a sentence
    */
   async explainGrammar(

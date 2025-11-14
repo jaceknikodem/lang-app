@@ -254,9 +254,10 @@ export class ContentGenerator {
       throw new Error('Failed to generate translations for frequency-based words');
     }
 
-    // Step 1: Lemmatize the words
+    // Step 1: Lemmatize the words (skip for Japanese)
     let lemmatizedWords: GeneratedWord[] = generatedWords;
-    if (this.lemmatizationService) {
+    const isJapanese = language.toLowerCase() === 'japanese' || language.toLowerCase() === 'ja';
+    if (this.lemmatizationService && !isJapanese) {
       const wordsToLemmatize = generatedWords.map((w) => w.word);
       const lemmas = await this.lemmatizationService.lemmatizeWords(
         wordsToLemmatize,
@@ -361,9 +362,11 @@ export class ContentGenerator {
         throw new Error('No valid words were generated. Please try again.');
       }
 
-      // Step 1: Lemmatize the words
+      // Step 1: Lemmatize the words (skip for Japanese)
       let lemmatizedWords: GeneratedWord[] = validWords;
-      if (this.lemmatizationService) {
+      const isJapanese =
+        targetLanguage.toLowerCase() === 'japanese' || targetLanguage.toLowerCase() === 'ja';
+      if (this.lemmatizationService && !isJapanese) {
         const wordsToLemmatize = validWords.map((w) => w.word);
         const lemmas = await this.lemmatizationService.lemmatizeWords(
           wordsToLemmatize,
@@ -523,12 +526,55 @@ export class ContentGenerator {
                     targetLanguage,
                     proficiencyLevel
                   );
+
+                  // Also convert to pronunciation for Japanese
+                  const isJapanese =
+                    targetLanguage.toLowerCase() === 'japanese' ||
+                    targetLanguage.toLowerCase() === 'ja';
+                  let pronunciation: string | undefined;
+                  let contextBeforePronunciation: string | undefined;
+                  let contextAfterPronunciation: string | undefined;
+
+                  if (isJapanese) {
+                    try {
+                      pronunciation = await this.llmClient.convertToPronunciation(
+                        sentence.sentence,
+                        targetLanguage
+                      );
+                      pronunciation = pronunciation || undefined;
+
+                      if (context.contextBefore) {
+                        contextBeforePronunciation = await this.llmClient.convertToPronunciation(
+                          context.contextBefore,
+                          targetLanguage
+                        );
+                        contextBeforePronunciation = contextBeforePronunciation || undefined;
+                      }
+
+                      if (context.contextAfter) {
+                        contextAfterPronunciation = await this.llmClient.convertToPronunciation(
+                          context.contextAfter,
+                          targetLanguage
+                        );
+                        contextAfterPronunciation = contextAfterPronunciation || undefined;
+                      }
+                    } catch (pronError) {
+                      this.logger.warn(
+                        { error: pronError },
+                        'Failed to convert Tatoeba sentence to pronunciation'
+                      );
+                    }
+                  }
+
                   return {
                     ...sentence,
                     contextBefore: context.contextBefore,
                     contextAfter: context.contextAfter,
                     contextBeforeTranslation: context.contextBeforeTranslation,
                     contextAfterTranslation: context.contextAfterTranslation,
+                    pronunciation,
+                    contextBeforePronunciation,
+                    contextAfterPronunciation,
                   };
                 } catch (error) {
                   this.logger.warn(
@@ -605,6 +651,46 @@ export class ContentGenerator {
 
       if (combinedSentences.length === 0) {
         throw new Error(`No valid sentences were generated for word: ${word}. Please try again.`);
+      }
+
+      // Convert to pronunciation for Japanese sentences
+      const isJapanese =
+        targetLanguage.toLowerCase() === 'japanese' || targetLanguage.toLowerCase() === 'ja';
+      if (isJapanese) {
+        const sentencesWithPronunciation = await Promise.all(
+          combinedSentences.map(async (sentence) => {
+            try {
+              const pronunciation = await this.llmClient.convertToPronunciation(
+                sentence.sentence,
+                targetLanguage
+              );
+              const contextBeforePronunciation = sentence.contextBefore
+                ? await this.llmClient.convertToPronunciation(
+                    sentence.contextBefore,
+                    targetLanguage
+                  )
+                : undefined;
+              const contextAfterPronunciation = sentence.contextAfter
+                ? await this.llmClient.convertToPronunciation(sentence.contextAfter, targetLanguage)
+                : undefined;
+
+              return {
+                ...sentence,
+                pronunciation: pronunciation || undefined,
+                contextBeforePronunciation: contextBeforePronunciation || undefined,
+                contextAfterPronunciation: contextAfterPronunciation || undefined,
+              };
+            } catch (error) {
+              this.logger.warn(
+                { error, sentence: sentence.sentence },
+                'Failed to convert to pronunciation'
+              );
+              // Return sentence without pronunciation on error (graceful degradation)
+              return sentence;
+            }
+          })
+        );
+        return sentencesWithPronunciation;
       }
 
       // Return combined sentences (LLM results shuffled, Tatoeba examples appended)

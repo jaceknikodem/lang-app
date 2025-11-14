@@ -64,7 +64,10 @@ export interface IPCBridge {
       sentenceGenerationModel?: string,
       audioGenerationService?: string,
       audioGenerationModel?: string,
-      audioGenerationVoiceId?: string
+      audioGenerationVoiceId?: string,
+      pronunciation?: string,
+      contextBeforePronunciation?: string,
+      contextAfterPronunciation?: string
     ) => Promise<number>;
     getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
     getSentencesByIds: (sentenceIds: number[]) => Promise<Sentence[]>;

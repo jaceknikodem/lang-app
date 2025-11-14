@@ -65,7 +65,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       sentenceGenerationModel?: string,
       audioGenerationService?: string,
       audioGenerationModel?: string,
-      audioGenerationVoiceId?: string
+      audioGenerationVoiceId?: string,
+      pronunciation?: string,
+      contextBeforePronunciation?: string,
+      contextAfterPronunciation?: string
     ) =>
       ipcRenderer.invoke(
         IPC_CHANNELS.DATABASE.INSERT_SENTENCE,
@@ -81,7 +84,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
         sentenceGenerationModel,
         audioGenerationService,
         audioGenerationModel,
-        audioGenerationVoiceId
+        audioGenerationVoiceId,
+        pronunciation,
+        contextBeforePronunciation,
+        contextAfterPronunciation
       ),
     getSentencesByWord: (wordId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_SENTENCES_BY_WORD, wordId),

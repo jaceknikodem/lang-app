@@ -87,6 +87,13 @@ export class LemmatizationService {
    * Load a Stanza model for the given language
    */
   async loadModel(language: string): Promise<void> {
+    // Skip loading model for Japanese (not supported by Stanza in the same way)
+    const normalizedLanguage = language.toLowerCase().trim();
+    if (normalizedLanguage === 'japanese' || normalizedLanguage === 'ja') {
+      this.logger.debug({ language }, '[Lemmatization] Skipping model load for Japanese');
+      return;
+    }
+
     const languageCode = this.mapLanguageToCode(language);
 
     const response = await fetch(`${this.serverUrl}/load_model`, {
@@ -122,6 +129,17 @@ export class LemmatizationService {
    * Lemmatize a list of words
    */
   async lemmatizeWords(words: string[], language: string): Promise<Record<string, string>> {
+    // Skip lemmatization for Japanese (not supported by Stanza in the same way)
+    const normalizedLanguage = language.toLowerCase().trim();
+    if (normalizedLanguage === 'japanese' || normalizedLanguage === 'ja') {
+      this.logger.debug(
+        { language, wordCount: words.length },
+        '[Lemmatization] Skipping lemmatization for Japanese'
+      );
+      // Return empty object (no lemmas) for Japanese
+      return {};
+    }
+
     const languageCode = this.mapLanguageToCode(language);
 
     this.logger.debug(

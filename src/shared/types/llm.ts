@@ -54,6 +54,7 @@ export interface LLMClient {
     language: string,
     proficiencyLevel?: string
   ): Promise<string>;
+  convertToPronunciation(sentence: string, language: string): Promise<string>;
   isAvailable(): Promise<boolean>;
   getAvailableModels(): Promise<string[]>;
   setModel(model: string): void;

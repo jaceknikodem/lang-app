@@ -213,7 +213,11 @@ export class WordGenerationRunner {
             sentenceParts,
             undefined, // Will be set after audio generation
             undefined, // Will be set after audio generation
-            undefined // Will be set after audio generation
+            undefined, // Will be set after audio generation
+            undefined, // tokenizedTokens
+            sentence.pronunciation,
+            sentence.contextBeforePronunciation,
+            sentence.contextAfterPronunciation
           );
 
           // Generate audio now that we have sentenceId

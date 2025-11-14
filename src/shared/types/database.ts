@@ -118,7 +118,10 @@ export interface DatabaseLayer {
     audioGenerationService?: string,
     audioGenerationModel?: string,
     audioGenerationVoiceId?: string,
-    tokenizedTokens?: PrecomputedToken[]
+    tokenizedTokens?: PrecomputedToken[],
+    pronunciation?: string,
+    contextBeforePronunciation?: string,
+    contextAfterPronunciation?: string
   ): Promise<number>;
   getSentencesByWord(wordId: number): Promise<Sentence[]>;
   getSentencesByIds(sentenceIds: number[]): Promise<Sentence[]>;
