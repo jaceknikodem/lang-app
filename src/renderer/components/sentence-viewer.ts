@@ -84,6 +84,9 @@ export class SentenceViewer extends LitElement {
   @state()
   private zipfFrequencies: Record<string, number> = {}; // word -> zipf frequency
 
+  @state()
+  private contextMenu: { x: number; y: number; selectedText: string } | null = null;
+
   // Dictionary cache is not reactive to avoid unnecessary re-renders
   // Dictionary data is precomputed in tokens, so cache updates shouldn't trigger UI updates
   private dictionaryCache: Record<string, DictionaryEntry[] | null> = {};
@@ -658,6 +661,33 @@ export class SentenceViewer extends LitElement {
         margin: var(--spacing-xs) 0;
       }
 
+      .context-menu {
+        position: fixed;
+        background: var(--background-primary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-small);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        z-index: 10000;
+        min-width: 150px;
+        padding: var(--spacing-xs) 0;
+      }
+
+      .context-menu-item {
+        padding: var(--spacing-sm) var(--spacing-md);
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--text-primary);
+        transition: background 0.15s ease;
+      }
+
+      .context-menu-item:hover {
+        background: var(--background-secondary);
+      }
+
+      .context-menu-item:active {
+        background: var(--primary-light);
+      }
+
       @media (max-width: 768px) {
         .sentence-header {
           flex-direction: column;
@@ -721,6 +751,14 @@ export class SentenceViewer extends LitElement {
   }
 
   private handleOutsideClick = (event: MouseEvent) => {
+    // Handle context menu close
+    if (this.contextMenu) {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.context-menu') && !target.closest('.grammar-explanation-content')) {
+        this.handleCloseContextMenu();
+      }
+    }
+
     if (!this.wordPopup) return;
 
     // Use setTimeout to allow click handlers on words to execute first
@@ -747,8 +785,12 @@ export class SentenceViewer extends LitElement {
   };
 
   private handleKeyDown = (event: KeyboardEvent) => {
-    if (event.key === 'Escape' && this.wordPopup) {
-      this.closeWordPopup();
+    if (event.key === 'Escape') {
+      if (this.contextMenu) {
+        this.handleCloseContextMenu();
+      } else if (this.wordPopup) {
+        this.closeWordPopup();
+      }
     }
   };
 
@@ -1923,6 +1965,74 @@ export class SentenceViewer extends LitElement {
     this.requestUpdate();
   }
 
+  private async handleGrammarContextMenu(e: MouseEvent) {
+    e.preventDefault();
+
+    const selection = window.getSelection();
+    const selectedText = selection?.toString().trim() || '';
+
+    // Only show menu if text is between 5 and 100 characters
+    if (selectedText.length < 5 || selectedText.length > 100) {
+      this.contextMenu = null;
+      return;
+    }
+
+    // Show context menu at cursor position (works with any TTS backend)
+    this.contextMenu = {
+      x: e.clientX,
+      y: e.clientY,
+      selectedText,
+    };
+
+    this.requestUpdate();
+  }
+
+  private handleCloseContextMenu() {
+    this.contextMenu = null;
+    // Clear selection
+    window.getSelection()?.removeAllRanges();
+  }
+
+  private async handleReadSelectedText() {
+    if (!this.contextMenu) return;
+
+    const selectedText = this.contextMenu.selectedText;
+    this.handleCloseContextMenu();
+
+    try {
+      logger.info({ selectedText }, 'Generating audio for selected text');
+
+      // Get current language
+      const language =
+        this.targetWord?.language || (await window.electronAPI.database.getCurrentLanguage());
+
+      logger.info({ language, selectedText }, 'Generating audio with language');
+
+      // Generate audio using the configured TTS backend (ElevenLabs or system TTS)
+      const audioPath = await window.electronAPI.audio.generateAudio(selectedText, language);
+
+      logger.info({ audioPath }, 'Audio generated successfully, playing...');
+
+      // Play the audio
+      await audioPlayer.play(audioPath, {
+        playbackSpeed: this.playbackSpeed || 1.0,
+        onError: (error: Error) => {
+          logger.error({ error, audioPath, selectedText }, 'Error during audio playback');
+        },
+        onEnded: () => {
+          logger.info({ audioPath, selectedText }, 'Audio playback completed');
+        },
+      });
+
+      logger.info({ audioPath }, 'Audio playback started');
+    } catch (error) {
+      logger.error({ error, selectedText }, 'Failed to read selected text');
+      console.error('Error reading selected text:', error);
+      // Show error to user
+      alert(`Failed to read text: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   private async addWordFromSentence(
     wordInfo: WordInSentence,
     generateSentences: boolean = true
@@ -2794,9 +2904,25 @@ export class SentenceViewer extends LitElement {
                     ×
                   </button>
                 </div>
-                <div class="grammar-explanation-content">
+                <div
+                  class="grammar-explanation-content"
+                  @contextmenu=${this.handleGrammarContextMenu}
+                >
                   ${unsafeHTML(markdownToHtml(this.grammarExplanation.explanation))}
                 </div>
+                ${this.contextMenu
+                  ? html`
+                      <div
+                        class="context-menu"
+                        style="left: ${this.contextMenu.x}px; top: ${this.contextMenu.y}px;"
+                        @click=${(e: Event) => e.stopPropagation()}
+                      >
+                        <div class="context-menu-item" @click=${this.handleReadSelectedText}>
+                          Read out loud
+                        </div>
+                      </div>
+                    `
+                  : nothing}
               </div>
             `
           : nothing}

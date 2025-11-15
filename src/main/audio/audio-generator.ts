@@ -2,6 +2,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
+import { createHash } from 'crypto';
 import { app } from 'electron';
 import { AudioConfig } from '../../shared/types/audio';
 import { DatabaseLayer } from '../../shared/types/database';
@@ -84,7 +85,8 @@ export class TTSAudioGenerator extends BaseAudioGenerator {
    *   - After sentence audio: /audio/<lang>/word_<word_id>/after_sentence_<sentence_id>.<extension>
    *   - Sentence audio: /audio/<lang>/<word_id>/<sentence_id>.<extension>
    *   - Word audio: /audio/<lang>/<word_id>.<extension>
-   * Requires wordId for word/sentence audio, variantId for continuation audio
+   *   - Custom text (no IDs): /audio/<lang>/custom_<hash>.<extension>
+   * Requires wordId for word/sentence audio, variantId for continuation audio, or uses text hash for custom text
    */
   private getAudioPath(text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number): string {
     if (variantId !== undefined) {
@@ -93,7 +95,10 @@ export class TTSAudioGenerator extends BaseAudioGenerator {
     }
 
     if (wordId === undefined) {
-      throw createAudioError(`Word ID or variant ID is required for audio file naming. Text: "${text}"`, 'INVALID_PATH');
+      // Custom text without wordId - use hash of text for filename
+      // This allows generating audio for arbitrary text selections
+      const textHash = createHash('md5').update(text.trim().toLowerCase()).digest('hex').substring(0, 16);
+      return join(this.config.audioDirectory, language, `custom_${textHash}${this.config.fileExtension}`);
     }
 
     if (sentenceId !== undefined && word?.includes('_before_sentence')) {
