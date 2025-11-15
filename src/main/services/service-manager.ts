@@ -176,6 +176,44 @@ export class ServiceManager {
   }
 
   /**
+   * Wait for a service to be ready by checking its status endpoint
+   * @param url The service URL (e.g., 'http://127.0.0.1:8888')
+   * @param serviceName Name of the service for error messages
+   * @param maxWaitTime Maximum time to wait in milliseconds (default: 10000)
+   * @param checkInterval Interval between checks in milliseconds (default: 500)
+   * @throws Error if service doesn't become ready within timeout
+   */
+  private async waitForServiceReady(
+    url: string,
+    serviceName: string,
+    maxWaitTime: number = 10000,
+    checkInterval: number = 500
+  ): Promise<void> {
+    const startTime = Date.now();
+    let serviceReady = false;
+
+    while (Date.now() - startTime < maxWaitTime) {
+      try {
+        const response = await fetch(`${url}/status`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(1000),
+        });
+        if (response.ok) {
+          serviceReady = true;
+          break;
+        }
+      } catch {
+        // Service not ready yet, continue waiting
+      }
+      await this.delay(checkInterval);
+    }
+
+    if (!serviceReady) {
+      throw new Error(`${serviceName} did not become ready within ${maxWaitTime}ms timeout`);
+    }
+  }
+
+  /**
    * Handle service exit with simplified restart logic
    */
   private handleServiceExit(
@@ -476,6 +514,9 @@ export class ServiceManager {
       if (lemmatizationProcess.killed || lemmatizationProcess.exitCode !== null) {
         throw new Error('Lemmatization server process died immediately');
       }
+
+      // Wait for service to be ready (check /status endpoint)
+      await this.waitForServiceReady(url, 'Lemmatization server');
 
       this.logger.info(
         { url, port: actualPort },
