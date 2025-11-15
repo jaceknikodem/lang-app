@@ -535,15 +535,6 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
   );
 
   ipcMain.handle(
-    IPC_CHANNELS.DATABASE.GET_AVAILABLE_LANGUAGES,
-    createIPCHandler(
-      undefined,
-      () => databaseLayer.getAvailableLanguages(),
-      'get available languages'
-    )
-  );
-
-  ipcMain.handle(
     IPC_CHANNELS.DATABASE.GET_LANGUAGE_STATS,
     createIPCHandler(undefined, () => databaseLayer.getLanguageStats(), 'get language stats')
   );

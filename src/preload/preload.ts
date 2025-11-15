@@ -151,7 +151,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getCurrentLanguage: () => ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_CURRENT_LANGUAGE),
     setCurrentLanguage: (language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.SET_CURRENT_LANGUAGE, language),
-    getAvailableLanguages: () => ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_AVAILABLE_LANGUAGES),
     getLanguageStats: () => ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_LANGUAGE_STATS),
     lookupDictionary: (word: string, language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.LOOKUP_DICTIONARY, word, language),

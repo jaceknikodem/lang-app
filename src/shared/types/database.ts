@@ -206,7 +206,6 @@ export interface DatabaseLayer {
   setSetting(key: string, value: string): Promise<void>;
   getCurrentLanguage(): Promise<string>;
   setCurrentLanguage(language: string): Promise<void>;
-  getAvailableLanguages(): Promise<string[]>;
   getLanguageStats(): Promise<
     Array<{
       language: string;

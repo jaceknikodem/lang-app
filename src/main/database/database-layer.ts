@@ -1088,6 +1088,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
    * Helper function to find all learning words that appear in a sentence
    * Tokenizes the sentence and matches normalized words against learning words
    */
+  // TODO: This needs some SQL optimization.
   private findMatchingLearningWords(sentence: string, language: string): Word[] {
     const db = this.getDb();
 
@@ -2449,29 +2450,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
-   * Get all available languages that have words in the database
-   */
-  async getAvailableLanguages(): Promise<string[]> {
-    const db = this.getDb();
-
-    try {
-      const stmt = db.prepare(`
-        SELECT DISTINCT language 
-        FROM words 
-        ORDER BY language ASC
-      `);
-
-      const rows = stmt.all() as any[];
-
-      return rows.map((row) => row.language);
-    } catch (error) {
-      throw wrapError(error, `Failed to get available languages`);
-    }
-  }
-
-  /**
    * Get word count statistics per language
    */
+  // TODO: This needs some caching
   async getLanguageStats(): Promise<
     Array<{
       language: string;

@@ -118,7 +118,6 @@ export interface IPCBridge {
     setSetting: (key: string, value: string) => Promise<void>;
     getCurrentLanguage: () => Promise<string>;
     setCurrentLanguage: (language: string) => Promise<void>;
-    getAvailableLanguages: () => Promise<string[]>;
     getLanguageStats: () => Promise<
       Array<{
         language: string;
@@ -430,7 +429,6 @@ export const IPC_CHANNELS = {
     SET_SETTING: 'database:setSetting',
     GET_CURRENT_LANGUAGE: 'database:getCurrentLanguage',
     SET_CURRENT_LANGUAGE: 'database:setCurrentLanguage',
-    GET_AVAILABLE_LANGUAGES: 'database:getAvailableLanguages',
     GET_LANGUAGE_STATS: 'database:getLanguageStats',
     LOOKUP_DICTIONARY: 'database:lookupDictionary',
     GET_NEW_WORD_COUNT: 'database:getNewWordCount',
