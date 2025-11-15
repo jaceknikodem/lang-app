@@ -425,12 +425,34 @@ export class ServiceManager {
       process.env.LEMMATIZATION_SERVER_URL = url;
 
       // Handle stdout/stderr
+      // stdout contains normal informational logs from the Python service
       lemmatizationProcess.stdout?.on('data', (data) => {
-        this.logger.debug({ service: 'stanza' }, data.toString().trim());
+        const message = data.toString().trim();
+        // Parse log level from message if it contains [Lemmatization] prefix
+        if (message.includes('[Lemmatization]')) {
+          // Check if it's an error message
+          if (message.toLowerCase().includes('error') || message.toLowerCase().includes('failed')) {
+            this.logger.warn({ service: 'stanza' }, message);
+          } else {
+            this.logger.debug({ service: 'stanza' }, message);
+          }
+        } else {
+          this.logger.debug({ service: 'stanza' }, message);
+        }
       });
 
+      // stderr should only contain actual errors/warnings from the Python service
       lemmatizationProcess.stderr?.on('data', (data) => {
-        this.logger.warn({ service: 'stanza' }, data.toString().trim());
+        const message = data.toString().trim();
+        // Check if it's a critical error or just a warning
+        if (
+          message.toLowerCase().includes('error') ||
+          message.toLowerCase().includes('exception')
+        ) {
+          this.logger.error({ service: 'stanza' }, message);
+        } else {
+          this.logger.warn({ service: 'stanza' }, message);
+        }
       });
 
       // Handle process exit
