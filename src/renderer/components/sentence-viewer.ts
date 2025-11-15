@@ -2013,8 +2013,32 @@ export class SentenceViewer extends LitElement {
       const cached = await window.electronAPI.database.getReadAloudCache(selectedText, language);
 
       if (cached) {
-        logger.info({ audioPath: cached.audioPath, selectedText }, 'Using cached audio');
-        audioPath = cached.audioPath;
+        // Verify the cached audio file still exists
+        const audioExists = await window.electronAPI.audio.audioExists(cached.audioPath);
+        if (audioExists) {
+          logger.info({ audioPath: cached.audioPath, selectedText }, 'Using cached audio');
+          audioPath = cached.audioPath;
+        } else {
+          logger.warn(
+            { audioPath: cached.audioPath, selectedText },
+            'Cached audio file not found, regenerating'
+          );
+          // File was deleted, generate new audio
+          audioPath = await window.electronAPI.audio.generateAudio(selectedText, language);
+          logger.info({ audioPath }, 'Audio generated successfully');
+
+          // Update cache with new audio path
+          try {
+            await window.electronAPI.database.insertReadAloudCache(
+              selectedText,
+              language,
+              audioPath
+            );
+            logger.info({ audioPath, selectedText }, 'Audio cache updated');
+          } catch (cacheError) {
+            logger.warn({ error: cacheError, audioPath, selectedText }, 'Failed to update cache');
+          }
+        }
       } else {
         // Generate audio using the configured TTS backend (ElevenLabs or system TTS)
         audioPath = await window.electronAPI.audio.generateAudio(selectedText, language);
