@@ -203,11 +203,9 @@ export class AudioPlayerService {
     this.currentAudioPath = null;
     this.pausedPosition = 0;
 
-    // Only clear queue if not processing a sequence (to allow queue processing to continue)
-    if (!this.isProcessingQueue) {
-      this.playbackQueue = [];
-      this.isProcessingQueue = false;
-    }
+    // Always clear queue when stopping (user-initiated stops should clear everything)
+    this.playbackQueue = [];
+    this.isProcessingQueue = false;
 
     // Clear callbacks
     this.onEndedCallbacks.clear();

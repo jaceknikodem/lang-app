@@ -620,7 +620,7 @@ export class LearningMode extends BaseComponent {
       this.keyboardUnsubscribe();
     }
 
-    // Clean up audio cache and playing audio
+    // Clean up audio cache and playing audio (fire-and-forget is fine here since component is being destroyed)
     void this.stopCachedAudio();
     // Revoke all blob URLs to free memory
     this.blobUrlCache.forEach((blobUrl) => URL.revokeObjectURL(blobUrl));
@@ -1497,6 +1497,9 @@ export class LearningMode extends BaseComponent {
 
   private async handleShowOtherSentence() {
     if (this.isLoading || this.error || this.showCompletion || this.isProcessing) return;
+
+    // Stop any currently playing audio immediately
+    await this.stopCachedAudio();
 
     const currentWord = this.getCurrentWord();
     const currentSentence = this.getCurrentSentence();

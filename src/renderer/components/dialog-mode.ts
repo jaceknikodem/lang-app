@@ -276,11 +276,15 @@ export class DialogMode extends BaseComponent {
       this.keyboardUnsubscribe = undefined;
     }
 
-    // Clean up audio
+    // Clean up audio - stop both HTML5 audio and IPC audio
     if (this.currentAudioElement) {
       this.currentAudioElement.pause();
       this.currentAudioElement = null;
     }
+    // Stop any IPC audio playback that might be playing
+    void window.electronAPI.audio.stopAudio().catch(() => {
+      // Ignore errors when stopping (might not be playing)
+    });
   }
 
   private async loadDialogSession() {
