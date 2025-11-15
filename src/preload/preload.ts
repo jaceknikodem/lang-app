@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         includeKnown,
         includeIgnored
       ),
+    getAllWordsWithSentences: (language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_ALL_WORDS_WITH_SENTENCES, language),
     getWordsWithSentences: (language: string, includeKnown?: boolean, includeIgnored?: boolean) =>
       ipcRenderer.invoke(
         IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES,
@@ -525,6 +527,7 @@ declare global {
           includeKnown?: boolean,
           includeIgnored?: boolean
         ) => Promise<any[]>;
+        getAllWordsWithSentences: (language: string) => Promise<any[]>;
         getWordsWithSentences: (
           language: string,
           includeKnown?: boolean,

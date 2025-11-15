@@ -819,6 +819,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   /**
    * Get all words with optional filtering and shuffling for learning
    */
+  // TODO: Review - querying the whole table is not efficient, we should use a more efficient query
   async getAllWords(
     language: string,
     includeKnown: boolean = true,
@@ -859,6 +860,24 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
 
     return words;
+  }
+
+  /**
+   * Get all words with sentences for a language (hardcoded: includeKnown=true, includeIgnored=false)
+   * Used for top panel stats calculation
+   */
+  async getAllWordsWithSentences(language: string): Promise<Word[]> {
+    const db = this.getDb();
+
+    const stmt = db.prepare(`
+      SELECT DISTINCT w.* FROM words w
+      INNER JOIN sentence_words sw ON w.id = sw.word_id
+      WHERE w.language = ? AND w.ignored = FALSE
+      ORDER BY w.created_at DESC
+    `);
+
+    const rows = stmt.all(language) as any[];
+    return rows.map(this.mapRowToWord);
   }
 
   /**

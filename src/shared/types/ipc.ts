@@ -38,6 +38,7 @@ export interface IPCBridge {
       includeKnown?: boolean,
       includeIgnored?: boolean
     ) => Promise<Word[]>;
+    getAllWordsWithSentences: (language: string) => Promise<Word[]>;
     getWordsWithSentences: (
       language: string,
       includeKnown?: boolean,
@@ -401,6 +402,7 @@ export const IPC_CHANNELS = {
     GET_WORD_BY_ID: 'database:getWordById',
     GET_WORDS_BY_IDS: 'database:getWordsByIds',
     GET_ALL_WORDS: 'database:getAllWords',
+    GET_ALL_WORDS_WITH_SENTENCES: 'database:getAllWordsWithSentences',
     GET_WORDS_WITH_SENTENCES: 'database:getWordsWithSentences',
     GET_WORDS_WITH_SENTENCES_ORDERED_BY_STRENGTH: 'database:getWordsWithSentencesOrderedByStrength',
     GET_RECENT_STUDY_SESSIONS: 'database:getRecentStudySessions',

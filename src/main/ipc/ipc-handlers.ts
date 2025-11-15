@@ -453,6 +453,17 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
   );
 
   ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_ALL_WORDS_WITH_SENTENCES,
+    createIPCHandler(
+      LanguageSchema,
+      async (language) => {
+        return databaseLayer.getAllWordsWithSentences(language);
+      },
+      'get all words with sentences'
+    )
+  );
+
+  ipcMain.handle(
     IPC_CHANNELS.DATABASE.GET_WORDS_WITH_SENTENCES,
     createIPCHandler(
       [LanguageSchema, z.boolean().optional(), z.boolean().optional()],

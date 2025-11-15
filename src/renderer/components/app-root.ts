@@ -837,10 +837,8 @@ export class AppRoot extends LitElement {
         return;
       }
 
-      const allWords = await window.electronAPI.database.getAllWords(
-        this.languageDataState.currentLanguage,
-        true,
-        false
+      const allWords = await window.electronAPI.database.getAllWordsWithSentences(
+        this.languageDataState.currentLanguage
       );
       this.languageDataState = {
         ...this.languageDataState,

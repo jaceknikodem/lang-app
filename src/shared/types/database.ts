@@ -56,6 +56,7 @@ export interface DatabaseLayer {
     includeIgnored?: boolean,
     maxWords?: number
   ): Promise<Word[]>;
+  getAllWordsWithSentences(language: string): Promise<Word[]>;
   getWordsWithSentences(
     language: string,
     includeKnown?: boolean,

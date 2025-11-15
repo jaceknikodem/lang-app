@@ -214,6 +214,7 @@ export class WordGenerationRunner {
             undefined, // Will be set after audio generation
             undefined, // Will be set after audio generation
             undefined, // Will be set after audio generation
+            undefined, // Will be set after audio generation
             undefined, // tokenizedTokens
             sentence.pronunciation,
             sentence.contextBeforePronunciation,
