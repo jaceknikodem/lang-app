@@ -148,7 +148,7 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
       try {
         return JSON.parse(cleanResponse);
       } catch {
-        throw new Error(`Invalid JSON response: ${cleanResponse.substring(0, 100)}...`);
+        throw new Error(`Invalid JSON response: ${cleanResponse.substring(0, 1000)}...`);
       }
     });
   }

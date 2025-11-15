@@ -2000,13 +2000,9 @@ export class SentenceViewer extends LitElement {
     this.handleCloseContextMenu();
 
     try {
-      logger.info({ selectedText }, 'Generating audio for selected text');
-
       // Get current language
       const language =
         this.targetWord?.language || (await window.electronAPI.database.getCurrentLanguage());
-
-      logger.info({ language, selectedText }, 'Generating audio with language');
 
       // Check cache first
       let audioPath: string;
@@ -2016,7 +2012,6 @@ export class SentenceViewer extends LitElement {
         // Verify the cached audio file still exists
         const audioExists = await window.electronAPI.audio.audioExists(cached.audioPath);
         if (audioExists) {
-          logger.info({ audioPath: cached.audioPath, selectedText }, 'Using cached audio');
           audioPath = cached.audioPath;
         } else {
           logger.warn(
@@ -2025,7 +2020,6 @@ export class SentenceViewer extends LitElement {
           );
           // File was deleted, generate new audio
           audioPath = await window.electronAPI.audio.generateAudio(selectedText, language);
-          logger.info({ audioPath }, 'Audio generated successfully');
 
           // Update cache with new audio path
           try {
@@ -2034,7 +2028,6 @@ export class SentenceViewer extends LitElement {
               language,
               audioPath
             );
-            logger.info({ audioPath, selectedText }, 'Audio cache updated');
           } catch (cacheError) {
             logger.warn({ error: cacheError, audioPath, selectedText }, 'Failed to update cache');
           }
@@ -2042,19 +2035,15 @@ export class SentenceViewer extends LitElement {
       } else {
         // Generate audio using the configured TTS backend (ElevenLabs or system TTS)
         audioPath = await window.electronAPI.audio.generateAudio(selectedText, language);
-        logger.info({ audioPath }, 'Audio generated successfully');
 
         // Cache the audio for future use
         try {
           await window.electronAPI.database.insertReadAloudCache(selectedText, language, audioPath);
-          logger.info({ audioPath, selectedText }, 'Audio cached successfully');
         } catch (cacheError) {
           // Log but don't fail if caching fails
           logger.warn({ error: cacheError, audioPath, selectedText }, 'Failed to cache audio');
         }
       }
-
-      logger.info({ audioPath }, 'Playing audio...');
 
       // Play the audio
       await audioPlayer.play(audioPath, {
@@ -2062,12 +2051,7 @@ export class SentenceViewer extends LitElement {
         onError: (error: Error) => {
           logger.error({ error, audioPath, selectedText }, 'Error during audio playback');
         },
-        onEnded: () => {
-          logger.info({ audioPath, selectedText }, 'Audio playback completed');
-        },
       });
-
-      logger.info({ audioPath }, 'Audio playback started');
     } catch (error) {
       logger.error({ error, selectedText }, 'Failed to read selected text');
       console.error('Error reading selected text:', error);
@@ -2433,7 +2417,6 @@ export class SentenceViewer extends LitElement {
     }
 
     this.isRegeneratingAudio = true;
-    logger.info('Recreate audio: start');
     try {
       // Ensure no audio is playing
       try {
@@ -2447,8 +2430,6 @@ export class SentenceViewer extends LitElement {
       const language =
         this.targetWord?.language || (await window.electronAPI.database.getCurrentLanguage());
       const word = this.targetWord?.word;
-
-      logger.info({ oldPath }, 'Recreate audio: invoking regenerateAudio');
 
       let regeneratedPath: string | undefined;
 
@@ -2483,10 +2464,6 @@ export class SentenceViewer extends LitElement {
             this.sentence.id,
             regeneratedPath
           );
-          logger.info(
-            { sentenceId: this.sentence.id },
-            'Recreate audio (fallback): DB audio_path updated for sentence'
-          );
 
           try {
             await window.electronAPI.audio.deleteRecording(oldPath);
@@ -2511,13 +2488,7 @@ export class SentenceViewer extends LitElement {
           this.sentence.id,
           regeneratedPath
         );
-        logger.info(
-          { sentenceId: this.sentence.id },
-          'Recreate audio: DB audio_path updated for sentence'
-        );
       }
-
-      logger.info({ audioPath: regeneratedPath }, 'Recreate audio: regeneration completed');
 
       this.sentence = { ...this.sentence, audioPath: regeneratedPath };
 
@@ -2559,7 +2530,6 @@ export class SentenceViewer extends LitElement {
       window.alert(`Failed to recreate audio: ${message}`);
     } finally {
       this.isRegeneratingAudio = false;
-      logger.info('Recreate audio: end');
     }
   }
 
