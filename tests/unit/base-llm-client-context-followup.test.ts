@@ -14,6 +14,11 @@ class TestLLMClient extends BaseLLMClient {
     return this.mockResponse;
   }
 
+  // Implement abstract generateResponse method
+  protected async generateResponse(_prompt: string, _model?: string): Promise<string> {
+    return this.mockResponse || '';
+  }
+
   // Set mock response for testing
   public setMockResponse(response: any): void {
     this.mockResponse = response;
@@ -34,11 +39,11 @@ class TestLLMClient extends BaseLLMClient {
   }
 
   public async testGenerateFollowUp(
-    sentence: string,
-    translation: string,
-    language: string
+    conversationHistory: string[],
+    language: string,
+    proficiencyLevel?: string
   ): Promise<{ text: string; translation: string }> {
-    return this.generateFollowUp(sentence, translation, language);
+    return this.generateFollowUp(conversationHistory, language, proficiencyLevel);
   }
 }
 
@@ -223,7 +228,7 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
 
       client.setMockResponse(mockResponse);
 
-      const result = await client.testGenerateFollowUp('Hola', 'Hello', 'Spanish');
+      const result = await client.testGenerateFollowUp(['Hola'], 'Spanish');
 
       expect(result.text).toBe('Continuación del texto');
       expect(result.translation).toBe('English translation here');
@@ -237,7 +242,7 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
 
       client.setMockResponse(mockResponse);
 
-      const result = await client.testGenerateFollowUp('Hola', 'Hello', 'Spanish');
+      const result = await client.testGenerateFollowUp(['Hola'], 'Spanish');
 
       expect(result.text).toBe('Continuación del texto');
       expect(result.translation).toBe('English translation');
@@ -259,7 +264,7 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
 
       client.setMockResponse(mockResponse);
 
-      const result = await client.testGenerateFollowUp('Hola', 'Hello', 'Spanish');
+      const result = await client.testGenerateFollowUp(['Hola'], 'Spanish');
 
       expect(result.text).toBe('Continuación del texto');
       expect(result.translation).toBe('English translation');
@@ -273,7 +278,7 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
 
       client.setMockResponse(mockResponse);
 
-      const result = await client.testGenerateFollowUp('Hola', 'Hello', 'Spanish');
+      const result = await client.testGenerateFollowUp(['Hola'], 'Spanish');
 
       expect(result.text).toBe('Continuación del texto');
       expect(result.translation).toBe('English translation');
@@ -285,7 +290,7 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
 
       client.setMockResponse(mockResponse);
 
-      const result = await client.testGenerateFollowUp('Hola', 'Hello', 'Spanish');
+      const result = await client.testGenerateFollowUp(['Hola'], 'Spanish');
 
       expect(result.text).toBe('Continuación del texto');
       expect(result.translation).toBe('English translation');
@@ -297,7 +302,7 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
 
       client.setMockResponse(mockResponse);
 
-      const result = await client.testGenerateFollowUp('Hola', 'Hello', 'Spanish');
+      const result = await client.testGenerateFollowUp(['Hola'], 'Spanish');
 
       // Should take first part as text, rest as translation
       expect(result.text).toBe('First part');
@@ -308,7 +313,7 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
     it('should return empty strings on validation failure', async () => {
       client.setMockResponse({ invalid: 'response' });
 
-      const result = await client.testGenerateFollowUp('Hola', 'Hello', 'Spanish');
+      const result = await client.testGenerateFollowUp(['Hola'], 'Spanish');
 
       expect(result.text).toBe('');
       expect(result.translation).toBe('');
@@ -318,7 +323,7 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
       // String inputs are actually valid (they get transformed), so use an invalid structure
       client.setMockResponse({ invalid: 'response', noValidFields: true });
 
-      const result = await client.testGenerateFollowUp('Hola', 'Hello', 'Spanish');
+      const result = await client.testGenerateFollowUp(['Hola'], 'Spanish');
 
       // The generic record transformer returns empty strings for invalid records
       expect(result.text).toBe('');
@@ -328,7 +333,7 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
     it('should return empty strings on any error', async () => {
       (client as any).makeRequest = jest.fn().mockRejectedValue(new Error('Network error'));
 
-      const result = await client.testGenerateFollowUp('Hola', 'Hello', 'Spanish');
+      const result = await client.testGenerateFollowUp(['Hola'], 'Spanish');
 
       expect(result.text).toBe('');
       expect(result.translation).toBe('');
@@ -342,7 +347,7 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
 
       client.setMockResponse(mockResponse);
 
-      const result = await client.testGenerateFollowUp('Hola', 'Hello', 'Spanish');
+      const result = await client.testGenerateFollowUp(['Hola'], 'Spanish');
 
       expect(result.text).toBe('');
       expect(result.translation).toBe('English translation');
@@ -358,7 +363,7 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
 
       client.setMockResponse(mockResponse);
 
-      const result = await client.testGenerateFollowUp('Hola', 'Hello', 'Spanish');
+      const result = await client.testGenerateFollowUp(['Hola'], 'Spanish');
 
       // Validation fails because translation is required, returns empty strings
       expect(result.text).toBe('');
@@ -374,7 +379,7 @@ describe('BaseLLMClient Context Sentences and Follow-Up', () => {
 
       client.setMockResponse(mockResponse);
 
-      const result = await client.testGenerateFollowUp('Hola', 'Hello', 'Spanish');
+      const result = await client.testGenerateFollowUp(['Hola'], 'Spanish');
 
       // Empty continuation becomes empty text after trimming
       expect(result.text).toBe('');

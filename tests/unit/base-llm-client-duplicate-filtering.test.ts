@@ -15,6 +15,11 @@ class TestLLMClient extends BaseLLMClient {
     return this.mockResponse;
   }
 
+  // Implement abstract generateResponse method
+  protected async generateResponse(_prompt: string, _model?: string): Promise<string> {
+    return this.mockResponse || '';
+  }
+
   // Set mock response for testing
   public setMockResponse(response: any): void {
     this.mockResponse = response;

@@ -253,6 +253,9 @@ describe('ContentGenerator', () => {
     it('should handle topic parameter', async () => {
       // Mock fetchTatoebaExamples to return empty
       (contentGenerator as any).fetchTatoebaExamples = jest.fn().mockResolvedValue([]);
+      // Mock Math.random to always return 0.6 (above 0.5 threshold) so topic is not dropped
+      const originalRandom = Math.random;
+      Math.random = jest.fn(() => 0.6);
 
       await contentGenerator.generateWordSentences('hola', 'Spanish', 3, undefined, 'greetings');
 
@@ -263,6 +266,9 @@ describe('ContentGenerator', () => {
         'greetings',
         undefined
       );
+
+      // Restore Math.random
+      Math.random = originalRandom;
     });
 
     it('should handle proficiency level from database', async () => {
@@ -652,7 +658,9 @@ describe('ContentGenerator', () => {
       });
     });
 
-    describe('getWordTranslation', () => {
+    // Note: getWordTranslation method was removed from ContentGenerator
+    // These tests are skipped as the method no longer exists
+    describe.skip('getWordTranslation', () => {
       it('should get translation from LLM', async () => {
         mockClient.generateResponse.mockResolvedValue('hello');
 

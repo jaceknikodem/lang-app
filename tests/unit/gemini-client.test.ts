@@ -109,7 +109,15 @@ describe('GeminiClient', () => {
   });
 
   describe('generateResponse', () => {
+    // Create a test class that extends GeminiClient to access protected method
+    class TestGeminiClient extends GeminiClient {
+      public async testGenerateResponse(prompt: string, model?: string): Promise<string> {
+        return this.generateResponse(prompt, model);
+      }
+    }
+
     it('should generate response successfully', async () => {
+      const testClient = new TestGeminiClient(mockApiKey);
       const mockResponse = {
         data: {
           candidates: [
@@ -129,7 +137,7 @@ describe('GeminiClient', () => {
 
       (mockedAxios.post as jest.Mock).mockResolvedValueOnce(mockResponse);
 
-      const result = await client.generateResponse('Test prompt');
+      const result = await testClient.testGenerateResponse('Test prompt');
       expect(result).toBe('Test response');
       expect(mockedAxios.post).toHaveBeenCalledWith(
         expect.stringContaining('generateContent'),
@@ -152,13 +160,14 @@ describe('GeminiClient', () => {
     });
 
     it('should throw error when API key is missing', async () => {
-      const emptyClient = new GeminiClient('');
-      await expect(emptyClient.generateResponse('Test prompt')).rejects.toThrow(
+      const emptyClient = new TestGeminiClient('');
+      await expect(emptyClient.testGenerateResponse('Test prompt')).rejects.toThrow(
         'Gemini API key not configured'
       );
     });
 
     it('should handle API errors', async () => {
+      const testClient = new TestGeminiClient(mockApiKey);
       const axiosError = new Error('Request failed') as any;
       axiosError.isAxiosError = true;
       axiosError.response = {
@@ -168,13 +177,14 @@ describe('GeminiClient', () => {
       };
       (mockedAxios.post as jest.Mock).mockRejectedValueOnce(axiosError);
 
-      await expect(client.generateResponse('Test prompt')).rejects.toThrow(
+      await expect(testClient.testGenerateResponse('Test prompt')).rejects.toThrow(
         'Failed to generate response'
       );
     });
 
     it('should handle timeout', async () => {
-      const timeoutClient = new GeminiClient(mockApiKey, { timeout: 100 });
+      const timeoutClient = new TestGeminiClient(mockApiKey);
+      (timeoutClient as any).config.timeout = 100;
 
       const timeoutError = new Error('timeout of 100ms exceeded') as any;
       timeoutError.isAxiosError = true;
@@ -190,7 +200,7 @@ describe('GeminiClient', () => {
         return false;
       });
 
-      await expect(timeoutClient.generateResponse('Test prompt')).rejects.toThrow(
+      await expect(timeoutClient.testGenerateResponse('Test prompt')).rejects.toThrow(
         'Request timeout'
       );
 

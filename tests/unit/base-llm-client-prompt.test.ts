@@ -53,16 +53,20 @@ class TestLLMClient extends BaseLLMClient {
   }
 
   public testCreateFollowUpPrompt(
-    sentence: string,
-    translation: string,
+    conversationHistory: string[],
     language: string,
     proficiencyLevel?: string
   ): string {
-    return this.createFollowUpPrompt(sentence, translation, language, proficiencyLevel);
+    return this.createFollowUpPrompt(conversationHistory, language, proficiencyLevel);
   }
 
   // Abstract method implementation (not used in tests)
   protected async makeRequest(_prompt: string, _model?: string): Promise<any> {
+    throw new Error('Not implemented in test class');
+  }
+
+  // Implement abstract generateResponse method
+  protected async generateResponse(_prompt: string, _model?: string): Promise<string> {
     throw new Error('Not implemented in test class');
   }
 }
@@ -108,28 +112,28 @@ describe('BaseLLMClient Prompt Generation', () => {
       const prompt = client.testCreateTopicWordsPrompt('food', 'Spanish', 3, [], 'newbie');
 
       expect(prompt).toContain("user's proficiency level is NEWBIE");
-      expect(prompt).toContain('Use very simple, basic words that beginners can understand');
+      expect(prompt).toContain('Use everyday words appropriate for NEWBIE level');
     });
 
     it('should include proficiency level guidance for a1', () => {
       const prompt = client.testCreateTopicWordsPrompt('food', 'Spanish', 3, [], 'a1');
 
       expect(prompt).toContain("user's proficiency level is A1");
-      expect(prompt).toContain('Use simple, everyday words appropriate for A1 beginners');
+      expect(prompt).toContain('Use everyday words appropriate for A1 level');
     });
 
     it('should include proficiency level guidance for a2', () => {
       const prompt = client.testCreateTopicWordsPrompt('food', 'Spanish', 3, [], 'a2');
 
       expect(prompt).toContain("user's proficiency level is A2");
-      expect(prompt).toContain('Use common words appropriate for A2 elementary learners');
+      expect(prompt).toContain('Use everyday words appropriate for A2 level');
     });
 
     it('should include proficiency level guidance for b1', () => {
       const prompt = client.testCreateTopicWordsPrompt('food', 'Spanish', 3, [], 'b1');
 
       expect(prompt).toContain("user's proficiency level is B1");
-      expect(prompt).toContain('Use intermediate vocabulary appropriate for B1 learners');
+      expect(prompt).toContain('Use everyday words appropriate for B1 level');
     });
 
     it('should not include proficiency text when not provided', () => {
@@ -211,32 +215,28 @@ describe('BaseLLMClient Prompt Generation', () => {
       );
 
       expect(prompt).toContain("user's proficiency level is NEWBIE");
-      expect(prompt).toContain(
-        'Use very simple sentence structures, basic grammar, and common words'
-      );
+      expect(prompt).toContain('presente (ser/estar/tener/haber/ir/hacer + regular verbs)');
     });
 
     it('should include proficiency level guidance for a1', () => {
       const prompt = client.testCreateSentencesPrompt('hola', 'Spanish', 3, [], undefined, 'a1');
 
       expect(prompt).toContain("user's proficiency level is A1");
-      expect(prompt).toContain('Use simple sentence structures appropriate for A1 beginners');
+      expect(prompt).toContain('presente (all persons)');
     });
 
     it('should include proficiency level guidance for a2', () => {
       const prompt = client.testCreateSentencesPrompt('hola', 'Spanish', 3, [], undefined, 'a2');
 
       expect(prompt).toContain("user's proficiency level is A2");
-      expect(prompt).toContain(
-        'Use common sentence structures appropriate for A2 elementary learners'
-      );
+      expect(prompt).toContain('pretérito perfecto compuesto');
     });
 
     it('should include proficiency level guidance for b1', () => {
       const prompt = client.testCreateSentencesPrompt('hola', 'Spanish', 3, [], undefined, 'b1');
 
       expect(prompt).toContain("user's proficiency level is B1");
-      expect(prompt).toContain('Use intermediate sentence structures appropriate for B1 learners');
+      expect(prompt).toContain('pretérito imperfecto and pretérito indefinido');
     });
 
     it('should include context sentence format in example', () => {
@@ -399,15 +399,15 @@ describe('BaseLLMClient Prompt Generation', () => {
   });
 
   describe('createFollowUpPrompt', () => {
-    it('should generate prompt with sentence and translation', () => {
-      const prompt = client.testCreateFollowUpPrompt('Hola mundo', 'Hello world', 'Spanish');
+    it('should generate prompt with conversation history', () => {
+      const prompt = client.testCreateFollowUpPrompt(['Hola mundo', 'Hello world'], 'Spanish');
 
-      expect(prompt).toContain('"Hola mundo"');
-      expect(prompt).toContain('"Hello world"');
+      expect(prompt).toContain('1. Hola mundo');
+      expect(prompt).toContain('2. Hello world');
     });
 
     it('should specify continuation requirements', () => {
-      const prompt = client.testCreateFollowUpPrompt('Hola', 'Hello', 'Spanish');
+      const prompt = client.testCreateFollowUpPrompt(['Hola'], 'Spanish');
 
       // Default proficiency level returns 2 sentences
       expect(prompt).toContain('Generate a natural continuation of about 2 sentences');
@@ -417,46 +417,46 @@ describe('BaseLLMClient Prompt Generation', () => {
 
     it('should vary sentence count based on proficiency level', () => {
       // Test newbie - 1 sentence
-      const newbiePrompt = client.testCreateFollowUpPrompt('Hola', 'Hello', 'Spanish', 'newbie');
+      const newbiePrompt = client.testCreateFollowUpPrompt(['Hola'], 'Spanish', 'newbie');
       expect(newbiePrompt).toContain('Generate a natural continuation of about 1 sentence');
 
       // Test a1 - 2 sentences
-      const a1Prompt = client.testCreateFollowUpPrompt('Hola', 'Hello', 'Spanish', 'a1');
+      const a1Prompt = client.testCreateFollowUpPrompt(['Hola'], 'Spanish', 'a1');
       expect(a1Prompt).toContain('Generate a natural continuation of about 2 sentences');
 
       // Test a2 - 3 sentences
-      const a2Prompt = client.testCreateFollowUpPrompt('Hola', 'Hello', 'Spanish', 'a2');
+      const a2Prompt = client.testCreateFollowUpPrompt(['Hola'], 'Spanish', 'a2');
       expect(a2Prompt).toContain('Generate a natural continuation of about 3 sentences');
 
       // Test b1 - 4 sentences
-      const b1Prompt = client.testCreateFollowUpPrompt('Hola', 'Hello', 'Spanish', 'b1');
+      const b1Prompt = client.testCreateFollowUpPrompt(['Hola'], 'Spanish', 'b1');
       expect(b1Prompt).toContain('Generate a natural continuation of about 4 sentences');
     });
 
     it('should require both language text and translation', () => {
-      const prompt = client.testCreateFollowUpPrompt('Hola', 'Hello', 'Spanish');
+      const prompt = client.testCreateFollowUpPrompt(['Hola'], 'Spanish');
 
       expect(prompt).toContain('You must return BOTH the Spanish text AND its English translation');
     });
 
     it('should include preferred JSON format', () => {
-      const prompt = client.testCreateFollowUpPrompt('Hola', 'Hello', 'Spanish');
+      const prompt = client.testCreateFollowUpPrompt(['Hola'], 'Spanish');
 
       expect(prompt).toContain('"text": "Spanish continuation text here"');
       expect(prompt).toContain('"translation": "English translation here"');
     });
 
     it('should capitalize language name', () => {
-      const prompt = client.testCreateFollowUpPrompt('Hola', 'Hello', 'spanish');
+      const prompt = client.testCreateFollowUpPrompt(['Hola'], 'spanish');
 
-      expect(prompt).toContain('Spanish sentence');
+      expect(prompt).toContain('Spanish conversation');
       expect(prompt).toContain('Spanish');
     });
 
     it('should handle different languages', () => {
-      const prompt = client.testCreateFollowUpPrompt('Bonjour', 'Hello', 'French');
+      const prompt = client.testCreateFollowUpPrompt(['Bonjour'], 'French');
 
-      expect(prompt).toContain('French sentence');
+      expect(prompt).toContain('French conversation');
       expect(prompt).toContain('French continuation');
     });
   });

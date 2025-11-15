@@ -88,8 +88,34 @@ class MockLLMClient implements LLMClient {
     return [];
   }
 
-  async generateFollowUp(_sentence: string, _translation: string, _language: string): Promise<any> {
+  async generateFollowUp(
+    _conversationHistory: string[],
+    _language: string,
+    _proficiencyLevel?: string
+  ): Promise<{ text: string; translation: string }> {
     return { text: '', translation: '' };
+  }
+
+  async analyzeTranscription(
+    _transcription: string,
+    _language: string,
+    _assistantSentence: string,
+    _topic?: string
+  ): Promise<any> {
+    return { hasGrammarMistakes: false };
+  }
+
+  async explainGrammar(
+    _word: string,
+    _sentence: string,
+    _language: string,
+    _proficiencyLevel?: string
+  ): Promise<string> {
+    return '';
+  }
+
+  async convertToPronunciation(_sentence: string, _language: string): Promise<string> {
+    return '';
   }
 
   async generateResponse(_prompt: string, _model?: string): Promise<string> {
