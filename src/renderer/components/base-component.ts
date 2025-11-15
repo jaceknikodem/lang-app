@@ -17,7 +17,7 @@ export abstract class BaseComponent extends LitElement {
   @state()
   protected currentLanguage: string | null = null;
 
-  private boundHandleExternalLanguageChange = this.handleExternalLanguageChange.bind(this);
+  private boundHandleExternalLanguageChange?: (event: Event) => void;
 
   protected async handleExternalLanguageChange(event: Event): Promise<void> {
     const detail = (event as CustomEvent<{ language?: string }>).detail;
@@ -35,12 +35,17 @@ export abstract class BaseComponent extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback();
-    document.addEventListener('language-changed', this.boundHandleExternalLanguageChange);
+    // Rebind in connectedCallback to ensure it uses the overridden method from subclasses
+    this.boundHandleExternalLanguageChange = this.handleExternalLanguageChange.bind(this);
+    window.addEventListener('language-changed', this.boundHandleExternalLanguageChange);
   }
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
-    document.removeEventListener('language-changed', this.boundHandleExternalLanguageChange);
+    if (this.boundHandleExternalLanguageChange) {
+      window.removeEventListener('language-changed', this.boundHandleExternalLanguageChange);
+      this.boundHandleExternalLanguageChange = undefined;
+    }
   }
 
   /**

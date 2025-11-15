@@ -119,15 +119,16 @@ export class LearningMode extends BaseComponent {
   private blobUrlCache: Map<string, string> = new Map(); // audioPath -> blob URL (for cleanup)
 
   protected override handleExternalLanguageChange = async (event: Event): Promise<void> => {
-    // Call base class handler first
-    await super.handleExternalLanguageChange(event);
-
     const detail = (event as CustomEvent<{ language?: string }>).detail;
     const newLanguage = detail?.language;
 
+    // Check if language actually changed BEFORE calling super (which updates currentLanguage)
     if (!newLanguage || newLanguage === this.currentLanguage) {
       return;
     }
+
+    // Call base class handler (this will update this.currentLanguage)
+    await super.handleExternalLanguageChange(event);
 
     // Reload all data for the new language
     try {

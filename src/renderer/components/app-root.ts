@@ -764,7 +764,8 @@ export class AppRoot extends LitElement {
         this.requestUpdate();
 
         // Dispatch event to notify other components (like settings panel)
-        this.dispatchEvent(
+        // Dispatch on window instead of this element to ensure it reaches all listeners
+        window.dispatchEvent(
           new CustomEvent('language-changed', {
             detail: { language: newLanguage },
             bubbles: true,
