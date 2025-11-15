@@ -2008,10 +2008,29 @@ export class SentenceViewer extends LitElement {
 
       logger.info({ language, selectedText }, 'Generating audio with language');
 
-      // Generate audio using the configured TTS backend (ElevenLabs or system TTS)
-      const audioPath = await window.electronAPI.audio.generateAudio(selectedText, language);
+      // Check cache first
+      let audioPath: string;
+      const cached = await window.electronAPI.database.getReadAloudCache(selectedText, language);
 
-      logger.info({ audioPath }, 'Audio generated successfully, playing...');
+      if (cached) {
+        logger.info({ audioPath: cached.audioPath, selectedText }, 'Using cached audio');
+        audioPath = cached.audioPath;
+      } else {
+        // Generate audio using the configured TTS backend (ElevenLabs or system TTS)
+        audioPath = await window.electronAPI.audio.generateAudio(selectedText, language);
+        logger.info({ audioPath }, 'Audio generated successfully');
+
+        // Cache the audio for future use
+        try {
+          await window.electronAPI.database.insertReadAloudCache(selectedText, language, audioPath);
+          logger.info({ audioPath, selectedText }, 'Audio cached successfully');
+        } catch (cacheError) {
+          // Log but don't fail if caching fails
+          logger.warn({ error: cacheError, audioPath, selectedText }, 'Failed to cache audio');
+        }
+      }
+
+      logger.info({ audioPath }, 'Playing audio...');
 
       // Play the audio
       await audioPlayer.play(audioPath, {

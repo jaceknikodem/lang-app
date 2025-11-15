@@ -601,6 +601,28 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       'get topic word counts'
     )
   );
+
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.GET_READ_ALOUD_CACHE,
+    createIPCHandler(
+      [TextSchema, LanguageSchema],
+      (text, language) => databaseLayer.getReadAloudCache(text, language),
+      'get read aloud cache'
+    )
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE.INSERT_READ_ALOUD_CACHE,
+    createIPCHandler(
+      [TextSchema, LanguageSchema, TextSchema],
+      (text, language, audioPath) => databaseLayer.insertReadAloudCache(text, language, audioPath),
+      'insert read aloud cache'
+    )
+  );
+
+  // Log that read aloud cache handlers are registered
+  const logger = getLogger();
+  logger.debug('Read aloud cache handlers registered');
 }
 
 /**

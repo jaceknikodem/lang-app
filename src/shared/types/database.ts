@@ -341,6 +341,13 @@ export interface DatabaseLayer {
   // Zipf frequency caching
   getZipfFrequencies(words: string[], language: string): Promise<Record<string, number>>;
   updateZipfFrequencies(frequencies: Record<string, number>, language: string): Promise<void>;
+
+  // Read aloud cache
+  getReadAloudCache(
+    text: string,
+    language: string
+  ): Promise<{ id: number; rawText: string; audioPath: string } | null>;
+  insertReadAloudCache(text: string, language: string, audioPath: string): Promise<number>;
 }
 
 export interface DatabaseConfig {

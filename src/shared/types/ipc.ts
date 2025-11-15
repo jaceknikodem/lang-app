@@ -133,6 +133,11 @@ export interface IPCBridge {
     getAvailableSentencesCount: (language: string) => Promise<number>;
     resetLanguageProgress: (language: string) => Promise<void>;
     getTopicWordCounts: (language: string) => Promise<Array<{ topic: string; count: number }>>;
+    getReadAloudCache: (
+      text: string,
+      language: string
+    ) => Promise<{ id: number; rawText: string; audioPath: string } | null>;
+    insertReadAloudCache: (text: string, language: string, audioPath: string) => Promise<number>;
   };
 
   // SRS operations
@@ -432,6 +437,8 @@ export const IPC_CHANNELS = {
     GET_AVAILABLE_SENTENCES_COUNT: 'database:getAvailableSentencesCount',
     RESET_LANGUAGE_PROGRESS: 'database:resetLanguageProgress',
     GET_TOPIC_WORD_COUNTS: 'database:getTopicWordCounts',
+    GET_READ_ALOUD_CACHE: 'database:getReadAloudCache',
+    INSERT_READ_ALOUD_CACHE: 'database:insertReadAloudCache',
   },
   LLM: {
     GENERATE_WORDS: 'llm:generateWords',

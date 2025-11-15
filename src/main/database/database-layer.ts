@@ -462,6 +462,18 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       )
     `);
 
+    // Read aloud cache table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS read_aloud_cache (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        raw_text TEXT NOT NULL,
+        language TEXT NOT NULL,
+        audio_path TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(raw_text, language)
+      )
+    `);
+
     // Create indexes for better query performance
     db.exec(`CREATE INDEX IF NOT EXISTS idx_words_strength ON words(strength)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_words_last_studied ON words(last_studied)`);
@@ -546,6 +558,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     );
     db.exec(
       `CREATE INDEX IF NOT EXISTS idx_dictionary_hover_events_created_at ON dictionary_hover_events(created_at)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_read_aloud_cache_text_lang ON read_aloud_cache(raw_text, language)`
     );
   }
 
@@ -4226,6 +4241,60 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       );
     } catch (error) {
       throw wrapError(error, `Failed to update zipf frequencies`);
+    }
+  }
+
+  /**
+   * Get cached read aloud audio for text and language
+   */
+  async getReadAloudCache(
+    text: string,
+    language: string
+  ): Promise<{ id: number; rawText: string; audioPath: string } | null> {
+    const db = this.getDb();
+
+    try {
+      const stmt = db.prepare(`
+        SELECT id, raw_text, audio_path
+        FROM read_aloud_cache
+        WHERE raw_text = ? AND language = ?
+      `);
+
+      const row = stmt.get(text, language) as
+        | { id: number; raw_text: string; audio_path: string }
+        | undefined;
+
+      if (!row) {
+        return null;
+      }
+
+      return {
+        id: row.id,
+        rawText: row.raw_text,
+        audioPath: row.audio_path,
+      };
+    } catch (error) {
+      throw wrapError(error, `Failed to get read aloud cache`);
+    }
+  }
+
+  /**
+   * Insert or update read aloud cache entry
+   * Uses INSERT OR REPLACE to handle unique constraint on (raw_text, language)
+   */
+  async insertReadAloudCache(text: string, language: string, audioPath: string): Promise<number> {
+    const db = this.getDb();
+
+    try {
+      const stmt = db.prepare(`
+        INSERT OR REPLACE INTO read_aloud_cache (raw_text, language, audio_path)
+        VALUES (?, ?, ?)
+      `);
+
+      const result = stmt.run(text, language, audioPath);
+      return result.lastInsertRowid as number;
+    } catch (error) {
+      throw wrapError(error, `Failed to insert read aloud cache`);
     }
   }
 }

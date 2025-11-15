@@ -163,6 +163,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.RESET_LANGUAGE_PROGRESS, language),
     getTopicWordCounts: (language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_TOPIC_WORD_COUNTS, language),
+    getReadAloudCache: (text: string, language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_READ_ALOUD_CACHE, text, language),
+    insertReadAloudCache: (text: string, language: string, audioPath: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DATABASE.INSERT_READ_ALOUD_CACHE, text, language, audioPath),
   },
 
   // LLM operations
@@ -620,6 +624,15 @@ declare global {
         getAvailableSentencesCount: (language: string) => Promise<number>;
         resetLanguageProgress: (language: string) => Promise<void>;
         getTopicWordCounts: (language: string) => Promise<Array<{ topic: string; count: number }>>;
+        getReadAloudCache: (
+          text: string,
+          language: string
+        ) => Promise<{ id: number; rawText: string; audioPath: string } | null>;
+        insertReadAloudCache: (
+          text: string,
+          language: string,
+          audioPath: string
+        ) => Promise<number>;
       };
       llm: {
         generateWords: (topic: string | undefined, language: string) => Promise<any[]>;
