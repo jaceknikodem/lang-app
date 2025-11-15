@@ -12,8 +12,8 @@ import { logger } from '../utils/logger.js';
 import { BaseComponent } from './base-component.js';
 
 interface FlowSentence {
-  sentence: Sentence;
-  words: Word[];
+  audioPath: string;
+  englishAudioPath?: string;
   beforeSentenceAudio?: string;
   afterSentenceAudio?: string;
   continuationAudios: string[];
@@ -203,25 +203,12 @@ export class FlowMode extends BaseComponent {
           if (item.beforeSentenceAudio) {
             audioPaths.push(item.beforeSentenceAudio);
           }
-          if (item.sentence.audioPath) {
-            audioPaths.push(item.sentence.audioPath);
+          if (item.audioPath) {
+            audioPaths.push(item.audioPath);
 
-            // For English stitching, construct English audio path
-            // English audio is stored as: <language>/word_<wordId>/english_sentence_<sentenceId>.<ext>
-            // We need to construct this from the sentence's audio path
-            if (item.sentence.audioPath) {
-              // Extract the directory and construct English path
-              const audioPathParts = item.sentence.audioPath.split('/');
-              if (audioPathParts.length >= 3) {
-                // Format: <lang>/word_<wordId>/sentence_<sentenceId>.<ext>
-                const lang = audioPathParts[0];
-                const wordDir = audioPathParts[1];
-                const sentenceFile = audioPathParts[2];
-                // Replace sentence_ with english_sentence_
-                const englishFile = sentenceFile.replace(/^sentence_/, 'english_sentence_');
-                const englishPath = `${lang}/${wordDir}/${englishFile}`;
-                audioPathPairs.push([englishPath, item.sentence.audioPath]);
-              }
+            // For English stitching, use the provided English audio path if available
+            if (item.englishAudioPath) {
+              audioPathPairs.push([item.englishAudioPath, item.audioPath]);
             }
           }
           if (item.afterSentenceAudio) {

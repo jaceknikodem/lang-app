@@ -245,8 +245,8 @@ export interface DatabaseLayer {
   // Flow feature operations
   getFlowSentences(language: string): Promise<
     Array<{
-      sentence: Sentence;
-      words: Word[];
+      audioPath: string;
+      englishAudioPath?: string; // Optional English audio path (constructed from audioPath)
       beforeSentenceAudio?: string;
       afterSentenceAudio?: string;
       continuationAudios: string[];

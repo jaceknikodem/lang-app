@@ -2084,13 +2084,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
   /**
    * Get all sentences with audio for Flow feature
-   * Includes sentences, connected words, before sentence audio paths, and continuation audio paths
+   * Simplified to only return what flow mode actually needs
    * If more than 100 sentences are available, randomly selects 100 of them
    */
   async getFlowSentences(language: string): Promise<
     Array<{
-      sentence: Sentence;
-      words: Word[];
+      audioPath: string;
+      englishAudioPath?: string;
       beforeSentenceAudio?: string;
       afterSentenceAudio?: string;
       continuationAudios: string[];
@@ -2117,7 +2117,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const limit = totalCount > 100 ? 'LIMIT 100' : '';
 
       const stmt = db.prepare(`
-        SELECT * 
+        SELECT id, audio_path, before_sentence_audio_path, after_sentence_audio_path
         FROM sentences
         WHERE language = ?
           AND audio_path IS NOT NULL
@@ -2127,71 +2127,77 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ${limit}
       `);
 
-      const sentenceRows = stmt.all(language) as any[];
-      const sentences = sentenceRows.map((row) => this.mapRowToSentence(row));
+      const sentenceRows = stmt.all(language) as Array<{
+        id: number;
+        audio_path: string;
+        before_sentence_audio_path: string | null;
+        after_sentence_audio_path: string | null;
+      }>;
 
       const result: Array<{
-        sentence: Sentence;
-        words: Word[];
+        audioPath: string;
+        englishAudioPath?: string;
         beforeSentenceAudio?: string;
         afterSentenceAudio?: string;
         continuationAudios: string[];
       }> = [];
 
-      // For each sentence, get connected words and audio paths
-      for (const sentence of sentences) {
-        // Get all words connected to this sentence from sentence_words (if any)
-        const wordIdsStmt = db.prepare(`
-          SELECT word_id FROM sentence_words WHERE sentence_id = ?
-        `);
-        const wordIds = wordIdsStmt.all(sentence.id) as Array<{ word_id: number }>;
-
-        const words: Word[] = [];
-        const wordIdSet = new Set<number>();
-
-        // Add words from sentence_words junction table
-        if (wordIds.length > 0) {
-          const placeholders = wordIds.map(() => '?').join(',');
-          const wordsStmt = db.prepare(`
-            SELECT * FROM words 
-            WHERE id IN (${placeholders}) AND language = ?
-          `);
-          const wordRows = wordsStmt.all(...wordIds.map((w) => w.word_id), language) as any[];
-          for (const row of wordRows) {
-            const word = this.mapRowToWord(row);
-            words.push(word);
-            wordIdSet.add(word.id);
-          }
-        }
-
-        // Always include the primary word (sentence.word_id) if it's in the correct language and not already included
-        if (sentence.wordId && !wordIdSet.has(sentence.wordId)) {
-          const primaryWord = await this.getWordById(sentence.wordId);
-          if (primaryWord && primaryWord.language === language) {
-            words.push(primaryWord);
-          }
-        }
-
-        // Get before and after sentence audio paths from database (if stored)
-        const beforeSentenceAudioPath = sentence.beforeSentenceAudioPath || undefined;
-        const afterSentenceAudioPath = sentence.afterSentenceAudioPath || undefined;
-
+      // For each sentence, get continuation audio paths and construct English audio path
+      for (const row of sentenceRows) {
         // Get dialogue variants and their continuation audio
         const variantsStmt = db.prepare(`
           SELECT continuation_audio FROM dialogue_variants
           WHERE sentence_id = ? AND continuation_audio IS NOT NULL AND TRIM(continuation_audio) != ''
         `);
-        const variantRows = variantsStmt.all(sentence.id) as Array<{ continuation_audio: string }>;
+        const variantRows = variantsStmt.all(row.id) as Array<{ continuation_audio: string }>;
         const continuationAudios = variantRows
-          .map((row) => row.continuation_audio)
+          .map((variantRow) => variantRow.continuation_audio)
           .filter((audio): audio is string => !!audio && audio.trim() !== '');
 
+        // Construct English audio path from sentence audio path
+        // English audio is stored as: <lang>/word_<wordId>/english_sentence_<sentenceId>.<ext>
+        // Sentence audio is: <lang>/word_<wordId>/sentence_<sentenceId>.<ext>
+        let englishAudioPath: string | undefined;
+        const audioPathParts = row.audio_path.split('/');
+        if (audioPathParts.length >= 3) {
+          const sentenceFile = audioPathParts[2];
+          // Replace sentence_ with english_sentence_
+          const englishFile = sentenceFile.replace(/^sentence_/, 'english_sentence_');
+          if (englishFile !== sentenceFile) {
+            // Only set if we successfully replaced (i.e., it was a sentence file)
+            englishAudioPath = `${audioPathParts[0]}/${audioPathParts[1]}/${englishFile}`;
+          }
+        }
+
         result.push({
-          sentence,
-          words,
-          beforeSentenceAudio: beforeSentenceAudioPath, // We'll check existence later
-          afterSentenceAudio: afterSentenceAudioPath, // We'll check existence later
+          audioPath: row.audio_path,
+          englishAudioPath,
+          beforeSentenceAudio: row.before_sentence_audio_path || undefined,
+          afterSentenceAudio: row.after_sentence_audio_path || undefined,
           continuationAudios,
+        });
+      }
+
+      // Also get entries from read_aloud_cache
+      const readAloudStmt = db.prepare(`
+        SELECT raw_text, audio_path
+        FROM read_aloud_cache
+        WHERE language = ?
+          AND audio_path IS NOT NULL
+          AND TRIM(audio_path) != ''
+      `);
+
+      const readAloudRows = readAloudStmt.all(language) as Array<{
+        raw_text: string;
+        audio_path: string;
+      }>;
+
+      // Add read_aloud_cache entries (no English audio path for these)
+      for (const row of readAloudRows) {
+        result.push({
+          audioPath: row.audio_path,
+          // No englishAudioPath for read_aloud_cache entries
+          continuationAudios: [],
         });
       }
 

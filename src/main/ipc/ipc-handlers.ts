@@ -2356,12 +2356,36 @@ function setupFlowHandlers(databaseLayer: SQLiteDatabaseLayer, audioService: Aud
         // Check which audio files actually exist and filter accordingly
         const result = await Promise.all(
           flowSentences.map(async (item) => {
+            // Check if main audio path exists
+            const mainAudioExists = await audioService.audioExists(item.audioPath);
+            if (!mainAudioExists) {
+              return null; // Skip this item if main audio doesn't exist
+            }
+
+            // Check if English audio path exists (if provided)
+            let englishAudioPath: string | undefined;
+            if (item.englishAudioPath) {
+              const exists = await audioService.audioExists(item.englishAudioPath);
+              if (exists) {
+                englishAudioPath = item.englishAudioPath;
+              }
+            }
+
             // Check if before sentence audio exists
             let beforeSentenceAudio: string | undefined;
             if (item.beforeSentenceAudio) {
               const exists = await audioService.audioExists(item.beforeSentenceAudio);
               if (exists) {
                 beforeSentenceAudio = item.beforeSentenceAudio;
+              }
+            }
+
+            // Check if after sentence audio exists
+            let afterSentenceAudio: string | undefined;
+            if (item.afterSentenceAudio) {
+              const exists = await audioService.audioExists(item.afterSentenceAudio);
+              if (exists) {
+                afterSentenceAudio = item.afterSentenceAudio;
               }
             }
 
@@ -2375,15 +2399,17 @@ function setupFlowHandlers(databaseLayer: SQLiteDatabaseLayer, audioService: Aud
             }
 
             return {
-              sentence: item.sentence,
-              words: item.words,
+              audioPath: item.audioPath,
+              englishAudioPath,
               beforeSentenceAudio,
+              afterSentenceAudio,
               continuationAudios: existingContinuationAudios,
             };
           })
         );
 
-        return result;
+        // Filter out null entries (where main audio didn't exist)
+        return result.filter((item): item is NonNullable<typeof item> => item !== null);
       },
       'get flow sentences'
     )
