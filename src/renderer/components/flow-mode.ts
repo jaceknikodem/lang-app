@@ -100,6 +100,30 @@ export class FlowMode extends BaseComponent {
     this.stopAudio();
   }
 
+  protected override handleExternalLanguageChange = async (event: Event): Promise<void> => {
+    const detail = (event as CustomEvent<{ language?: string }>).detail;
+    const newLanguage = detail?.language;
+
+    // Check if language actually changed BEFORE calling super (which updates currentLanguage)
+    if (!newLanguage || newLanguage === this.currentLanguage) {
+      return;
+    }
+
+    // Call base class handler (this will update this.currentLanguage)
+    await super.handleExternalLanguageChange(event);
+
+    // Stop any currently playing audio
+    this.stopAudio();
+
+    // Clear cached audio paths so they're reloaded for the new language
+    this.stitchedAudioPath = null;
+    this.stitchedAudioPathWithEnglish = null;
+    this.flowSentences = [];
+
+    // Reload flow sentences for the new language
+    await this.loadFlowSentences();
+  };
+
   private async updateSessionOnCompletion() {
     if (!this.currentSessionId) return;
 
