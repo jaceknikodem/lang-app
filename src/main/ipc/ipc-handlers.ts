@@ -729,6 +729,15 @@ function setupLLMHandlers(
     createIPCHandler(
       [TextSchema, TextSchema, LanguageSchema, z.string().optional(), z.number(), z.number()],
       async (word, sentence, language, proficiencyLevel, wordId, sentenceId) => {
+        // Check if explanation already exists in cache
+        if (databaseLayer) {
+          const cachedExplanation = await databaseLayer.getGrammarExplanation(wordId, sentenceId);
+          if (cachedExplanation !== null) {
+            return cachedExplanation;
+          }
+        }
+
+        // Generate new explanation if not cached
         const explanation = await llmClient.explainGrammar(
           word,
           sentence,

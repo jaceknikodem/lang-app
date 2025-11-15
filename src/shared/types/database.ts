@@ -144,6 +144,7 @@ export interface DatabaseLayer {
     sentenceId: number,
     explanation: string
   ): Promise<number>;
+  getGrammarExplanation(wordId: number, sentenceId: number): Promise<string | null>;
   recordPronunciationAttempt(
     sentenceId: number,
     similarityScore: number,

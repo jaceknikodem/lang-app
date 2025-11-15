@@ -1599,6 +1599,25 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
+   * Get a grammar explanation for a word and sentence
+   */
+  async getGrammarExplanation(wordId: number, sentenceId: number): Promise<string | null> {
+    const db = this.getDb();
+
+    try {
+      const stmt = db.prepare(`
+        SELECT explanation FROM grammar_explanations
+        WHERE word_id = ? AND sentence_id = ?
+        LIMIT 1
+      `);
+      const result = stmt.get(wordId, sentenceId) as { explanation: string } | undefined;
+      return result?.explanation ?? null;
+    } catch (error) {
+      throw wrapError(error, `Failed to get grammar explanation`);
+    }
+  }
+
+  /**
    * Record a pronunciation attempt for a sentence (tracks full history)
    * This method inserts into pronunciation_attempts table for history (with expected and transcribed text).
    * Pronunciation stats can be queried from the pronunciation_attempts table.
