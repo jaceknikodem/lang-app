@@ -31,7 +31,6 @@ import {
   serializeTokenizedTokens,
   parseTokenizedTokens,
 } from '../../shared/utils/sentence.js';
-import { backfillSentenceTokens } from './backfill-sentence-tokens.js';
 import { wrapError } from '../../shared/utils/error.js';
 import { getLogger } from '../utils/logger.js';
 import { Logger } from '../../shared/utils/logger.js';
@@ -54,22 +53,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       // Initialize schema
       this.initializeSchema(db);
-
-      // Defer expensive operations to background - don't block startup
-      // Backfill sentence parts in background (non-blocking)
-      setImmediate(() => {
-        this.backfillSentenceParts();
-      });
-
-      // Backfill sentence tokens in background (non-blocking)
-      // This precomputes tokens for existing sentences
-      setImmediate(async () => {
-        try {
-          await this.runSentenceTokenBackfill();
-        } catch (tokenError) {
-          this.logger.warn({ error: tokenError }, 'Sentence token backfill skipped due to error');
-        }
-      });
 
       // Populate dictionary data from bundled files in background (non-blocking)
       // This is a very expensive operation that can take several seconds
@@ -158,100 +141,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ignored BOOLEAN DEFAULT FALSE
       )
     `);
-
-    // Migration: Add audio_generation_voice_id column if it doesn't exist
-    try {
-      db.exec(`ALTER TABLE sentences ADD COLUMN audio_generation_voice_id TEXT`);
-    } catch {
-      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
-      // Ignore error - this is expected for existing databases with the column
-    }
-
-    // Migration: Add topic column to words table if it doesn't exist
-    try {
-      db.exec(`ALTER TABLE words ADD COLUMN topic TEXT`);
-    } catch {
-      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
-      // Ignore error - this is expected for existing databases with the column
-    }
-
-    // Migration: Add related_words column to sentences table if it doesn't exist
-    try {
-      db.exec(`ALTER TABLE sentences ADD COLUMN related_words TEXT`);
-    } catch {
-      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
-      // Ignore error - this is expected for existing databases with the column
-    }
-
-    // Migration: Add language column to sentences table if it doesn't exist
-    try {
-      db.exec(`ALTER TABLE sentences ADD COLUMN language TEXT`);
-      // Backfill existing sentences with language from their associated words
-      db.exec(`
-        UPDATE sentences
-        SET language = (
-          SELECT w.language
-          FROM words w
-          WHERE w.id = sentences.word_id
-        )
-        WHERE language IS NULL
-      `);
-    } catch {
-      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
-      // Ignore error - this is expected for existing databases with the column
-    }
-
-    // Migration: Add before_sentence_audio_path column to sentences table if it doesn't exist
-    try {
-      db.exec(`ALTER TABLE sentences ADD COLUMN before_sentence_audio_path TEXT`);
-    } catch {
-      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
-      // Ignore error - this is expected for existing databases with the column
-    }
-
-    // Migration: Add after_sentence_audio_path column to sentences table if it doesn't exist
-    try {
-      db.exec(`ALTER TABLE sentences ADD COLUMN after_sentence_audio_path TEXT`);
-    } catch {
-      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
-      // Ignore error - this is expected for existing databases with the column
-    }
-
-    // Migration: Add ignored column to sentences table if it doesn't exist
-    try {
-      db.exec(`ALTER TABLE sentences ADD COLUMN ignored BOOLEAN DEFAULT FALSE`);
-    } catch {
-      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
-      // Ignore error - this is expected for existing databases with the column
-    }
-
-    // Migration: Add grammar_explanation_count column to words table if it doesn't exist
-    try {
-      db.exec(`ALTER TABLE words ADD COLUMN grammar_explanation_count INTEGER DEFAULT 0`);
-    } catch {
-      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
-      // Ignore error - this is expected for existing databases with the column
-    }
-
-    // Migration: Add pronunciation columns to sentences table if they don't exist
-    try {
-      db.exec(`ALTER TABLE sentences ADD COLUMN pronunciation TEXT`);
-    } catch {
-      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
-      // Ignore error - this is expected for existing databases with the column
-    }
-    try {
-      db.exec(`ALTER TABLE sentences ADD COLUMN context_before_pronunciation TEXT`);
-    } catch {
-      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
-      // Ignore error - this is expected for existing databases with the column
-    }
-    try {
-      db.exec(`ALTER TABLE sentences ADD COLUMN context_after_pronunciation TEXT`);
-    } catch {
-      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
-      // Ignore error - this is expected for existing databases with the column
-    }
 
     // Progress table
     db.exec(`
@@ -354,30 +243,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
-
-    // Migration: Add audio_path column to pronunciation_attempts table if it doesn't exist
-    try {
-      db.exec(`ALTER TABLE pronunciation_attempts ADD COLUMN audio_path TEXT`);
-    } catch {
-      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
-      // Ignore error - this is expected for existing databases with the column
-    }
-
-    // Migration: Add added_via column to words table if it doesn't exist
-    try {
-      db.exec(`ALTER TABLE words ADD COLUMN added_via TEXT`);
-    } catch {
-      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
-      // Ignore error - this is expected for existing databases with the column
-    }
-
-    // Migration: Add zipf_frequency column to words table if it doesn't exist
-    try {
-      db.exec(`ALTER TABLE words ADD COLUMN zipf_frequency REAL`);
-    } catch {
-      // Column already exists or table doesn't exist yet (handled by CREATE TABLE IF NOT EXISTS)
-      // Ignore error - this is expected for existing databases with the column
-    }
 
     // SRS adjustments tracking (quiz mode only)
     db.exec(`
@@ -1843,22 +1708,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   }
 
   /**
-   * Get all sentences (for backfill operations)
-   */
-  async getAllSentences(): Promise<Sentence[]> {
-    const db = this.getDb();
-
-    try {
-      const stmt = db.prepare('SELECT * FROM sentences ORDER BY id');
-      const rows = stmt.all() as any[];
-
-      return rows.map((row) => this.mapRowToSentence(row));
-    } catch (error) {
-      throw wrapError(error, `Failed to get all sentences`);
-    }
-  }
-
-  /**
    * Get sentence by ID
    */
   async getSentenceById(sentenceId: number): Promise<Sentence | null> {
@@ -3223,105 +3072,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     return shuffled;
-  }
-
-  private backfillSentenceParts(): void {
-    const db = this.getDb();
-
-    try {
-      // Check if backfill is needed - early return if already done
-      const checkStmt = db.prepare(`
-        SELECT COUNT(*) as count 
-        FROM sentences 
-        WHERE sentence_parts IS NULL OR sentence_parts = ''
-      `);
-      const checkResult = checkStmt.get() as { count: number };
-
-      if (!checkResult.count || checkResult.count === 0) {
-        // No sentences need backfilling - skip entirely
-        return;
-      }
-
-      const rows = db
-        .prepare(
-          `
-        SELECT id, sentence 
-        FROM sentences 
-        WHERE sentence_parts IS NULL OR sentence_parts = ''
-      `
-        )
-        .all() as Array<{ id: number; sentence: string }>;
-
-      const updates = rows
-        .map((row) => {
-          const parts = splitSentenceIntoParts(row.sentence);
-          const serialized = serializeSentenceParts(parts);
-          if (!serialized) {
-            return null;
-          }
-          return { id: row.id, serialized };
-        })
-        .filter((entry): entry is { id: number; serialized: string } => entry !== null);
-
-      if (!updates.length) {
-        return;
-      }
-
-      const updateStmt = db.prepare('UPDATE sentences SET sentence_parts = ? WHERE id = ?');
-      const updateTransaction = db.transaction(
-        (items: Array<{ id: number; serialized: string }>) => {
-          for (const item of items) {
-            updateStmt.run(item.serialized, item.id);
-          }
-        }
-      );
-
-      updateTransaction(updates);
-      this.logger.info(
-        { sentenceCount: updates.length },
-        `Backfilled sentence_parts for ${updates.length} sentences`
-      );
-    } catch (error) {
-      this.logger.warn({ error }, 'Failed to backfill sentence parts');
-    }
-  }
-
-  /**
-   * Backfill sentence tokens for all existing sentences.
-   * This precomputes tokenization and dictionary lookups for sentences that don't have them.
-   */
-  private async runSentenceTokenBackfill(): Promise<void> {
-    try {
-      // Check if the sentence_tokens column exists before running backfill
-      const db = this.getDb();
-      try {
-        // Try to select from the column to check if it exists
-        db.prepare('SELECT sentence_tokens FROM sentences LIMIT 1').get();
-      } catch {
-        // Column doesn't exist yet - migration may not have run
-        this.logger.info(
-          'Sentence tokens column not found, skipping backfill (migration may not have run)'
-        );
-        return;
-      }
-
-      await backfillSentenceTokens({
-        database: this,
-        batchSize: 10,
-        onProgress: (processed, total) => {
-          if (processed % 50 === 0) {
-            this.logger.debug(
-              { processed, total },
-              `Backfilling sentence tokens: ${processed}/${total} processed`
-            );
-          }
-        },
-      });
-      this.logger.info('Sentence token backfill completed');
-    } catch (error) {
-      this.logger.error({ error }, 'Failed to backfill sentence tokens');
-      // Non-fatal - continue without backfill
-    }
   }
 
   private mapRowToWord(row: Record<string, unknown>): Word {
