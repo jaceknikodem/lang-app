@@ -441,21 +441,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Flow operations
   flow: {
-    getFlowSentences: (language: string) => Promise<
-      Array<{
-        audioPath: string;
-        englishAudioPath?: string;
-        beforeSentenceAudio?: string;
-        afterSentenceAudio?: string;
-        continuationAudios: string[];
-      }>
-    >;
-    stitchAudio: (audioPaths: string[], language: string) => Promise<string>;
-    stitchAudioWithEnglish: (
-      audioPathPairs: Array<[string, string]>,
-      language: string
-    ) => Promise<string>;
-    getFileStats: (filePath: string) => Promise<{ mtime: Date } | null>;
+    getFlowSentences: (language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.FLOW.GET_FLOW_SENTENCES, language),
+    stitchAudio: (audioPaths: string[], language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.FLOW.STITCH_AUDIO, audioPaths, language),
+    stitchAudioWithEnglish: (audioPathPairs: Array<[string, string]>, language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.FLOW.STITCH_AUDIO_WITH_ENGLISH, audioPathPairs, language),
+    getFileStats: (filePath: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.FLOW.GET_FILE_STATS, filePath),
   },
 
   // Scoring operations

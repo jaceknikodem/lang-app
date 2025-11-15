@@ -5,7 +5,6 @@
 import { html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
-import { Word, Sentence } from '../../shared/types/core.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
 import { keyboardManager, CommonKeys } from '../utils/keyboard-manager.js';
 import { logger } from '../utils/logger.js';

@@ -62,16 +62,23 @@ describe('TTSAudioGenerator Path Generation', () => {
       expect(path).toBe(join(audioDir, 'spanish', 'variant_10.aiff'));
     });
 
-    it('should throw error when wordId is missing for word audio', () => {
-      expect(() => {
-        (generator as any).getAudioPath('hola', 'spanish', undefined, undefined);
-      }).toThrow('Word ID or variant ID is required');
+    it('should generate custom path when wordId is missing for word audio', () => {
+      const path = (generator as any).getAudioPath('hola', 'spanish', undefined, undefined);
+      // Should generate a custom path with hash: custom_<hash>.aiff
+      expect(path).toContain('spanish');
+      expect(path).toContain('custom_');
+      expect(path).toMatch(/custom_[a-f0-9]{16}\.aiff$/);
+      expect(path).toContain(audioDir);
     });
 
-    it('should throw error when wordId is missing for sentence audio', () => {
-      expect(() => {
-        (generator as any).getAudioPath('Hola mundo', 'spanish', 'hola', undefined, 5);
-      }).toThrow('Word ID or variant ID is required');
+    it('should generate custom path when wordId is missing for sentence audio', () => {
+      const path = (generator as any).getAudioPath('Hola mundo', 'spanish', 'hola', undefined, 5);
+      // Should generate a custom path with hash: custom_<hash>.aiff
+      // Note: sentenceId is ignored when wordId is missing
+      expect(path).toContain('spanish');
+      expect(path).toContain('custom_');
+      expect(path).toMatch(/custom_[a-f0-9]{16}\.aiff$/);
+      expect(path).toContain(audioDir);
     });
 
     it('should handle different languages', () => {
