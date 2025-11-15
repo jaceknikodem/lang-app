@@ -163,26 +163,29 @@ export class FlowMode extends BaseComponent {
       this.isLoading = true;
       this.error = null;
 
-      // Get current language for per-language caching
+      // Get current language for per-language caching - ALWAYS fetch fresh from database
+      let currentLanguage: string | null = null;
       try {
-        this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+        currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+        this.currentLanguage = currentLanguage; // Update instance variable
       } catch (error) {
         logger.warn({ error }, '[Flow] Failed to get current language');
         this.currentLanguage = null;
+        currentLanguage = null;
       }
 
       // Check cache first before loading sentences
       let needsStitching = true;
       let needsEnglishStitching = true;
       // Ensure we have a valid language before constructing the path
-      if (!this.currentLanguage) {
+      if (!currentLanguage) {
         logger.warn('[Flow] No current language available, cannot use cache');
         needsStitching = true;
         needsEnglishStitching = true;
       } else {
-        const languageSuffix = `_${this.currentLanguage}`;
+        const languageSuffix = `_${currentLanguage}`;
         const defaultAudioPath = `audio/flow_stitched${languageSuffix}.mp3`;
-        const defaultEnglishAudioPath = `audio/flow_stitched_english_${this.currentLanguage}.mp3`;
+        const defaultEnglishAudioPath = `audio/flow_stitched_english_${currentLanguage}.mp3`;
 
         // Check if cached files exist and are recent (within 2 hours)
         const stats = await window.electronAPI.flow.getFileStats(defaultAudioPath);
@@ -213,8 +216,13 @@ export class FlowMode extends BaseComponent {
 
       // Only load sentences and stitch if cache is not valid
       if (needsStitching || needsEnglishStitching) {
-        const language = await window.electronAPI.database.getCurrentLanguage();
-        const sentences = await window.electronAPI.flow.getFlowSentences(language);
+        // Use the same language variable we used for cache checking
+        if (!currentLanguage) {
+          currentLanguage = await window.electronAPI.database.getCurrentLanguage();
+          this.currentLanguage = currentLanguage;
+        }
+
+        const sentences = await window.electronAPI.flow.getFlowSentences(currentLanguage);
         this.flowSentences = sentences;
 
         // Collect all audio paths for regular stitching (limited to 200)
@@ -262,7 +270,7 @@ export class FlowMode extends BaseComponent {
         this.isStitching = true;
         try {
           // Language is required for stitching
-          if (!this.currentLanguage) {
+          if (!currentLanguage) {
             throw new Error('Current language is required for flow mode audio stitching');
           }
 
@@ -270,7 +278,7 @@ export class FlowMode extends BaseComponent {
           if (needsStitching && audioPaths.length > 0) {
             this.stitchedAudioPath = await window.electronAPI.flow.stitchAudio(
               audioPaths,
-              this.currentLanguage
+              currentLanguage // Use the same language variable
             );
             if (!this.stitchedAudioPath) {
               this.error = 'Failed to stitch audio files. Please ensure ffmpeg is installed.';
@@ -282,7 +290,7 @@ export class FlowMode extends BaseComponent {
             this.stitchedAudioPathWithEnglish =
               await window.electronAPI.flow.stitchAudioWithEnglish(
                 audioPathPairs,
-                this.currentLanguage
+                currentLanguage // Use the same language variable
               );
             if (!this.stitchedAudioPathWithEnglish) {
               logger.warn(
@@ -298,11 +306,11 @@ export class FlowMode extends BaseComponent {
         }
       } else {
         // If using cache, still load sentences for display purposes (but don't wait for it)
-        window.electronAPI.database
-          .getCurrentLanguage()
-          .then((language) => {
-            return window.electronAPI.flow.getFlowSentences(language);
-          })
+        // Use currentLanguage to ensure consistency
+        const displayLanguage =
+          currentLanguage || (await window.electronAPI.database.getCurrentLanguage());
+        window.electronAPI.flow
+          .getFlowSentences(displayLanguage)
           .then((sentences) => {
             this.flowSentences = sentences;
             this.requestUpdate();
