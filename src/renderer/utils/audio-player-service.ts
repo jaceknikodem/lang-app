@@ -171,7 +171,18 @@ export class AudioPlayerService {
           if (options.onEnded) {
             options.onEnded();
           }
-          this.processQueue(options);
+          // Wrap processQueue call in error handling to prevent hanging
+          this.processQueue(options).catch((error) => {
+            // Clear queue state on error
+            this.playbackQueue = [];
+            this.isProcessingQueue = false;
+
+            // Call onError callback if provided
+            if (options.onError) {
+              const err = error instanceof Error ? error : new Error(String(error));
+              options.onError(err);
+            }
+          });
         },
       });
     } catch (error) {
