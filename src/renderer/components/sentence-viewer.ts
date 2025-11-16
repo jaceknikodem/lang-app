@@ -1921,9 +1921,21 @@ export class SentenceViewer extends LitElement {
     if (!this.wordPopup) return;
 
     const wordInfo = this.wordPopup.wordInfo;
+    let word: Word | null = wordInfo.isTargetWord ? this.targetWord : wordInfo.wordData || null;
+
+    // If word doesn't exist in database, add it first (without generating sentences)
+    // This ensures we have a wordId for caching the grammar explanation
+    if (!word) {
+      word = await this.addWordFromSentence(wordInfo, false);
+      if (!word) {
+        this.closeWordPopup();
+        return;
+      }
+    }
+
     const wordText = wordInfo.dictionaryForm?.trim() || wordInfo.text.trim();
     const sentenceText = this.sentence.sentence;
-    const language = this.targetWord.language;
+    const language = word.language || this.targetWord.language;
 
     this.isFetchingGrammar = true;
     this.closeWordPopup();
@@ -1937,7 +1949,7 @@ export class SentenceViewer extends LitElement {
         sentenceText,
         language,
         proficiencyLevel || undefined,
-        this.targetWord.id,
+        word.id, // Use the clicked word's ID, not targetWord.id
         this.sentence.id
       );
 
