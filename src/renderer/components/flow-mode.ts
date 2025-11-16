@@ -77,7 +77,11 @@ export class FlowMode extends BaseComponent {
         logger.warn({ error: err }, 'Failed to get current language for flow session');
       });
 
-    this.loadFlowSentences();
+    // Defer loading flow sentences to avoid blocking app startup
+    // Use setTimeout to yield to the event loop and let other components initialize first
+    setTimeout(() => {
+      this.loadFlowSentences();
+    }, 100); // Small delay to let app finish initializing
 
     // Set up direct keyboard listener for flow mode (handles space key when overlay is visible)
     this.directKeyHandler = this.handleDirectKeyDown.bind(this);
