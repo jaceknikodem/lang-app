@@ -10,6 +10,7 @@ import { precomputeSentenceTokens } from '../database/sentence-preprocessor.js';
 import type { LemmatizationService } from '../lemmatization/index.js';
 import { getLogger } from '../utils/logger.js';
 import { Logger } from '../../shared/utils/logger.js';
+import { serializeErrorForLogging } from '../../shared/utils/error.js';
 
 export interface WordGenerationRunnerOptions {
   database: DatabaseLayer;
@@ -424,11 +425,44 @@ export class WordGenerationRunner {
       await this.emitWordUpdate(word.id);
       this.logger.info({ jobId: job.id, wordId: word.id }, '[WordGenerationRunner] Job completed');
     } catch (error) {
+      // Log raw error info for debugging
+      this.logger.debug(
+        {
+          jobId: job.id,
+          errorType: typeof error,
+          errorConstructor: error?.constructor?.name,
+          isError: error instanceof Error,
+          hasMessage: error && typeof error === 'object' && 'message' in error,
+          errorKeys: error && typeof error === 'object' ? Object.keys(error) : [],
+        },
+        '[WordGenerationRunner] Raw error info before serialization'
+      );
+
+      const errorDetails = serializeErrorForLogging(error);
+
+      // Safety check: if serialization resulted in an empty or nearly empty object, log a warning
+      const detailKeys = Object.keys(errorDetails);
+      if (detailKeys.length === 0 || (detailKeys.length === 1 && detailKeys[0] === 'type')) {
+        this.logger.warn(
+          {
+            jobId: job.id,
+            serializedError: errorDetails,
+            detailKeys,
+            errorString: String(error),
+            errorJson: JSON.stringify(error),
+          },
+          '[WordGenerationRunner] Error serialization resulted in empty/minimal object'
+        );
+      }
+
+      // Use both 'err' (pino's standard error key) and 'error' (our custom key) for maximum compatibility
+      // Spread errorDetails directly into the log object so pino can serialize it properly
       this.logger.error(
         {
           jobId: job.id,
           attemptNumber,
-          error,
+          err: error instanceof Error ? error : undefined, // Pino's standard error key
+          ...errorDetails, // Spread error details directly
         },
         `WordGenerationRunner failed for job`
       );

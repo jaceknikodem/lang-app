@@ -213,3 +213,134 @@ export function createSpeechRecognitionError(
   }
   return error;
 }
+
+/**
+ * Serializes an error for logging purposes.
+ * Extracts all relevant error information including custom properties.
+ *
+ * @param error - Error to serialize
+ * @returns Serializable error object
+ */
+export function serializeErrorForLogging(error: unknown): Record<string, any> {
+  // Handle null/undefined
+  if (error === null || error === undefined) {
+    return {
+      message: 'Error was null or undefined',
+      type: error === null ? 'null' : 'undefined',
+    };
+  }
+
+  // Handle Error instances
+  if (error instanceof Error) {
+    const serialized: Record<string, any> = {
+      message: error.message || '(no message)',
+      name: error.name || 'Error',
+    };
+
+    // Add stack trace if available
+    if (error.stack) {
+      serialized.stack = error.stack;
+    }
+
+    // Add custom properties for LLMError
+    if ('code' in error) {
+      serialized.code = (error as any).code;
+    }
+    if ('retryable' in error) {
+      serialized.retryable = (error as any).retryable;
+    }
+    if ('audioPath' in error) {
+      serialized.audioPath = (error as any).audioPath;
+    }
+    if ('filePath' in error) {
+      serialized.filePath = (error as any).filePath;
+    }
+
+    // Add cause if present
+    if ('cause' in error && error.cause) {
+      serialized.cause = serializeErrorForLogging(error.cause);
+    }
+
+    // Try to get all enumerable properties from the error object
+    // This catches any other custom properties that might be set
+    try {
+      const errorObj = error as any;
+      for (const key in errorObj) {
+        if (key !== 'message' && key !== 'name' && key !== 'stack' && key !== 'cause') {
+          try {
+            const value = errorObj[key];
+            // Only include serializable values
+            if (
+              value !== undefined &&
+              (typeof value === 'string' ||
+                typeof value === 'number' ||
+                typeof value === 'boolean' ||
+                value === null)
+            ) {
+              serialized[key] = value;
+            }
+          } catch {
+            // Skip properties that can't be accessed
+          }
+        }
+      }
+    } catch {
+      // Ignore errors when trying to enumerate properties
+    }
+
+    return serialized;
+  }
+
+  // Handle objects that might be error-like
+  if (typeof error === 'object') {
+    try {
+      const obj = error as Record<string, any>;
+      const serialized: Record<string, any> = {
+        type: 'object',
+      };
+
+      // Try to extract common error properties
+      if ('message' in obj) {
+        serialized.message = String(obj.message);
+      }
+      if ('name' in obj) {
+        serialized.name = String(obj.name);
+      }
+      if ('code' in obj) {
+        serialized.code = obj.code;
+      }
+      if ('stack' in obj) {
+        serialized.stack = String(obj.stack);
+      }
+
+      // If we got at least a message, return it
+      if (serialized.message) {
+        return serialized;
+      }
+
+      // Otherwise, try to stringify the whole object
+      try {
+        serialized.raw = JSON.stringify(obj);
+      } catch {
+        serialized.raw = String(obj);
+      }
+
+      return serialized;
+    } catch {
+      // Fall through to string conversion
+    }
+  }
+
+  // For other types, try to convert to string
+  try {
+    return {
+      message: String(error),
+      type: typeof error,
+    };
+  } catch {
+    return {
+      message: 'Unknown error (could not serialize)',
+      type: 'unknown',
+    };
+  }
+}

@@ -9,7 +9,7 @@ import { DatabaseLayer } from '../../shared/types/database.js';
 import { LLMFactory, LLMFactoryConfig, LLMProvider } from './llm-factory.js';
 import { FrequencyWordManager } from './frequency-word-manager.js';
 import type { LemmatizationService } from '../lemmatization/index.js';
-import { wrapError } from '../../shared/utils/error.js';
+import { wrapError, serializeErrorForLogging } from '../../shared/utils/error.js';
 import { getLogger } from '../utils/logger.js';
 import { Logger } from '../../shared/utils/logger.js';
 
@@ -722,6 +722,16 @@ export class ContentGenerator {
       // Return combined sentences (LLM results shuffled, Tatoeba examples appended)
       return combinedSentences;
     } catch (error) {
+      const errorDetails = serializeErrorForLogging(error);
+      this.logger.error(
+        {
+          word,
+          language: targetLanguage,
+          requestedCount: sentenceCount,
+          error: errorDetails,
+        },
+        '[ContentGenerator] Error in generateWordSentences'
+      );
       throw this.handleContentGenerationError(error, 'sentence generation');
     }
   }
