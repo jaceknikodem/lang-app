@@ -2612,18 +2612,6 @@ export class SentenceViewer extends LitElement {
   render() {
     const wordStrength = Math.round(this.targetWord?.strength ?? 0);
 
-    // Debug: Log pronunciation for Japanese sentences
-    if (
-      this.sentence &&
-      (this.sentence.language === 'japanese' || this.sentence.language === 'ja')
-    ) {
-      console.log('[SentenceViewer] Japanese sentence pronunciation:', {
-        hasPronunciation: !!this.sentence.pronunciation,
-        pronunciation: this.sentence.pronunciation,
-        hasContextBeforePronunciation: !!this.sentence.contextBeforePronunciation,
-        hasContextAfterPronunciation: !!this.sentence.contextAfterPronunciation,
-      });
-    }
     const lastSeenSource = this.displayLastSeen ?? this.sentence?.lastShown;
     const lastSeenText = this.formatTimeAgo(lastSeenSource);
 

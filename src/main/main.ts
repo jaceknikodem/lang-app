@@ -2,6 +2,12 @@
  * Electron main process entry point
  */
 
+// Suppress macOS CoreText font warnings (e.g., ".HiraKakuInterface-W5", ".HiraKakuInterface-W7" not found)
+// Must be set before Electron is imported
+if (process.platform === 'darwin') {
+  process.env.OS_ACTIVITY_MODE = 'disable';
+}
+
 import { app, BrowserWindow, session, systemPreferences } from 'electron';
 import * as path from 'path';
 import { setupIPCHandlers, cleanupIPCHandlers } from './ipc/index.js';
@@ -321,6 +327,14 @@ function createWindow(): void {
   mainWindow.on('closed', () => {
     mainWindow = null as any;
   });
+}
+
+// Suppress macOS CoreText font warnings before app initialization
+// Must be called before app.whenReady()
+if (process.platform === 'darwin') {
+  // Set environment variable to suppress CoreText warnings
+  // This must be set before any Electron processes spawn
+  process.env.OS_ACTIVITY_MODE = 'disable';
 }
 
 // Set app name and dock icon
