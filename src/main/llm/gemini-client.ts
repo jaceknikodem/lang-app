@@ -305,7 +305,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
           temperature: 0.7,
           topK: 40,
           topP: 0.95,
-          maxOutputTokens: 2048,
+          maxOutputTokens: 4096,
         },
       };
 
@@ -360,7 +360,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         temperature: 0.3, // Lower temperature for more consistent JSON output
         topK: 40,
         topP: 0.95,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 4096, // Increased from 2048 to handle multiple sentences with full context
       },
     };
 
@@ -419,7 +419,47 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         throw new Error('Empty response from Gemini');
       }
 
-      const cleanResponse = cleanLLMResponse(candidate.content.parts[0].text);
+      // Check if response was truncated
+      if (candidate.finishReason === 'MAX_TOKENS') {
+        this.logger.warn(
+          {
+            finishReason: candidate.finishReason,
+            maxOutputTokens: requestBody.generationConfig?.maxOutputTokens,
+          },
+          'Gemini response was truncated due to token limit'
+        );
+      }
+
+      let cleanResponse = cleanLLMResponse(candidate.content.parts[0].text);
+
+      // If response was truncated and looks like an incomplete array, try to fix it
+      if (candidate.finishReason === 'MAX_TOKENS' && cleanResponse.trim().startsWith('[')) {
+        const trimmed = cleanResponse.trim();
+        // If it starts with [ but doesn't end with ], try to add the closing bracket
+        if (!trimmed.endsWith(']')) {
+          // Count open brackets vs close brackets
+          const openBrackets = (trimmed.match(/\[/g) || []).length;
+          const closeBrackets = (trimmed.match(/\]/g) || []).length;
+          const openBraces = (trimmed.match(/\{/g) || []).length;
+          const closeBraces = (trimmed.match(/\}/g) || []).length;
+
+          // If we have unmatched brackets/braces, try to close them
+          if (openBrackets > closeBrackets || openBraces > closeBraces) {
+            // Add missing closing braces first, then brackets
+            let fixed = trimmed;
+            for (let i = 0; i < openBraces - closeBraces; i++) {
+              fixed += '\n}';
+            }
+            for (let i = 0; i < openBrackets - closeBrackets; i++) {
+              fixed += '\n]';
+            }
+            this.logger.warn(
+              'Attempting to fix truncated JSON by adding missing closing brackets/braces'
+            );
+            cleanResponse = fixed;
+          }
+        }
+      }
 
       // Parse JSON
       try {
@@ -430,11 +470,14 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
           {
             parseError: errorMessage,
             parseErrorStack: parseError instanceof Error ? parseError.stack : undefined,
+            finishReason: candidate.finishReason,
             cleanResponse,
           },
           'JSON parsing failed for response'
         );
-        throw new Error(`Invalid JSON response: ${cleanResponse}...`);
+        throw new Error(
+          `Invalid JSON response${candidate.finishReason === 'MAX_TOKENS' ? ' (truncated due to token limit)' : ''}: ${cleanResponse.substring(0, 200)}...`
+        );
       }
     }, customRetryDelayExtractor);
   }
