@@ -240,3 +240,25 @@ export const TranscriptionAnalysisSchema = z.object({
     .transform((s) => (s ? cleanSpecialTokens(s) : undefined)),
   hasGrammarMistakes: z.boolean(),
 });
+
+// Pronunciation response schema
+export const PronunciationResponseSchema = z.union([
+  z.array(z.string()),
+  z
+    .object({
+      pronunciations: z.array(z.string()).optional(),
+      response: z.array(z.string()).optional(),
+    })
+    .transform((obj) => obj.pronunciations || obj.response || []),
+  // Generic fallback: handles various formats
+  z.any().transform((input) => {
+    if (Array.isArray(input)) {
+      return input.map((item) => cleanSpecialTokens(String(item)));
+    }
+    if (input && typeof input === 'object') {
+      const arr = (input.pronunciations || input.response || []) as any[];
+      return arr.map((item: any) => cleanSpecialTokens(String(item)));
+    }
+    return [];
+  }),
+]);

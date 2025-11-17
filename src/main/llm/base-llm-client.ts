@@ -15,6 +15,7 @@ import {
   DialogueVariantResponseSchema,
   FollowUpResponseSchema,
   TranscriptionAnalysisSchema,
+  PronunciationResponseSchema, // Add this import
 } from './schemas.js';
 import { z } from 'zod';
 import { TranscriptionAnalysis } from '../../shared/types/core.js';
@@ -914,8 +915,8 @@ If there are no mistakes, you can omit correction and grammarExplanation, but al
     }
 
     try {
-      // Use generateResponse for plain text responses
-      const response = await this.generateResponse(prompt, this.getWordGenerationModel());
+      // Use makeRequest for JSON responses
+      const response = await this.makeRequest(prompt, this.getWordGenerationModel());
       return this.parsePronunciationResponse(response, sentences.length);
     } catch (error) {
       // On error, return empty strings (graceful degradation)
@@ -928,65 +929,44 @@ If there are no mistakes, you can omit correction and grammarExplanation, but al
   }
 
   /**
-   * Parse the LLM response containing multiple pronunciations
-   * Expected format: one pronunciation per line, or numbered list
+   * Parse the LLM response containing multiple pronunciations using Zod validation
+   * Expected format: JSON array of strings
    */
-  private parsePronunciationResponse(response: string, expectedCount: number): string[] {
-    const trimmed = response.trim();
-    if (!trimmed) {
+  private parsePronunciationResponse(response: any, expectedCount: number): string[] {
+    try {
+      // Use Zod to parse and validate the response
+      const parseResult = PronunciationResponseSchema.safeParse(response);
+
+      if (!parseResult.success) {
+        this.logger.warn(
+          {
+            issues: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
+            response,
+            expectedCount,
+          },
+          'Pronunciation response validation failed'
+        );
+        return Array(expectedCount).fill('');
+      }
+
+      const pronunciations = parseResult.data;
+
+      // Ensure we have an array
+      const pronunciationArray = Array.isArray(pronunciations) ? pronunciations : [];
+
+      // Pad or truncate to expected count
+      while (pronunciationArray.length < expectedCount) {
+        pronunciationArray.push('');
+      }
+
+      return pronunciationArray.slice(0, expectedCount);
+    } catch (error) {
+      this.logger.warn(
+        { error, response, expectedCount },
+        'Could not parse pronunciation response correctly'
+      );
       return Array(expectedCount).fill('');
     }
-
-    // Try to parse as numbered list (1. ... 2. ...) or bullet list (- ...)
-    const lines = trimmed.split(/\n/).filter((line) => line.trim());
-    const results: string[] = [];
-
-    for (const line of lines) {
-      // Match numbered format: "1. pronunciation" or "1) pronunciation"
-      const numberedMatch = line.match(/^\d+[.)]\s*(.+)$/);
-      if (numberedMatch) {
-        results.push(numberedMatch[1].trim());
-      } else if (line.trim() && !line.match(/^(Romaji|Pronunciation|Rules?):/i)) {
-        // Skip header lines but include other content
-        results.push(line.trim());
-      }
-    }
-
-    // If we got the expected count from numbered format, return it
-    if (results.length === expectedCount) {
-      return results;
-    }
-
-    // Try to parse as line-separated list (non-numbered)
-    const nonHeaderLines = lines.filter((line) => !line.match(/^(Romaji|Pronunciation|Rules?):/i));
-
-    if (nonHeaderLines.length === expectedCount) {
-      return nonHeaderLines.map((line) => line.trim());
-    }
-
-    // If we can't parse properly, try to extract what we can
-    if (results.length > 0) {
-      // Pad or truncate to expected count
-      while (results.length < expectedCount) {
-        results.push('');
-      }
-      return results.slice(0, expectedCount);
-    }
-
-    if (nonHeaderLines.length > 0) {
-      // Pad or truncate to expected count
-      while (nonHeaderLines.length < expectedCount) {
-        nonHeaderLines.push('');
-      }
-      return nonHeaderLines.slice(0, expectedCount).map((line) => line.trim());
-    }
-
-    // Last resort: return empty array
-    this.logger.warn(
-      { response, expectedCount, parsedCount: results.length },
-      'Could not parse pronunciation response correctly'
-    );
-    return Array(expectedCount).fill('');
   }
 
   /**
@@ -998,7 +978,7 @@ If there are no mistakes, you can omit correction and grammarExplanation, but al
         .map((sentence, index) => `${index + 1}. "${sentence}"`)
         .join('\n');
 
-      return `Convert these Japanese sentences to Romaji (romanized Japanese). Return ONLY the space-separated Romaji text for each sentence, one per line, numbered.
+      return `Convert these Japanese sentences to Romaji (romanized Japanese). Return ONLY a JSON array of space-separated Romaji text for each sentence.
 
 Japanese sentences:
 ${sentencesList}
@@ -1007,10 +987,13 @@ Rules:
 1. Convert all Kanji and Kana to Romaji for each sentence
 2. Use space-separated format (e.g., "watashi wa gakusei desu" not "watashiwa gakuseidesu")
 3. Preserve punctuation marks as-is
-4. Return the Romaji for each sentence on a separate line, numbered (1. ... 2. ... etc.)
-5. Return ONLY the numbered Romaji text, no explanations or additional text
+4. Return a JSON array with exactly ${sentences.length} elements, one Romaji string per sentence
+5. Return ONLY the JSON array, no explanations or additional text
 
-Romaji:`;
+CRITICAL: You must return exactly ${sentences.length} pronunciations in a JSON array. No more, no less.
+CRITICAL: Return ONLY the JSON array, nothing else.
+
+Example format: ["watashi wa gakusei desu", "kore wa hon desu"]`;
     }
 
     // For other languages, return empty string (can be extended later)
