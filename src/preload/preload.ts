@@ -317,7 +317,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.RESTORE_FROM_BACKUP, backupPath),
     checkForUpdates: () => ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.CHECK_FOR_UPDATES),
     getAppVersion: () => ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.GET_APP_VERSION),
-    restartAll: () => ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.RESTART_ALL),
+    restartAll: (language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.RESTART_ALL, language),
     openBackupDialog: () => ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.OPEN_BACKUP_DIALOG),
     openBackupDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.OPEN_BACKUP_DIRECTORY),
     closeApp: () => ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.CLOSE_APP),

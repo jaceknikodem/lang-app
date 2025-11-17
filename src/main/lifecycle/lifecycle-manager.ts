@@ -370,6 +370,87 @@ export class LifecycleManager {
   }
 
   /**
+   * Restart language - clear all data and audio files for a specific language (but preserve settings)
+   */
+  async restartLanguage(language: string): Promise<void> {
+    try {
+      this.logger.info({ language }, 'Starting language-specific data reset...');
+
+      // Access the database connection through the database layer
+      const db = (this.config.databaseLayer as any).getDb();
+
+      // Delete all words for this language (this will cascade delete sentences and related data)
+      const deleteWordsStmt = db.prepare('DELETE FROM words WHERE language = ?');
+      const wordsResult = deleteWordsStmt.run(language);
+      this.logger.info(
+        { language, deletedWords: wordsResult.changes },
+        'Deleted words for language'
+      );
+
+      // Delete language-specific entries from other tables
+      // Note: sentences are deleted via CASCADE when words are deleted
+      const deleteQueueStmt = db.prepare('DELETE FROM word_generation_queue WHERE language = ?');
+      deleteQueueStmt.run(language);
+
+      const deleteSessionsStmt = db.prepare('DELETE FROM learning_sessions WHERE language = ?');
+      deleteSessionsStmt.run(language);
+
+      const deleteAudioEventsStmt = db.prepare(
+        'DELETE FROM audio_playback_events WHERE language = ?'
+      );
+      deleteAudioEventsStmt.run(language);
+
+      const deleteSrsAdjustmentsStmt = db.prepare('DELETE FROM srs_adjustments WHERE language = ?');
+      deleteSrsAdjustmentsStmt.run(language);
+
+      // dialog_corrections will be deleted via CASCADE when sentences are deleted,
+      // but we'll also delete any orphaned entries just in case
+      const deleteDialogCorrectionsStmt = db.prepare(
+        'DELETE FROM dialog_corrections WHERE language = ?'
+      );
+      deleteDialogCorrectionsStmt.run(language);
+
+      const deleteNeglectedWordsStmt = db.prepare('DELETE FROM neglected_words WHERE language = ?');
+      deleteNeglectedWordsStmt.run(language);
+
+      const deleteDictionaryHoverStmt = db.prepare(
+        'DELETE FROM dictionary_hover_events WHERE language = ?'
+      );
+      deleteDictionaryHoverStmt.run(language);
+
+      const deleteReadAloudCacheStmt = db.prepare(
+        'DELETE FROM read_aloud_cache WHERE language = ?'
+      );
+      deleteReadAloudCacheStmt.run(language);
+
+      this.logger.info({ language }, 'Deleted language-specific database entries');
+
+      // Remove audio files for this language
+      // Audio files are stored in lowercase language directories
+      const audioDir = path.join(app.getPath('userData'), 'audio');
+      const languageAudioDir = path.join(audioDir, language.toLowerCase());
+      try {
+        await fs.rm(languageAudioDir, { recursive: true, force: true });
+        this.logger.info(
+          { language, audioDir: languageAudioDir },
+          'Removed audio files for language'
+        );
+      } catch (error) {
+        // Directory might not exist, which is fine
+        this.logger.debug(
+          { language, error },
+          'No audio files to remove for language (this is normal)'
+        );
+      }
+
+      this.logger.info({ language }, 'Language-specific data reset completed successfully');
+    } catch (error) {
+      this.logger.error({ error, language }, 'Failed to restart language');
+      throw error;
+    }
+  }
+
+  /**
    * Open the backup directory in the system file manager
    */
   async openBackupDirectory(): Promise<void> {

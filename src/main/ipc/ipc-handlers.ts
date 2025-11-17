@@ -1573,11 +1573,11 @@ function setupLifecycleHandlers(
   ipcMain.handle(
     IPC_CHANNELS.LIFECYCLE.RESTART_ALL,
     createIPCHandler(
-      undefined,
-      async () => {
-        await lifecycleManager.restartAll();
+      z.string().min(1),
+      async (language: string) => {
+        await lifecycleManager.restartLanguage(language);
       },
-      'restart all'
+      'restart language'
     )
   );
 

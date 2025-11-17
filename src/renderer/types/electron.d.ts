@@ -245,7 +245,7 @@ declare global {
         restoreFromBackup: (backupPath: string) => Promise<void>;
         checkForUpdates: () => Promise<boolean>;
         getAppVersion: () => Promise<string>;
-        restartAll: () => Promise<void>;
+        restartAll: (language: string) => Promise<void>;
         openBackupDialog: () => Promise<string | null>;
         openBackupDirectory: () => Promise<void>;
         closeApp: () => Promise<void>;

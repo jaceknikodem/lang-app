@@ -829,9 +829,14 @@ export class SettingsPanel extends BaseComponent {
     this.restartStatus = '';
 
     try {
-      await window.electronAPI.lifecycle.restartAll();
-      this.restartStatus =
-        'All data has been cleared successfully. The application will restart with a fresh database.';
+      const language =
+        this.currentLanguage || (await window.electronAPI.database.getCurrentLanguage());
+      if (!language) {
+        throw new Error('No language selected');
+      }
+
+      await window.electronAPI.lifecycle.restartAll(language);
+      this.restartStatus = `All data for ${this.capitalizeLanguage(language)} has been cleared successfully.`;
 
       // Clear any local state/cache if needed
       // The app will automatically reinitialize with empty database
@@ -841,8 +846,8 @@ export class SettingsPanel extends BaseComponent {
         window.location.reload();
       }, 2000);
     } catch (error) {
-      console.error('Failed to restart all:', error);
-      this.restartStatus = `Failed to clear all data: ${getErrorMessage(error)}`;
+      console.error('Failed to restart language:', error);
+      this.restartStatus = `Failed to clear data: ${getErrorMessage(error)}`;
     } finally {
       this.isRestarting = false;
     }
@@ -1465,10 +1470,13 @@ export class SettingsPanel extends BaseComponent {
           <h3>⚠️ Danger Zone</h3>
           <div class="settings-row">
             <div class="settings-description">
-              <strong>Restart All</strong>
+              <strong
+                >Restart ${this.capitalizeLanguage(this.currentLanguage || 'Language')}</strong
+              >
               <p>
-                Permanently delete all words, sentences, progress, and audio files. Backups will be
-                preserved. This cannot be undone!
+                Permanently delete all words, sentences, progress, and audio files for
+                ${this.capitalizeLanguage(this.currentLanguage || 'the selected language')}. Backups
+                will be preserved. This cannot be undone!
               </p>
             </div>
             <app-button
@@ -1477,7 +1485,7 @@ export class SettingsPanel extends BaseComponent {
               ?loading=${this.isRestarting}
               @click=${this.showRestartConfirmation}
             >
-              ${this.isRestarting ? 'Clearing...' : 'Restart All'}
+              ${this.isRestarting ? 'Clearing...' : 'Restart Language'}
             </app-button>
           </div>
           ${this.restartStatus
@@ -1519,12 +1527,17 @@ export class SettingsPanel extends BaseComponent {
 
         <confirmation-dialog
           .open=${this.showConfirmation}
-          title="⚠️ Confirm Restart All"
+          title="⚠️ Confirm Restart Language"
           variant="danger"
           confirmText="Yes, Delete Everything"
           cancelText="Cancel"
           .message=${html`
-            <p>This will permanently delete:</p>
+            <p>
+              This will permanently delete for
+              <strong
+                >${this.capitalizeLanguage(this.currentLanguage || 'the selected language')}</strong
+              >:
+            </p>
             <ul>
               <li>All words and translations</li>
               <li>All sentences and examples</li>
@@ -1532,7 +1545,8 @@ export class SettingsPanel extends BaseComponent {
               <li>All audio files</li>
             </ul>
             <p style="color: #28a745; font-size: 0.9rem;">
-              <strong>Note:</strong> Backup files will be preserved.
+              <strong>Note:</strong> Backup files will be preserved. Data for other languages will
+              not be affected.
             </p>
             <p><strong>This action cannot be undone!</strong></p>
           `}
