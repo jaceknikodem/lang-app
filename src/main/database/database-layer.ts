@@ -140,7 +140,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         play_count INTEGER DEFAULT 0,
         ignored BOOLEAN DEFAULT FALSE,
         before_sentence_audio_path TEXT,
-        after_sentence_audio_path TEXT
+        after_sentence_audio_path TEXT,
+        pronunciation TEXT,
+        context_before_pronunciation TEXT,
+        context_after_pronunciation TEXT
       )
     `);
 
@@ -161,6 +164,43 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       db.exec(`
         ALTER TABLE sentences 
         ADD COLUMN after_sentence_audio_path TEXT;
+      `);
+    } catch (error) {
+      // Column might already exist, ignore error
+      if (!(error instanceof Error && error.message.includes('duplicate column'))) {
+        throw error;
+      }
+    }
+
+    // Add pronunciation columns if they don't exist (for existing databases)
+    try {
+      db.exec(`
+        ALTER TABLE sentences 
+        ADD COLUMN pronunciation TEXT;
+      `);
+    } catch (error) {
+      // Column might already exist, ignore error
+      if (!(error instanceof Error && error.message.includes('duplicate column'))) {
+        throw error;
+      }
+    }
+
+    try {
+      db.exec(`
+        ALTER TABLE sentences 
+        ADD COLUMN context_before_pronunciation TEXT;
+      `);
+    } catch (error) {
+      // Column might already exist, ignore error
+      if (!(error instanceof Error && error.message.includes('duplicate column'))) {
+        throw error;
+      }
+    }
+
+    try {
+      db.exec(`
+        ALTER TABLE sentences 
+        ADD COLUMN context_after_pronunciation TEXT;
       `);
     } catch (error) {
       // Column might already exist, ignore error
