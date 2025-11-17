@@ -8,7 +8,6 @@ import { sharedStyles } from '../styles/shared.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
 import { sessionManager } from '../utils/session-manager.js';
 import { BaseComponent } from './base-component.js';
-import './voice-bubble.js';
 import './status-message.js';
 import './confirmation-dialog.js';
 import './app-button.js';
@@ -325,58 +324,6 @@ export class SettingsPanel extends BaseComponent {
         color: #721c24;
         border: 1px solid #f5c6cb;
       }
-
-      .voice-ids-container {
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-sm);
-        width: 350px;
-      }
-
-      .voice-ids-input-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--spacing-xs);
-        align-items: center;
-        padding: var(--spacing-sm);
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        background: white;
-        min-height: 38px;
-      }
-
-      .voice-ids-input-container:focus-within {
-        border-color: #007acc;
-        box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
-      }
-
-      .voice-ids-input {
-        flex: 1;
-        min-width: 150px;
-        border: none;
-        outline: none;
-        font-size: 0.9rem;
-        font-family: monospace;
-        padding: var(--spacing-xs) 0;
-      }
-
-      .voice-ids-input::placeholder {
-        color: #999;
-      }
-
-      .voice-ids-bubbles {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--spacing-xs);
-        align-items: center;
-      }
-
-      .voice-ids-hint {
-        font-size: 11px;
-        color: #666;
-        margin-top: var(--spacing-xs);
-        font-style: italic;
-      }
     `,
   ];
 
@@ -417,12 +364,6 @@ export class SettingsPanel extends BaseComponent {
   private currentLLMModel = '';
 
   @state()
-  private currentWordGenerationModel = '';
-
-  @state()
-  private currentSentenceGenerationModel = '';
-
-  @state()
   private isLoadingLLMModels = false;
 
   @state()
@@ -449,15 +390,6 @@ export class SettingsPanel extends BaseComponent {
   @state()
   private llmError = '';
 
-  @state()
-  private voiceMappings: Record<string, string[]> = {};
-
-  @state()
-  private isLoadingVoiceMappings = false;
-
-  @state()
-  private voiceMappingStatus = '';
-
   async connectedCallback() {
     super.connectedCallback();
     await this.loadSettings();
@@ -479,11 +411,6 @@ export class SettingsPanel extends BaseComponent {
 
       // Load ElevenLabs settings
       await this.loadElevenLabsSettings();
-
-      // Load voice mappings if ElevenLabs is enabled
-      if (this.isElevenLabsEnabled) {
-        await this.loadVoiceMappings();
-      }
     } catch (error) {
       console.error('Failed to load settings:', error);
     }
@@ -509,11 +436,8 @@ export class SettingsPanel extends BaseComponent {
         this.currentLLMProvider
       );
 
-      // Get current LLM models
+      // Get current LLM model
       this.currentLLMModel = await window.electronAPI.llm.getCurrentModel();
-      this.currentWordGenerationModel = await window.electronAPI.llm.getWordGenerationModel();
-      this.currentSentenceGenerationModel =
-        await window.electronAPI.llm.getSentenceGenerationModel();
 
       console.log('LLM settings loaded:', {
         providers: this.availableLLMProviders,
@@ -521,8 +445,6 @@ export class SettingsPanel extends BaseComponent {
         geminiApiKey: !!this.geminiApiKey,
         models: this.availableLLMModels,
         current: this.currentLLMModel,
-        wordGeneration: this.currentWordGenerationModel,
-        sentenceGeneration: this.currentSentenceGenerationModel,
       });
     } catch (error) {
       console.error('Failed to load LLM settings:', error);
@@ -531,8 +453,6 @@ export class SettingsPanel extends BaseComponent {
       this.geminiApiKey = '';
       this.availableLLMModels = [];
       this.currentLLMModel = '';
-      this.currentWordGenerationModel = '';
-      this.currentSentenceGenerationModel = '';
     } finally {
       this.isLoadingLLMModels = false;
       this.isLoadingProviders = false;
@@ -581,152 +501,6 @@ export class SettingsPanel extends BaseComponent {
       this.elevenLabsModel = 'eleven_flash_v2_5';
       this.isElevenLabsEnabled = false;
     }
-  }
-
-  private async loadVoiceMappings() {
-    if (!this.isElevenLabsEnabled) {
-      return;
-    }
-
-    this.isLoadingVoiceMappings = true;
-    this.voiceMappingStatus = '';
-
-    try {
-      this.voiceMappings = await window.electronAPI.audio.getVoiceMappings();
-      console.log('Voice mappings loaded:', this.voiceMappings);
-    } catch (error) {
-      console.error('Failed to load voice mappings:', error);
-      this.voiceMappingStatus = `Failed to load voice mappings: ${getErrorMessage(error)}`;
-      // Initialize with empty object if loading fails
-      this.voiceMappings = {};
-    } finally {
-      this.isLoadingVoiceMappings = false;
-    }
-  }
-
-  private async saveVoiceMappings() {
-    if (!this.isElevenLabsEnabled) {
-      return;
-    }
-
-    this.voiceMappingStatus = '';
-
-    try {
-      await window.electronAPI.audio.saveVoiceMappings(this.voiceMappings);
-      this.voiceMappingStatus = 'Voice mappings saved successfully';
-      console.log('Voice mappings saved:', this.voiceMappings);
-    } catch (error) {
-      console.error('Failed to save voice mappings:', error);
-      this.voiceMappingStatus = `Failed to save voice mappings: ${getErrorMessage(error)}`;
-    }
-  }
-
-  private async resetVoiceMappingsToDefaults() {
-    if (!this.isElevenLabsEnabled) {
-      return;
-    }
-
-    this.voiceMappingStatus = '';
-
-    try {
-      await window.electronAPI.audio.resetVoiceMappingsToDefaults();
-      await this.loadVoiceMappings(); // Reload to get defaults
-      this.voiceMappingStatus = 'Voice mappings reset to defaults';
-      console.log('Voice mappings reset to defaults');
-    } catch (error) {
-      console.error('Failed to reset voice mappings:', error);
-      this.voiceMappingStatus = `Failed to reset voice mappings: ${getErrorMessage(error)}`;
-    }
-  }
-
-  private updateVoiceMapping(language: string, value: string) {
-    // Parse comma-separated voice IDs
-    const voiceIds = value
-      .split(',')
-      .map((id) => id.trim())
-      .filter((id) => id.length > 0);
-
-    if (voiceIds.length > 0) {
-      this.voiceMappings[language] = voiceIds;
-    } else {
-      // Remove language if empty
-      delete this.voiceMappings[language];
-    }
-
-    // Trigger save after a short delay (debounce)
-    clearTimeout((this as any).voiceMappingSaveTimeout);
-    (this as any).voiceMappingSaveTimeout = setTimeout(() => {
-      this.saveVoiceMappings();
-    }, 1000);
-  }
-
-  private getVoiceMappingValue(language: string): string {
-    return this.voiceMappings[language]?.join(', ') || '';
-  }
-
-  private getVoiceIdsForLanguage(language: string): string[] {
-    return this.voiceMappings[language] || [];
-  }
-
-  private handleAddVoiceId(language: string, event: Event) {
-    const input = event.target as HTMLInputElement;
-    const value = input.value.trim();
-
-    if (value) {
-      // Check if voice ID already exists
-      const currentIds = this.getVoiceIdsForLanguage(language);
-      if (!currentIds.includes(value)) {
-        this.voiceMappings[language] = [...currentIds, value];
-        this.saveVoiceMappings();
-      }
-      input.value = '';
-    }
-  }
-
-  private handleRemoveVoiceId(language: string, voiceId: string) {
-    const currentIds = this.getVoiceIdsForLanguage(language);
-    this.voiceMappings[language] = currentIds.filter((id) => id !== voiceId);
-
-    // Remove language entry if no voice IDs left
-    if (this.voiceMappings[language].length === 0) {
-      delete this.voiceMappings[language];
-    }
-
-    this.saveVoiceMappings();
-  }
-
-  private handleVoiceIdKeyDown(language: string, event: KeyboardEvent) {
-    const input = event.target as HTMLInputElement;
-
-    // Add voice ID on Enter or comma
-    if (event.key === 'Enter' || event.key === ',') {
-      event.preventDefault();
-      this.handleAddVoiceId(language, event);
-    }
-
-    // Remove last voice ID on Backspace if input is empty
-    if (event.key === 'Backspace' && input.value === '') {
-      const currentIds = this.getVoiceIdsForLanguage(language);
-      if (currentIds.length > 0) {
-        this.handleRemoveVoiceId(language, currentIds[currentIds.length - 1]);
-      }
-    }
-  }
-
-  private getSupportedLanguages(): string[] {
-    return ['portuguese', 'italian', 'polish', 'spanish', 'indonesian', 'japanese'];
-  }
-
-  private getLanguageDisplayName(language: string): string {
-    const names: Record<string, string> = {
-      portuguese: 'Portuguese',
-      italian: 'Italian',
-      polish: 'Polish',
-      spanish: 'Spanish',
-      indonesian: 'Indonesian',
-      japanese: 'Japanese',
-    };
-    return names[language] || language;
   }
 
   private async createBackup() {
@@ -907,42 +681,6 @@ export class SettingsPanel extends BaseComponent {
     }
   }
 
-  private async changeWordGenerationModel(event: Event) {
-    const select = event.target as HTMLSelectElement;
-    const selectedModel = select.value;
-
-    if (!selectedModel) return;
-
-    try {
-      await window.electronAPI.llm.setWordGenerationModel(selectedModel);
-      this.currentWordGenerationModel = selectedModel;
-
-      console.log('Word generation model changed to:', this.currentWordGenerationModel);
-    } catch (error) {
-      console.error('Failed to change word generation model:', error);
-      // Revert the selection
-      select.value = this.currentWordGenerationModel;
-    }
-  }
-
-  private async changeSentenceGenerationModel(event: Event) {
-    const select = event.target as HTMLSelectElement;
-    const selectedModel = select.value;
-
-    if (!selectedModel) return;
-
-    try {
-      await window.electronAPI.llm.setSentenceGenerationModel(selectedModel);
-      this.currentSentenceGenerationModel = selectedModel;
-
-      console.log('Sentence generation model changed to:', this.currentSentenceGenerationModel);
-    } catch (error) {
-      console.error('Failed to change sentence generation model:', error);
-      // Revert the selection
-      select.value = this.currentSentenceGenerationModel;
-    }
-  }
-
   private capitalizeLanguage(language: string): string {
     return language.charAt(0).toUpperCase() + language.slice(1);
   }
@@ -962,11 +700,6 @@ export class SettingsPanel extends BaseComponent {
 
       // Switch TTS based on current settings
       await this.switchTTSBasedOnSettings();
-
-      // Load voice mappings if ElevenLabs is now enabled
-      if (this.isElevenLabsEnabled) {
-        await this.loadVoiceMappings();
-      }
 
       console.log('ElevenLabs API key updated:', { enabled: this.isElevenLabsEnabled });
     } catch (error) {
@@ -992,11 +725,6 @@ export class SettingsPanel extends BaseComponent {
 
       // Switch TTS based on current settings
       await this.switchTTSBasedOnSettings();
-
-      // Load voice mappings if ElevenLabs is now enabled
-      if (this.isElevenLabsEnabled) {
-        await this.loadVoiceMappings();
-      }
 
       console.log('TTS model updated:', model);
     } catch (error) {
@@ -1194,68 +922,14 @@ export class SettingsPanel extends BaseComponent {
               `
             : this.availableLLMModels.length > 0
               ? html`
-                  <div class="dropdown-row">
-                    <div class="dropdown-description">
-                      <strong>Word Generation Model (Small)</strong>
-                      <p>
-                        Choose a small, fast model for generating vocabulary words and translations
-                      </p>
-                    </div>
-                    <select
-                      class="model-select"
-                      .value=${this.currentWordGenerationModel}
-                      @change=${this.changeWordGenerationModel}
-                      ?disabled=${this.isLoadingLLMModels}
-                    >
-                      ${this.availableLLMModels.map(
-                        (model) => html`
-                          <option
-                            value=${model}
-                            ?selected=${model === this.currentWordGenerationModel}
-                          >
-                            ${model}
-                          </option>
-                        `
-                      )}
-                    </select>
-                  </div>
-
-                  <div class="dropdown-row">
-                    <div class="dropdown-description">
-                      <strong>Sentence Generation Model (Big)</strong>
-                      <p>
-                        Choose a larger, more capable model for generating complex sentences and
-                        context
-                      </p>
-                    </div>
-                    <select
-                      class="model-select"
-                      .value=${this.currentSentenceGenerationModel}
-                      @change=${this.changeSentenceGenerationModel}
-                      ?disabled=${this.isLoadingLLMModels}
-                    >
-                      ${this.availableLLMModels.map(
-                        (model) => html`
-                          <option
-                            value=${model}
-                            ?selected=${model === this.currentSentenceGenerationModel}
-                          >
-                            ${model}
-                          </option>
-                        `
-                      )}
-                    </select>
-                  </div>
-
                   <div class="model-info">
                     Provider: ${this.getProviderDisplayName(this.currentLLMProvider)}
                     ${this.currentLLMProvider === 'gemini' && !this.geminiApiKey.trim()
                       ? html` <span style="color: #dc3545;"> (⚠️ API key required)</span> `
                       : html` <span style="color: #28a745;"> (✓ Ready)</span> `}<br />
-                    Word generation: ${this.currentWordGenerationModel || 'None selected'}
-                    ${this.getLLMModelDescription(this.currentWordGenerationModel)}<br />
-                    Sentence generation: ${this.currentSentenceGenerationModel || 'None selected'}
-                    ${this.getLLMModelDescription(this.currentSentenceGenerationModel)}
+                    <p style="margin-top: 0.5rem; font-size: 0.85rem; color: #666;">
+                      Word and sentence generation models are configured in config.toml
+                    </p>
                   </div>
                 `
               : html`
@@ -1308,89 +982,10 @@ export class SettingsPanel extends BaseComponent {
 
                 ${this.isElevenLabsEnabled
                   ? html`
-                      <div class="advanced-settings">
-                        <h4
-                          style="margin-top: 0; margin-bottom: var(--spacing-md); font-size: 14px; font-weight: 600;"
-                        >
-                          Voice IDs (Advanced)
-                        </h4>
-                        <p
-                          style="margin: 0 0 var(--spacing-md) 0; font-size: 12px; color: var(--text-secondary);"
-                        >
-                          Customize voice IDs for each language. Enter comma-separated voice IDs
-                          from your ElevenLabs account. Multiple voices per language will be
-                          randomly selected for variety.
+                      <div class="model-info" style="margin-top: var(--spacing-md);">
+                        <p style="margin: 0; font-size: 0.85rem; color: #666;">
+                          Voice IDs are configured in config.toml
                         </p>
-
-                        ${this.isLoadingVoiceMappings
-                          ? html`
-                              <status-message
-                                type="info"
-                                message="Loading voice mappings..."
-                              ></status-message>
-                            `
-                          : html`
-                              ${this.getSupportedLanguages().map(
-                                (language) => html`
-                                  <div class="settings-row">
-                                    <div class="settings-description">
-                                      ${this.getLanguageDisplayName(language)}
-                                    </div>
-                                    <div class="voice-ids-container">
-                                      <div class="voice-ids-input-container">
-                                        <div class="voice-ids-bubbles">
-                                          ${this.getVoiceIdsForLanguage(language).map(
-                                            (voiceId) => html`
-                                              <voice-bubble
-                                                .voiceId=${voiceId}
-                                                .removable=${true}
-                                                @remove=${() =>
-                                                  this.handleRemoveVoiceId(language, voiceId)}
-                                              ></voice-bubble>
-                                            `
-                                          )}
-                                        </div>
-                                        <input
-                                          type="text"
-                                          class="voice-ids-input"
-                                          placeholder="Add voice ID..."
-                                          @keydown=${(e: KeyboardEvent) =>
-                                            this.handleVoiceIdKeyDown(language, e)}
-                                          @blur=${(e: Event) => this.handleAddVoiceId(language, e)}
-                                        />
-                                      </div>
-                                      <div class="voice-ids-hint">
-                                        ${this.getVoiceIdsForLanguage(language).length === 0
-                                          ? 'No voice IDs set. Default will be used.'
-                                          : `${this.getVoiceIdsForLanguage(language).length} voice ID${this.getVoiceIdsForLanguage(language).length === 1 ? '' : 's'} configured.`}
-                                      </div>
-                                    </div>
-                                  </div>
-                                `
-                              )}
-
-                              <div
-                                style="margin-top: var(--spacing-md); display: flex; gap: var(--spacing-md); align-items: center;"
-                              >
-                                <app-button
-                                  variant="primary"
-                                  @click=${this.resetVoiceMappingsToDefaults}
-                                >
-                                  Reset to Defaults
-                                </app-button>
-                                ${this.voiceMappingStatus
-                                  ? html`
-                                      <status-message
-                                        type=${this.voiceMappingStatus.includes('Failed')
-                                          ? 'error'
-                                          : 'success'}
-                                        message=${this.voiceMappingStatus}
-                                        style="margin: 0;"
-                                      ></status-message>
-                                    `
-                                  : ''}
-                              </div>
-                            `}
                       </div>
                     `
                   : ''}
