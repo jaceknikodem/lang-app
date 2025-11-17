@@ -92,7 +92,7 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     this.lastUsedVoiceId = finalVoiceId;
 
     // Make API request to ElevenLabs (rate-limited to 1 concurrent request)
-    const audioBuffer = await queueApiRequest(() => this.callElevenLabsAPI(text, finalVoiceId));
+    const audioBuffer = await queueApiRequest(() => this.callElevenLabsAPI(text, finalVoiceId, voiceLanguage));
 
     // Write audio file
     writeFileSync(audioPath, audioBuffer);
@@ -109,12 +109,17 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
   /**
    * Call ElevenLabs API to generate audio
    */
-  private async callElevenLabsAPI(text: string, voiceId: string): Promise<Buffer> {
+  private async callElevenLabsAPI(text: string, voiceId: string, language: string): Promise<Buffer> {
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
     
-    const requestBody = {
+    // Get language code for the API (2-letter ISO code)
+    const languageCode = getLanguageCode(language);
+    const isJapanese = language.toLowerCase() === 'japanese' || languageCode === 'ja';
+    
+    const requestBody: any = {
       text: text,
       model_id: this.config.elevenLabsModel,
+      language_code: languageCode,
       voice_settings: {
         stability: 0.5,
         similarity_boost: 0.5,
@@ -122,6 +127,11 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
         use_speaker_boost: true
       }
     };
+    
+    // Apply language text normalization for Japanese
+    if (isJapanese) {
+      requestBody.apply_language_text_normalization = true;
+    }
 
     const response = await fetch(url, {
       method: 'POST',
