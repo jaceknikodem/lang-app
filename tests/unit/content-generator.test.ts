@@ -272,6 +272,8 @@ describe('ContentGenerator', () => {
     });
 
     it('should handle proficiency level from database', async () => {
+      // Mock fetchTatoebaExamples to return empty
+      (contentGenerator as any).fetchTatoebaExamples = jest.fn().mockResolvedValue([]);
       mockDatabase.getSetting = jest.fn().mockResolvedValue('A1');
       await contentGenerator.generateWordSentences(
         'hola',
