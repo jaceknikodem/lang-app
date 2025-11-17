@@ -138,9 +138,36 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         audio_generation_voice_id TEXT,
         sentence_tokens TEXT,
         play_count INTEGER DEFAULT 0,
-        ignored BOOLEAN DEFAULT FALSE
+        ignored BOOLEAN DEFAULT FALSE,
+        before_sentence_audio_path TEXT,
+        after_sentence_audio_path TEXT
       )
     `);
+
+    // Add missing columns if they don't exist (for existing databases)
+    try {
+      db.exec(`
+        ALTER TABLE sentences 
+        ADD COLUMN before_sentence_audio_path TEXT;
+      `);
+    } catch (error) {
+      // Column might already exist, ignore error
+      if (!(error instanceof Error && error.message.includes('duplicate column'))) {
+        throw error;
+      }
+    }
+
+    try {
+      db.exec(`
+        ALTER TABLE sentences 
+        ADD COLUMN after_sentence_audio_path TEXT;
+      `);
+    } catch (error) {
+      // Column might already exist, ignore error
+      if (!(error instanceof Error && error.message.includes('duplicate column'))) {
+        throw error;
+      }
+    }
 
     // Progress table
     db.exec(`
