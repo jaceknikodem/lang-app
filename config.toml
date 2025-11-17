@@ -42,7 +42,7 @@ max_existing_words_in_prompt = 50
 
 [llm.gemini]
 # Default Gemini model
-default_model = "gemini-2.5-flash"
+default_model = "gemini-2.5-flash-lite"
 # Gemini model for word generation and pronunciation
 fast_model = "gemini-2.5-flash-lite"
 # Gemini model for sentence generation

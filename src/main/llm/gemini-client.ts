@@ -166,12 +166,14 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
 
   /**
    * Extract retry delay from Gemini API error response
-   * @param errorText The error response text from the API
+   * @param errorText The error response text from the API (can be JSON string or already parsed object)
+   * @param retryAfterHeader Optional Retry-After header value
    * @returns Retry delay in milliseconds, or null if not found or >= 2 minutes
    */
-  private extractRetryDelay(errorText: string): number | null {
+  private extractRetryDelay(errorText: string | object, retryAfterHeader?: string): number | null {
     try {
-      const errorJson = JSON.parse(errorText);
+      // Parse errorText if it's a string, otherwise use it directly
+      const errorJson = typeof errorText === 'string' ? JSON.parse(errorText) : errorText;
 
       // Check if error.details exists and is an array
       if (errorJson.error?.details && Array.isArray(errorJson.error.details)) {
@@ -203,8 +205,27 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
           }
         }
       }
-    } catch {
-      // If parsing fails, return null to fall back to exponential backoff
+
+      // Fallback: check Retry-After header if provided
+      if (retryAfterHeader) {
+        const headerSeconds = parseInt(retryAfterHeader, 10);
+        if (!isNaN(headerSeconds)) {
+          const milliseconds = headerSeconds * 1000;
+          const twoMinutes = 2 * 60 * 1000; // 120,000ms
+          if (milliseconds < twoMinutes) {
+            return milliseconds;
+          }
+        }
+      }
+    } catch (parseError) {
+      // If parsing fails, log and return null to fall back to exponential backoff
+      this.logger.debug(
+        {
+          parseError,
+          errorText: typeof errorText === 'string' ? errorText.substring(0, 200) : errorText,
+        },
+        'Failed to parse retry delay from error response'
+      );
       return null;
     }
 
@@ -366,21 +387,62 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
 
     // Custom retry delay extractor for 429 rate limit errors
     const customRetryDelayExtractor = (error: unknown): number | null => {
-      const errorWithStatus = error as Error & { status?: number; errorText?: string };
-      if (errorWithStatus.status === 429 && errorWithStatus.errorText) {
-        const retryDelayMs = this.extractRetryDelay(errorWithStatus.errorText);
+      // Check if error has status and errorText properties (from our custom error)
+      const errorWithStatus = error as Error & {
+        status?: number;
+        errorText?: string | object;
+        retryAfter?: string;
+      };
 
-        // If retryDelay is null (>= 2 minutes), throw error to give up
-        if (retryDelayMs === null) {
-          throw super.createLLMError(
-            ensureError(error),
-            'Rate limit exceeded - retry delay too long',
-            'CONNECTION_ERROR',
-            false
-          );
+      // Also check if it's an axios error with response
+      const axiosError = axios.isAxiosError(error) ? error : null;
+      const status = errorWithStatus.status ?? axiosError?.response?.status;
+      const errorData = errorWithStatus.errorText ?? axiosError?.response?.data;
+      const retryAfterHeader =
+        errorWithStatus.retryAfter ?? axiosError?.response?.headers?.['retry-after'];
+
+      if (status === 429) {
+        this.logger.debug(
+          {
+            hasErrorData: !!errorData,
+            hasRetryAfterHeader: !!retryAfterHeader,
+            errorDataType: typeof errorData,
+          },
+          'Gemini 429 error detected, attempting to extract retry delay'
+        );
+
+        // Try to extract retry delay from error response
+        if (errorData) {
+          const retryDelayMs = this.extractRetryDelay(errorData, retryAfterHeader);
+
+          // If retryDelay is null (>= 2 minutes or not found), fall back to exponential backoff
+          // Don't throw here - let exponential backoff handle it
+          if (retryDelayMs !== null) {
+            this.logger.info(
+              { retryDelayMs, retryDelaySeconds: Math.ceil(retryDelayMs / 1000) },
+              'Extracted retry delay from Gemini API response'
+            );
+            return retryDelayMs;
+          } else {
+            this.logger.debug(
+              'Could not extract retry delay from error response, will use exponential backoff'
+            );
+          }
+        } else if (retryAfterHeader) {
+          // If we have Retry-After header but no error data, use the header
+          const headerSeconds = parseInt(retryAfterHeader, 10);
+          if (!isNaN(headerSeconds)) {
+            const milliseconds = headerSeconds * 1000;
+            const twoMinutes = 2 * 60 * 1000; // 120,000ms
+            if (milliseconds < twoMinutes) {
+              this.logger.info(
+                { retryDelayMs: milliseconds, retryDelaySeconds: headerSeconds },
+                'Using Retry-After header for retry delay'
+              );
+              return milliseconds;
+            }
+          }
         }
-
-        return retryDelayMs;
       }
       return null;
     };
@@ -399,12 +461,16 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
       );
 
       if (response.status !== 200) {
-        const errorText =
-          typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+        // Preserve the original data structure - don't stringify if it's already an object
+        // This allows extractRetryDelay to work with both string and object formats
+        const errorData = response.data;
+        const errorText = typeof errorData === 'string' ? errorData : JSON.stringify(errorData);
         const error = new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
-        // Attach response status and errorText to error for retry logic
+        // Attach response status, errorText (can be string or object), and Retry-After header to error for retry logic
         (error as any).status = response.status;
-        (error as any).errorText = errorText;
+        (error as any).errorText = errorData; // Store original data, not stringified version
+        (error as any).retryAfter =
+          response.headers?.['retry-after'] || response.headers?.['Retry-After'];
         throw error;
       }
 
