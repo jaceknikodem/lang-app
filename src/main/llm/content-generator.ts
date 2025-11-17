@@ -537,26 +537,25 @@ export class ContentGenerator {
 
                   if (isJapanese) {
                     try {
-                      pronunciation = await this.llmClient.convertToPronunciation(
+                      // Batch all pronunciation conversions
+                      const sentencesToConvert = [
                         sentence.sentence,
+                        ...(context.contextBefore ? [context.contextBefore] : []),
+                        ...(context.contextAfter ? [context.contextAfter] : []),
+                      ];
+
+                      const pronunciations = await this.llmClient.convertToPronunciation(
+                        sentencesToConvert,
                         targetLanguage
                       );
-                      pronunciation = pronunciation || undefined;
 
+                      pronunciation = pronunciations[0] || undefined;
                       if (context.contextBefore) {
-                        contextBeforePronunciation = await this.llmClient.convertToPronunciation(
-                          context.contextBefore,
-                          targetLanguage
-                        );
-                        contextBeforePronunciation = contextBeforePronunciation || undefined;
+                        contextBeforePronunciation = pronunciations[1] || undefined;
                       }
-
                       if (context.contextAfter) {
-                        contextAfterPronunciation = await this.llmClient.convertToPronunciation(
-                          context.contextAfter,
-                          targetLanguage
-                        );
-                        contextAfterPronunciation = contextAfterPronunciation || undefined;
+                        contextAfterPronunciation =
+                          pronunciations[context.contextBefore ? 2 : 1] || undefined;
                       }
                     } catch (pronError) {
                       this.logger.warn(
@@ -661,40 +660,63 @@ export class ContentGenerator {
       const isJapanese =
         targetLanguage.toLowerCase() === 'japanese' || targetLanguage.toLowerCase() === 'ja';
       if (isJapanese) {
-        const sentencesWithPronunciation = await Promise.all(
-          combinedSentences.map(async (sentence) => {
-            try {
-              const pronunciation = await this.llmClient.convertToPronunciation(
-                sentence.sentence,
-                targetLanguage
-              );
-              const contextBeforePronunciation = sentence.contextBefore
-                ? await this.llmClient.convertToPronunciation(
-                    sentence.contextBefore,
-                    targetLanguage
-                  )
+        try {
+          // Collect all sentences that need pronunciation
+          const allSentencesToConvert: string[] = [];
+          const sentenceIndices: number[] = [];
+          const contextBeforeIndices: number[] = [];
+          const contextAfterIndices: number[] = [];
+
+          combinedSentences.forEach((sentence) => {
+            sentenceIndices.push(allSentencesToConvert.length);
+            allSentencesToConvert.push(sentence.sentence);
+
+            if (sentence.contextBefore) {
+              contextBeforeIndices.push(allSentencesToConvert.length);
+              allSentencesToConvert.push(sentence.contextBefore);
+            } else {
+              contextBeforeIndices.push(-1);
+            }
+
+            if (sentence.contextAfter) {
+              contextAfterIndices.push(allSentencesToConvert.length);
+              allSentencesToConvert.push(sentence.contextAfter);
+            } else {
+              contextAfterIndices.push(-1);
+            }
+          });
+
+          // Batch convert all pronunciations
+          const pronunciations = await this.llmClient.convertToPronunciation(
+            allSentencesToConvert,
+            targetLanguage
+          );
+
+          // Map pronunciations back to sentences
+          const sentencesWithPronunciation = combinedSentences.map((sentence, index) => {
+            const mainPron = pronunciations[sentenceIndices[index]] || undefined;
+            const beforePron =
+              contextBeforeIndices[index] >= 0
+                ? pronunciations[contextBeforeIndices[index]] || undefined
                 : undefined;
-              const contextAfterPronunciation = sentence.contextAfter
-                ? await this.llmClient.convertToPronunciation(sentence.contextAfter, targetLanguage)
+            const afterPron =
+              contextAfterIndices[index] >= 0
+                ? pronunciations[contextAfterIndices[index]] || undefined
                 : undefined;
 
-              return {
-                ...sentence,
-                pronunciation: pronunciation || undefined,
-                contextBeforePronunciation: contextBeforePronunciation || undefined,
-                contextAfterPronunciation: contextAfterPronunciation || undefined,
-              };
-            } catch (error) {
-              this.logger.warn(
-                { error, sentence: sentence.sentence },
-                'Failed to convert to pronunciation'
-              );
-              // Return sentence without pronunciation on error (graceful degradation)
-              return sentence;
-            }
-          })
-        );
-        return sentencesWithPronunciation;
+            return {
+              ...sentence,
+              pronunciation: mainPron,
+              contextBeforePronunciation: beforePron,
+              contextAfterPronunciation: afterPron,
+            };
+          });
+
+          return sentencesWithPronunciation;
+        } catch (error) {
+          this.logger.warn({ error }, 'Failed to batch convert to pronunciation');
+          // Continue without pronunciation (graceful degradation)
+        }
       }
 
       // Return combined sentences (LLM results shuffled, Tatoeba examples appended)

@@ -897,42 +897,118 @@ If there are no mistakes, you can omit correction and grammarExplanation, but al
   }
 
   /**
-   * Convert a sentence to pronunciation (e.g., Romaji for Japanese)
-   * Returns space-separated pronunciation text
+   * Convert sentences to pronunciation (e.g., Romaji for Japanese)
+   * Returns array of space-separated pronunciation text
    */
-  async convertToPronunciation(sentence: string, language: string): Promise<string> {
-    const prompt = this.createPronunciationPrompt(sentence, language);
+  async convertToPronunciation(sentences: string[], language: string): Promise<string[]> {
+    // Handle empty input
+    if (!sentences || sentences.length === 0) {
+      return [];
+    }
 
-    // If prompt is empty (language not supported), return empty string
+    const prompt = this.createPronunciationPrompt(sentences, language);
+
+    // If prompt is empty (language not supported), return empty strings
     if (!prompt || !prompt.trim()) {
-      return '';
+      return sentences.map(() => '');
     }
 
     try {
       // Use generateResponse for plain text responses
       const response = await this.generateResponse(prompt, this.getSentenceGenerationModel());
-      return response.trim();
+      return this.parsePronunciationResponse(response, sentences.length);
     } catch (error) {
-      // On error, return empty string (graceful degradation)
-      this.logger.warn({ error, sentence, language }, 'Failed to convert to pronunciation');
-      return '';
+      // On error, return empty strings (graceful degradation)
+      this.logger.warn(
+        { error, sentenceCount: sentences.length, language },
+        'Failed to convert to pronunciation'
+      );
+      return sentences.map(() => '');
     }
+  }
+
+  /**
+   * Parse the LLM response containing multiple pronunciations
+   * Expected format: one pronunciation per line, or numbered list
+   */
+  private parsePronunciationResponse(response: string, expectedCount: number): string[] {
+    const trimmed = response.trim();
+    if (!trimmed) {
+      return Array(expectedCount).fill('');
+    }
+
+    // Try to parse as numbered list (1. ... 2. ...) or bullet list (- ...)
+    const lines = trimmed.split(/\n/).filter((line) => line.trim());
+    const results: string[] = [];
+
+    for (const line of lines) {
+      // Match numbered format: "1. pronunciation" or "1) pronunciation"
+      const numberedMatch = line.match(/^\d+[.)]\s*(.+)$/);
+      if (numberedMatch) {
+        results.push(numberedMatch[1].trim());
+      } else if (line.trim() && !line.match(/^(Romaji|Pronunciation|Rules?):/i)) {
+        // Skip header lines but include other content
+        results.push(line.trim());
+      }
+    }
+
+    // If we got the expected count from numbered format, return it
+    if (results.length === expectedCount) {
+      return results;
+    }
+
+    // Try to parse as line-separated list (non-numbered)
+    const nonHeaderLines = lines.filter((line) => !line.match(/^(Romaji|Pronunciation|Rules?):/i));
+
+    if (nonHeaderLines.length === expectedCount) {
+      return nonHeaderLines.map((line) => line.trim());
+    }
+
+    // If we can't parse properly, try to extract what we can
+    if (results.length > 0) {
+      // Pad or truncate to expected count
+      while (results.length < expectedCount) {
+        results.push('');
+      }
+      return results.slice(0, expectedCount);
+    }
+
+    if (nonHeaderLines.length > 0) {
+      // Pad or truncate to expected count
+      while (nonHeaderLines.length < expectedCount) {
+        nonHeaderLines.push('');
+      }
+      return nonHeaderLines.slice(0, expectedCount).map((line) => line.trim());
+    }
+
+    // Last resort: return empty array
+    this.logger.warn(
+      { response, expectedCount, parsedCount: results.length },
+      'Could not parse pronunciation response correctly'
+    );
+    return Array(expectedCount).fill('');
   }
 
   /**
    * Create prompt for pronunciation conversion
    */
-  protected createPronunciationPrompt(sentence: string, language: string): string {
+  protected createPronunciationPrompt(sentences: string[], language: string): string {
     if (language.toLowerCase() === 'japanese' || language.toLowerCase() === 'ja') {
-      return `Convert this Japanese sentence to Romaji (romanized Japanese). Return ONLY the space-separated Romaji text, nothing else.
+      const sentencesList = sentences
+        .map((sentence, index) => `${index + 1}. "${sentence}"`)
+        .join('\n');
 
-Japanese sentence: "${sentence}"
+      return `Convert these Japanese sentences to Romaji (romanized Japanese). Return ONLY the space-separated Romaji text for each sentence, one per line, numbered.
+
+Japanese sentences:
+${sentencesList}
 
 Rules:
-1. Convert all Kanji and Kana to Romaji
+1. Convert all Kanji and Kana to Romaji for each sentence
 2. Use space-separated format (e.g., "watashi wa gakusei desu" not "watashiwa gakuseidesu")
 3. Preserve punctuation marks as-is
-4. Return ONLY the Romaji text, no explanations or additional text
+4. Return the Romaji for each sentence on a separate line, numbered (1. ... 2. ... etc.)
+5. Return ONLY the numbered Romaji text, no explanations or additional text
 
 Romaji:`;
     }

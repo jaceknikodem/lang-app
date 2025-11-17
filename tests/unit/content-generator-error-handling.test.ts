@@ -114,8 +114,8 @@ class MockLLMClient implements LLMClient {
     return '';
   }
 
-  async convertToPronunciation(_sentence: string, _language: string): Promise<string> {
-    return '';
+  async convertToPronunciation(_sentences: string[], _language: string): Promise<string[]> {
+    return _sentences.map(() => '');
   }
 
   async generateResponse(_prompt: string, _model?: string): Promise<string> {
