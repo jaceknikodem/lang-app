@@ -103,8 +103,8 @@ describe('GeminiClient', () => {
 
     it('should use defaults for specialized models when not provided', () => {
       const testClient = new GeminiClient(mockApiKey, { model: 'gemini-1.5-pro' });
-      expect(testClient.getWordGenerationModel()).toBe('gemini-2.5-flash-lite'); // Uses default word model
-      expect(testClient.getSentenceGenerationModel()).toBe('gemini-2.5-flash'); // Uses default sentence model
+      expect(testClient.getWordGenerationModel()).toBe('gemini-2.5-flash-lite'); // Uses default fast model
+      expect(testClient.getSentenceGenerationModel()).toBe('gemini-2.5-flash'); // Uses default full model
     });
   });
 

@@ -235,17 +235,17 @@ const config = convict({
         default: 'gemini-2.5-flash',
         env: 'GEMINI_DEFAULT_MODEL',
       },
-      wordModel: {
-        doc: 'Gemini model for word generation',
+      fastModel: {
+        doc: 'Gemini model for word generation and pronunciation',
         format: String,
         default: 'gemini-2.5-flash-lite',
-        env: 'GEMINI_WORD_MODEL',
+        env: 'GEMINI_FAST_MODEL',
       },
-      sentenceModel: {
+      fullModel: {
         doc: 'Gemini model for sentence generation',
         format: String,
         default: 'gemini-2.5-flash',
-        env: 'GEMINI_SENTENCE_MODEL',
+        env: 'GEMINI_FULL_MODEL',
       },
       timeout: {
         doc: 'Gemini request timeout in milliseconds',
@@ -494,8 +494,8 @@ export const llmConfig = {
   maxExistingWordsInPrompt: config.get('llm.maxExistingWordsInPrompt'),
   gemini: {
     defaultModel: config.get('llm.gemini.defaultModel'),
-    wordModel: config.get('llm.gemini.wordModel'),
-    sentenceModel: config.get('llm.gemini.sentenceModel'),
+    fastModel: config.get('llm.gemini.fastModel'),
+    fullModel: config.get('llm.gemini.fullModel'),
     timeout: config.get('llm.gemini.timeout'),
   },
 };

@@ -44,9 +44,9 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
     super({
       baseUrl: config.baseUrl || defaultBaseUrl,
       model: config.model || LLM_CONFIG.GEMINI_DEFAULT_MODEL,
-      wordGenerationModel: config.wordGenerationModel || LLM_CONFIG.GEMINI_DEFAULT_WORD_MODEL,
+      wordGenerationModel: config.wordGenerationModel || LLM_CONFIG.GEMINI_DEFAULT_FAST_MODEL,
       sentenceGenerationModel:
-        config.sentenceGenerationModel || LLM_CONFIG.GEMINI_DEFAULT_SENTENCE_MODEL,
+        config.sentenceGenerationModel || LLM_CONFIG.GEMINI_DEFAULT_FULL_MODEL,
       timeout: config.timeout || LLM_CONFIG.GEMINI_DEFAULT_TIMEOUT,
       maxRetries: config.maxRetries || LLM_CONFIG.MAX_RETRIES,
     });

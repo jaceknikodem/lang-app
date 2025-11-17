@@ -84,8 +84,8 @@ const DEFAULT_LLM_CONFIG = {
   maxExistingWordsInPrompt: 50,
   gemini: {
     defaultModel: 'gemini-2.5-flash',
-    wordModel: 'gemini-2.5-flash-lite',
-    sentenceModel: 'gemini-2.5-flash',
+    fastModel: 'gemini-2.5-flash-lite',
+    fullModel: 'gemini-2.5-flash',
     timeout: 30000,
   },
 };
@@ -134,9 +134,8 @@ export const LLM_CONFIG = {
   MAX_EXISTING_WORDS_IN_PROMPT:
     llmConfig?.maxExistingWordsInPrompt ?? DEFAULT_LLM_CONFIG.maxExistingWordsInPrompt,
   GEMINI_DEFAULT_MODEL: llmConfig?.gemini?.defaultModel ?? DEFAULT_LLM_CONFIG.gemini.defaultModel,
-  GEMINI_DEFAULT_WORD_MODEL: llmConfig?.gemini?.wordModel ?? DEFAULT_LLM_CONFIG.gemini.wordModel,
-  GEMINI_DEFAULT_SENTENCE_MODEL:
-    llmConfig?.gemini?.sentenceModel ?? DEFAULT_LLM_CONFIG.gemini.sentenceModel,
+  GEMINI_DEFAULT_FAST_MODEL: llmConfig?.gemini?.fastModel ?? DEFAULT_LLM_CONFIG.gemini.fastModel,
+  GEMINI_DEFAULT_FULL_MODEL: llmConfig?.gemini?.fullModel ?? DEFAULT_LLM_CONFIG.gemini.fullModel,
   GEMINI_DEFAULT_TIMEOUT: llmConfig?.gemini?.timeout ?? DEFAULT_LLM_CONFIG.gemini.timeout,
 } as const;
 

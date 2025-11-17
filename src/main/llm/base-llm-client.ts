@@ -915,7 +915,7 @@ If there are no mistakes, you can omit correction and grammarExplanation, but al
 
     try {
       // Use generateResponse for plain text responses
-      const response = await this.generateResponse(prompt, this.getSentenceGenerationModel());
+      const response = await this.generateResponse(prompt, this.getWordGenerationModel());
       return this.parsePronunciationResponse(response, sentences.length);
     } catch (error) {
       // On error, return empty strings (graceful degradation)
