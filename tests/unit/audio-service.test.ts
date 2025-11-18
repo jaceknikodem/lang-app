@@ -12,6 +12,16 @@ jest.mock('electron', () => ({
   },
 }));
 
+// Mock logger to avoid pino issues in test environment
+jest.mock('../../src/main/utils/logger', () => ({
+  getLogger: jest.fn(() => ({
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  })),
+}));
+
 // Mock AudioRecorder
 jest.mock('../../src/main/audio/audio-recorder', () => {
   return {
@@ -39,6 +49,34 @@ jest.mock('../../src/main/audio/speech-recognition', () => {
     })),
   };
 });
+
+// Mock child_process and util for execFileAsync
+jest.mock('child_process', () => ({
+  execFile: jest.fn(),
+}));
+
+// Store the mock function in a module-level variable that can be accessed
+// We'll initialize it in the mock factory
+let mockExecFileAsyncFn: jest.Mock;
+
+jest.mock('util', () => {
+  // Create the mock function here
+  const fn = jest.fn();
+  // Store it in a way that's accessible
+  (global as any).__mockExecFileAsync = fn;
+  return {
+    promisify: jest.fn(() => fn),
+  };
+});
+
+// Helper to get the mock function for use in tests
+const getMockExecFileAsync = () => {
+  if (!mockExecFileAsyncFn) {
+    const util = jest.requireMock('util');
+    mockExecFileAsyncFn = util.promisify();
+  }
+  return mockExecFileAsyncFn;
+};
 
 describe('Audio Service', () => {
   let audioService: AudioService;
@@ -691,9 +729,7 @@ describe('Audio Service', () => {
         mockGenerator.audioExists.mockResolvedValueOnce(false); // After ffmpeg fails, normalized file still doesn't exist
 
         // Mock execFileAsync to fail
-        jest
-          .spyOn(require('util'), 'promisify')
-          .mockReturnValueOnce(() => Promise.reject(new Error('ffmpeg failed')));
+        getMockExecFileAsync().mockRejectedValue(new Error('ffmpeg failed'));
 
         const service = new AudioService(mockGenerator);
         const result = await service.normalizeAudioVolume('test.aiff', 5);
@@ -750,6 +786,33 @@ describe('Audio Service', () => {
     });
 
     describe('stitchAudio', () => {
+      let mockFs: any;
+      let mockFsPromises: any;
+
+      beforeEach(() => {
+        mockFs = require('fs');
+        mockFsPromises = {
+          stat: jest.fn(),
+          unlink: jest.fn(),
+          writeFile: jest.fn(),
+        };
+        // Use Object.defineProperty to override the getter
+        Object.defineProperty(mockFs, 'promises', {
+          get: () => mockFsPromises,
+          configurable: true,
+        });
+        mockFs.existsSync = jest.fn();
+        mockFs.mkdirSync = jest.fn();
+        mockFs.writeFileSync = jest.fn();
+        mockFs.unlinkSync = jest.fn();
+
+        getMockExecFileAsync().mockClear();
+      });
+
+      afterEach(() => {
+        jest.clearAllMocks();
+      });
+
       it('should return null for empty paths', async () => {
         const service = new AudioService(mockGenerator);
         const result = await service.stitchAudio([], 'spanish');
@@ -766,13 +829,52 @@ describe('Audio Service', () => {
         expect(result).toBeNull();
       });
 
-      it('should return null on ffmpeg error', async () => {
+      it('should return cached file if it exists and is recent', async () => {
+        // Mock audioExists to return true for input file
         mockGenerator.audioExists.mockResolvedValue(true);
+        const mockStats = {
+          mtime: { getTime: () => Date.now() - 1000 }, // 1 second ago (within 2 hour cache)
+        };
+        // Mock stat to resolve successfully (file exists and is recent) - this is for the cache check
+        mockFsPromises.stat.mockResolvedValue(mockStats);
+        // Mock silence file creation to succeed (it's created before cache check)
+        mockFs.existsSync
+          .mockReturnValueOnce(false) // Silence file doesn't exist initially
+          .mockReturnValueOnce(true); // Silence file exists after creation
+        getMockExecFileAsync().mockResolvedValue(undefined); // Silence file creation succeeds
 
-        // Mock execFileAsync to fail
-        jest
-          .spyOn(require('util'), 'promisify')
-          .mockReturnValueOnce(() => Promise.reject(new Error('ffmpeg failed')));
+        const service = new AudioService(mockGenerator);
+        const result = await service.stitchAudio(['audio1.mp3'], 'spanish');
+
+        expect(result).toBe('flow_stitched_spanish.mp3');
+        expect(mockFsPromises.stat).toHaveBeenCalled();
+      });
+
+      it('should return null on ffmpeg error when creating silence file', async () => {
+        mockGenerator.audioExists.mockResolvedValue(true);
+        mockFs.existsSync.mockReturnValue(false);
+        mockFsPromises.stat.mockRejectedValue(new Error('File not found')); // Cache miss
+        getMockExecFileAsync().mockRejectedValue(new Error('ffmpeg failed'));
+
+        const service = new AudioService(mockGenerator);
+        const result = await service.stitchAudio(['audio1.mp3'], 'spanish');
+
+        expect(result).toBeNull();
+      });
+
+      it('should return null on ffmpeg error during concat', async () => {
+        mockGenerator.audioExists.mockResolvedValue(true);
+        mockFs.existsSync
+          .mockReturnValueOnce(false) // Silence file doesn't exist initially
+          .mockReturnValueOnce(true) // Silence file exists after creation
+          .mockReturnValueOnce(true) // Audio file exists (for buildInputListWithPauses)
+          .mockReturnValueOnce(true); // Output file doesn't exist (for final check)
+        mockFsPromises.stat.mockRejectedValue(new Error('File not found')); // Cache miss
+        // First call succeeds (silence file creation), second is for getAudioDuration (ffprobe), third fails (concat)
+        getMockExecFileAsync()
+          .mockResolvedValueOnce(undefined) // Silence file creation succeeds
+          .mockResolvedValueOnce({ stdout: '5.0\n' }) // getAudioDuration succeeds (5 seconds)
+          .mockRejectedValueOnce(new Error('ffmpeg concat failed')); // Concat fails
 
         const service = new AudioService(mockGenerator);
         const result = await service.stitchAudio(['audio1.mp3'], 'spanish');
