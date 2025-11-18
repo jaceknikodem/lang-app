@@ -214,9 +214,12 @@ export class AudioPlayerService {
     this.currentAudioPath = null;
     this.pausedPosition = 0;
 
-    // Always clear queue when stopping (user-initiated stops should clear everything)
-    this.playbackQueue = [];
-    this.isProcessingQueue = false;
+    // Preserve queue when processing sequence (internal stop during playback)
+    // Only clear queue for user-initiated stops
+    if (!this.isProcessingQueue) {
+      this.playbackQueue = [];
+      this.isProcessingQueue = false;
+    }
 
     // Clear callbacks
     this.onEndedCallbacks.clear();
