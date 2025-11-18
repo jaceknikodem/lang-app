@@ -163,7 +163,7 @@ display_name = "Japanese"
 tatoeba_code = "jpn"
 lemmatization_code = "ja"
 speech_recognition_code = "ja"
-elevenlabs_voice_ids = ["sRYzP8TwEiiqAWebdYPJ", "9pDzHy2OpOgeXM8SeL0t", "3JDquces8E8bkmvbh6Bc"]
+elevenlabs_voice_ids = ["sRYzP8TwEiiqAWebdYPJ"]
 
 audio_generator_voice = "Kyoko"
 

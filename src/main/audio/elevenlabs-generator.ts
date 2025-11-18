@@ -114,7 +114,6 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     
     // Get language code for the API (2-letter ISO code)
     const languageCode = getLanguageCode(language);
-    const isJapanese = language.toLowerCase() === 'japanese' || languageCode === 'ja';
     
     const requestBody: any = {
       text: text,
@@ -128,10 +127,6 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
       }
     };
     
-    // Apply language text normalization for Japanese
-    if (isJapanese) {
-      requestBody.apply_language_text_normalization = true;
-    }
 
     const response = await fetch(url, {
       method: 'POST',
