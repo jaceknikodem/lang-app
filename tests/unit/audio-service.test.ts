@@ -838,9 +838,11 @@ describe('Audio Service', () => {
         // Mock stat to resolve successfully (file exists and is recent) - this is for the cache check
         mockFsPromises.stat.mockResolvedValue(mockStats);
         // Mock silence file creation to succeed (it's created before cache check)
+        // createSilenceFile checks: 1) if silence file exists, 2) if audioDir exists
         mockFs.existsSync
           .mockReturnValueOnce(false) // Silence file doesn't exist initially
-          .mockReturnValueOnce(true); // Silence file exists after creation
+          .mockReturnValueOnce(true) // Audio directory exists
+          .mockReturnValueOnce(true); // Silence file exists after creation (if checked again)
         getMockExecFileAsync().mockResolvedValue(undefined); // Silence file creation succeeds
 
         const service = new AudioService(mockGenerator);

@@ -21,13 +21,13 @@ describe('GeminiClient', () => {
   describe('constructor', () => {
     it('should create client with API key', () => {
       expect(client).toBeInstanceOf(GeminiClient);
-      expect(client.getCurrentModel()).toBe('gemini-2.5-flash');
+      expect(client.getCurrentModel()).toBe('gemini-2.5-flash-lite');
     });
 
     it('should create client with empty API key', () => {
       const emptyClient = new GeminiClient('');
       expect(emptyClient).toBeInstanceOf(GeminiClient);
-      expect(emptyClient.getCurrentModel()).toBe('gemini-2.5-flash');
+      expect(emptyClient.getCurrentModel()).toBe('gemini-2.5-flash-lite');
     });
 
     it('should use custom configuration', () => {
@@ -104,7 +104,7 @@ describe('GeminiClient', () => {
     it('should use defaults for specialized models when not provided', () => {
       const testClient = new GeminiClient(mockApiKey, { model: 'gemini-1.5-pro' });
       expect(testClient.getWordGenerationModel()).toBe('gemini-2.5-flash-lite'); // Uses default fast model
-      expect(testClient.getSentenceGenerationModel()).toBe('gemini-2.5-flash'); // Uses default full model
+      expect(testClient.getSentenceGenerationModel()).toBe('gemini-2.5-flash-lite'); // Uses default full model
     });
   });
 
