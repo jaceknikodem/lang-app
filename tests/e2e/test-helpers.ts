@@ -136,12 +136,12 @@ export async function completeLearningSession(page: Page): Promise<void> {
   await page.waitForSelector('learning-mode');
 
   // Mark some words as known
-  const wordButtons = page.locator('sentence-viewer .word-button');
+  const wordButtons = page.locator('sentence-viewer .word-in-sentence');
   const wordCount = await wordButtons.count();
 
   if (wordCount > 0) {
     await wordButtons.first().click();
-    const knownButton = page.locator('button:has-text("Mark as Known")');
+    const knownButton = page.locator('button:has-text("Mark as known")');
     if (await knownButton.isVisible()) {
       await knownButton.click();
       await page.waitForTimeout(1000);

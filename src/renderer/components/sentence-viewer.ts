@@ -2,7 +2,7 @@
  * Sentence viewer component for learning mode
  */
 
-import { LitElement, html, css, nothing } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { customElement, state, property } from 'lit/decorators.js';
 import { formatDistanceToNow } from 'date-fns';
@@ -794,31 +794,93 @@ export class SentenceViewer extends LitElement {
     }
   };
 
+  /**
+   * Handles grammar state cleanup when sentence changes
+   */
+  private handleGrammarStateOnSentenceChange(currentSentenceId?: number): void {
+    if (currentSentenceId !== this.lastGrammarSentenceId) {
+      this.grammarExplanation = null;
+      this.isFetchingGrammar = false;
+      this.lastGrammarSentenceId = currentSentenceId;
+    }
+  }
+
+  /**
+   * Handles tokenization when sentence or words change
+   */
+  private handleSentenceTokenization(sentenceChanged: boolean, allWordsChanged: boolean): void {
+    const hasPrecomputedTokens =
+      this.sentence?.tokenizedTokens && this.sentence.tokenizedTokens.length > 0;
+
+    // Check if allWords array reference is the same (no need to re-parse)
+    if (allWordsChanged && this.allWords === this.lastAllWordsArrayReference) {
+      this.lastAllWordsArrayReference = this.allWords;
+      return;
+    }
+
+    const currentSentenceId = this.sentence?.id;
+    const sentenceIdChanged = sentenceChanged && currentSentenceId !== this.lastProcessedSentenceId;
+    const needsReparse =
+      sentenceIdChanged ||
+      (allWordsChanged && !hasPrecomputedTokens && this.needsReparseForAllWords());
+
+    if (hasPrecomputedTokens) {
+      // With precomputed tokens, only do synchronous conversion
+      if (sentenceIdChanged) {
+        this.lastProcessedSentenceId = currentSentenceId;
+        const newParsedWords = this.convertPrecomputedTokensToWords(this.sentence.tokenizedTokens!);
+        const hasChanged = this.hasParsedWordsChanged(newParsedWords, this.parsedWords);
+        if (hasChanged) {
+          this.parsedWords = newParsedWords;
+          void this.fetchZipfFrequencies();
+        }
+      } else if (allWordsChanged) {
+        // Only word statuses might have changed - update without re-tokenizing
+        this.lastAllWordsArrayReference = this.allWords;
+        this.updateWordStatusesFromPrecomputedTokens();
+      }
+    } else if (needsReparse) {
+      // No precomputed tokens - need async tokenization
+      if (sentenceChanged) {
+        this.lastProcessedSentenceId = currentSentenceId;
+      }
+      if (allWordsChanged) {
+        this.lastAllWordsArrayReference = this.allWords;
+      }
+      void this.parseSentence();
+    } else if (allWordsChanged) {
+      // Array changed but content might be same, still update reference
+      this.lastAllWordsArrayReference = this.allWords;
+    }
+  }
+
+  /**
+   * Handles autoplay when sentence changes
+   */
+  private handleAutoplayOnSentenceChange(): void {
+    void this.loadAutoplaySettings().then(() => {
+      if (this.autoplayEnabled && this.sentence?.audioPath) {
+        console.log('Autoplay triggered - sentence changed or first set');
+        this.handleAutoPlay();
+      }
+    });
+  }
+
   updated(changedProperties: Map<string, any>) {
     // Sync currentPlayingAudio from parent if provided
-    // Use parent state if available, otherwise use local state
     if (changedProperties.has('currentPlayingAudio')) {
-      // Always sync to parent state when it changes
-      // If parent has a value, use it; if parent clears it, clear local too
       this.localPlayingAudio = this.currentPlayingAudio;
     }
 
-    // Only re-parse if sentence actually changed (different ID) or allWords meaningfully changed
     const sentenceChanged = changedProperties.has('sentence');
     const allWordsChanged = changedProperties.has('allWords');
 
     // Clear grammar explanation when sentence changes
     if (sentenceChanged) {
-      const currentSentenceId = this.sentence?.id;
-      if (currentSentenceId !== this.lastGrammarSentenceId) {
-        // Sentence ID changed - clear grammar state
-        this.grammarExplanation = null;
-        this.isFetchingGrammar = false;
-        this.lastGrammarSentenceId = currentSentenceId;
-      }
+      this.handleGrammarStateOnSentenceChange(this.sentence?.id);
     }
 
-    // Skip if only non-relevant properties changed (isFirstSentence, isLastSentence, isProcessing, displayLastSeen)
+    // Skip if only non-relevant properties changed
     const relevantPropertyChanged =
       sentenceChanged ||
       allWordsChanged ||
@@ -829,73 +891,14 @@ export class SentenceViewer extends LitElement {
       return;
     }
 
-    // If we have precomputed tokens, we never need to do async tokenization
-    // We can update word statuses synchronously if needed
-    const hasPrecomputedTokens =
-      this.sentence?.tokenizedTokens && this.sentence.tokenizedTokens.length > 0;
-
+    // Handle tokenization when sentence or words change
     if (sentenceChanged || allWordsChanged) {
-      // Check if allWords array reference is the same (no need to re-parse)
-      if (allWordsChanged && this.allWords === this.lastAllWordsArrayReference) {
-        // Same array reference, skip re-parsing
-        this.lastAllWordsArrayReference = this.allWords;
-        return;
-      }
-
-      const currentSentenceId = this.sentence?.id;
-      const sentenceIdChanged =
-        sentenceChanged && currentSentenceId !== this.lastProcessedSentenceId;
-      const needsReparse =
-        sentenceIdChanged ||
-        (allWordsChanged && !hasPrecomputedTokens && this.needsReparseForAllWords());
-
-      if (hasPrecomputedTokens) {
-        // With precomputed tokens, only do synchronous conversion
-        // Lemmatization is already done during sentence generation, so we just use precomputed tokens
-        if (sentenceIdChanged) {
-          this.lastProcessedSentenceId = currentSentenceId;
-          // Convert precomputed tokens synchronously - no async work
-          const newParsedWords = this.convertPrecomputedTokensToWords(
-            this.sentence.tokenizedTokens!
-          );
-          const hasChanged = this.hasParsedWordsChanged(newParsedWords, this.parsedWords);
-          if (hasChanged) {
-            this.parsedWords = newParsedWords;
-            // Fetch zipf frequencies after parsedWords are set
-            void this.fetchZipfFrequencies();
-          }
-        } else if (allWordsChanged) {
-          // Only word statuses might have changed - update without re-tokenizing
-          this.lastAllWordsArrayReference = this.allWords;
-          this.updateWordStatusesFromPrecomputedTokens();
-        }
-      } else if (needsReparse) {
-        // No precomputed tokens - need async tokenization
-        if (sentenceChanged) {
-          this.lastProcessedSentenceId = currentSentenceId;
-        }
-        if (allWordsChanged) {
-          this.lastAllWordsArrayReference = this.allWords;
-        }
-        void this.parseSentence();
-      } else if (allWordsChanged) {
-        // Array changed but content might be same, still update reference
-        this.lastAllWordsArrayReference = this.allWords;
-      }
+      this.handleSentenceTokenization(sentenceChanged, allWordsChanged);
     }
 
     // Auto-play audio when sentence changes (if enabled)
-    // This includes both when sentence changes AND when it's first set
-    // Reload autoplay setting when sentence changes to respect user toggles
     if (sentenceChanged) {
-      // Reload autoplay setting to ensure it's up-to-date
-      void this.loadAutoplaySettings().then(() => {
-        if (this.autoplayEnabled && this.sentence?.audioPath) {
-          console.log('Autoplay triggered - sentence changed or first set');
-          // Handle auto-play asynchronously
-          this.handleAutoPlay();
-        }
-      });
+      this.handleAutoplayOnSentenceChange();
     }
   }
 
@@ -1326,6 +1329,19 @@ export class SentenceViewer extends LitElement {
     await this.getDictionaryEntries(word, key, undefined, lemma);
   }
 
+  /**
+   * Creates a timeout promise for dictionary lookups
+   */
+  private createDictionaryLookupTimeout(ms: number = 10000): Promise<never> {
+    return new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        const error = new Error('Timeout');
+        error.name = 'TimeoutError';
+        reject(error);
+      }, ms);
+    });
+  }
+
   private async getDictionaryEntries(
     word: string,
     key?: string,
@@ -1351,20 +1367,14 @@ export class SentenceViewer extends LitElement {
         this.dictionaryLookupInFlight.add(dictionaryKey);
 
         // Try original word lookup first
+        const language =
+          languageOverride ??
+          this.targetWord?.language ??
+          (await window.electronAPI.database.getCurrentLanguage());
+
         const entries = await Promise.race([
-          window.electronAPI.database.lookupDictionary(
-            word,
-            languageOverride ??
-              this.targetWord?.language ??
-              (await window.electronAPI.database.getCurrentLanguage())
-          ),
-          new Promise<never>((_, reject) => {
-            setTimeout(() => {
-              const error = new Error('Timeout');
-              error.name = 'TimeoutError';
-              reject(error);
-            }, 10000); // 10 second timeout
-          }),
+          window.electronAPI.database.lookupDictionary(word, language),
+          this.createDictionaryLookupTimeout(),
         ]);
 
         let normalizedEntries = Array.isArray(entries) && entries.length > 0 ? entries : null;
@@ -1376,18 +1386,10 @@ export class SentenceViewer extends LitElement {
           lemma.toLowerCase().trim() !== word.toLowerCase().trim()
         ) {
           try {
+            const lemmaLanguage = languageOverride ?? this.targetWord?.language;
             const lemmaEntries = await Promise.race([
-              window.electronAPI.database.lookupDictionary(
-                lemma,
-                languageOverride ?? this.targetWord?.language
-              ),
-              new Promise<never>((_, reject) => {
-                setTimeout(() => {
-                  const error = new Error('Timeout');
-                  error.name = 'TimeoutError';
-                  reject(error);
-                }, 10000); // 10 second timeout
-              }),
+              window.electronAPI.database.lookupDictionary(lemma, lemmaLanguage),
+              this.createDictionaryLookupTimeout(),
             ]);
 
             normalizedEntries =
@@ -2101,7 +2103,7 @@ export class SentenceViewer extends LitElement {
             [rawWord.toLowerCase()],
             this.targetWord.language
           );
-          const lemma = lemmas[rawWord.toLowerCase()];
+          const lemma: string | undefined = lemmas[rawWord.toLowerCase()];
           wordToAdd = lemma || rawWord.replace(/\s+/g, ' ');
         } catch (error) {
           logger.warn({ error, rawWord }, 'Failed to lemmatize word (non-critical)');
@@ -2207,51 +2209,68 @@ export class SentenceViewer extends LitElement {
     }
   }
 
+  /**
+   * Builds the audio sequence (before, main, after) for the current sentence
+   */
+  private async buildAudioSequence(): Promise<{
+    audioPaths: string[];
+    audioTypes: ('before' | 'main' | 'after')[];
+  }> {
+    const audioPaths: string[] = [];
+    const audioTypes: ('before' | 'main' | 'after')[] = [];
+
+    // Get before sentence audio if it exists
+    if (this.sentence.contextBefore && this.sentence.id) {
+      try {
+        const beforeSentenceAudioPath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(
+          this.sentence.id
+        );
+        if (beforeSentenceAudioPath) {
+          audioPaths.push(beforeSentenceAudioPath);
+          audioTypes.push('before');
+        }
+      } catch (error) {
+        logger.warn({ error }, 'Failed to get before sentence audio');
+        // Continue with main sentence audio even if before sentence audio fails
+      }
+    }
+
+    // Add main sentence audio
+    if (this.sentence.audioPath) {
+      audioPaths.push(this.sentence.audioPath);
+      audioTypes.push('main');
+    }
+
+    // Get after sentence audio if it exists
+    if (this.sentence.contextAfter && this.sentence.id) {
+      try {
+        const contextAudio = await window.electronAPI.dialog.ensureContextSentences(
+          this.sentence.id
+        );
+        const afterSentenceAudioPath = contextAudio.afterSentenceAudio;
+        if (afterSentenceAudioPath) {
+          audioPaths.push(afterSentenceAudioPath);
+          audioTypes.push('after');
+        }
+      } catch (error) {
+        logger.warn({ error }, 'Failed to get after sentence audio');
+        // Continue even if after sentence audio fails
+      }
+    }
+
+    return { audioPaths, audioTypes };
+  }
+
   private async handlePlayAudio() {
     if (!this.sentence.audioPath) {
       return;
     }
 
     try {
-      // Build sequence of audio paths (before, main, after)
-      const audioPaths: string[] = [];
-      const audioTypes: ('before' | 'main' | 'after')[] = [];
+      const { audioPaths, audioTypes } = await this.buildAudioSequence();
 
-      // Get before sentence audio if it exists
-      if (this.sentence.contextBefore && this.sentence.id) {
-        try {
-          const beforeSentenceAudioPath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(
-            this.sentence.id
-          );
-          if (beforeSentenceAudioPath) {
-            audioPaths.push(beforeSentenceAudioPath);
-            audioTypes.push('before');
-          }
-        } catch (error) {
-          logger.warn({ error }, 'Failed to get before sentence audio');
-          // Continue with main sentence audio even if before sentence audio fails
-        }
-      }
-
-      // Add main sentence audio
-      audioPaths.push(this.sentence.audioPath);
-      audioTypes.push('main');
-
-      // Get after sentence audio if it exists
-      if (this.sentence.contextAfter && this.sentence.id) {
-        try {
-          const contextAudio = await window.electronAPI.dialog.ensureContextSentences(
-            this.sentence.id
-          );
-          const afterSentenceAudioPath = contextAudio.afterSentenceAudio;
-          if (afterSentenceAudioPath) {
-            audioPaths.push(afterSentenceAudioPath);
-            audioTypes.push('after');
-          }
-        } catch (error) {
-          logger.warn({ error }, 'Failed to get after sentence audio');
-          // Continue even if after sentence audio fails
-        }
+      if (audioPaths.length === 0) {
+        return;
       }
 
       // Track which audio is currently playing for UI state
@@ -2259,10 +2278,8 @@ export class SentenceViewer extends LitElement {
       const playbackSpeed = this.playbackSpeed ?? sessionManager.getPlaybackSpeed() ?? 1.0;
 
       // Set initial playing state
-      if (audioTypes.length > 0) {
-        this.localPlayingAudio = audioTypes[0];
-        this.requestUpdate();
-      }
+      this.localPlayingAudio = audioTypes[0];
+      this.requestUpdate();
 
       // Play sequence
       await audioPlayer.playSequence(audioPaths, {
@@ -2609,336 +2626,369 @@ export class SentenceViewer extends LitElement {
     this.keyboardUnsubscribe = useKeyboardBindings(bindings);
   }
 
-  render() {
-    const wordStrength = Math.round(this.targetWord?.strength ?? 0);
+  /**
+   * Builds the buttons for the word popup menu
+   */
+  private buildWordPopupButtons(): TemplateResult[] {
+    if (!this.wordPopup) return [];
 
+    const wordInfo = this.wordPopup.wordInfo;
+    const word = wordInfo.isTargetWord ? this.targetWord : wordInfo.wordData;
+    const isKnown = word?.known ?? false;
+    const isIgnored = word?.ignored ?? false;
+    const existsInLearning = !!word || wordInfo.isTargetWord;
+    const needsAddToLearningSet = !existsInLearning;
+
+    const buttons: TemplateResult[] = [];
+
+    if (!isKnown) {
+      buttons.push(html`
+        <button
+          class="word-popup-button known"
+          @click=${this.handleMarkWordKnown}
+          ?disabled=${this.isProcessing}
+        >
+          Mark as known
+        </button>
+      `);
+    }
+
+    if (!isIgnored) {
+      buttons.push(html`
+        <button
+          class="word-popup-button ignore"
+          @click=${this.handleIgnoreWord}
+          ?disabled=${this.isProcessing}
+        >
+          Ignore
+        </button>
+      `);
+    }
+
+    if (needsAddToLearningSet) {
+      if (buttons.length > 0) {
+        buttons.push(html`<div class="word-popup-divider"></div>`);
+      }
+      buttons.push(html`
+        <button
+          class="word-popup-button add"
+          @click=${this.handleAddToLearningSet}
+          ?disabled=${this.isProcessing}
+        >
+          Add to learning set
+        </button>
+      `);
+    }
+
+    // Add "Explain grammar" button (always available)
+    if (buttons.length > 0) {
+      buttons.push(html`<div class="word-popup-divider"></div>`);
+    }
+    buttons.push(html`
+      <button
+        class="word-popup-button grammar"
+        @click=${this.handleExplainGrammar}
+        ?disabled=${this.isProcessing || this.isFetchingGrammar}
+      >
+        ${this.isFetchingGrammar ? 'Loading...' : 'Explain grammar'}
+      </button>
+    `);
+
+    // If no buttons to show (word is already known/ignored and in learning set)
+    if (buttons.length === 0) {
+      buttons.push(html`
+        <div
+          class="word-popup-button"
+          style="opacity: 0.6; cursor: default; padding: var(--spacing-sm);"
+        >
+          ${wordInfo.isTargetWord ? 'Target word' : isKnown ? 'Already known' : 'Already ignored'}
+        </div>
+      `);
+    }
+
+    return buttons;
+  }
+
+  /**
+   * Renders the sentence header with target word info and audio buttons
+   */
+  private renderHeader(): TemplateResult {
+    const wordStrength = Math.round(this.targetWord?.strength ?? 0);
     const lastSeenSource = this.displayLastSeen ?? this.sentence?.lastShown;
     const lastSeenText = this.formatTimeAgo(lastSeenSource);
 
     return html`
-      <div class="sentence-container">
-        <div class="sentence-header">
-          <div class="target-word-info">
-            <span class="target-word">${this.targetWord.word}</span>
-            <span class="word-separator">•</span>
-            <span class="word-translation" title=${this.targetWord.translation}>
-              ${this.truncate(this.targetWord.translation, 40)}
-            </span>
-            <span class="word-separator">•</span>
-            <span class="word-strength" title="Current spaced repetition strength">
-              Strength <span class="word-strength-value">${wordStrength}</span>
-            </span>
-            <span class="word-separator">•</span>
-            <span
-              class="last-seen"
-              title=${this.sentence?.lastShown
-                ? this.sentence.lastShown.toLocaleString()
-                : 'Never viewed'}
-            >
-              Last seen ${lastSeenText}
-            </span>
-          </div>
-
-          <div
-            class="flex gap-xs"
-            style="display: flex; align-items: center; gap: var(--spacing-xs);"
+      <div class="sentence-header">
+        <div class="target-word-info">
+          <span class="target-word">${this.targetWord.word}</span>
+          <span class="word-separator">•</span>
+          <span class="word-translation" title=${this.targetWord.translation}>
+            ${this.truncate(this.targetWord.translation, 40)}
+          </span>
+          <span class="word-separator">•</span>
+          <span class="word-strength" title="Current spaced repetition strength">
+            Strength <span class="word-strength-value">${wordStrength}</span>
+          </span>
+          <span class="word-separator">•</span>
+          <span
+            class="last-seen"
+            title=${this.sentence?.lastShown
+              ? this.sentence.lastShown.toLocaleString()
+              : 'Never viewed'}
           >
-            ${this.sentence.audioPath
-              ? html`
-                  <button
-                    class="audio-button"
-                    @click=${this.handlePlayAudio}
-                    ?disabled=${audioPlayer.getState().isPlaying || this.isRegeneratingAudio}
-                    title="Play audio (Space)"
-                  >
-                    <span aria-hidden="true">🔊</span>
-                  </button>
-                `
-              : ''}
-            <button
-              class="audio-button secondary"
-              @click=${this.handleRecreateAudio}
-              ?disabled=${audioPlayer.getState().isPlaying || this.isRegeneratingAudio}
-              title="Recreate audio"
-            >
-              <span aria-hidden="true">♻</span>
-            </button>
-          </div>
+            Last seen ${lastSeenText}
+          </span>
         </div>
+
+        <div
+          class="flex gap-xs"
+          style="display: flex; align-items: center; gap: var(--spacing-xs);"
+        >
+          ${this.sentence.audioPath
+            ? html`
+                <button
+                  class="audio-button"
+                  @click=${this.handlePlayAudio}
+                  ?disabled=${audioPlayer.getState().isPlaying || this.isRegeneratingAudio}
+                  title="Play audio (Space)"
+                >
+                  <span aria-hidden="true">🔊</span>
+                </button>
+              `
+            : ''}
+          <button
+            class="audio-button secondary"
+            @click=${this.handleRecreateAudio}
+            ?disabled=${audioPlayer.getState().isPlaying || this.isRegeneratingAudio}
+            title="Recreate audio"
+          >
+            <span aria-hidden="true">♻</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Renders a context section (before or after sentence)
+   */
+  private renderContextSection(
+    text: string | undefined,
+    pronunciation: string | undefined,
+    translation: string | undefined,
+    audioType: 'before' | 'after',
+    onClick: (e: MouseEvent) => void
+  ): TemplateResult {
+    if (!text) return html``;
+
+    const isPlaying = this.localPlayingAudio === audioType;
+
+    return html`
+      <div class="context-section ${isPlaying ? 'playing' : ''}" @click=${onClick}>
+        <div class="context-text">${text}</div>
+        ${pronunciation && pronunciation.trim()
+          ? html` <div class="context-pronunciation">${pronunciation}</div> `
+          : nothing}
+        <div class="context-translation ${this.audioOnlyMode ? 'hidden' : ''}">${translation}</div>
+      </div>
+    `;
+  }
+
+  /**
+   * Renders a single word in the sentence
+   */
+  private renderWord(wordInfo: WordInSentence): TemplateResult {
+    // For whitespace and punctuation, render without word styling
+    if (/^\s+$/.test(wordInfo.text) || /^[.,!?;:]+$/.test(wordInfo.text)) {
+      return html`${wordInfo.text}`;
+    }
+
+    // For actual words, render with full styling
+    const tooltipText = this.getWordTooltip(wordInfo);
+    const isPopupOpen =
+      this.wordPopup &&
+      this.wordPopup.wordInfo.text.trim() === wordInfo.text.trim() &&
+      this.wordPopup.wordInfo.dictionaryForm === wordInfo.dictionaryForm;
+
+    return html`
+      <span
+        class="word-in-sentence ${this.getWordClass(wordInfo)}"
+        @click=${(e: MouseEvent) => {
+          this.handleWordHoverEnd(wordInfo); // Clear hover tracking on click
+          this.handleWordClick(wordInfo, e);
+        }}
+        @mouseenter=${(e: MouseEvent) => {
+          this.handleTooltipPosition(e);
+          this.handleWordHoverStart(wordInfo);
+        }}
+        @mouseleave=${() => this.handleWordHoverEnd(wordInfo)}
+        aria-label=${tooltipText || nothing}
+      >
+        ${wordInfo.text}
+        ${tooltipText && !isPopupOpen ? html`<div class="tooltip">${tooltipText}</div>` : nothing}
+      </span>
+    `;
+  }
+
+  /**
+   * Renders the sentence text with all words
+   */
+  private renderSentenceText(): TemplateResult {
+    return html`
+      <div
+        class="sentence-text ${this.localPlayingAudio === 'main' ? 'playing' : ''}"
+        @click=${this.handleSentenceTextClick}
+      >
+        ${this.parsedWords.map((wordInfo) => this.renderWord(wordInfo))}
+        ${this.wordPopup
+          ? html`
+              <div
+                class="word-popup"
+                style="${this.getPopupStyle()}"
+                @click=${(e: Event) => e.stopPropagation()}
+              >
+                ${this.buildWordPopupButtons()}
+              </div>
+            `
+          : nothing}
+        ${this.sentence.pronunciation && this.sentence.pronunciation.trim()
+          ? html` <div class="sentence-pronunciation">${this.sentence.pronunciation}</div> `
+          : nothing}
+        <div class="sentence-translation ${this.audioOnlyMode ? 'hidden' : ''}">
+          ${this.sentence.translation}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Renders the action buttons at the bottom
+   */
+  private renderActionButtons(): TemplateResult {
+    return html`
+      <div class="word-actions">
+        <button
+          class="btn btn-secondary nav-action-btn"
+          @click=${this.handlePrevious}
+          ?disabled=${this.isFirstSentence || this.isProcessing || this.autoScrollEnabled}
+        >
+          Previous <span class="keyboard-hint">(←)</span>
+        </button>
+
+        <button
+          class="btn btn-success word-action-btn"
+          @click=${this.handleMarkKnown}
+          ?disabled=${this.targetWord.known}
+        >
+          ${this.targetWord.known ? 'Already Known' : 'Know'}
+          ${!this.targetWord.known ? html`<span class="keyboard-hint">(K)</span>` : ''}
+        </button>
+
+        <button class="btn btn-danger word-action-btn" @click=${this.handleRemoveSentence}>
+          Remove
+          <span class="keyboard-hint">(Del)</span>
+        </button>
+
+        <button
+          class="btn btn-warning word-action-btn"
+          @click=${this.handleMarkIgnored}
+          ?disabled=${this.targetWord.ignored}
+        >
+          ${this.targetWord.ignored ? 'Already Ignored' : 'Ignore'}
+          ${!this.targetWord.ignored ? html`<span class="keyboard-hint">(I)</span>` : ''}
+        </button>
+
+        <button
+          class="btn btn-secondary word-action-btn"
+          @click=${this.handleShowOtherSentence}
+          ?disabled=${this.isProcessing}
+        >
+          Other <span class="keyboard-hint">(O)</span>
+        </button>
+
+        <button
+          class="btn btn-primary nav-action-btn"
+          @click=${this.handleNext}
+          ?disabled=${this.isProcessing || this.autoScrollEnabled}
+        >
+          ${this.isLastSentence ? 'Finish' : 'Next'} <span class="keyboard-hint">(→)</span>
+        </button>
+      </div>
+    `;
+  }
+
+  /**
+   * Renders the grammar explanation section
+   */
+  private renderGrammarExplanation(): TemplateResult {
+    if (this.isFetchingGrammar) {
+      return html`
+        <div class="grammar-loading-box">
+          <div class="spinner"></div>
+          <span>Loading explanation...</span>
+        </div>
+      `;
+    }
+
+    if (!this.grammarExplanation) {
+      return html``;
+    }
+
+    return html`
+      <div class="grammar-explanation-box">
+        <div class="grammar-explanation-header">
+          <button
+            class="grammar-close-btn"
+            @click=${this.handleCloseGrammarExplanation}
+            title="Close"
+          >
+            ×
+          </button>
+        </div>
+        <div class="grammar-explanation-content" @contextmenu=${this.handleGrammarContextMenu}>
+          ${unsafeHTML(markdownToHtml(this.grammarExplanation.explanation))}
+        </div>
+        ${this.contextMenu
+          ? html`
+              <div
+                class="context-menu"
+                style="left: ${this.contextMenu.x}px; top: ${this.contextMenu.y}px;"
+                @click=${(e: Event) => e.stopPropagation()}
+              >
+                <div class="context-menu-item" @click=${this.handleReadSelectedText}>
+                  Read out loud
+                </div>
+              </div>
+            `
+          : nothing}
+      </div>
+    `;
+  }
+
+  render() {
+    return html`
+      <div class="sentence-container">
+        ${this.renderHeader()}
 
         <div class="sentence-content">
-          ${this.sentence.contextBefore
-            ? html`
-                <div
-                  class="context-section ${this.localPlayingAudio === 'before' ? 'playing' : ''}"
-                  @click=${this.handleContextBeforeClick}
-                >
-                  <div class="context-text">${this.sentence.contextBefore}</div>
-                  ${this.sentence.contextBeforePronunciation &&
-                  this.sentence.contextBeforePronunciation.trim()
-                    ? html`
-                        <div class="context-pronunciation">
-                          ${this.sentence.contextBeforePronunciation}
-                        </div>
-                      `
-                    : nothing}
-                  <div class="context-translation ${this.audioOnlyMode ? 'hidden' : ''}">
-                    ${this.sentence.contextBeforeTranslation}
-                  </div>
-                </div>
-              `
-            : ''}
-
-          <div
-            class="sentence-text ${this.localPlayingAudio === 'main' ? 'playing' : ''}"
-            @click=${this.handleSentenceTextClick}
-          >
-            ${this.parsedWords.map((wordInfo) => {
-              // For whitespace and punctuation, render without word styling
-              if (/^\s+$/.test(wordInfo.text) || /^[.,!?;:]+$/.test(wordInfo.text)) {
-                return html`${wordInfo.text}`;
-              }
-
-              // For actual words, render with full styling
-              const tooltipText = this.getWordTooltip(wordInfo);
-              const isPopupOpen =
-                this.wordPopup &&
-                this.wordPopup.wordInfo.text.trim() === wordInfo.text.trim() &&
-                this.wordPopup.wordInfo.dictionaryForm === wordInfo.dictionaryForm;
-              return html`
-                <span
-                  class="word-in-sentence ${this.getWordClass(wordInfo)}"
-                  @click=${(e: MouseEvent) => {
-                    this.handleWordHoverEnd(wordInfo); // Clear hover tracking on click
-                    this.handleWordClick(wordInfo, e);
-                  }}
-                  @mouseenter=${(e: MouseEvent) => {
-                    this.handleTooltipPosition(e);
-                    this.handleWordHoverStart(wordInfo);
-                  }}
-                  @mouseleave=${() => this.handleWordHoverEnd(wordInfo)}
-                  aria-label=${tooltipText || nothing}
-                >
-                  ${wordInfo.text}
-                  ${tooltipText && !isPopupOpen
-                    ? html`<div class="tooltip">${tooltipText}</div>`
-                    : nothing}
-                </span>
-              `;
-            })}
-            ${this.wordPopup
-              ? html`
-                  <div
-                    class="word-popup"
-                    style="${this.getPopupStyle()}"
-                    @click=${(e: Event) => e.stopPropagation()}
-                  >
-                    ${(() => {
-                      const wordInfo = this.wordPopup!.wordInfo;
-                      const word = wordInfo.isTargetWord ? this.targetWord : wordInfo.wordData;
-                      const isKnown = word?.known ?? false;
-                      const isIgnored = word?.ignored ?? false;
-                      const existsInLearning = !!word || wordInfo.isTargetWord;
-                      const needsAddToLearningSet = !existsInLearning;
-
-                      const buttons: any[] = [];
-
-                      if (!isKnown) {
-                        buttons.push(html`
-                          <button
-                            class="word-popup-button known"
-                            @click=${this.handleMarkWordKnown}
-                            ?disabled=${this.isProcessing}
-                          >
-                            Mark as known
-                          </button>
-                        `);
-                      }
-
-                      if (!isIgnored) {
-                        buttons.push(html`
-                          <button
-                            class="word-popup-button ignore"
-                            @click=${this.handleIgnoreWord}
-                            ?disabled=${this.isProcessing}
-                          >
-                            Ignore
-                          </button>
-                        `);
-                      }
-
-                      if (needsAddToLearningSet) {
-                        if (buttons.length > 0) {
-                          buttons.push(html`<div class="word-popup-divider"></div>`);
-                        }
-                        buttons.push(html`
-                          <button
-                            class="word-popup-button add"
-                            @click=${this.handleAddToLearningSet}
-                            ?disabled=${this.isProcessing}
-                          >
-                            Add to learning set
-                          </button>
-                        `);
-                      }
-
-                      // Add "Explain grammar" button (always available)
-                      if (buttons.length > 0) {
-                        buttons.push(html`<div class="word-popup-divider"></div>`);
-                      }
-                      buttons.push(html`
-                        <button
-                          class="word-popup-button grammar"
-                          @click=${this.handleExplainGrammar}
-                          ?disabled=${this.isProcessing || this.isFetchingGrammar}
-                        >
-                          ${this.isFetchingGrammar ? 'Loading...' : 'Explain grammar'}
-                        </button>
-                      `);
-
-                      // If no buttons to show (word is already known/ignored and in learning set)
-                      if (buttons.length === 0) {
-                        buttons.push(html`
-                          <div
-                            class="word-popup-button"
-                            style="opacity: 0.6; cursor: default; padding: var(--spacing-sm);"
-                          >
-                            ${wordInfo.isTargetWord
-                              ? 'Target word'
-                              : isKnown
-                                ? 'Already known'
-                                : 'Already ignored'}
-                          </div>
-                        `);
-                      }
-
-                      return buttons;
-                    })()}
-                  </div>
-                `
-              : nothing}
-            ${this.sentence.pronunciation && this.sentence.pronunciation.trim()
-              ? html` <div class="sentence-pronunciation">${this.sentence.pronunciation}</div> `
-              : nothing}
-            <div class="sentence-translation ${this.audioOnlyMode ? 'hidden' : ''}">
-              ${this.sentence.translation}
-            </div>
-          </div>
-
-          ${this.sentence.contextAfter
-            ? html`
-                <div
-                  class="context-section ${this.localPlayingAudio === 'after' ? 'playing' : ''}"
-                  @click=${this.handleContextAfterClick}
-                >
-                  <div class="context-text">${this.sentence.contextAfter}</div>
-                  ${this.sentence.contextAfterPronunciation &&
-                  this.sentence.contextAfterPronunciation.trim()
-                    ? html`
-                        <div class="context-pronunciation">
-                          ${this.sentence.contextAfterPronunciation}
-                        </div>
-                      `
-                    : nothing}
-                  <div class="context-translation ${this.audioOnlyMode ? 'hidden' : ''}">
-                    ${this.sentence.contextAfterTranslation}
-                  </div>
-                </div>
-              `
-            : ''}
+          ${this.renderContextSection(
+            this.sentence.contextBefore,
+            this.sentence.contextBeforePronunciation,
+            this.sentence.contextBeforeTranslation,
+            'before',
+            this.handleContextBeforeClick
+          )}
+          ${this.renderSentenceText()}
+          ${this.renderContextSection(
+            this.sentence.contextAfter,
+            this.sentence.contextAfterPronunciation,
+            this.sentence.contextAfterTranslation,
+            'after',
+            this.handleContextAfterClick
+          )}
         </div>
 
-        <div class="word-actions">
-          <button
-            class="btn btn-secondary nav-action-btn"
-            @click=${this.handlePrevious}
-            ?disabled=${this.isFirstSentence || this.isProcessing || this.autoScrollEnabled}
-          >
-            Previous <span class="keyboard-hint">(←)</span>
-          </button>
-
-          <button
-            class="btn btn-success word-action-btn"
-            @click=${this.handleMarkKnown}
-            ?disabled=${this.targetWord.known}
-          >
-            ${this.targetWord.known ? 'Already Known' : 'Know'}
-            ${!this.targetWord.known ? html`<span class="keyboard-hint">(K)</span>` : ''}
-          </button>
-
-          <button class="btn btn-danger word-action-btn" @click=${this.handleRemoveSentence}>
-            Remove
-            <span class="keyboard-hint">(Del)</span>
-          </button>
-
-          <button
-            class="btn btn-warning word-action-btn"
-            @click=${this.handleMarkIgnored}
-            ?disabled=${this.targetWord.ignored}
-          >
-            ${this.targetWord.ignored ? 'Already Ignored' : 'Ignore'}
-            ${!this.targetWord.ignored ? html`<span class="keyboard-hint">(I)</span>` : ''}
-          </button>
-
-          <button
-            class="btn btn-secondary word-action-btn"
-            @click=${this.handleShowOtherSentence}
-            ?disabled=${this.isProcessing}
-          >
-            Other <span class="keyboard-hint">(O)</span>
-          </button>
-
-          <button
-            class="btn btn-primary nav-action-btn"
-            @click=${this.handleNext}
-            ?disabled=${this.isProcessing || this.autoScrollEnabled}
-          >
-            ${this.isLastSentence ? 'Finish' : 'Next'} <span class="keyboard-hint">(→)</span>
-          </button>
-        </div>
-
-        ${this.isFetchingGrammar
-          ? html`
-              <div class="grammar-loading-box">
-                <div class="spinner"></div>
-                <span>Loading explanation...</span>
-              </div>
-            `
-          : nothing}
-        ${this.grammarExplanation
-          ? html`
-              <div class="grammar-explanation-box">
-                <div class="grammar-explanation-header">
-                  <button
-                    class="grammar-close-btn"
-                    @click=${this.handleCloseGrammarExplanation}
-                    title="Close"
-                  >
-                    ×
-                  </button>
-                </div>
-                <div
-                  class="grammar-explanation-content"
-                  @contextmenu=${this.handleGrammarContextMenu}
-                >
-                  ${unsafeHTML(markdownToHtml(this.grammarExplanation.explanation))}
-                </div>
-                ${this.contextMenu
-                  ? html`
-                      <div
-                        class="context-menu"
-                        style="left: ${this.contextMenu.x}px; top: ${this.contextMenu.y}px;"
-                        @click=${(e: Event) => e.stopPropagation()}
-                      >
-                        <div class="context-menu-item" @click=${this.handleReadSelectedText}>
-                          Read out loud
-                        </div>
-                      </div>
-                    `
-                  : nothing}
-              </div>
-            `
-          : nothing}
+        ${this.renderActionButtons()} ${this.renderGrammarExplanation()}
       </div>
     `;
   }
