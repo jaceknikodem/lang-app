@@ -385,9 +385,6 @@ export class SettingsPanel extends BaseComponent {
   private isElevenLabsEnabled = false;
 
   @state()
-  private elevenLabsModel = 'eleven_flash_v2_5';
-
-  @state()
   private llmError = '';
 
   async connectedCallback() {
@@ -479,26 +476,16 @@ export class SettingsPanel extends BaseComponent {
       const apiKey = await window.electronAPI.database.getSetting('elevenlabs_api_key');
       this.elevenLabsApiKey = apiKey || '';
 
-      // Get ElevenLabs model
-      const model = await window.electronAPI.database.getSetting('elevenlabs_model');
-      this.elevenLabsModel = model || 'eleven_flash_v2_5';
-
-      // Check if ElevenLabs is enabled (has API key and model is not disabled)
-      this.isElevenLabsEnabled = !!(
-        this.elevenLabsApiKey &&
-        this.elevenLabsApiKey.trim() &&
-        this.elevenLabsModel !== 'disabled'
-      );
+      // Check if ElevenLabs is enabled (has API key)
+      this.isElevenLabsEnabled = !!(this.elevenLabsApiKey && this.elevenLabsApiKey.trim());
 
       console.log('ElevenLabs settings loaded:', {
         hasApiKey: !!this.elevenLabsApiKey,
-        model: this.elevenLabsModel,
         enabled: this.isElevenLabsEnabled,
       });
     } catch (error) {
       console.error('Failed to load ElevenLabs settings:', error);
       this.elevenLabsApiKey = '';
-      this.elevenLabsModel = 'eleven_flash_v2_5';
       this.isElevenLabsEnabled = false;
     }
   }
@@ -692,11 +679,7 @@ export class SettingsPanel extends BaseComponent {
     try {
       await window.electronAPI.database.setSetting('elevenlabs_api_key', apiKey);
       this.elevenLabsApiKey = apiKey;
-      this.isElevenLabsEnabled = !!(
-        apiKey &&
-        apiKey.length > 0 &&
-        this.elevenLabsModel !== 'disabled'
-      );
+      this.isElevenLabsEnabled = !!(apiKey && apiKey.length > 0);
 
       // Switch TTS based on current settings
       await this.switchTTSBasedOnSettings();
@@ -707,39 +690,6 @@ export class SettingsPanel extends BaseComponent {
       // Revert the input value if saving failed
       input.value = this.elevenLabsApiKey;
     }
-  }
-
-  private async updateElevenLabsModel(event: Event) {
-    const select = event.target as HTMLSelectElement;
-    const model = select.value;
-
-    try {
-      // Update ElevenLabs settings
-      await window.electronAPI.database.setSetting('elevenlabs_model', model);
-      this.elevenLabsModel = model;
-      this.isElevenLabsEnabled = !!(
-        this.elevenLabsApiKey &&
-        this.elevenLabsApiKey.trim() &&
-        model !== 'disabled'
-      );
-
-      // Switch TTS based on current settings
-      await this.switchTTSBasedOnSettings();
-
-      console.log('TTS model updated:', model);
-    } catch (error) {
-      console.error('Failed to save TTS model:', error);
-      // Revert the selection
-      select.value = this.getCurrentTTSModel();
-    }
-  }
-
-  private getCurrentTTSModel(): string {
-    // Return the currently active TTS model for the dropdown
-    if (this.isElevenLabsEnabled && this.elevenLabsModel && this.elevenLabsModel !== 'disabled') {
-      return this.elevenLabsModel;
-    }
-    return 'disabled';
   }
 
   private async switchTTSBasedOnSettings() {
@@ -943,63 +893,39 @@ export class SettingsPanel extends BaseComponent {
         <div class="settings-section">
           <h3>🎙️ Text-to-Speech</h3>
 
-          <div class="dropdown-row">
-            <div class="dropdown-description">
-              <strong>TTS Engine</strong>
+          <div class="settings-row">
+            <div class="settings-description">
+              <strong>ElevenLabs API Key</strong>
+              <p>
+                Enter your ElevenLabs API key to use AI voices. Model is configured per-language in
+                config.toml
+              </p>
             </div>
-            <select
-              class="model-select"
-              .value=${this.getCurrentTTSModel()}
-              @change=${this.updateElevenLabsModel}
-            >
-              <option value="disabled">System TTS (macOS say command)</option>
-              <optgroup label="ElevenLabs">
-                <option value="eleven_flash_v2_5">
-                  ElevenLabs Flash v2.5 (Fastest, most cost-effective)
-                </option>
-                <option value="eleven_multilingual_v2">
-                  ElevenLabs Multilingual v2 (High quality, slower)
-                </option>
-              </optgroup>
-            </select>
+            <input
+              type="password"
+              class="text-input"
+              .value=${this.elevenLabsApiKey}
+              @blur=${this.updateElevenLabsApiKey}
+              placeholder="Enter ElevenLabs API key..."
+            />
           </div>
 
-          ${this.elevenLabsModel !== 'disabled'
+          ${this.isElevenLabsEnabled
             ? html`
-                <div class="settings-row">
-                  <div class="settings-description">
-                    <strong>ElevenLabs API Key</strong>
-                    <p>Enter your ElevenLabs API key to use AI voices</p>
-                  </div>
-                  <input
-                    type="password"
-                    class="text-input"
-                    .value=${this.elevenLabsApiKey}
-                    @blur=${this.updateElevenLabsApiKey}
-                    placeholder="Enter ElevenLabs API key..."
-                  />
+                <div class="model-info" style="margin-top: var(--spacing-md);">
+                  <p style="margin: 0; font-size: 0.85rem; color: #666;">
+                    Voice IDs and model are configured per-language in config.toml
+                  </p>
                 </div>
-
-                ${this.isElevenLabsEnabled
-                  ? html`
-                      <div class="model-info" style="margin-top: var(--spacing-md);">
-                        <p style="margin: 0; font-size: 0.85rem; color: #666;">
-                          Voice IDs are configured in config.toml
-                        </p>
-                      </div>
-                    `
-                  : ''}
               `
             : ''}
 
           <div class="model-info">
             Status:
             ${this.isElevenLabsEnabled
-              ? html`<span style="color: #28a745;"
-                  >✓ ElevenLabs TTS Active (${this.elevenLabsModel})</span
-                >`
+              ? html`<span style="color: #28a745;">✓ ElevenLabs TTS Active</span>`
               : html`<span style="color: #6c757d;">System TTS Active</span>`}
-            ${this.elevenLabsModel !== 'disabled' && !this.elevenLabsApiKey
+            ${!this.elevenLabsApiKey
               ? html`
                   <br /><span style="color: #dc3545;">⚠️ API key required for ElevenLabs TTS</span>
                 `

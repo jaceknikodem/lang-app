@@ -13,6 +13,7 @@ export interface LanguageConfig {
   lemmatizationCode: string;
   speechRecognitionCode: string;
   elevenlabsVoiceIds: string[];
+  elevenlabsModel?: string;
   audioGeneratorVoice: string;
 }
 
@@ -141,6 +142,14 @@ export function getSpeechRecognitionCode(nameOrCode: string): string | null {
 export function getElevenlabsVoiceIds(nameOrCode: string): string[] {
   const lang = getLanguageConfigByName(nameOrCode) || getLanguageConfig(nameOrCode);
   return lang?.elevenlabsVoiceIds || [];
+}
+
+/**
+ * Get ElevenLabs model for a language
+ */
+export function getElevenlabsModel(nameOrCode: string): string | null {
+  const lang = getLanguageConfigByName(nameOrCode) || getLanguageConfig(nameOrCode);
+  return lang?.elevenlabsModel || null;
 }
 
 /**

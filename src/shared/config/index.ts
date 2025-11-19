@@ -448,6 +448,11 @@ const config = convict({
           format: String,
         },
       },
+      elevenlabsModel: {
+        doc: 'ElevenLabs TTS model ID',
+        format: String,
+        default: 'eleven_flash_v2_5',
+      },
       audioGeneratorVoice: {
         doc: 'macOS say command voice name',
         format: String,
@@ -546,6 +551,7 @@ export const languagesConfig = config.get('languages') as Array<{
   lemmatizationCode: string;
   speechRecognitionCode: string;
   elevenlabsVoiceIds: string[];
+  elevenlabsModel: string;
   audioGeneratorVoice: string;
 }>;
 

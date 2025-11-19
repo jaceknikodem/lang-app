@@ -15,6 +15,7 @@ import { getErrorMessage, createAudioError } from '../../shared/utils/error.js';
 import { testingConfig } from '../../shared/config/index.js';
 import { getLogger } from '../utils/logger.js';
 import { Logger } from '../../shared/utils/logger.js';
+import { getElevenlabsModel } from '../../shared/utils/language-config.js';
 
 // Constants for audio stitching
 const CACHE_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
@@ -77,19 +78,15 @@ export class AudioService {
     }
 
     try {
-      // Check for ElevenLabs settings
-      const model = await database.getSetting('elevenlabs_model');
-      
-      // If model is disabled, use system TTS
-      if (model === 'disabled') {
-        return; // Keep using system TTS
-      }
-
       const apiKey = await database.getSetting('elevenlabs_api_key');
       if (apiKey && apiKey.trim()) {
+        // Get current language and model from config
+        const currentLanguage = await database.getCurrentLanguage();
+        const model = getElevenlabsModel(currentLanguage) || 'eleven_flash_v2_5';
+        
         const config = {
           elevenLabsApiKey: apiKey,
-          elevenLabsModel: model || 'eleven_flash_v2_5'
+          elevenLabsModel: model
         };
         this.audioGenerator = new ElevenLabsAudioGenerator(config, database);
       }
@@ -108,20 +105,17 @@ export class AudioService {
       return;
     }
 
-    // Get model from database if available
-    let model = 'eleven_flash_v2_5'; // Default to flash model
+    // Get model from language config based on current language
+    let model = 'eleven_flash_v2_5'; // Default fallback
     if (this.database) {
       try {
-        const savedModel = await this.database.getSetting('elevenlabs_model');
-        if (savedModel && savedModel !== 'disabled') {
-          model = savedModel;
-        } else if (savedModel === 'disabled') {
-          // If model is disabled, switch to system TTS instead
-          await this.switchToSystemTTS();
-          return;
+        const currentLanguage = await this.database.getCurrentLanguage();
+        const languageModel = getElevenlabsModel(currentLanguage);
+        if (languageModel) {
+          model = languageModel;
         }
       } catch (error) {
-        this.logger.warn({ error }, 'Failed to get ElevenLabs model from database, using default');
+        this.logger.warn({ error }, 'Failed to get ElevenLabs model from language config, using default');
       }
     }
 
