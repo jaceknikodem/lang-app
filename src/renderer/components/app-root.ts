@@ -221,6 +221,13 @@ export class AppRoot extends LitElement {
 
       .stat-box.proficiency {
         background: rgba(0, 150, 136, 0.05);
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .stat-box.proficiency:hover {
+        background: rgba(0, 150, 136, 0.15);
+        transform: translateY(-1px);
       }
 
       .stat-box.proficiency .stat-value {
@@ -526,6 +533,9 @@ export class AppRoot extends LitElement {
     // Setup keyboard bindings
     this.setupKeyboardBindings();
 
+    // Listen for manual proficiency adjustment
+    window.addEventListener('show-proficiency-selector', this.handleShowProficiencySelector);
+
     await this.initializeApp();
   }
 
@@ -547,6 +557,7 @@ export class AppRoot extends LitElement {
     this.removeEventListener('language-changed', this.handleLanguageChanged);
     this.removeEventListener('words-updated', this.handleWordsUpdated);
     window.removeEventListener('dialog-session-complete', this.handleDialogSessionComplete);
+    window.removeEventListener('show-proficiency-selector', this.handleShowProficiencySelector);
   }
 
   private async initializeApp() {
@@ -624,6 +635,10 @@ export class AppRoot extends LitElement {
       router.goToTopicSelection();
     }
   }
+
+  private handleShowProficiencySelector = () => {
+    this.languageDataState = { ...this.languageDataState, showProficiencySelector: true };
+  };
 
   private async checkProficiencyLevelInternal() {
     if (!this.languageDataState.currentLanguage) {
@@ -1291,9 +1306,16 @@ export class AppRoot extends LitElement {
                               : ''}
                             ${proficiencyLevelDisplay
                               ? html`
-                                  <div class="stat-box proficiency">
+                                  <div
+                                    class="stat-box proficiency"
+                                    @click=${() =>
+                                      (this.languageDataState = {
+                                        ...this.languageDataState,
+                                        showProficiencySelector: true,
+                                      })}
+                                  >
                                     <span class="stat-value">${proficiencyLevelDisplay}</span>
-                                    <div class="tooltip">Proficiency level</div>
+                                    <div class="tooltip">Click to adjust proficiency level</div>
                                   </div>
                                 `
                               : ''}

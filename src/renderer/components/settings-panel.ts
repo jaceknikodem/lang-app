@@ -934,6 +934,25 @@ export class SettingsPanel extends BaseComponent {
         </div>
 
         <div class="settings-section">
+          <h3>🎓 Learning Preferences</h3>
+          <div class="settings-row">
+            <div class="settings-description">
+              <strong>${this.capitalizeLanguage(this.currentLanguage || 'Language')} Level</strong>
+              <p>
+                Adjust your proficiency level. This affects the difficulty of generated sentences
+                and the strictness of pronunciation feedback.
+              </p>
+            </div>
+            <app-button
+              variant="primary"
+              @click=${() => window.dispatchEvent(new CustomEvent('show-proficiency-selector'))}
+            >
+              Change Level
+            </app-button>
+          </div>
+        </div>
+
+        <div class="settings-section">
           <h3>Data Management</h3>
           <div class="backup-actions">
             <div class="backup-action">

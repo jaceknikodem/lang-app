@@ -64,16 +64,25 @@ Most dependencies are automatically installed by `./bootstrap.sh`. The bootstrap
 ## Setup
 
 1. Install Node.js 22.19+ from https://nodejs.org/en/download
-2. Run the bootstrap script to install system dependencies, download models, and set up services: `./bootstrap.sh`
+2. Install `just` if you haven't already: `brew install just` (macOS) or visit [just.systems](https://just.systems)
+3. Run the bootstrap setup: `just bootstrap`
 
 ## Development
 
-```bash
-# Development mode
-npm run dev
+All common tasks are available via `just`:
 
-# Run tests
-npm run test:all
+```bash
+# Start development mode
+just dev
+
+# Run all tests
+just test-all
+
+# Apply formatting
+just format
+
+# List all available commands
+just --list
 ```
 
 ## Project Structure
