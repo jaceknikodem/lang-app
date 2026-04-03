@@ -38,7 +38,7 @@ export const languageGrammarDescriptions: Record<string, Record<string, string>>
       'presente (ser/estar/tener/haber/ir/hacer + regular verbs), simple S-V and S-V-O patterns, fixed modal chunks (puedo/debo/quiero), basic reflexives in fixed phrases (me llamo/se llama), gender-number agreement patterns, basic connectors (y/pero/porque), and plural endings (-s/-es)',
     a1: 'presente (all persons), pretérito perfecto compuesto (he comido) for recognition only, basic reflexives (levantarse/llamarse), modal verbs + infinitive (puedo ir/tengo que estudiar), basic imperatives (tú/ustedes), periphrastic future “ir a + infinitive,” common quantifiers (mucho/poco/demasiado), question words (dónde/cuándo/por qué/cuánto), and negation (“no + verb”)',
     a2: 'pretérito perfecto compuesto, recognition of pretérito imperfecto and pretérito indefinido, periphrastic progressive (“estar + gerundio”), basic condicional simple (me gustaría/podría), expanded reflexives (daily routine/emotions), direct object pronouns (lo/la/los/las) in simple contexts, gustar-type verbs (me gusta/me gustan/me gustaría), temporal connectors (luego/mientras/antes de/después de), and comparatives (más/menos… que)',
-    b1: 'pretérito imperfecto and pretérito indefinido, recognition of pluscuamperfecto (había hecho) and futuro perfecto, productive futuro simple, productive condicional simple plus recognition of condicional compuesto, recognition of presente de subjuntivo (quiero que vengas), clitic combinations (se lo doy/me lo llevo), relative clauses with “que/quien,” expanded connectors (sin embargo/por lo tanto/aunque), and basic passive structures (es hecho/ha sido escrito)',
+    b1: 'productive use of present subjunctive (venga, sea, vaya), advanced connectors (sin embargo, por lo tanto, a pesar de, puesto que), conversational idioms and frases hechas (tomar el pelo, echar una mano, estar por las nubes), and complex relative clauses (quien, el cual).',
   },
   portuguese: {
     newbie:
@@ -429,7 +429,10 @@ export abstract class BaseLLMClient {
 
     // Vocabulary guidance is generic across all languages
     if (guidanceType === 'vocabulary') {
-      const levelGuidance = `Use everyday words appropriate for ${proficiencyLevel.toUpperCase()} level`;
+      const levelGuidance =
+        proficiencyLevel.toLowerCase() === 'b1'
+          ? `Prioritize idiomatic expressions and conversational "chunks" (frases hechas) rather than simple single words.`
+          : `Use everyday words appropriate for ${proficiencyLevel.toUpperCase()} level`;
       return `\nIMPORTANT: The user's proficiency level is ${proficiencyLevel.toUpperCase()}. Adjust vocabulary complexity accordingly: ${levelGuidance}`;
     }
 

@@ -133,7 +133,7 @@ describe('BaseLLMClient Prompt Generation', () => {
       const prompt = client.testCreateTopicWordsPrompt('food', 'Spanish', 3, [], 'b1');
 
       expect(prompt).toContain("user's proficiency level is B1");
-      expect(prompt).toContain('Use everyday words appropriate for B1 level');
+      expect(prompt).toContain('Prioritize idiomatic expressions and conversational "chunks"');
     });
 
     it('should not include proficiency text when not provided', () => {
@@ -236,7 +236,8 @@ describe('BaseLLMClient Prompt Generation', () => {
       const prompt = client.testCreateSentencesPrompt('hola', 'Spanish', 3, [], undefined, 'b1');
 
       expect(prompt).toContain("user's proficiency level is B1");
-      expect(prompt).toContain('pretérito imperfecto and pretérito indefinido');
+      expect(prompt).toContain('productive use of present subjunctive');
+      expect(prompt).toContain('conversational idioms and frases hechas');
     });
 
     it('should include context sentence format in example', () => {

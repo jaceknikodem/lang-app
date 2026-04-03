@@ -133,7 +133,7 @@ export class FrequencyWordManager {
       case 'a2':
         return 500; // Skip top 500 words for A2
       case 'b1':
-        return 1000; // Skip top 1000 words for B1
+        return 1000; // Skip top 1000 words for B1 (skips current word lists entirely)
       default:
         return 0; // No minimum for other levels
     }
