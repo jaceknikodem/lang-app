@@ -16,7 +16,8 @@ export interface LLMClient {
     language: string,
     count: number,
     topic?: string,
-    proficiencyLevel?: string
+    proficiencyLevel?: string,
+    translation?: string
   ): Promise<GeneratedSentence[]>;
   generateContextSentences(
     sentence: string,

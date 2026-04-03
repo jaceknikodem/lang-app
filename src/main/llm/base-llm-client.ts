@@ -234,7 +234,8 @@ export abstract class BaseLLMClient {
     language: string,
     count: number,
     topic?: string,
-    proficiencyLevel?: string
+    proficiencyLevel?: string,
+    translation?: string
   ): Promise<GeneratedSentence[]> {
     // Get known words to include in sentences when possible
     const knownWords = await this.getKnownWords(language);
@@ -244,7 +245,8 @@ export abstract class BaseLLMClient {
       count,
       knownWords,
       topic,
-      proficiencyLevel
+      proficiencyLevel,
+      translation
     );
 
     try {
@@ -531,7 +533,8 @@ Rules:
     count: number,
     knownWords: string[] = [],
     topic?: string,
-    proficiencyLevel?: string
+    proficiencyLevel?: string,
+    translation?: string
   ): string {
     const example = `  {
     "sentence": "${language.toLowerCase()}_sentence1_with_${word}",
@@ -557,6 +560,11 @@ Rules:
     // Create proficiency level guidance
     const proficiencyText = this.createProficiencyGuidance(proficiencyLevel, 'sentence', language);
 
+    // Create translation guidance
+    const translationGuidance = translation
+      ? `\nCRITICAL: The generated sentences MUST use this word with the meaning of "${translation}". Do NOT use any other meaning of the word.`
+      : '';
+
     return `CRITICAL: You must return exactly ${count} sentences in a JSON array. No more, no less.
 CRITICAL: Return ONLY the JSON array, no explanations or extra text.
 
@@ -571,7 +579,7 @@ ${example}
 Rules:
 1. Must be exactly ${count} sentences
 2. Each sentence must contain the word '${word}' or its appropriate conjugated/inflected form
-3. The word '${word}' is provided in its canonical dictionary form - use the appropriate conjugated/inflected form that fits naturally in each sentence
+3. The word '${word}' is provided in its canonical dictionary form - use the appropriate conjugated/inflected form that fits naturally in each sentence.${translationGuidance}
 4. Keep sentences short (5-15 words)
 5. Make them conversational and natural
 6. Each sentence must be different

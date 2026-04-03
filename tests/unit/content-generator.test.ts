@@ -37,7 +37,8 @@ class MockOllamaClient {
         _language: string,
         count: number,
         _topic?: string,
-        _proficiencyLevel?: string
+        _proficiencyLevel?: string,
+        _translation?: string
       ): Promise<GeneratedSentence[]> => {
         const sentences: GeneratedSentence[] = [];
         for (let i = 1; i <= count; i++) {
@@ -264,6 +265,7 @@ describe('ContentGenerator', () => {
         'Spanish',
         expect.any(Number),
         'greetings',
+        undefined,
         undefined
       );
 

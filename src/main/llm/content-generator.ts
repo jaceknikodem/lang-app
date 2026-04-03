@@ -477,7 +477,8 @@ export class ContentGenerator {
     language?: string,
     count?: number,
     database?: DatabaseLayer,
-    topic?: string
+    topic?: string,
+    translation?: string
   ): Promise<GeneratedSentence[]> {
     const targetLanguage = language || this.config.defaultLanguage;
     const sentenceCount = count || this.config.defaultSentenceCount;
@@ -641,7 +642,8 @@ export class ContentGenerator {
         targetLanguage,
         needed,
         effectiveTopic,
-        proficiencyLevel
+        proficiencyLevel,
+        translation
       );
 
       // Validate and filter LLM results

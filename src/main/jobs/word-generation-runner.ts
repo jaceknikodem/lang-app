@@ -186,7 +186,8 @@ export class WordGenerationRunner {
           language,
           needed,
           this.database,
-          job.topic
+          job.topic,
+          word.translation
         );
 
         for (const sentence of generatedSentences) {

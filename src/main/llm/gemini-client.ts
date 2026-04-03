@@ -255,7 +255,8 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
     language: string,
     count: number,
     topic?: string,
-    proficiencyLevel?: string
+    proficiencyLevel?: string,
+    translation?: string
   ): Promise<GeneratedSentence[]> {
     this.ensureApiKey();
 
@@ -266,7 +267,8 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
         language,
         count,
         topic,
-        proficiencyLevel
+        proficiencyLevel,
+        translation
       );
       return sentences;
     } catch (error) {
