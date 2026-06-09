@@ -6,7 +6,7 @@
 # Whether to manage external services (whisper, lemmatization)
 manage_services = true
 # Maximum service restart attempts
-max_restarts = 10
+max_restarts = 5
 
 [services.whisper]
 # Whisper server port
@@ -24,11 +24,11 @@ server_url = "http://127.0.0.1:8888"
 # Ollama base URL
 base_url = "http://localhost:11434"
 # Default LLM model
-default_model = "granite4:tiny-h"
+default_model = "gemma4:12b-mlx"
 # Model for word generation
-word_generation_model = "granite4:tiny-h"
+word_generation_model = "gemma4:12b-mlx"
 # Model for sentence generation
-sentence_generation_model = "granite4:tiny-h"
+sentence_generation_model = "gemma4:12b-mlx"
 # LLM request timeout in milliseconds
 timeout = 80000
 # Maximum retry attempts for LLM requests
@@ -42,11 +42,11 @@ max_existing_words_in_prompt = 50
 
 [llm.gemini]
 # Default Gemini model
-default_model = "gemini-2.5-flash-lite"
-# Gemini model for word generation and pronunciation
-fast_model = "gemini-2.5-flash-lite"
-# Gemini model for sentence generation
-full_model = "gemini-2.5-flash-lite"
+default_model = "gemini-3.1-flash-lite"
+# Gemini model for word generation and pronunciation (~500 tokens/10-word session)
+fast_model = "gemini-3.1-flash-lite"
+# Gemini model for sentence generation (~5k tokens/10-word session)
+full_model = "gemini-3.1-flash-lite"
 # Gemini request timeout in milliseconds
 timeout = 30000
 
