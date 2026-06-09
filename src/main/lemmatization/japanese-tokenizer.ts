@@ -85,6 +85,37 @@ async function getJapaneseTokenizer(): Promise<kuromoji.Tokenizer<kuromoji.Ipadi
 }
 
 /**
+ * Convert katakana string to hiragana
+ */
+function katakanaToHiragana(str: string): string {
+  return str.replace(/[ァ-ヶ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+}
+
+/**
+ * Get phonetic hiragana reading of Japanese text using kuromoji.
+ * Converts kanji and katakana to hiragana, preserving non-Japanese characters.
+ * Falls back to original text if kuromoji is unavailable.
+ */
+export async function getJapanesePhoneticText(text: string): Promise<string> {
+  try {
+    const tokenizer = await getJapaneseTokenizer();
+    const tokens = tokenizer.tokenize(text);
+    return tokens
+      .map((token) => {
+        const reading = token.reading;
+        if (reading && reading !== '*') {
+          return katakanaToHiragana(reading);
+        }
+        // For punctuation and symbols (no reading), keep original
+        return token.surface_form;
+      })
+      .join('');
+  } catch {
+    return text;
+  }
+}
+
+/**
  * Tokenize Japanese text using kuromoji
  */
 export async function tokenizeJapanese(sentence: string): Promise<TokenizedToken[]> {

@@ -7,6 +7,7 @@ import { DatabaseLayer } from '../../shared/types/database';
 import { createAudioError } from '../../shared/utils/error.js';
 import { BaseAudioGenerator } from './base-audio-generator';
 import { getElevenlabsVoiceIds, getLanguageCode, getLanguageName } from '../../shared/utils/language-config.js';
+import { getJapanesePhoneticText } from '../lemmatization/japanese-tokenizer.js';
 
 // Simple queue to limit ElevenLabs API calls to 1 concurrent request
 let apiRequestQueue: Promise<any> = Promise.resolve();
@@ -91,8 +92,12 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     // Store the voiceID that was used for this generation
     this.lastUsedVoiceId = finalVoiceId;
 
+    // For Japanese, convert kanji to hiragana to avoid ElevenLabs mispronunciation
+    const isJapanese = voiceLanguage === 'japanese' || voiceLanguage === 'ja';
+    const ttsText = isJapanese ? await getJapanesePhoneticText(text) : text;
+
     // Make API request to ElevenLabs (rate-limited to 1 concurrent request)
-    const audioBuffer = await queueApiRequest(() => this.callElevenLabsAPI(text, finalVoiceId, voiceLanguage));
+    const audioBuffer = await queueApiRequest(() => this.callElevenLabsAPI(ttsText, finalVoiceId, voiceLanguage));
 
     // Write audio file
     writeFileSync(audioPath, audioBuffer);

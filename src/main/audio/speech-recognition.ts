@@ -55,12 +55,14 @@ export class SpeechRecognitionService {
     'portuguese': 'pt',
     'polish': 'pl',
     'indonesian': 'id',
+    'japanese': 'ja',
     // Also handle ISO codes directly
     'es': 'es',
     'it': 'it',
     'pt': 'pt',
     'pl': 'pl',
-    'id': 'id'
+    'id': 'id',
+    'ja': 'ja',
   };
 
   constructor() {
