@@ -263,7 +263,7 @@ export class WordSelector extends LitElement {
         left: 50%;
         transform: translateX(-50%);
         background: #1a1a2e;
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        border: 1px solid #444;
         border-radius: 8px;
         padding: 8px 12px;
         white-space: nowrap;

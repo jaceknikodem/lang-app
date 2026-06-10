@@ -88,6 +88,9 @@ export class SentenceViewer extends LitElement {
   @state()
   private contextMenu: { x: number; y: number; selectedText: string } | null = null;
 
+  @state()
+  private wordReading = ''; // hiragana reading of targetWord (Japanese only)
+
   // Dictionary cache is not reactive to avoid unnecessary re-renders
   // Dictionary data is precomputed in tokens, so cache updates shouldn't trigger UI updates
   private dictionaryCache: Record<string, DictionaryEntry[] | null> = {};
@@ -161,6 +164,63 @@ export class SentenceViewer extends LitElement {
         font-size: 16px;
         font-weight: 700;
         color: var(--primary-color);
+        position: relative;
+        display: inline-block;
+      }
+
+      .word-reading-tooltip {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        position: absolute;
+        bottom: calc(100% + 8px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1a1a2e;
+        border: 1px solid #444;
+        border-radius: 8px;
+        padding: 8px 12px;
+        white-space: nowrap;
+        pointer-events: none;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+        z-index: 100;
+      }
+
+      .word-reading-tooltip::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: #1a1a2e;
+      }
+
+      .target-word:hover .word-reading-tooltip {
+        display: flex;
+      }
+
+      .target-word .word-reading-tooltip {
+        left: 0;
+        transform: none;
+      }
+
+      .target-word .word-reading-tooltip::after {
+        left: 16px;
+        transform: none;
+      }
+
+      .tooltip-hiragana {
+        font-size: 15px;
+        color: #e8e8f0;
+        letter-spacing: 0.05em;
+      }
+
+      .tooltip-romaji {
+        font-size: 11px;
+        color: #9090b0;
+        letter-spacing: 0.08em;
       }
 
       .word-separator {
@@ -282,7 +342,7 @@ export class SentenceViewer extends LitElement {
       }
 
       .context-text {
-        font-size: 14px;
+        font-size: 21px;
         line-height: 1.4;
         color: var(--text-primary);
         margin-bottom: var(--spacing-xs);
@@ -302,7 +362,7 @@ export class SentenceViewer extends LitElement {
       }
 
       .sentence-text {
-        font-size: 18px;
+        font-size: 27px;
         line-height: 1.5;
         margin-bottom: var(--spacing-sm);
         color: var(--text-primary);
@@ -325,21 +385,55 @@ export class SentenceViewer extends LitElement {
       }
 
       .sentence-pronunciation {
-        font-size: 13px;
+        font-size: 20px;
         color: var(--text-secondary);
         font-style: normal;
         line-height: 1.4;
         margin-top: var(--spacing-xs);
-        opacity: 0.8;
+        position: relative;
+        display: inline-block;
+        cursor: default;
+      }
+
+      .sentence-pronunciation .word-reading-tooltip {
+        bottom: calc(100% + 6px);
+        left: 0;
+        transform: none;
+      }
+
+      .sentence-pronunciation .word-reading-tooltip::after {
+        left: 16px;
+        transform: none;
+      }
+
+      .sentence-pronunciation:hover .word-reading-tooltip {
+        display: flex;
       }
 
       .context-pronunciation {
-        font-size: 12px;
+        font-size: 18px;
         color: var(--text-secondary);
         font-style: normal;
         line-height: 1.4;
         margin-top: var(--spacing-xs);
-        opacity: 0.8;
+        position: relative;
+        display: inline-block;
+        cursor: default;
+      }
+
+      .context-pronunciation .word-reading-tooltip {
+        bottom: calc(100% + 6px);
+        left: 0;
+        transform: none;
+      }
+
+      .context-pronunciation .word-reading-tooltip::after {
+        left: 16px;
+        transform: none;
+      }
+
+      .context-pronunciation:hover .word-reading-tooltip {
+        display: flex;
       }
 
       .sentence-translation {
@@ -700,7 +794,7 @@ export class SentenceViewer extends LitElement {
         }
 
         .sentence-text {
-          font-size: 16px;
+          font-size: 22px;
         }
 
         .word-actions {
@@ -900,6 +994,27 @@ export class SentenceViewer extends LitElement {
     // Auto-play audio when sentence changes (if enabled)
     if (sentenceChanged) {
       this.handleAutoplayOnSentenceChange();
+    }
+
+    // Fetch Japanese word reading when targetWord changes
+    if (changedProperties.has('targetWord') && this.targetWord) {
+      void this.fetchWordReading();
+    }
+  }
+
+  private async fetchWordReading(): Promise<void> {
+    const lang = this.targetWord?.language?.toLowerCase();
+    if (lang !== 'japanese' && lang !== 'ja') {
+      this.wordReading = '';
+      return;
+    }
+    try {
+      const readings = await window.electronAPI.japaneseTokenization.getWordReadings([
+        this.targetWord.word,
+      ]);
+      this.wordReading = readings[this.targetWord.word] ?? '';
+    } catch {
+      this.wordReading = '';
     }
   }
 
@@ -2721,7 +2836,15 @@ export class SentenceViewer extends LitElement {
     return html`
       <div class="sentence-header">
         <div class="target-word-info">
-          <span class="target-word">${this.targetWord.word}</span>
+          <span class="target-word">
+            ${this.targetWord.word}
+            ${this.wordReading
+              ? html`<div class="word-reading-tooltip">
+                  <span class="tooltip-hiragana">${this.wordReading}</span>
+                  <span class="tooltip-romaji">${hiraganaToRomaji(this.wordReading)}</span>
+                </div>`
+              : nothing}
+          </span>
           <span class="word-separator">•</span>
           <span class="word-translation" title=${this.targetWord.translation}>
             ${this.truncate(this.targetWord.translation, 40)}
@@ -2789,8 +2912,11 @@ export class SentenceViewer extends LitElement {
         <div class="context-text">${text}</div>
         ${pronunciation && pronunciation.trim()
           ? html`
-              <div class="context-pronunciation" title=${hiraganaToRomaji(pronunciation)}>
+              <div class="context-pronunciation">
                 ${pronunciation}
+                <div class="word-reading-tooltip">
+                  <span class="tooltip-romaji">${hiraganaToRomaji(pronunciation)}</span>
+                </div>
               </div>
             `
           : nothing}
@@ -2858,11 +2984,13 @@ export class SentenceViewer extends LitElement {
           : nothing}
         ${this.sentence.pronunciation && this.sentence.pronunciation.trim()
           ? html`
-              <div
-                class="sentence-pronunciation"
-                title=${hiraganaToRomaji(this.sentence.pronunciation)}
-              >
+              <div class="sentence-pronunciation">
                 ${this.sentence.pronunciation}
+                <div class="word-reading-tooltip">
+                  <span class="tooltip-romaji"
+                    >${hiraganaToRomaji(this.sentence.pronunciation)}</span
+                  >
+                </div>
               </div>
             `
           : nothing}
