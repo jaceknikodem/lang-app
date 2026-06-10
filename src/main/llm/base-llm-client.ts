@@ -498,10 +498,15 @@ export abstract class BaseLLMClient {
       language
     );
 
+    const scriptNote =
+      language.toLowerCase() === 'japanese' || language.toLowerCase() === 'ja'
+        ? '\nCRITICAL: Write all words in kanji/kana (Japanese script), NOT romaji. e.g. "空港" not "kuko", "食べる" not "taberu".'
+        : '';
+
     // Topic is always specified when this method is called
     return `CRITICAL: You must return exactly ${count} words in a JSON array. No more, no less.
 CRITICAL: Return ONLY the JSON array, no explanations or extra text.
-CRITICAL: All words must be in their canonical dictionary form (infinitive for verbs, singular for nouns, base form for adjectives).
+CRITICAL: All words must be in their canonical dictionary form (infinitive for verbs, singular for nouns, base form for adjectives).${scriptNote}
 
 Task: Generate exactly ${count} different ${language} words related to "${topic}".${proficiencyText}${exclusionText}
 

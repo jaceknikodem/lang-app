@@ -12,7 +12,7 @@ import { LifecycleManager, UpdateManager } from '../lifecycle/index.js';
 import { SRSService } from '../srs/srs-service.js';
 import { WordGenerationRunner } from '../jobs/word-generation-runner.js';
 import { LemmatizationService } from '../lemmatization/index.js';
-import { tokenizeJapanese } from '../lemmatization/japanese-tokenizer.js';
+import { tokenizeJapanese, getWordReadings } from '../lemmatization/japanese-tokenizer.js';
 import { DialogService } from '../dialog/index.js';
 import { promises as fsPromises } from 'fs';
 import { join } from 'path';
@@ -1771,6 +1771,17 @@ function setupJapaneseTokenizationHandlers(): void {
         return await tokenizeJapanese(sentence);
       },
       'tokenize Japanese sentence'
+    )
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.JAPANESE_TOKENIZATION.GET_WORD_READINGS,
+    createIPCHandler(
+      z.array(z.string()),
+      async (words) => {
+        return await getWordReadings(words);
+      },
+      'get Japanese word readings'
     )
   );
 }

@@ -316,6 +316,7 @@ export interface IPCBridge {
     tokenize: (
       sentence: string
     ) => Promise<Array<{ text: string; type: 'word' | 'whitespace' | 'punctuation' }>>;
+    getWordReadings: (words: string[]) => Promise<Record<string, string>>;
   };
 
   // Dialog operations
@@ -526,6 +527,7 @@ export const IPC_CHANNELS = {
   },
   JAPANESE_TOKENIZATION: {
     TOKENIZE: 'japanese-tokenization:tokenize',
+    GET_WORD_READINGS: 'japanese-tokenization:getWordReadings',
   },
   DIALOG: {
     SELECT_SENTENCE: 'dialog:selectSentence',

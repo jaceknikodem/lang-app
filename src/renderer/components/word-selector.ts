@@ -17,6 +17,7 @@ import { getErrorMessage } from '../../shared/utils/error.js';
 import { GeneratedWord, Word } from '../../shared/types/core.js';
 import { logger } from '../utils/logger.js';
 import { APP_CONFIG } from '../../shared/constants/index.js';
+import { hiraganaToRomaji } from '../utils/hiragana-romaji.js';
 
 interface SelectableWord extends GeneratedWord {
   selected: boolean;
@@ -54,6 +55,9 @@ export class WordSelector extends LitElement {
 
   @state()
   private zipfFrequencies: Record<string, number> = {}; // word -> zipf frequency
+
+  @state()
+  private wordReadings: Record<string, string> = {}; // word -> hiragana reading (Japanese only)
 
   private keyboardUnsubscribe?: () => void;
   private autoNavigateTimeout?: number;
@@ -245,6 +249,53 @@ export class WordSelector extends LitElement {
         font-weight: 600;
         color: var(--text-primary);
         margin: 0;
+        position: relative;
+        display: inline-block;
+      }
+
+      .word-reading-tooltip {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        position: absolute;
+        bottom: calc(100% + 8px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1a1a2e;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        padding: 8px 12px;
+        white-space: nowrap;
+        pointer-events: none;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+        z-index: 100;
+      }
+
+      .word-reading-tooltip::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: #1a1a2e;
+      }
+
+      .word-foreign:hover .word-reading-tooltip {
+        display: flex;
+      }
+
+      .tooltip-hiragana {
+        font-size: 15px;
+        color: #e8e8f0;
+        letter-spacing: 0.05em;
+      }
+
+      .tooltip-romaji {
+        font-size: 11px;
+        color: #9090b0;
+        letter-spacing: 0.08em;
       }
 
       .word-translation {
@@ -366,6 +417,7 @@ export class WordSelector extends LitElement {
     if (changedProperties.has('generatedWords')) {
       this.initializeWords();
       this.fetchZipfFrequencies();
+      this.fetchWordReadings();
     }
   }
 
@@ -411,6 +463,20 @@ export class WordSelector extends LitElement {
     } catch (error) {
       // Gracefully degrade - don't show zipf, but don't break the UI
       console.warn('[WordSelector] Failed to fetch zipf frequencies:', error);
+    }
+  }
+
+  private async fetchWordReadings() {
+    const lang = this.language.toLowerCase();
+    if (lang !== 'japanese' && lang !== 'ja') return;
+    if (this.generatedWords.length === 0) return;
+
+    try {
+      const words = this.generatedWords.map((w) => w.word);
+      const readings = await window.electronAPI.japaneseTokenization.getWordReadings(words);
+      this.wordReadings = readings;
+    } catch (error) {
+      console.warn('[WordSelector] Failed to fetch Japanese word readings:', error);
     }
   }
 
@@ -910,7 +976,17 @@ export class WordSelector extends LitElement {
                     : ''}
                 </div>
                 <div class="word-content">
-                  <h4 class="word-foreign">${word.word}</h4>
+                  <h4 class="word-foreign">
+                    ${word.word}
+                    ${this.wordReadings[word.word]
+                      ? html`<div class="word-reading-tooltip">
+                          <span class="tooltip-hiragana">${this.wordReadings[word.word]}</span>
+                          <span class="tooltip-romaji"
+                            >${hiraganaToRomaji(this.wordReadings[word.word])}</span
+                          >
+                        </div>`
+                      : ''}
+                  </h4>
                   ${!this.wordsProcessed ? html`•` : ''}
                   ${!this.wordsProcessed
                     ? html`<p class="word-translation">${word.translation}</p>`

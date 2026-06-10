@@ -384,6 +384,10 @@ declare global {
         getProgress: (language: string) => Promise<any>;
         getAvailableLanguages: () => Promise<string[]>;
       };
+      japaneseTokenization: {
+        tokenize: (sentence: string) => Promise<any[]>;
+        getWordReadings: (words: string[]) => Promise<Record<string, string>>;
+      };
     };
   }
 }

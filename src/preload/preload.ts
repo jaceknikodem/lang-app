@@ -406,6 +406,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   japaneseTokenization: {
     tokenize: (sentence: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.JAPANESE_TOKENIZATION.TOKENIZE, sentence),
+    getWordReadings: (words: string[]) =>
+      ipcRenderer.invoke(IPC_CHANNELS.JAPANESE_TOKENIZATION.GET_WORD_READINGS, words),
   },
 
   // Dialog operations
@@ -849,6 +851,10 @@ declare global {
       };
       topics: {
         getTopics: () => Promise<string[]>;
+      };
+      japaneseTokenization: {
+        tokenize: (sentence: string) => Promise<any[]>;
+        getWordReadings: (words: string[]) => Promise<Record<string, string>>;
       };
       tracking: {
         createSession: (
