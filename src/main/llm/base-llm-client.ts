@@ -999,13 +999,14 @@ Rules:
 2. Leave hiragana as-is
 3. Convert katakana to hiragana (e.g. コーヒー → こーひー)
 4. Preserve punctuation (。、！？) as-is
-5. Return a JSON array with exactly ${sentences.length} elements
-6. Return ONLY the JSON array, no explanations or additional text
+5. Separate each word/morpheme with a single space
+6. Return a JSON array with exactly ${sentences.length} elements
+7. Return ONLY the JSON array, no explanations or additional text
 
 CRITICAL: You must return exactly ${sentences.length} hiragana strings. No more, no less.
 CRITICAL: Return ONLY the JSON array, nothing else.
 
-Example: ["はい、あんぜんなみずですね。", "これはほんです。"]`;
+Example: ["はい、 あんぜん な みず です ね。", "これ は ほん です。"]`;
     }
 
     // For other languages, return empty string (can be extended later)

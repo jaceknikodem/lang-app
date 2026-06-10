@@ -18,6 +18,7 @@ import { sessionManager } from '../utils/session-manager.js';
 import { audioPlayer } from '../utils/audio-player-service.js';
 import { markdownToHtml } from '../utils/markdown-utils.js';
 import { checkProficiencyLevel } from '../utils/app-initializer.js';
+import { hiraganaToRomaji } from '../utils/hiragana-romaji.js';
 
 @customElement('sentence-viewer')
 export class SentenceViewer extends LitElement {
@@ -2787,7 +2788,11 @@ export class SentenceViewer extends LitElement {
       <div class="context-section ${isPlaying ? 'playing' : ''}" @click=${onClick}>
         <div class="context-text">${text}</div>
         ${pronunciation && pronunciation.trim()
-          ? html` <div class="context-pronunciation">${pronunciation}</div> `
+          ? html`
+              <div class="context-pronunciation" title=${hiraganaToRomaji(pronunciation)}>
+                ${pronunciation}
+              </div>
+            `
           : nothing}
         <div class="context-translation ${this.audioOnlyMode ? 'hidden' : ''}">${translation}</div>
       </div>
@@ -2852,7 +2857,14 @@ export class SentenceViewer extends LitElement {
             `
           : nothing}
         ${this.sentence.pronunciation && this.sentence.pronunciation.trim()
-          ? html` <div class="sentence-pronunciation">${this.sentence.pronunciation}</div> `
+          ? html`
+              <div
+                class="sentence-pronunciation"
+                title=${hiraganaToRomaji(this.sentence.pronunciation)}
+              >
+                ${this.sentence.pronunciation}
+              </div>
+            `
           : nothing}
         <div class="sentence-translation ${this.audioOnlyMode ? 'hidden' : ''}">
           ${this.sentence.translation}
