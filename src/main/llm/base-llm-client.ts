@@ -989,22 +989,23 @@ If there are no mistakes, you can omit correction and grammarExplanation, but al
         .map((sentence, index) => `${index + 1}. "${sentence}"`)
         .join('\n');
 
-      return `Convert these Japanese sentences to Romaji (romanized Japanese). Return ONLY a JSON array of space-separated Romaji text for each sentence.
+      return `Convert these Japanese sentences to hiragana (phonetic reading). Return ONLY a JSON array of hiragana strings, one per sentence.
 
 Japanese sentences:
 ${sentencesList}
 
 Rules:
-1. Convert all Kanji and Kana to Romaji for each sentence
-2. Use space-separated format (e.g., "watashi wa gakusei desu" not "watashiwa gakuseidesu")
-3. Preserve punctuation marks as-is
-4. Return a JSON array with exactly ${sentences.length} elements, one Romaji string per sentence
-5. Return ONLY the JSON array, no explanations or additional text
+1. Convert all kanji to their correct hiragana readings based on context
+2. Leave hiragana as-is
+3. Convert katakana to hiragana (e.g. コーヒー → こーひー)
+4. Preserve punctuation (。、！？) as-is
+5. Return a JSON array with exactly ${sentences.length} elements
+6. Return ONLY the JSON array, no explanations or additional text
 
-CRITICAL: You must return exactly ${sentences.length} pronunciations in a JSON array. No more, no less.
+CRITICAL: You must return exactly ${sentences.length} hiragana strings. No more, no less.
 CRITICAL: Return ONLY the JSON array, nothing else.
 
-Example format: ["watashi wa gakusei desu", "kore wa hon desu"]`;
+Example: ["はい、あんぜんなみずですね。", "これはほんです。"]`;
     }
 
     // For other languages, return empty string (can be extended later)

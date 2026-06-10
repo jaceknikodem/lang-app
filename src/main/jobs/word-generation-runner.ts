@@ -279,8 +279,11 @@ export class WordGenerationRunner {
           } else {
             // LLM-generated sentence - generate audio with proper IDs
             try {
+              const isJapanese = language === 'japanese' || language === 'ja';
+              const ttsText =
+                isJapanese && sentence.pronunciation ? sentence.pronunciation : sentence.sentence;
               audioPath = await this.audioService.generateSentenceAudio(
-                sentence.sentence,
+                ttsText,
                 language,
                 word.word,
                 word.id,
@@ -512,8 +515,11 @@ export class WordGenerationRunner {
       );
 
       try {
+        const isJapanese = language === 'japanese' || language === 'ja';
+        const ttsText =
+          isJapanese && sentence.pronunciation ? sentence.pronunciation : sentence.sentence;
         const audioPath = await this.audioService.generateSentenceAudio(
-          sentence.sentence,
+          ttsText,
           language,
           wordText,
           wordId,

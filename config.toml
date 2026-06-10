@@ -169,6 +169,6 @@ tatoeba_code = "jpn"
 lemmatization_code = "ja"
 speech_recognition_code = "ja"
 elevenlabs_voice_ids = ["sRYzP8TwEiiqAWebdYPJ"]
-elevenlabs_model = "eleven_multilingual_v2"
+elevenlabs_model = "eleven_v3"
 audio_generator_voice = "Kyoko"
 

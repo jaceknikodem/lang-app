@@ -61,7 +61,7 @@ export interface Sentence {
   afterSentenceAudioPath?: string;
   ignored?: boolean;
   relatedWords?: string[];
-  pronunciation?: string; // Pronunciation (e.g., Romaji for Japanese)
+  pronunciation?: string; // Phonetic reading (hiragana for Japanese)
   contextBeforePronunciation?: string; // Pronunciation of context before
   contextAfterPronunciation?: string; // Pronunciation of context after
 }
@@ -108,7 +108,7 @@ export interface GeneratedSentence {
   contextBeforeTranslation?: string; // Translation of context before
   contextAfterTranslation?: string; // Translation of context after
   audioUrl?: string; // Optional external audio source URL
-  pronunciation?: string; // Pronunciation (e.g., Romaji for Japanese)
+  pronunciation?: string; // Phonetic reading (hiragana for Japanese)
   contextBeforePronunciation?: string; // Pronunciation of context before
   contextAfterPronunciation?: string; // Pronunciation of context after
 }
