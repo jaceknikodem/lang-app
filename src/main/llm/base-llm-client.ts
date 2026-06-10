@@ -1007,6 +1007,7 @@ Rules:
 5. Separate each word/morpheme with a single space
 6. Return a JSON array with exactly ${sentences.length} elements
 7. Return ONLY the JSON array, no explanations or additional text
+8. Use the natural spoken reading, not the dictionary/citation form (e.g. 何 before です is なん not なに)
 
 CRITICAL: You must return exactly ${sentences.length} hiragana strings. No more, no less.
 CRITICAL: Return ONLY the JSON array, nothing else.

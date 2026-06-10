@@ -326,6 +326,7 @@ export class DialogMode extends BaseComponent {
 
         // Reload autoplay setting to ensure it's up-to-date
         await this.loadAutoplaySetting();
+        await this.loadShowTranslationsSetting();
 
         // Get current language to verify cached session is for the correct language
         const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
@@ -468,6 +469,7 @@ export class DialogMode extends BaseComponent {
 
       // Reload autoplay setting to ensure it's up-to-date
       await this.loadAutoplaySetting();
+      await this.loadShowTranslationsSetting();
 
       // Randomly choose between old flow (variants) and new flow (topic-based/open-ended)
       this.isTopicBasedFlow = Math.random() < 0.5;
@@ -644,6 +646,28 @@ export class DialogMode extends BaseComponent {
     } catch (error) {
       logger.error({ error }, 'Failed to load autoplay setting');
       this.autoplayEnabled = false;
+    }
+  }
+
+  private async loadShowTranslationsSetting() {
+    try {
+      const setting = await window.electronAPI.database.getSetting('dialog_show_translations');
+      if (setting !== null) {
+        this.showTranslations = setting === 'true';
+      }
+    } catch (error) {
+      logger.error({ error }, 'Failed to load show translations setting');
+    }
+  }
+
+  private async saveShowTranslationsSetting() {
+    try {
+      await window.electronAPI.database.setSetting(
+        'dialog_show_translations',
+        String(this.showTranslations)
+      );
+    } catch (error) {
+      logger.error({ error }, 'Failed to save show translations setting');
     }
   }
 
@@ -932,6 +956,7 @@ export class DialogMode extends BaseComponent {
         ...GlobalShortcuts.TOGGLE_AUDIO_ONLY,
         action: () => {
           this.showTranslations = !this.showTranslations;
+          void this.saveShowTranslationsSetting();
         },
         context: 'dialog',
         description: 'Toggle English translation visibility',
@@ -2641,6 +2666,7 @@ export class DialogMode extends BaseComponent {
                 class="translations-switch ${!this.showTranslations ? 'active' : ''}"
                 @click=${() => {
                   this.showTranslations = !this.showTranslations;
+                  void this.saveShowTranslationsSetting();
                 }}
                 title="Hide English translations"
                 aria-label="Hide English translations"

@@ -584,6 +584,18 @@ export class LearningMode extends BaseComponent {
     // Load all words for highlighting purposes
     await this.loadAllWords();
 
+    // Load persisted UI preferences
+    try {
+      const audioOnlySetting = await window.electronAPI.database.getSetting(
+        'learning_audio_only_mode'
+      );
+      if (audioOnlySetting !== null) {
+        this.audioOnlyMode = audioOnlySetting === 'true';
+      }
+    } catch (error) {
+      logger.error({ error }, 'Failed to load audio only mode setting');
+    }
+
     // Load words from database first
     await this.loadSelectedWords();
 
@@ -1271,6 +1283,9 @@ export class LearningMode extends BaseComponent {
 
   private toggleAudioOnlyMode(): void {
     this.audioOnlyMode = !this.audioOnlyMode;
+    void window.electronAPI.database
+      .setSetting('learning_audio_only_mode', String(this.audioOnlyMode))
+      .catch((error: unknown) => logger.error({ error }, 'Failed to save audio only mode setting'));
   }
 
   private setPlaybackSpeed(speed: number): void {
