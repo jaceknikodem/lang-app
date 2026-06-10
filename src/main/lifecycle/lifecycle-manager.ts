@@ -387,13 +387,11 @@ export class LifecycleManager {
         'Deleted words for language'
       );
 
-      // Delete language-specific entries from other tables
-      // Note: sentences are deleted via CASCADE when words are deleted
+      // Delete language-specific entries from other tables.
+      // Tables that reference learning_sessions without CASCADE must be deleted before
+      // learning_sessions itself, otherwise the FK constraint fires.
       const deleteQueueStmt = db.prepare('DELETE FROM word_generation_queue WHERE language = ?');
       deleteQueueStmt.run(language);
-
-      const deleteSessionsStmt = db.prepare('DELETE FROM learning_sessions WHERE language = ?');
-      deleteSessionsStmt.run(language);
 
       const deleteAudioEventsStmt = db.prepare(
         'DELETE FROM audio_playback_events WHERE language = ?'
@@ -422,6 +420,11 @@ export class LifecycleManager {
         'DELETE FROM read_aloud_cache WHERE language = ?'
       );
       deleteReadAloudCacheStmt.run(language);
+
+      // Delete sessions last — audio_playback_events, srs_adjustments, dialog_corrections,
+      // neglected_words, and dictionary_hover_events all have non-cascading FKs to this table.
+      const deleteSessionsStmt = db.prepare('DELETE FROM learning_sessions WHERE language = ?');
+      deleteSessionsStmt.run(language);
 
       this.logger.info({ language }, 'Deleted language-specific database entries');
 
