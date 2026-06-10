@@ -111,12 +111,15 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
    */
   private async callElevenLabsAPI(text: string, voiceId: string, language: string): Promise<Buffer> {
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
-    
+
     // Get language code for the API (2-letter ISO code)
     const languageCode = getLanguageCode(language);
-    
+
+    // Japanese doesn't use spaces; Gemini adds them for readability but they cause TTS pauses
+    const ttsText = language === 'japanese' || language === 'ja' ? text.replace(/ /g, '') : text;
+
     const requestBody: any = {
-      text: text,
+      text: ttsText,
       model_id: this.config.elevenLabsModel,
       language_code: languageCode,
       voice_settings: {
