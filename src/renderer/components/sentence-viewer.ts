@@ -2970,7 +2970,7 @@ export class SentenceViewer extends LitElement {
         class="sentence-text ${this.localPlayingAudio === 'main' ? 'playing' : ''}"
         @click=${this.handleSentenceTextClick}
       >
-        ${this.parsedWords.map((wordInfo) => this.renderWord(wordInfo))}
+        <div>${this.parsedWords.map((wordInfo) => this.renderWord(wordInfo))}</div>
         ${this.wordPopup
           ? html`
               <div
