@@ -2,11 +2,21 @@
  * Sentence viewer component for learning mode
  */
 
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
-import { formatDistanceToNow } from 'date-fns';
 import { sharedStyles } from '../styles/shared.js';
+import { sentenceViewerStyles } from './sentence-viewer.styles.js';
+import './grammar-explanation.js';
+import './word-popup.js';
+import {
+  truncate,
+  formatTimeAgo,
+  buildDictionaryKey,
+  formatDictionaryTooltip,
+  truncateTooltipText,
+  getWordClass,
+  hasParsedWordsChanged,
+} from './sentence-viewer-helpers.js';
 import { Word, Sentence, DictionaryEntry, PrecomputedToken } from '../../shared/types/core.js';
 import { splitSentenceIntoParts } from '../../shared/utils/sentence.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
@@ -16,7 +26,6 @@ import type { TokenizedWord as WordInSentence } from '../utils/sentence-tokenize
 import { logger } from '../utils/logger.js';
 import { sessionManager } from '../utils/session-manager.js';
 import { audioPlayer } from '../utils/audio-player-service.js';
-import { markdownToHtml } from '../utils/markdown-utils.js';
 import { checkProficiencyLevel } from '../utils/app-initializer.js';
 import { hiraganaToRomaji } from '../utils/hiragana-romaji.js';
 
@@ -87,9 +96,6 @@ export class SentenceViewer extends LitElement {
   private zipfFrequencies: Record<string, number> = {}; // word -> zipf frequency
 
   @state()
-  private contextMenu: { x: number; y: number; selectedText: string } | null = null;
-
-  @state()
   private wordReading = ''; // hiragana reading of targetWord (Japanese only)
 
   // Dictionary cache is not reactive to avoid unnecessary re-renders
@@ -110,712 +116,7 @@ export class SentenceViewer extends LitElement {
   private hoverStartTime = new Map<string, number>(); // Keyed by dictionaryKey
   private hoverTimeout = new Map<string, number>(); // Timeout IDs for hover duration tracking
 
-  private truncate(text: string, max: number): string {
-    if (!text) return '';
-    const chars = Array.from(text);
-    if (chars.length <= max) return text;
-    return chars.slice(0, max).join('') + '…';
-  }
-
-  static styles = [
-    sharedStyles,
-    css`
-      :host {
-        display: block;
-        width: 100%;
-        max-width: 100%;
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
-
-      .sentence-container {
-        background: var(--background-primary);
-        border-radius: var(--border-radius);
-        padding: var(--spacing-lg);
-        box-shadow: var(--shadow-light);
-        border: 1px solid var(--border-color);
-        width: 100%;
-        max-width: 100%;
-        min-width: 0;
-        box-sizing: border-box;
-        margin: 0;
-      }
-
-      .sentence-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: var(--spacing-sm);
-        flex-wrap: wrap;
-        gap: var(--spacing-sm);
-        width: 100%;
-        box-sizing: border-box;
-      }
-
-      .target-word-info {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-sm);
-        flex: 1;
-        min-width: 0;
-      }
-
-      .target-word {
-        font-size: 16px;
-        font-weight: 700;
-        color: var(--primary-color);
-        position: relative;
-        display: inline-block;
-      }
-
-      .word-reading-tooltip {
-        display: none;
-        flex-direction: column;
-        align-items: center;
-        gap: 2px;
-        position: absolute;
-        bottom: calc(100% + 8px);
-        left: 50%;
-        transform: translateX(-50%);
-        background: #1a1a2e;
-        border: 1px solid #444;
-        border-radius: 8px;
-        padding: 8px 12px;
-        white-space: nowrap;
-        pointer-events: none;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-        z-index: 100;
-      }
-
-      .word-reading-tooltip::after {
-        content: '';
-        position: absolute;
-        top: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        border: 6px solid transparent;
-        border-top-color: #1a1a2e;
-      }
-
-      .target-word:hover .word-reading-tooltip {
-        display: flex;
-      }
-
-      .target-word .word-reading-tooltip {
-        left: 0;
-        transform: none;
-      }
-
-      .target-word .word-reading-tooltip::after {
-        left: 16px;
-        transform: none;
-      }
-
-      .tooltip-hiragana {
-        font-size: 15px;
-        color: #e8e8f0;
-        letter-spacing: 0.05em;
-      }
-
-      .tooltip-romaji {
-        font-size: 11px;
-        color: #9090b0;
-        letter-spacing: 0.08em;
-      }
-
-      .word-separator {
-        font-size: 16px;
-        font-weight: 700;
-        color: var(--text-primary);
-        margin: 0 var(--spacing-sm);
-      }
-
-      .word-translation {
-        font-size: 16px;
-        color: var(--text-primary);
-        font-weight: 400;
-      }
-
-      .audio-button {
-        background: var(--background-primary);
-        border: 1px solid var(--border-color);
-        border-radius: 999px;
-        padding: 4px 8px;
-        font-size: 14px;
-        color: var(--text-secondary);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        width: 32px;
-        height: 32px;
-        line-height: 1;
-        flex-shrink: 0;
-      }
-
-      .audio-button:hover:not(:disabled) {
-        border-color: var(--primary-color);
-        color: var(--primary-color);
-        background: rgba(0, 0, 0, 0.03);
-      }
-
-      .audio-button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-
-      .audio-icon {
-        width: 16px;
-        height: 16px;
-      }
-
-      .audio-button.secondary {
-        background: var(--background-primary);
-        border: 1px solid var(--border-color);
-        color: var(--text-secondary);
-      }
-
-      .audio-button.secondary:hover:not(:disabled) {
-        border-color: var(--primary-color);
-        color: var(--primary-color);
-        background: rgba(0, 0, 0, 0.03);
-      }
-
-      .word-strength {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--text-secondary);
-        background: var(--background-secondary);
-        border-radius: var(--border-radius-small);
-        padding: 2px 6px;
-        line-height: 1;
-      }
-
-      .last-seen {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--text-secondary);
-        background: var(--background-secondary);
-        border-radius: var(--border-radius-small);
-        padding: 2px 6px;
-        line-height: 1;
-      }
-
-      .word-strength-value {
-        color: var(--primary-color);
-      }
-
-      .sentence-content {
-        margin-bottom: var(--spacing-md);
-        width: 100%;
-        box-sizing: border-box;
-      }
-
-      .context-section {
-        margin-bottom: var(--spacing-sm);
-        padding: var(--spacing-md);
-        background: var(--background-secondary);
-        border-radius: var(--border-radius-small);
-        border-left: 2px solid var(--primary-color);
-        transition: all 0.3s ease;
-        cursor: pointer;
-      }
-
-      .context-section.playing {
-        background: #e3f2fd;
-      }
-
-      .context-label {
-        font-size: 10px;
-        font-weight: 600;
-        color: var(--primary-color);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: var(--spacing-xs);
-      }
-
-      .context-text {
-        font-size: 21px;
-        line-height: 1.4;
-        color: var(--text-primary);
-        margin-bottom: var(--spacing-xs);
-      }
-
-      .context-translation {
-        font-size: 12px;
-        color: var(--text-secondary);
-        font-style: italic;
-      }
-
-      .context-translation.hidden {
-        opacity: 0.1;
-        filter: blur(8px);
-        pointer-events: none;
-        user-select: none;
-      }
-
-      .sentence-text {
-        font-size: 27px;
-        line-height: 1.5;
-        margin-bottom: var(--spacing-sm);
-        color: var(--text-primary);
-        width: 100%;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-        hyphens: auto;
-        padding: var(--spacing-md);
-        padding-right: var(--spacing-md);
-        background: var(--background-secondary);
-        border-radius: var(--border-radius-small);
-        border-left: 2px solid var(--primary-color);
-        transition: all 0.3s ease;
-        box-sizing: border-box;
-        cursor: pointer;
-      }
-
-      .sentence-text.playing {
-        background: #e3f2fd;
-      }
-
-      .sentence-pronunciation {
-        font-size: 20px;
-        color: var(--text-secondary);
-        font-style: normal;
-        line-height: 1.4;
-        margin-top: var(--spacing-xs);
-        position: relative;
-        display: inline-block;
-        cursor: default;
-      }
-
-      .sentence-pronunciation .word-reading-tooltip {
-        bottom: calc(100% + 6px);
-        left: 0;
-        transform: none;
-      }
-
-      .sentence-pronunciation .word-reading-tooltip::after {
-        left: 16px;
-        transform: none;
-      }
-
-      .sentence-pronunciation:hover .word-reading-tooltip {
-        display: flex;
-      }
-
-      .context-pronunciation {
-        font-size: 18px;
-        color: var(--text-secondary);
-        font-style: normal;
-        line-height: 1.4;
-        margin-top: var(--spacing-xs);
-        position: relative;
-        display: inline-block;
-        cursor: default;
-      }
-
-      .context-pronunciation .word-reading-tooltip {
-        bottom: calc(100% + 6px);
-        left: 0;
-        transform: none;
-      }
-
-      .context-pronunciation .word-reading-tooltip::after {
-        left: 16px;
-        transform: none;
-      }
-
-      .context-pronunciation:hover .word-reading-tooltip {
-        display: flex;
-      }
-
-      .sentence-translation {
-        font-size: 14px;
-        color: var(--text-secondary);
-        font-style: italic;
-        line-height: 1.4;
-        margin-top: var(--spacing-xs);
-      }
-
-      .sentence-translation.hidden {
-        opacity: 0.1;
-        filter: blur(8px);
-        pointer-events: none;
-        user-select: none;
-      }
-
-      .word-in-sentence {
-        cursor: pointer;
-        padding: 2px 4px;
-        border-radius: 3px;
-        transition: all 0.2s ease;
-        position: relative;
-        display: inline-block;
-        vertical-align: baseline;
-        border: 2px solid transparent;
-        box-sizing: border-box;
-      }
-
-      .japanese-words {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px;
-        align-items: baseline;
-      }
-
-      .word-in-sentence:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      }
-
-      /* Word strength and status colors */
-      .word-neutral {
-        background-color: transparent;
-      }
-
-      .word-target {
-        background-color: var(--primary-light);
-        border: 2px solid transparent;
-      }
-
-      .word-known {
-        background-color: #c8e6c9;
-        color: #2e7d32;
-      }
-
-      .word-ignored {
-        background-color: #f5f5f5;
-        color: #999;
-        text-decoration: line-through;
-      }
-
-      .word-strength-0 {
-        background-color: #ffebee;
-      } /* Very weak - light red */
-      .word-strength-1 {
-        background-color: #fff3e0;
-      } /* Weak - light orange */
-      .word-strength-2 {
-        background-color: #fffde7;
-      } /* Learning - light yellow */
-      .word-strength-3 {
-        background-color: #f3e5f5;
-      } /* Good - light purple */
-      .word-strength-4 {
-        background-color: #e8f5e8;
-      } /* Strong - light green */
-
-      .word-actions {
-        display: flex;
-        justify-content: center;
-        gap: var(--spacing-md);
-        margin-top: var(--spacing-md);
-        flex-wrap: wrap;
-      }
-
-      .word-action-btn,
-      .nav-action-btn {
-        min-width: 100px;
-      }
-
-      /* Toned down colors for action buttons */
-      .word-action-btn.btn-success {
-        background: #e8f5e9;
-        color: #2e7d32;
-        border: 1px solid #81c784;
-      }
-
-      .word-action-btn.btn-success:hover:not(:disabled) {
-        background: #c8e6c9;
-        border-color: #66bb6a;
-      }
-
-      .word-action-btn.btn-danger {
-        background: #ffebee;
-        color: #c62828;
-        border: 1px solid #ef5350;
-      }
-
-      .word-action-btn.btn-danger:hover:not(:disabled) {
-        background: #ffcdd2;
-        border-color: #e57373;
-      }
-
-      .word-action-btn.btn-warning {
-        background: #fff3e0;
-        color: #e65100;
-        border: 1px solid #ffb74d;
-      }
-
-      .word-action-btn.btn-warning:hover:not(:disabled) {
-        background: #ffe0b2;
-        border-color: #ffa726;
-      }
-
-      .tooltip {
-        position: absolute;
-        bottom: 100%;
-        left: 0;
-        transform: none;
-        background: var(--text-primary);
-        color: white;
-        padding: var(--spacing-xs) var(--spacing-sm);
-        border-radius: var(--border-radius-small);
-        font-size: 12px;
-        white-space: normal;
-        max-width: 600px;
-        min-width: 150px;
-        width: fit-content;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.2s ease;
-        z-index: 10;
-        margin-bottom: var(--spacing-xs);
-      }
-
-      .tooltip.left {
-        left: auto;
-        right: 0;
-      }
-
-      .word-in-sentence:hover .tooltip {
-        opacity: 1;
-      }
-
-      .tooltip::after {
-        content: '';
-        position: absolute;
-        top: 100%;
-        left: 14px;
-        transform: none;
-        border: 4px solid transparent;
-        border-top-color: var(--text-primary);
-      }
-
-      .tooltip.left::after {
-        left: auto;
-        right: 14px;
-      }
-
-      .word-popup {
-        position: fixed;
-        background: var(--background-primary);
-        border: 1px solid var(--border-color);
-        border-radius: var(--border-radius);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        padding: var(--spacing-xs);
-        z-index: 1000;
-        min-width: 180px;
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-xs);
-      }
-
-      .word-popup-button {
-        padding: var(--spacing-sm) var(--spacing-md);
-        border: none;
-        border-radius: var(--border-radius-small);
-        cursor: pointer;
-        font-size: 14px;
-        text-align: left;
-        transition: all 0.2s ease;
-        background: transparent;
-        color: var(--text-primary);
-      }
-
-      .word-popup-button:hover:not(:disabled) {
-        background: var(--background-secondary);
-      }
-
-      .word-popup-button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-
-      .word-popup-button.ignore {
-        color: #c62828;
-      }
-
-      .word-popup-button.ignore:hover:not(:disabled) {
-        background: #ffebee;
-      }
-
-      .word-popup-button.known {
-        color: #2e7d32;
-      }
-
-      .word-popup-button.known:hover:not(:disabled) {
-        background: #e8f5e9;
-      }
-
-      .word-popup-button.add {
-        color: var(--primary-color);
-      }
-
-      .word-popup-button.add:hover:not(:disabled) {
-        background: var(--primary-light);
-      }
-
-      .word-popup-button.grammar {
-        color: var(--primary-color);
-      }
-
-      .word-popup-button.grammar:hover:not(:disabled) {
-        background: var(--primary-light);
-      }
-
-      .word-popup-divider {
-        height: 1px;
-        background: var(--border-color);
-        margin: var(--spacing-xs) 0;
-      }
-
-      .grammar-loading-box {
-        margin-top: var(--spacing-md);
-        padding: var(--spacing-md);
-        border: 1px solid #ccc;
-        border-radius: var(--border-radius);
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-sm);
-        color: var(--text-secondary);
-      }
-
-      .grammar-explanation-box {
-        margin-top: var(--spacing-md);
-        padding: var(--spacing-md);
-        border: 1px solid #ccc;
-        border-radius: var(--border-radius);
-      }
-
-      .grammar-explanation-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: var(--spacing-sm);
-      }
-
-      .grammar-explanation-header h4 {
-        margin: 0;
-        font-size: 16px;
-        color: var(--text-primary);
-      }
-
-      .grammar-close-btn {
-        background: transparent;
-        border: none;
-        font-size: 24px;
-        line-height: 1;
-        cursor: pointer;
-        color: var(--text-secondary);
-        padding: 0;
-        width: 24px;
-        height: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        transition: all 0.2s ease;
-      }
-
-      .grammar-close-btn:hover {
-        background: var(--background-secondary);
-        color: var(--text-primary);
-      }
-
-      .grammar-explanation-content {
-        font-size: 14px;
-        line-height: 1.6;
-        color: var(--text-primary);
-      }
-
-      .grammar-explanation-content code {
-        background: var(--background-primary);
-        padding: 2px 4px;
-        border-radius: 3px;
-        font-family: monospace;
-        font-size: 0.9em;
-      }
-
-      .grammar-explanation-content strong {
-        font-weight: 600;
-      }
-
-      .grammar-explanation-content em {
-        font-style: italic;
-      }
-
-      .grammar-explanation-content ul {
-        margin: var(--spacing-xs) 0;
-        padding-left: var(--spacing-lg);
-      }
-
-      .grammar-explanation-content li {
-        margin: var(--spacing-xs) 0;
-      }
-
-      .context-menu {
-        position: fixed;
-        background: var(--background-primary);
-        border: 1px solid var(--border-color);
-        border-radius: var(--border-radius-small);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        z-index: 10000;
-        min-width: 150px;
-        padding: var(--spacing-xs) 0;
-      }
-
-      .context-menu-item {
-        padding: var(--spacing-sm) var(--spacing-md);
-        cursor: pointer;
-        font-size: 13px;
-        color: var(--text-primary);
-        transition: background 0.15s ease;
-      }
-
-      .context-menu-item:hover {
-        background: var(--background-secondary);
-      }
-
-      .context-menu-item:active {
-        background: var(--primary-light);
-      }
-
-      @media (max-width: 768px) {
-        .sentence-header {
-          flex-direction: column;
-          align-items: stretch;
-        }
-
-        .target-word-info {
-          justify-content: center;
-        }
-
-        .sentence-text {
-          font-size: 22px;
-        }
-
-        .word-actions {
-          flex-direction: column;
-        }
-
-        .word-action-btn,
-        .nav-action-btn {
-          width: 100%;
-        }
-      }
-    `,
-  ];
+  static styles = [sharedStyles, sentenceViewerStyles];
 
   async connectedCallback() {
     super.connectedCallback();
@@ -853,47 +154,18 @@ export class SentenceViewer extends LitElement {
     audioPlayer.stop();
   }
 
-  private handleOutsideClick = (event: MouseEvent) => {
-    // Handle context menu close
-    if (this.contextMenu) {
-      const target = event.target as HTMLElement;
-      if (!target.closest('.context-menu') && !target.closest('.grammar-explanation-content')) {
-        this.handleCloseContextMenu();
-      }
+  private handleOutsideClick = () => {
+    // Word clicks (which open the popup) and clicks inside <word-popup> both call
+    // stopPropagation, so any click that reaches this document-level listener is
+    // genuinely outside the popup and should dismiss it.
+    if (this.wordPopup) {
+      this.closeWordPopup();
     }
-
-    if (!this.wordPopup) return;
-
-    // Use setTimeout to allow click handlers on words to execute first
-    setTimeout(() => {
-      if (!this.wordPopup) return;
-
-      const target = event.target as Node;
-      if (!this.shadowRoot) {
-        this.closeWordPopup();
-        return;
-      }
-
-      // Check if the click is inside the popup
-      const popupElement = this.shadowRoot.querySelector('.word-popup');
-      if (popupElement && (popupElement.contains(target) || popupElement === target)) {
-        return;
-      }
-
-      // Close if click is outside shadow root or outside popup but inside shadow root
-      if (!this.shadowRoot.contains(target) || (popupElement && !popupElement.contains(target))) {
-        this.closeWordPopup();
-      }
-    }, 0);
   };
 
   private handleKeyDown = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') {
-      if (this.contextMenu) {
-        this.handleCloseContextMenu();
-      } else if (this.wordPopup) {
-        this.closeWordPopup();
-      }
+    if (event.key === 'Escape' && this.wordPopup) {
+      this.closeWordPopup();
     }
   };
 
@@ -932,7 +204,7 @@ export class SentenceViewer extends LitElement {
       if (sentenceIdChanged) {
         this.lastProcessedSentenceId = currentSentenceId;
         const newParsedWords = this.convertPrecomputedTokensToWords(this.sentence.tokenizedTokens!);
-        const hasChanged = this.hasParsedWordsChanged(newParsedWords, this.parsedWords);
+        const hasChanged = hasParsedWordsChanged(newParsedWords, this.parsedWords);
         if (hasChanged) {
           this.parsedWords = newParsedWords;
           void this.fetchZipfFrequencies();
@@ -1095,7 +367,7 @@ export class SentenceViewer extends LitElement {
 
       // Only update if it actually changed to prevent unnecessary re-renders
       if (requestId === this.tokenizationRequestId) {
-        const hasChanged = this.hasParsedWordsChanged(newParsedWords, this.parsedWords);
+        const hasChanged = hasParsedWordsChanged(newParsedWords, this.parsedWords);
 
         if (hasChanged) {
           this.parsedWords = newParsedWords;
@@ -1131,7 +403,7 @@ export class SentenceViewer extends LitElement {
       // Find word data from allWords (compare directly since runtime tokenization doesn't have lemma)
       const wordData = this.allWords.find((w) => w.word.toLowerCase() === cleanText);
 
-      const dictionaryKey = this.buildDictionaryKey(dictionaryForm);
+      const dictionaryKey = buildDictionaryKey(dictionaryForm, this.targetWord?.language);
 
       if (!wordData && !isTargetWord && dictionaryKey) {
         void this.ensureDictionaryEntry(dictionaryForm, dictionaryKey);
@@ -1290,43 +562,6 @@ export class SentenceViewer extends LitElement {
   /**
    * Deep comparison of parsed words to detect meaningful changes.
    */
-  private hasParsedWordsChanged(newWords: WordInSentence[], oldWords: WordInSentence[]): boolean {
-    if (newWords.length !== oldWords.length) {
-      return true;
-    }
-
-    return newWords.some((word, i) => {
-      const oldWord = oldWords[i];
-      if (!oldWord) return true;
-
-      // Check text and isTargetWord (these should rarely change)
-      if (word.text !== oldWord.text || word.isTargetWord !== oldWord.isTargetWord) {
-        return true;
-      }
-
-      // Check wordData by ID and relevant properties, not by reference
-      const oldWordId = oldWord.wordData?.id;
-      const newWordId = word.wordData?.id;
-
-      if (oldWordId !== newWordId) {
-        return true;
-      }
-
-      // If same word ID, check if status changed
-      if (oldWordId && oldWordId === newWordId) {
-        const oldWordData = oldWord.wordData!;
-        const newWordData = word.wordData!;
-        return (
-          oldWordData.strength !== newWordData.strength ||
-          oldWordData.known !== newWordData.known ||
-          oldWordData.ignored !== newWordData.ignored
-        );
-      }
-
-      return false;
-    });
-  }
-
   /**
    * Convert precomputed tokens to WordInSentence format, merging with current word status.
    * This applies dynamic word status (strength, known, ignored) from current allWords.
@@ -1394,7 +629,7 @@ export class SentenceViewer extends LitElement {
           targetWord: this.targetWord,
           allWords: this.allWords,
           lookupDictionary: async (word, language) => {
-            const dictionaryKey = this.buildDictionaryKey(word, language);
+            const dictionaryKey = buildDictionaryKey(word, language ?? this.targetWord?.language);
             const entries = await this.getDictionaryEntries(word, dictionaryKey, language);
             return entries ?? [];
           },
@@ -1413,7 +648,7 @@ export class SentenceViewer extends LitElement {
         DictionaryEntry[] | null
       >;
       // Only update parsedWords if content actually changed to prevent unnecessary re-renders
-      const hasChanged = this.hasParsedWordsChanged(words, this.parsedWords);
+      const hasChanged = hasParsedWordsChanged(words, this.parsedWords);
 
       if (hasChanged) {
         this.parsedWords = words;
@@ -1425,28 +660,10 @@ export class SentenceViewer extends LitElement {
     }
   }
 
-  private formatTimeAgo(date?: Date): string {
-    if (!date) {
-      return 'never';
-    }
-    return formatDistanceToNow(date, { addSuffix: true });
-  }
-
   // Allows async tokenization pipelines to push pre-processed words into the view.
   public applyTokenizedWords(words: WordInSentence[]): void {
     this.tokenizationRequestId += 1;
     this.parsedWords = words;
-  }
-
-  private buildDictionaryKey(word: string, languageOverride?: string): string | undefined {
-    const trimmed = word.trim();
-    if (!trimmed) {
-      return undefined;
-    }
-
-    const language =
-      languageOverride?.toLowerCase() || this.targetWord?.language?.toLowerCase() || 'unknown';
-    return `${language}|${trimmed.toLowerCase()}`;
   }
 
   private async ensureDictionaryEntry(word: string, key: string, lemma?: string): Promise<void> {
@@ -1472,7 +689,8 @@ export class SentenceViewer extends LitElement {
     languageOverride?: string,
     lemma?: string
   ): Promise<DictionaryEntry[] | null> {
-    const dictionaryKey = key ?? this.buildDictionaryKey(word, languageOverride);
+    const dictionaryKey =
+      key ?? buildDictionaryKey(word, languageOverride ?? this.targetWord?.language);
 
     if (!dictionaryKey) {
       return null;
@@ -1552,61 +770,6 @@ export class SentenceViewer extends LitElement {
 
     this.dictionaryLookupPromises[dictionaryKey] = lookupPromise;
     return lookupPromise;
-  }
-
-  private formatDictionaryTooltip(entries: DictionaryEntry[]): string {
-    if (!entries.length) {
-      return '';
-    }
-
-    const content = entries
-      .map((entry) => {
-        const glossText = entry.glosses.join(', ');
-        if (entry.pos && glossText) {
-          return `${entry.pos}: ${glossText}`;
-        }
-        return glossText || entry.pos || '';
-      })
-      .filter(Boolean)
-      .join(' • ');
-
-    return content ? content : '';
-  }
-
-  private getWordClass(wordInfo: WordInSentence): string {
-    // Don't style whitespace or punctuation
-    if (/^\s+$/.test(wordInfo.text) || /^[.,!?;:]+$/.test(wordInfo.text)) {
-      return '';
-    }
-
-    if (!wordInfo.wordData && !wordInfo.isTargetWord) {
-      return 'word-neutral';
-    }
-
-    if (wordInfo.isTargetWord) {
-      return 'word-target';
-    }
-
-    const word = wordInfo.wordData!;
-
-    if (word.ignored) {
-      return 'word-ignored';
-    }
-
-    if (word.known) {
-      return 'word-known';
-    }
-
-    // Color based on strength (0-100 scale, map to 0-4 levels)
-    const strengthLevel = Math.min(4, Math.floor(word.strength / 20));
-    return `word-strength-${strengthLevel}`;
-  }
-
-  private truncateTooltipText(text: string, maxLength: number = 200): string {
-    if (text.length <= maxLength) {
-      return text;
-    }
-    return text.substring(0, maxLength - 3) + '...';
   }
 
   private async fetchZipfFrequencies() {
@@ -1691,18 +854,18 @@ export class SentenceViewer extends LitElement {
 
       const cachedEntries = this.dictionaryCache[wordInfo.dictionaryKey];
       if (cachedEntries && cachedEntries.length > 0) {
-        const formatted = this.formatDictionaryTooltip(cachedEntries);
+        const formatted = formatDictionaryTooltip(cachedEntries);
         if (parts.length > 0) {
           const result = parts.join(' • ') + ' • ' + formatted;
-          return this.truncateTooltipText(result);
+          return truncateTooltipText(result);
         }
-        return this.truncateTooltipText(formatted);
+        return truncateTooltipText(formatted);
       }
     }
 
     // If we have lemma but no dictionary definition, show just lemma
     if (parts.length > 0) {
-      return this.truncateTooltipText(parts.join(' • '));
+      return truncateTooltipText(parts.join(' • '));
     }
 
     return '';
@@ -1853,38 +1016,6 @@ export class SentenceViewer extends LitElement {
       logger.warn({ error }, 'Failed to record dictionary hover');
       // Don't block the flow if tracking fails
     }
-  }
-
-  private getPopupStyle(): string {
-    if (!this.wordPopup) return '';
-
-    // Position popup near the click, but ensure it stays on screen
-    const padding = 10;
-    const popupWidth = 180;
-    const popupHeight = 150; // Approximate height
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-
-    let left = this.wordPopup.position.x;
-    let top = this.wordPopup.position.y;
-
-    // Adjust horizontally if popup would go off-screen
-    if (left + popupWidth > viewportWidth - padding) {
-      left = viewportWidth - popupWidth - padding;
-    }
-    if (left < padding) {
-      left = padding;
-    }
-
-    // Adjust vertically if popup would go off-screen (show above click if needed)
-    if (top + popupHeight > viewportHeight - padding) {
-      top = this.wordPopup.position.y - popupHeight - 5;
-    }
-    if (top < padding) {
-      top = padding;
-    }
-
-    return `left: ${left}px; top: ${top}px;`;
   }
 
   private async handleIgnoreWord() {
@@ -2103,39 +1234,9 @@ export class SentenceViewer extends LitElement {
     this.requestUpdate();
   }
 
-  private async handleGrammarContextMenu(e: MouseEvent) {
-    e.preventDefault();
-
-    const selection = window.getSelection();
-    const selectedText = selection?.toString().trim() || '';
-
-    // Only show menu if text is between 5 and 100 characters
-    if (selectedText.length < 5 || selectedText.length > 100) {
-      this.contextMenu = null;
-      return;
-    }
-
-    // Show context menu at cursor position (works with any TTS backend)
-    this.contextMenu = {
-      x: e.clientX,
-      y: e.clientY,
-      selectedText,
-    };
-
-    this.requestUpdate();
-  }
-
-  private handleCloseContextMenu() {
-    this.contextMenu = null;
-    // Clear selection
-    window.getSelection()?.removeAllRanges();
-  }
-
-  private async handleReadSelectedText() {
-    if (!this.contextMenu) return;
-
-    const selectedText = this.contextMenu.selectedText;
-    this.handleCloseContextMenu();
+  /** Read-aloud handler for text selected inside the grammar explanation. */
+  private async handleReadAloud(selectedText: string) {
+    if (!selectedText) return;
 
     try {
       // Get current language
@@ -2753,93 +1854,13 @@ export class SentenceViewer extends LitElement {
   /**
    * Builds the buttons for the word popup menu
    */
-  private buildWordPopupButtons(): TemplateResult[] {
-    if (!this.wordPopup) return [];
-
-    const wordInfo = this.wordPopup.wordInfo;
-    const word = wordInfo.isTargetWord ? this.targetWord : wordInfo.wordData;
-    const isKnown = word?.known ?? false;
-    const isIgnored = word?.ignored ?? false;
-    const existsInLearning = !!word || wordInfo.isTargetWord;
-    const needsAddToLearningSet = !existsInLearning;
-
-    const buttons: TemplateResult[] = [];
-
-    if (!isKnown) {
-      buttons.push(html`
-        <button
-          class="word-popup-button known"
-          @click=${this.handleMarkWordKnown}
-          ?disabled=${this.isProcessing}
-        >
-          Mark as known
-        </button>
-      `);
-    }
-
-    if (!isIgnored) {
-      buttons.push(html`
-        <button
-          class="word-popup-button ignore"
-          @click=${this.handleIgnoreWord}
-          ?disabled=${this.isProcessing}
-        >
-          Ignore
-        </button>
-      `);
-    }
-
-    if (needsAddToLearningSet) {
-      if (buttons.length > 0) {
-        buttons.push(html`<div class="word-popup-divider"></div>`);
-      }
-      buttons.push(html`
-        <button
-          class="word-popup-button add"
-          @click=${this.handleAddToLearningSet}
-          ?disabled=${this.isProcessing}
-        >
-          Add to learning set
-        </button>
-      `);
-    }
-
-    // Add "Explain grammar" button (always available)
-    if (buttons.length > 0) {
-      buttons.push(html`<div class="word-popup-divider"></div>`);
-    }
-    buttons.push(html`
-      <button
-        class="word-popup-button grammar"
-        @click=${this.handleExplainGrammar}
-        ?disabled=${this.isProcessing || this.isFetchingGrammar}
-      >
-        ${this.isFetchingGrammar ? 'Loading...' : 'Explain grammar'}
-      </button>
-    `);
-
-    // If no buttons to show (word is already known/ignored and in learning set)
-    if (buttons.length === 0) {
-      buttons.push(html`
-        <div
-          class="word-popup-button"
-          style="opacity: 0.6; cursor: default; padding: var(--spacing-sm);"
-        >
-          ${wordInfo.isTargetWord ? 'Target word' : isKnown ? 'Already known' : 'Already ignored'}
-        </div>
-      `);
-    }
-
-    return buttons;
-  }
-
   /**
    * Renders the sentence header with target word info and audio buttons
    */
   private renderHeader(): TemplateResult {
     const wordStrength = Math.round(this.targetWord?.strength ?? 0);
     const lastSeenSource = this.displayLastSeen ?? this.sentence?.lastShown;
-    const lastSeenText = this.formatTimeAgo(lastSeenSource);
+    const lastSeenText = formatTimeAgo(lastSeenSource);
 
     return html`
       <div class="sentence-header">
@@ -2855,7 +1876,7 @@ export class SentenceViewer extends LitElement {
           </span>
           <span class="word-separator">•</span>
           <span class="word-translation" title=${this.targetWord.translation}>
-            ${this.truncate(this.targetWord.translation, 40)}
+            ${truncate(this.targetWord.translation, 40)}
           </span>
           <span class="word-separator">•</span>
           <span class="word-strength" title="Current spaced repetition strength">
@@ -2951,7 +1972,7 @@ export class SentenceViewer extends LitElement {
 
     return html`
       <span
-        class="word-in-sentence ${this.getWordClass(wordInfo)}"
+        class="word-in-sentence ${getWordClass(wordInfo)}"
         @click=${(e: MouseEvent) => {
           this.handleWordHoverEnd(wordInfo); // Clear hover tracking on click
           this.handleWordClick(wordInfo, e);
@@ -2984,17 +2005,17 @@ export class SentenceViewer extends LitElement {
         <div class="${isJapanese ? 'japanese-words' : ''}">
           ${this.parsedWords.map((wordInfo) => this.renderWord(wordInfo))}
         </div>
-        ${this.wordPopup
-          ? html`
-              <div
-                class="word-popup"
-                style="${this.getPopupStyle()}"
-                @click=${(e: Event) => e.stopPropagation()}
-              >
-                ${this.buildWordPopupButtons()}
-              </div>
-            `
-          : nothing}
+        <word-popup
+          .wordInfo=${this.wordPopup?.wordInfo ?? null}
+          .position=${this.wordPopup?.position ?? null}
+          .targetWord=${this.targetWord ?? null}
+          ?isProcessing=${this.isProcessing}
+          ?isFetchingGrammar=${this.isFetchingGrammar}
+          @mark-known=${this.handleMarkWordKnown}
+          @ignore=${this.handleIgnoreWord}
+          @add-to-set=${this.handleAddToLearningSet}
+          @explain-grammar=${this.handleExplainGrammar}
+        ></word-popup>
         ${this.sentence.pronunciation && this.sentence.pronunciation.trim()
           ? html`
               <div class="sentence-pronunciation">
@@ -3074,47 +2095,13 @@ export class SentenceViewer extends LitElement {
    * Renders the grammar explanation section
    */
   private renderGrammarExplanation(): TemplateResult {
-    if (this.isFetchingGrammar) {
-      return html`
-        <div class="grammar-loading-box">
-          <div class="spinner"></div>
-          <span>Loading explanation...</span>
-        </div>
-      `;
-    }
-
-    if (!this.grammarExplanation) {
-      return html``;
-    }
-
     return html`
-      <div class="grammar-explanation-box">
-        <div class="grammar-explanation-header">
-          <button
-            class="grammar-close-btn"
-            @click=${this.handleCloseGrammarExplanation}
-            title="Close"
-          >
-            ×
-          </button>
-        </div>
-        <div class="grammar-explanation-content" @contextmenu=${this.handleGrammarContextMenu}>
-          ${unsafeHTML(markdownToHtml(this.grammarExplanation.explanation))}
-        </div>
-        ${this.contextMenu
-          ? html`
-              <div
-                class="context-menu"
-                style="left: ${this.contextMenu.x}px; top: ${this.contextMenu.y}px;"
-                @click=${(e: Event) => e.stopPropagation()}
-              >
-                <div class="context-menu-item" @click=${this.handleReadSelectedText}>
-                  Read out loud
-                </div>
-              </div>
-            `
-          : nothing}
-      </div>
+      <grammar-explanation
+        .explanation=${this.grammarExplanation?.explanation ?? null}
+        ?loading=${this.isFetchingGrammar}
+        @close=${this.handleCloseGrammarExplanation}
+        @read-aloud=${(e: CustomEvent<{ text: string }>) => this.handleReadAloud(e.detail.text)}
+      ></grammar-explanation>
     `;
   }
 
