@@ -472,19 +472,11 @@ export class SettingsPanel extends BaseComponent {
 
   private async loadElevenLabsSettings() {
     try {
-      // Get ElevenLabs API key
       const apiKey = await window.electronAPI.database.getSetting('elevenlabs_api_key');
       this.elevenLabsApiKey = apiKey || '';
-
-      // Check if ElevenLabs is enabled (has API key)
       this.isElevenLabsEnabled = !!(this.elevenLabsApiKey && this.elevenLabsApiKey.trim());
-
-      console.log('ElevenLabs settings loaded:', {
-        hasApiKey: !!this.elevenLabsApiKey,
-        enabled: this.isElevenLabsEnabled,
-      });
     } catch (error) {
-      console.error('Failed to load ElevenLabs settings:', error);
+      console.error('Failed to load TTS settings:', error);
       this.elevenLabsApiKey = '';
       this.isElevenLabsEnabled = false;
     }
@@ -681,25 +673,17 @@ export class SettingsPanel extends BaseComponent {
       this.elevenLabsApiKey = apiKey;
       this.isElevenLabsEnabled = !!(apiKey && apiKey.length > 0);
 
-      // Switch TTS based on current settings
-      await this.switchTTSBasedOnSettings();
+      if (this.isElevenLabsEnabled) {
+        await window.electronAPI.audio.switchToElevenLabs(apiKey);
+      } else {
+        await window.electronAPI.audio.switchToSystemTTS();
+      }
 
       console.log('ElevenLabs API key updated:', { enabled: this.isElevenLabsEnabled });
     } catch (error) {
       console.error('Failed to save ElevenLabs API key:', error);
       // Revert the input value if saving failed
       input.value = this.elevenLabsApiKey;
-    }
-  }
-
-  private async switchTTSBasedOnSettings() {
-    // Check ElevenLabs, then fall back to system TTS
-    if (this.isElevenLabsEnabled) {
-      // Switch to ElevenLabs TTS
-      await window.electronAPI.audio.switchToElevenLabs(this.elevenLabsApiKey);
-    } else {
-      // Switch back to system TTS
-      await window.electronAPI.audio.switchToSystemTTS();
     }
   }
 
@@ -896,10 +880,7 @@ export class SettingsPanel extends BaseComponent {
           <div class="settings-row">
             <div class="settings-description">
               <strong>ElevenLabs API Key</strong>
-              <p>
-                Enter your ElevenLabs API key to use AI voices. Model is configured per-language in
-                config.toml
-              </p>
+              <p>Required when <code>tts_backend = "elevenlabs"</code> is set in config.toml.</p>
             </div>
             <input
               type="password"
@@ -909,28 +890,11 @@ export class SettingsPanel extends BaseComponent {
               placeholder="Enter ElevenLabs API key..."
             />
           </div>
-
           ${this.isElevenLabsEnabled
-            ? html`
-                <div class="model-info" style="margin-top: var(--spacing-md);">
-                  <p style="margin: 0; font-size: 0.85rem; color: #666;">
-                    Voice IDs and model are configured per-language in config.toml
-                  </p>
-                </div>
-              `
+            ? html`<div class="model-info">
+                <span style="color: #28a745;">✓ ElevenLabs API key set</span>
+              </div>`
             : ''}
-
-          <div class="model-info">
-            Status:
-            ${this.isElevenLabsEnabled
-              ? html`<span style="color: #28a745;">✓ ElevenLabs TTS Active</span>`
-              : html`<span style="color: #6c757d;">System TTS Active</span>`}
-            ${!this.elevenLabsApiKey
-              ? html`
-                  <br /><span style="color: #dc3545;">⚠️ API key required for ElevenLabs TTS</span>
-                `
-              : ''}
-          </div>
         </div>
 
         <div class="settings-section">

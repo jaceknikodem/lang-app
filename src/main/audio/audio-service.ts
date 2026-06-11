@@ -6,13 +6,14 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { TTSAudioGenerator } from './audio-generator';
 import { ElevenLabsAudioGenerator } from './elevenlabs-generator';
+import { KokoroAudioGenerator } from './kokoro-generator';
 import { AudioGenerator, AudioError } from '../../shared/types/audio';
 import { DatabaseLayer } from '../../shared/types/database';
 import { AudioRecorder, RecordingSession, RecordingOptions } from './audio-recorder';
 import { SpeechRecognitionService, TranscriptionOptions, TranscriptionResult } from './speech-recognition';
 import { sanitizeFilename } from '../../shared/utils/sanitizeFilename';
 import { getErrorMessage, createAudioError } from '../../shared/utils/error.js';
-import { testingConfig } from '../../shared/config/index.js';
+import { testingConfig, languagesConfig } from '../../shared/config/index.js';
 import { getLogger } from '../utils/logger.js';
 import { Logger } from '../../shared/utils/logger.js';
 import { getElevenlabsModel } from '../../shared/utils/language-config.js';
@@ -32,6 +33,7 @@ const execFileAsync = promisify(execFile);
  */
 export class AudioService {
   private audioGenerator: AudioGenerator;
+  private kokoroGenerator: KokoroAudioGenerator | null = null;
   private audioRecorder: AudioRecorder;
   private speechRecognition: SpeechRecognitionService;
   private database?: DatabaseLayer;
@@ -70,25 +72,54 @@ export class AudioService {
   }
 
   /**
-   * Check for audio backend settings (ElevenLabs) and switch if available
+   * Check for audio backend settings and switch if needed.
+   * Priority: tts_backend setting > elevenlabs_api_key (legacy) > system TTS
    */
+  private getTTSBackendForLanguage(language: string): 'system' | 'kokoro' | 'elevenlabs' {
+    const lang = language.toLowerCase();
+    const entry = languagesConfig.find(
+      (l) => l.code === lang || l.name === lang
+    );
+    return entry?.ttsBackend ?? 'system';
+  }
+
   private async checkAndSwitchToAudioBackend(database: DatabaseLayer): Promise<void> {
     if (this.shouldForceSystemTTS()) {
       return;
     }
 
     try {
+      const currentLanguage = await database.getCurrentLanguage();
+      const backend = this.getTTSBackendForLanguage(currentLanguage);
+
+      if (backend === 'kokoro') {
+        // Kokoro is handled per-call in generateAudio; non-kokoro generator handles the rest
+        if (!(this.audioGenerator instanceof TTSAudioGenerator) &&
+            !(this.audioGenerator instanceof ElevenLabsAudioGenerator)) {
+          this.audioGenerator = new TTSAudioGenerator(undefined, database);
+        }
+        return;
+      }
+
+      if (backend === 'system') {
+        if (!(this.audioGenerator instanceof TTSAudioGenerator)) {
+          this.audioGenerator = new TTSAudioGenerator(undefined, database);
+        }
+        return;
+      }
+
+      // backend === 'elevenlabs': check for API key
       const apiKey = await database.getSetting('elevenlabs_api_key');
       if (apiKey && apiKey.trim()) {
-        // Get current language and model from config
-        const currentLanguage = await database.getCurrentLanguage();
-        const model = getElevenlabsModel(currentLanguage) || 'eleven_flash_v2_5';
-        
-        const config = {
-          elevenLabsApiKey: apiKey,
-          elevenLabsModel: model
-        };
-        this.audioGenerator = new ElevenLabsAudioGenerator(config, database);
+        if (!(this.audioGenerator instanceof ElevenLabsAudioGenerator)) {
+          const model = getElevenlabsModel(currentLanguage) || 'eleven_flash_v2_5';
+          this.audioGenerator = new ElevenLabsAudioGenerator(
+            { elevenLabsApiKey: apiKey, elevenLabsModel: model },
+            database
+          );
+        }
+      } else if (!(this.audioGenerator instanceof TTSAudioGenerator)) {
+        this.audioGenerator = new TTSAudioGenerator(undefined, database);
       }
     } catch (error) {
       this.logger.warn({ error }, 'Failed to check audio backend settings, using system TTS');
@@ -141,7 +172,7 @@ export class AudioService {
    * Ensures the currently selected TTS engine is used for generation.
    */
   async generateAudio(text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, voiceId?: string): Promise<string> {
-    // Ensure we're using the currently selected TTS engine
+    // Ensure we're using the currently selected TTS engine for non-Japanese
     if (this.database) {
       await this.checkAndSwitchToAudioBackend(this.database);
     }
@@ -154,6 +185,18 @@ export class AudioService {
 
       if (!language || typeof language !== 'string') {
         throw new Error('Language must be a non-empty string');
+      }
+
+      const lang = language.toLowerCase();
+      if (this.getTTSBackendForLanguage(lang) === 'kokoro') {
+        if (!this.kokoroGenerator) {
+          this.kokoroGenerator = new KokoroAudioGenerator();
+        }
+        const audioPath = await this.kokoroGenerator.generateAudio(text.trim(), lang, word, wordId, sentenceId, variantId, voiceId);
+        if (!await this.audioExists(audioPath)) {
+          throw new Error(`Audio generation succeeded but file not found: ${audioPath}`);
+        }
+        return AudioService.getRelativeAudioPath(audioPath);
       }
 
       // Generate audio and return relative path
@@ -1204,7 +1247,6 @@ export class AudioService {
   getAudioGenerationInfo(): { service: string; model?: string; voiceId?: string } {
     const generatorName = this.audioGenerator.constructor.name;
     
-    // Check if it's ElevenLabs generator
     if (generatorName === 'ElevenLabsAudioGenerator') {
       const config = (this.audioGenerator as any).config;
       const voiceId = (this.audioGenerator as any).getLastUsedVoiceId?.();
@@ -1214,11 +1256,12 @@ export class AudioService {
         voiceId: voiceId
       };
     }
-    
-    // Otherwise it's system TTS
-    return {
-      service: 'system-tts'
-    };
+
+    if (generatorName === 'KokoroAudioGenerator') {
+      return { service: 'kokoro', model: 'Kokoro-82M-v1.0' };
+    }
+
+    return { service: 'system-tts' };
   }
 
   /**

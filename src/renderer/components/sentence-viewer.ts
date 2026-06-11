@@ -68,6 +68,7 @@ export class SentenceViewer extends LitElement {
   private isRegeneratingAudio = false;
 
   @state()
+  @state()
   private parsedWords: WordInSentence[] = [];
 
   @state()

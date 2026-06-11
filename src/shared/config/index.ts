@@ -458,6 +458,11 @@ const config = convict({
         format: String,
         default: '',
       },
+      ttsBackend: {
+        doc: 'TTS backend for this language: system, kokoro, or elevenlabs',
+        format: String,
+        default: 'system',
+      },
     },
   },
 });
@@ -553,6 +558,7 @@ export const languagesConfig = config.get('languages') as Array<{
   elevenlabsVoiceIds: string[];
   elevenlabsModel: string;
   audioGeneratorVoice: string;
+  ttsBackend: 'system' | 'kokoro' | 'elevenlabs';
 }>;
 
 // Export environment

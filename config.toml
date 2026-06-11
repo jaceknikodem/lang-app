@@ -106,6 +106,8 @@ word_stats_threshold_strong = 70
 
 # Language Configuration
 # Centralized language metadata - single source of truth for all language-related mappings
+# tts_backend: "kokoro" (offline neural TTS), "elevenlabs" (cloud), or "system" (macOS say)
+
 [[languages]]
 code = "es"
 name = "spanish"
@@ -116,6 +118,7 @@ speech_recognition_code = "es"
 elevenlabs_voice_ids = ["Nh2zY9kknu6z4pZy6FhD", "P951amuWPNCJ0L15rFyC"]
 elevenlabs_model = "eleven_flash_v2_5"
 audio_generator_voice = "Eddy (Spanish (Mexico))"
+tts_backend = "kokoro"
 
 [[languages]]
 code = "it"
@@ -127,6 +130,7 @@ speech_recognition_code = "it"
 elevenlabs_voice_ids = ["oCS6WHyqobqW2UapCSHl", "CiwzbDpaN3pQXjTgx3ML", "P951amuWPNCJ0L15rFyC"]
 elevenlabs_model = "eleven_flash_v2_5"
 audio_generator_voice = "Alice"
+tts_backend = "kokoro"
 
 [[languages]]
 code = "pt"
@@ -138,6 +142,7 @@ speech_recognition_code = "pt"
 elevenlabs_voice_ids = ["GDzHdQOi6jjf8zaXhCYD", "9pDzHy2OpOgeXM8SeL0t"]
 elevenlabs_model = "eleven_flash_v2_5"
 audio_generator_voice = "Luciana"
+tts_backend = "kokoro"
 
 [[languages]]
 code = "pl"
@@ -147,8 +152,9 @@ tatoeba_code = "pol"
 lemmatization_code = "pl"
 speech_recognition_code = "pl"
 elevenlabs_voice_ids = ["wyWA56cQNU2KqUW4eCsI", "g8ZOdhoD9R6eYKPTjKbE", "CiwzbDpaN3pQXjTgx3ML"]
-elevenlabs_model = "eleven_multilingual_v2"
+elevenlabs_model = "eleven_v3"
 audio_generator_voice = "Zosia"
+tts_backend = "elevenlabs"
 
 [[languages]]
 code = "id"
@@ -158,8 +164,21 @@ tatoeba_code = "ind"
 lemmatization_code = "id"
 speech_recognition_code = "id"
 elevenlabs_voice_ids = ["plgKUYgnlZ1DCNh54DwJ", "9pDzHy2OpOgeXM8SeL0t", "Nh2zY9kknu6z4pZy6FhD"]
-elevenlabs_model = "eleven_multilingual_v2"
+elevenlabs_model = "eleven_v3"
 audio_generator_voice = "Damayanti"
+tts_backend = "elevenlabs"
+
+[[languages]]
+code = "fr"
+name = "french"
+display_name = "French"
+tatoeba_code = "fra"
+lemmatization_code = "fr"
+speech_recognition_code = "fr"
+elevenlabs_voice_ids = []
+elevenlabs_model = "eleven_flash_v2_5"
+audio_generator_voice = "Thomas"
+tts_backend = "kokoro"
 
 [[languages]]
 code = "ja"
@@ -171,4 +190,5 @@ speech_recognition_code = "ja"
 elevenlabs_voice_ids = ["sRYzP8TwEiiqAWebdYPJ"]
 elevenlabs_model = "eleven_v3"
 audio_generator_voice = "Kyoko"
+tts_backend = "kokoro"
 

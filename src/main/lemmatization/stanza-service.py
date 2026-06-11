@@ -250,9 +250,145 @@ async def freqword(request: FreqWordRequest):
         )
 
 
+import os
+from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Kokoro TTS
+# ---------------------------------------------------------------------------
+
+_kokoro = None
+_ja_g2p = None
+
+VOICES_BY_LANGUAGE: dict[str, list[str]] = {
+    'japanese': ['jf_alpha', 'jf_gongitsune', 'jf_nezumi', 'jf_tebukuro', 'jm_kumo'],
+    'ja': ['jf_alpha', 'jf_gongitsune', 'jf_nezumi', 'jf_tebukuro', 'jm_kumo'],
+    'english': ['af_heart', 'af_bella', 'af_nicole', 'am_fenrir', 'am_michael'],
+    'en': ['af_heart', 'af_bella', 'af_nicole', 'am_fenrir', 'am_michael'],
+    'spanish': ['ef_dora'],
+    'es': ['ef_dora'],
+    'french': ['ff_siwis'],
+    'fr': ['ff_siwis'],
+    'italian': ['if_sara'],
+    'it': ['if_sara'],
+    'portuguese': ['pf_dora'],
+    'pt': ['pf_dora'],
+    'chinese': ['zf_xiaobei', 'zf_xiaoni', 'zm_yunxi'],
+    'zh': ['zf_xiaobei', 'zf_xiaoni', 'zm_yunxi'],
+    'korean': ['kf_aria', 'km_junho'],
+    'ko': ['kf_aria', 'km_junho'],
+}
+
+def _get_voice_for_language(language: str) -> str:
+    import random
+    voices = VOICES_BY_LANGUAGE.get(language.lower(), ['af_heart'])
+    return random.choice(voices)
+
+_KOKORO_MODEL_URL = (
+    "https://github.com/thewh1teagle/kokoro-onnx/releases/download"
+    "/model-files-v1.0/kokoro-v1.0.int8.onnx"
+)
+_KOKORO_VOICES_URL = (
+    "https://github.com/thewh1teagle/kokoro-onnx/releases/download"
+    "/model-files-v1.0/voices-v1.0.bin"
+)
+
+def _download_file(url: str, dest: Path, label: str) -> Path:
+    import urllib.request
+    if dest.exists():
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    print(f"[TTS] Downloading {label} to {dest} ...", flush=True)
+    urllib.request.urlretrieve(url, str(dest))
+    print(f"[TTS] {label} download complete", flush=True)
+    return dest
+
+def _get_model_path() -> Path:
+    return _download_file(
+        _KOKORO_MODEL_URL,
+        Path(os.path.expanduser('~/.cache/kotoba-ai/kokoro-v1.0.int8.onnx')),
+        'Kokoro ONNX model',
+    )
+
+def _get_voices_path() -> Path:
+    return _download_file(
+        _KOKORO_VOICES_URL,
+        Path(os.path.expanduser('~/.cache/kotoba-ai/voices-v1.0.bin')),
+        'Kokoro voices',
+    )
+
+def _get_kokoro():
+    global _kokoro
+    if _kokoro is None:
+        from kokoro_onnx import Kokoro
+
+        print("[TTS] Loading Kokoro ONNX model...", flush=True)
+        model_path = _get_model_path()
+        voices_path = _get_voices_path()
+        _kokoro = Kokoro(str(model_path), str(voices_path))
+        print("[TTS] Kokoro model ready", flush=True)
+    return _kokoro
+
+def _get_ja_g2p():
+    global _ja_g2p
+    if _ja_g2p is None:
+        from misaki import ja
+        _ja_g2p = ja.JAG2P()
+    return _ja_g2p
+
+# Maps language name/code → espeak-ng language code used by kokoro-onnx phonemizer
+LANG_TO_ESPEAK: dict[str, str] = {
+    'english': 'en-us',
+    'en': 'en-us',
+    'spanish': 'es',
+    'es': 'es',
+    'french': 'fr-fr',
+    'fr': 'fr-fr',
+    'italian': 'it',
+    'it': 'it',
+    'portuguese': 'pt-br',
+    'pt': 'pt-br',
+}
+
+
+class TTSRequest(BaseModel):
+    text: str
+    language: str
+    output_path: str
+    voice: Optional[str] = None
+
+class TTSResponse(BaseModel):
+    success: bool
+
+@app.post("/tts", response_model=TTSResponse)
+async def text_to_speech(request: TTSRequest):
+    try:
+        import soundfile as sf
+        lang = request.language.lower()
+        is_japanese = lang in ('japanese', 'ja')
+
+        voice = request.voice or _get_voice_for_language(lang)
+        kokoro = _get_kokoro()
+
+        if is_japanese:
+            g2p = _get_ja_g2p()
+            ipa = g2p(request.text)
+            audio, sample_rate = kokoro.create(ipa, voice=voice, is_phonemes=True)
+        else:
+            espeak_lang = LANG_TO_ESPEAK.get(lang, 'en-us')
+            audio, sample_rate = kokoro.create(request.text, voice=voice, lang=espeak_lang)
+
+        out = Path(request.output_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        sf.write(str(out), audio, sample_rate)
+        return {"success": True}
+    except Exception as e:
+        print(f"[TTS] Generation failed: {e}", file=sys.stderr)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
-    import os
     port = int(os.environ.get("STANZA_PORT", "8888"))
     uvicorn.run(app, host="127.0.0.1", port=port)
 
