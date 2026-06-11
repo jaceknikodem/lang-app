@@ -1,7 +1,3 @@
-/**
- * Main database layer implementation
- */
-
 import Database from 'better-sqlite3';
 import path from 'path';
 import { promises as fsPromises } from 'fs';
@@ -24,6 +20,7 @@ import {
   PrecomputedToken,
 } from '../../shared/types/core.js';
 import { DatabaseConnection } from './connection.js';
+import { initializeSchema } from './schema.js';
 import {
   splitSentenceIntoParts,
   serializeSentenceParts,
@@ -43,16 +40,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     this.logger = getLogger();
     this.connection = new DatabaseConnection(config);
   }
-
-  /**
-   * Initialize database connection and schema
-   */
   async initialize(): Promise<void> {
     try {
       const db = await this.connection.connect();
 
       // Initialize schema
-      this.initializeSchema(db);
+      initializeSchema(db);
 
       // Populate dictionary data from bundled files in background (non-blocking)
       // This is a very expensive operation that can take several seconds
@@ -69,439 +62,14 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to initialize database`);
     }
   }
-
-  /**
-   * Close database connection
-   */
   async close(): Promise<void> {
     await this.connection.close();
   }
 
-  /**
-   * Get database instance for operations
-   */
   private getDb(): Database.Database {
     return this.connection.getDatabase();
   }
-
-  /**
-   * Initialize database schema - creates all tables and indexes
-   */
-  private initializeSchema(db: Database.Database): void {
-    // Words table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS words (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        word TEXT NOT NULL,
-        language TEXT NOT NULL,
-        translation TEXT NOT NULL,
-        strength INTEGER DEFAULT 0,
-        known BOOLEAN DEFAULT FALSE,
-        ignored BOOLEAN DEFAULT FALSE,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        last_studied DATETIME,
-        interval_days INTEGER DEFAULT 1,
-        ease_factor REAL DEFAULT 2.5,
-        last_review DATETIME,
-        next_due DATETIME,
-        fsrs_difficulty REAL DEFAULT 5.0,
-        fsrs_stability REAL DEFAULT 1.0,
-        fsrs_lapses INTEGER DEFAULT 0,
-        fsrs_last_rating INTEGER,
-        processing_status TEXT DEFAULT 'ready',
-        sentence_count INTEGER DEFAULT 0,
-        grammar_explanation_count INTEGER DEFAULT 0,
-        topic TEXT,
-        added_via TEXT
-      )
-    `);
-
-    // Sentences table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS sentences (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        word_id INTEGER NOT NULL REFERENCES words(id) ON DELETE CASCADE,
-        language TEXT NOT NULL,
-        sentence TEXT NOT NULL,
-        translation TEXT NOT NULL,
-        audio_path TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        last_shown DATETIME,
-        context_before TEXT,
-        context_after TEXT,
-        context_before_translation TEXT,
-        context_after_translation TEXT,
-        sentence_parts TEXT,
-        sentence_generation_model TEXT,
-        audio_generation_service TEXT,
-        audio_generation_model TEXT,
-        audio_generation_voice_id TEXT,
-        sentence_tokens TEXT,
-        play_count INTEGER DEFAULT 0,
-        ignored BOOLEAN DEFAULT FALSE,
-        before_sentence_audio_path TEXT,
-        after_sentence_audio_path TEXT,
-        pronunciation TEXT,
-        context_before_pronunciation TEXT,
-        context_after_pronunciation TEXT
-      )
-    `);
-
-    // Add missing columns if they don't exist (for existing databases)
-    try {
-      db.exec(`
-        ALTER TABLE sentences 
-        ADD COLUMN before_sentence_audio_path TEXT;
-      `);
-    } catch (error) {
-      // Column might already exist, ignore error
-      if (!(error instanceof Error && error.message.includes('duplicate column'))) {
-        throw error;
-      }
-    }
-
-    try {
-      db.exec(`
-        ALTER TABLE sentences 
-        ADD COLUMN after_sentence_audio_path TEXT;
-      `);
-    } catch (error) {
-      // Column might already exist, ignore error
-      if (!(error instanceof Error && error.message.includes('duplicate column'))) {
-        throw error;
-      }
-    }
-
-    // Add pronunciation columns if they don't exist (for existing databases)
-    try {
-      db.exec(`
-        ALTER TABLE sentences 
-        ADD COLUMN pronunciation TEXT;
-      `);
-    } catch (error) {
-      // Column might already exist, ignore error
-      if (!(error instanceof Error && error.message.includes('duplicate column'))) {
-        throw error;
-      }
-    }
-
-    try {
-      db.exec(`
-        ALTER TABLE sentences 
-        ADD COLUMN context_before_pronunciation TEXT;
-      `);
-    } catch (error) {
-      // Column might already exist, ignore error
-      if (!(error instanceof Error && error.message.includes('duplicate column'))) {
-        throw error;
-      }
-    }
-
-    try {
-      db.exec(`
-        ALTER TABLE sentences 
-        ADD COLUMN context_after_pronunciation TEXT;
-      `);
-    } catch (error) {
-      // Column might already exist, ignore error
-      if (!(error instanceof Error && error.message.includes('duplicate column'))) {
-        throw error;
-      }
-    }
-
-    // Progress table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS progress (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        words_studied INTEGER DEFAULT 0,
-        when_studied DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Settings table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS settings (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    db.exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('current_language', 'spanish')`);
-
-    // Dictionary table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS dict (
-        word TEXT,
-        pos TEXT,
-        glosses TEXT,
-        lang TEXT
-      )
-    `);
-
-    // Word generation queue table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS word_generation_queue (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        word_id INTEGER NOT NULL UNIQUE REFERENCES words(id) ON DELETE CASCADE,
-        language TEXT NOT NULL,
-        topic TEXT,
-        desired_sentence_count INTEGER NOT NULL DEFAULT 3,
-        status TEXT NOT NULL DEFAULT 'queued',
-        attempts INTEGER NOT NULL DEFAULT 0,
-        last_error TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        started_at DATETIME
-      )
-    `);
-
-    // Sentence words junction table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS sentence_words (
-        sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
-        word_id INTEGER NOT NULL REFERENCES words(id) ON DELETE CASCADE,
-        PRIMARY KEY (sentence_id, word_id)
-      )
-    `);
-
-    // Sentence lemmas table - stores all lemmas from sentences, even for words not in database yet
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS sentence_lemmas (
-        sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
-        lemma TEXT NOT NULL,
-        PRIMARY KEY (sentence_id, lemma)
-      )
-    `);
-
-    // Dialogue variants table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS dialogue_variants (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
-        variant_sentence TEXT NOT NULL,
-        variant_translation TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        continuation_text TEXT,
-        continuation_translation TEXT,
-        continuation_audio TEXT
-      )
-    `);
-
-    // Pronunciation attempts table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS pronunciation_attempts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
-        similarity_score REAL NOT NULL,
-        expected_text TEXT NOT NULL,
-        transcribed_text TEXT NOT NULL,
-        audio_path TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Grammar explanations table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS grammar_explanations (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        word_id INTEGER NOT NULL REFERENCES words(id) ON DELETE CASCADE,
-        sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
-        explanation TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // SRS adjustments tracking (quiz mode only)
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS srs_adjustments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        word_id INTEGER NOT NULL REFERENCES words(id) ON DELETE CASCADE,
-        session_id INTEGER REFERENCES learning_sessions(id),
-        recall_rating INTEGER,  -- 0=failed, 1=hard, 2=good, 3=easy
-        strength_delta INTEGER,  -- change in strength
-        language TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Learning sessions tracking
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS learning_sessions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        mode TEXT NOT NULL,  -- 'learning', 'quiz', 'dialog', 'flow'
-        language TEXT NOT NULL,
-        started_at DATETIME NOT NULL,
-        ended_at DATETIME,
-        duration_seconds INTEGER,
-        word_count INTEGER DEFAULT 0,
-        sentence_count INTEGER DEFAULT 0,
-        audio_played_count INTEGER DEFAULT 0
-      )
-    `);
-
-    // Audio playback events tracking
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS audio_playback_events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id INTEGER REFERENCES learning_sessions(id),
-        sentence_id INTEGER REFERENCES sentences(id) ON DELETE SET NULL,
-        audio_path TEXT NOT NULL,
-        language TEXT NOT NULL,
-        mode TEXT NOT NULL,
-        playback_speed REAL DEFAULT 1.0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Dialog corrections table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS dialog_corrections (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
-        session_id INTEGER REFERENCES learning_sessions(id),
-        correction_text TEXT NOT NULL,
-        language TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Neglected words tracking
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS neglected_words (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        word TEXT NOT NULL,
-        language TEXT NOT NULL,
-        topic TEXT,
-        translation TEXT,
-        session_id INTEGER REFERENCES learning_sessions(id),
-        ignored_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        frequency_position INTEGER
-      )
-    `);
-
-    // Dictionary hover events tracking
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS dictionary_hover_events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        word TEXT NOT NULL,
-        language TEXT NOT NULL,
-        sentence_id INTEGER REFERENCES sentences(id) ON DELETE SET NULL,
-        session_id INTEGER REFERENCES learning_sessions(id),
-        hover_duration_ms INTEGER NOT NULL,
-        dictionary_key TEXT,
-        found_in_dict BOOLEAN DEFAULT FALSE,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Read aloud cache table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS read_aloud_cache (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        raw_text TEXT NOT NULL,
-        language TEXT NOT NULL,
-        audio_path TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(raw_text, language)
-      )
-    `);
-
-    // Create indexes for better query performance
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_words_strength ON words(strength)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_words_last_studied ON words(last_studied)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_words_known_ignored ON words(known, ignored)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_words_next_due ON words(next_due)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_words_srs_review ON words(next_due, strength)`);
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_words_fsrs_state ON words(fsrs_stability, fsrs_difficulty)`
-    );
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_words_language_topic ON words(language, topic)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_sentences_word_id ON sentences(word_id)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_progress_when_studied ON progress(when_studied)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_word_lang ON dict(word, lang)`);
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_word_generation_queue_status ON word_generation_queue(status, updated_at)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_sentence_words_sentence_id ON sentence_words(sentence_id)`
-    );
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_sentence_words_word_id ON sentence_words(word_id)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_sentence_lemmas_lemma ON sentence_lemmas(lemma)`);
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_sentence_lemmas_sentence_id ON sentence_lemmas(sentence_id)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_dialogue_variants_sentence_id ON dialogue_variants(sentence_id)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_dialogue_variants_created_at ON dialogue_variants(created_at)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_pronunciation_attempts_sentence_id ON pronunciation_attempts(sentence_id)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_pronunciation_attempts_created_at ON pronunciation_attempts(created_at)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_grammar_explanations_word_id ON grammar_explanations(word_id)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_grammar_explanations_sentence_id ON grammar_explanations(sentence_id)`
-    );
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_srs_adjustments_word_id ON srs_adjustments(word_id)`);
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_srs_adjustments_session_id ON srs_adjustments(session_id)`
-    );
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_srs_adjustments_language ON srs_adjustments(language)`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_learning_sessions_mode ON learning_sessions(mode)`);
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_learning_sessions_started_at ON learning_sessions(started_at)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_audio_playback_events_sentence_id ON audio_playback_events(sentence_id)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_audio_playback_events_session_id ON audio_playback_events(session_id)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_neglected_words_word_lang ON neglected_words(word, language)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_dialog_corrections_sentence_id ON dialog_corrections(sentence_id)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_dialog_corrections_session_id ON dialog_corrections(session_id)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_dialog_corrections_language ON dialog_corrections(language)`
-    );
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_neglected_words_topic ON neglected_words(topic)`);
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_neglected_words_session_id ON neglected_words(session_id)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_dictionary_hover_events_word_lang ON dictionary_hover_events(word, language)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_dictionary_hover_events_sentence_id ON dictionary_hover_events(sentence_id)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_dictionary_hover_events_session_id ON dictionary_hover_events(session_id)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_dictionary_hover_events_created_at ON dictionary_hover_events(created_at)`
-    );
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_read_aloud_cache_text_lang ON read_aloud_cache(raw_text, language)`
-    );
-  }
-
-  // Word management operations
-
-  /**
-   * Insert a new word into the database
-   * Also checks for existing sentences containing this word's lemma and links them
-   */
+  // Also back-links the word to any existing sentences that contain its lemma.
   async insertWord(wordData: CreateWordRequest): Promise<number> {
     const db = this.getDb();
 
@@ -515,9 +83,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       )
       VALUES (?, ?, ?, ?, ?, 20, 1, 2.5, ?)
     `);
-
-    console.log('[Database] Inserting word with topic:', wordData.topic);
-    console.log('[Database] Topic type:', typeof wordData.topic);
 
     const result = stmt.run(
       wordData.word,
@@ -570,10 +135,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
     return wordId;
   }
-
-  /**
-   * Update word strength based on user performance
-   */
   async updateWordStrength(wordId: number, strength: number): Promise<void> {
     const db = this.getDb();
 
@@ -589,10 +150,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw new Error(`Word with ID ${wordId} not found`);
     }
   }
-
-  /**
-   * Mark word as known or unknown
-   */
   async markWordKnown(wordId: number, known: boolean): Promise<void> {
     const db = this.getDb();
 
@@ -608,10 +165,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw new Error(`Word with ID ${wordId} not found`);
     }
   }
-
-  /**
-   * Mark word as ignored or not ignored
-   */
   async markWordIgnored(wordId: number, ignored: boolean): Promise<void> {
     const db = this.getDb();
 
@@ -627,10 +180,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw new Error(`Word with ID ${wordId} not found`);
     }
   }
-
-  /**
-   * Get words to study, prioritizing SRS due words first, then by lowest strength
-   */
   async getWordsToStudy(limit: number, language: string): Promise<Word[]> {
     const db = this.getDb();
 
@@ -661,10 +210,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     // Combine due words with additional words
     return [...dueWords, ...additionalWords];
   }
-
-  /**
-   * Get words by strength range for targeted practice
-   */
   async getWordsByStrength(
     minStrength: number,
     maxStrength: number,
@@ -692,10 +237,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
     return rows.map(this.mapRowToWord);
   }
-
-  /**
-   * Get words that have sentences available for learning
-   */
   async getWordsWithSentences(
     language: string,
     includeKnown: boolean = true,
@@ -728,10 +269,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
     return this.shuffleArray(words);
   }
-
-  /**
-   * Get words that have sentences available for review, ordered by last_studied (least recently studied first)
-   */
   async getWordsWithSentencesOrderedByStrength(
     language: string,
     includeKnown: boolean = true,
@@ -762,10 +299,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const rows = stmt.all(language) as any[];
     return rows.map(this.mapRowToWord);
   }
-
-  /**
-   * Get all words with optional filtering and shuffling for learning
-   */
   // TODO: Review - querying the whole table is not efficient, we should use a more efficient query
   async getAllWords(
     language: string,
@@ -808,11 +341,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
     return words;
   }
-
-  /**
-   * Get all words with sentences for a language (hardcoded: includeKnown=true, includeIgnored=false)
-   * Used for top panel stats calculation
-   */
   async getAllWordsWithSentences(language: string): Promise<Word[]> {
     const db = this.getDb();
 
@@ -826,10 +354,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const rows = stmt.all(language) as any[];
     return rows.map(this.mapRowToWord);
   }
-
-  /**
-   * Get word by ID
-   */
   async getWordById(wordId: number): Promise<Word | null> {
     const db = this.getDb();
 
@@ -838,11 +362,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
     return row ? this.mapRowToWord(row) : null;
   }
-
-  /**
-   * Get known words for sentence generation
-   * Returns word strings only, limited and randomized for use in prompts
-   */
   async getKnownWordsForSentenceGeneration(
     language: string,
     limit: number = 50
@@ -879,13 +398,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const rows = stmt.all(language, minWordStrength, maxWords) as Array<{ word: string }>;
     return rows.map((row) => row.word);
   }
-
-  /**
-   * Get all existing words for duplicate checking
-   * Returns word strings only (includes learning, known, and ignored words)
-   * @param topic - Optional topic parameter to filter words by topic
-   * @param limit - Optional limit on the number of words to return
-   */
   async getExistingWordsForDuplicateChecking(
     language: string,
     topic?: string,
@@ -911,13 +423,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const rows = stmt.all(...params) as Array<{ word: string }>;
     return rows.map((row) => row.word);
   }
-
-  /**
-   * Get ignored words for a language (for explicit filtering during word generation)
-   * Returns word strings only
-   * @param language - The language to get ignored words for
-   * @param topic - Optional topic parameter to filter words by topic
-   */
   async getIgnoredWords(language: string, topic?: string): Promise<string[]> {
     const db = this.getDb();
 
@@ -933,16 +438,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const rows = stmt.all(...params) as Array<{ word: string }>;
     return rows.map((row) => row.word);
   }
-
-  /**
-   * Check which of the provided words already exist in the database
-   * Returns a Set of lowercase words that exist (learning, known, or ignored)
-   * Also filters out words that were neglected 3+ times in the last 7 days
-   * This is more efficient than fetching all words and doing in-memory comparison
-   * @param language - The language to check words for
-   * @param words - Array of words to check (will be normalized to lowercase)
-   * @param topic - Optional topic parameter to filter words by topic (only applies to words table, not neglected_words)
-   */
+  // Also filters out words neglected 3+ times in the last 7 days (from neglected_words table).
   async checkWordsExist(language: string, words: string[], topic?: string): Promise<Set<string>> {
     const db = this.getDb();
 
@@ -996,10 +492,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
     return combinedSet;
   }
-
-  /**
-   * Get multiple words by IDs (batch query)
-   */
   async getWordsByIds(wordIds: number[]): Promise<Word[]> {
     const db = this.getDb();
 
@@ -1013,13 +505,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
     return rows.map((row) => this.mapRowToWord(row));
   }
-
-  // Sentence management operations
-
-  /**
-   * Helper function to find all learning words that appear in a sentence
-   * Tokenizes the sentence and matches normalized words against learning words
-   */
   // TODO: This needs some SQL optimization.
   private findMatchingLearningWords(sentence: string, language: string): Word[] {
     const db = this.getDb();
@@ -1084,22 +569,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       return [];
     }
   }
-
-  /**
-   * Insert a new sentence for a word
-   *
-   * This method creates two types of word-sentence linkages:
-   * 1. Direct link: sentences.word_id - the primary word this sentence was generated for
-   * 2. Junction table: sentence_words - links sentences to ALL words they contain
-   *
-   * IMPORTANT: The primary word (wordId) is ALWAYS added to the sentence_words junction table,
-   * regardless of whether it was found by the matching algorithm or its known/ignored status.
-   * This ensures the junction table is the single source of truth for all sentence-word relationships.
-   *
-   * Additionally, the method finds all other learning words that appear in the sentence and
-   * links them via the junction table, allowing sentences to be discoverable when studying
-   * any word they contain, not just the primary word.
-   */
+  // Inserts into both sentences.word_id (primary word) and the sentence_words junction table
+  // (all learning words found in the sentence). Junction table is the source of truth for lookups.
   async insertSentence(
     wordId: number,
     sentence: string,
@@ -1214,11 +685,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       // If tokenizedTokens were provided, also store lemmas immediately
       if (tokenizedTokens && tokenizedTokens.length > 0) {
         try {
-          // tokenizedTokens is already an array, not a serialized string
-          const parsedTokens = tokenizedTokens;
           const lemmas = new Set<string>();
 
-          parsedTokens.forEach((token: PrecomputedToken) => {
+          tokenizedTokens.forEach((token: PrecomputedToken) => {
             if (token.lemma) {
               lemmas.add(token.lemma.toLowerCase().trim());
             } else if (token.dictionaryForm) {
@@ -1256,11 +725,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to insert sentence`);
     }
   }
-
-  /**
-   * Get all sentences for a specific word in randomized order
-   * Uses the sentence_words junction table as the single source of truth
-   */
   async getSentencesByWord(wordId: number): Promise<Sentence[]> {
     const db = this.getDb();
 
@@ -1293,10 +757,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get sentences by word`);
     }
   }
-
-  /**
-   * Get multiple sentences by IDs (batch query)
-   */
   async getSentencesByIds(sentenceIds: number[]): Promise<Sentence[]> {
     const db = this.getDb();
 
@@ -1316,10 +776,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get sentences by IDs`);
     }
   }
-
-  /**
-   * Update sentence last shown timestamp
-   */
   async updateSentenceLastShown(sentenceId: number): Promise<void> {
     const db = this.getDb();
 
@@ -1339,10 +795,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to update sentence last shown`);
     }
   }
-
-  /**
-   * Update sentence audio path after successful regeneration
-   */
   async updateSentenceAudioPath(
     sentenceId: number,
     audioPath: string,
@@ -1377,10 +829,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to update sentence audio path`);
     }
   }
-
-  /**
-   * Update before sentence audio path after successful generation
-   */
   async updateBeforeSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void> {
     const db = this.getDb();
     try {
@@ -1414,11 +862,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to update after sentence audio path`);
     }
   }
-
-  /**
-   * Update sentence tokens (precomputed tokenization)
-   * Also stores all lemmas in sentence_lemmas table for future word matching
-   */
   async updateSentenceTokens(sentenceId: number, tokens: PrecomputedToken[]): Promise<void> {
     const db = this.getDb();
 
@@ -1434,16 +877,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         throw new Error(`Sentence with ID ${sentenceId} not found`);
       }
 
-      // Parse tokens to extract all lemmas
-      // tokens is already an array, not a serialized string
-      const parsedTokens = tokens;
-      if (!parsedTokens || parsedTokens.length === 0) {
+      if (!tokens || tokens.length === 0) {
         return;
       }
 
       const lemmas = new Set<string>();
 
-      parsedTokens.forEach((token: PrecomputedToken) => {
+      tokens.forEach((token: PrecomputedToken) => {
         // Collect lemmas (normalized)
         if (token.lemma) {
           lemmas.add(token.lemma.toLowerCase().trim());
@@ -1481,10 +921,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to update sentence tokens`);
     }
   }
-
-  /**
-   * Increment the play count for a sentence
-   */
   async incrementSentencePlayCount(sentenceId: number): Promise<void> {
     const db = this.getDb();
 
@@ -1502,10 +938,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to increment sentence play count`);
     }
   }
-
-  /**
-   * Increment the grammar explanation count for a word
-   */
   async incrementGrammarExplanationCount(wordId: number): Promise<void> {
     const db = this.getDb();
 
@@ -1523,10 +955,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to increment grammar explanation count`);
     }
   }
-
-  /**
-   * Insert a grammar explanation for a word and sentence
-   */
   async insertGrammarExplanation(
     wordId: number,
     sentenceId: number,
@@ -1545,10 +973,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to insert grammar explanation`);
     }
   }
-
-  /**
-   * Get a grammar explanation for a word and sentence
-   */
   async getGrammarExplanation(wordId: number, sentenceId: number): Promise<string | null> {
     const db = this.getDb();
 
@@ -1564,12 +988,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get grammar explanation`);
     }
   }
-
-  /**
-   * Record a pronunciation attempt for a sentence (tracks full history)
-   * This method inserts into pronunciation_attempts table for history (with expected and transcribed text).
-   * Pronunciation stats can be queried from the pronunciation_attempts table.
-   */
   async recordPronunciationAttempt(
     sentenceId: number,
     similarityScore: number,
@@ -1596,10 +1014,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to record pronunciation attempt`);
     }
   }
-
-  /**
-   * Get pronunciation history for a sentence
-   */
   async getPronunciationHistory(
     sentenceId: number,
     limit?: number
@@ -1621,7 +1035,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         ? `SELECT * FROM pronunciation_attempts WHERE sentence_id = ? ORDER BY created_at DESC LIMIT ?`
         : `SELECT * FROM pronunciation_attempts WHERE sentence_id = ? ORDER BY created_at DESC`;
 
-      const stmt = limit ? db.prepare(query) : db.prepare(query);
+      const stmt = db.prepare(query);
       const rows = limit ? stmt.all(sentenceId, limit) : (stmt.all(sentenceId) as any[]);
 
       return rows.map((row) => ({
@@ -1637,10 +1051,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get pronunciation history`);
     }
   }
-
-  /**
-   * Insert a dialogue variant for a sentence
-   */
   async insertDialogueVariant(
     sentenceId: number,
     variantSentence: string,
@@ -1660,10 +1070,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to insert dialogue variant`);
     }
   }
-
-  /**
-   * Get dialogue variants for a sentence
-   */
   async getDialogueVariantsBySentenceId(
     sentenceId: number,
     limit?: number
@@ -1681,7 +1087,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         query += ` LIMIT ?`;
       }
 
-      const stmt = limit ? db.prepare(query) : db.prepare(query);
+      const stmt = db.prepare(query);
       const rows = limit ? (stmt.all(sentenceId, limit) as any[]) : (stmt.all(sentenceId) as any[]);
 
       return rows.map((row) => ({
@@ -1698,10 +1104,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get dialogue variants`);
     }
   }
-
-  /**
-   * Get count of dialogue variants for a sentence
-   */
   async getDialogueVariantCount(sentenceId: number): Promise<number> {
     const db = this.getDb();
 
@@ -1717,10 +1119,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get dialogue variant count`);
     }
   }
-
-  /**
-   * Get dialogue variant by ID
-   */
   async getDialogueVariantById(variantId: number): Promise<DialogueVariant | null> {
     const db = this.getDb();
 
@@ -1749,10 +1147,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get dialogue variant`);
     }
   }
-
-  /**
-   * Update continuation for a dialogue variant
-   */
   async updateDialogueVariantContinuation(
     variantId: number,
     continuationText: string,
@@ -1773,10 +1167,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to update dialogue variant continuation`);
     }
   }
-
-  /**
-   * Get sentence by ID
-   */
   async getSentenceById(sentenceId: number): Promise<Sentence | null> {
     const db = this.getDb();
 
@@ -1789,10 +1179,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get sentence by ID`);
     }
   }
-
-  /**
-   * Mark a sentence as ignored instead of deleting it
-   */
   async deleteSentence(sentenceId: number): Promise<void> {
     const db = this.getDb();
 
@@ -1808,12 +1194,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to mark sentence as ignored`);
     }
   }
-
-  // Progress tracking operations
-
-  /**
-   * Update last studied timestamp for a word
-   */
   async updateLastStudied(wordId: number): Promise<void> {
     const db = this.getDb();
 
@@ -1833,10 +1213,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to update last studied`);
     }
   }
-
-  /**
-   * Get study statistics
-   */
   async getStudyStats(language: string): Promise<StudyStats> {
     const db = this.getDb();
 
@@ -1863,10 +1239,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get study stats`);
     }
   }
-
-  /**
-   * Record a study session in progress tracking
-   */
   async recordStudySession(wordsStudied: number): Promise<void> {
     const db = this.getDb();
 
@@ -1881,10 +1253,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to record study session`);
     }
   }
-
-  /**
-   * Get recent study sessions
-   */
   async getRecentStudySessions(
     limit: number = 10
   ): Promise<Array<{ id: number; wordsStudied: number; whenStudied: Date }>> {
@@ -1909,12 +1277,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get recent study sessions`);
     }
   }
-
-  // Quiz-specific operations
-
-  /**
-   * Get weakest words for quiz generation, prioritizing SRS due words and lowest strength
-   */
   async getWeakestWords(limit: number, language: string): Promise<Word[]> {
     const db = this.getDb();
 
@@ -1960,10 +1322,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get weakest words`);
     }
   }
-
-  /**
-   * Get a random sentence for a specific word (for quiz questions)
-   */
   async getRandomSentenceForWord(wordId: number): Promise<Sentence | null> {
     const db = this.getDb();
 
@@ -1998,12 +1356,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get random sentence for word`);
     }
   }
-
-  /**
-   * Get all sentences with audio for Flow feature
-   * Simplified to only return what flow mode actually needs
-   * If more than 100 sentences are available, randomly selects 100 of them
-   */
   async getFlowSentences(language: string): Promise<
     Array<{
       audioPath: string;
@@ -2123,48 +1475,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get flow sentences`);
     }
   }
-
-  /**
-   * Get a random sentence suitable for dialog practice
-   * Filters by: language, ignored=false, and contextBefore exists
-   * All filtering and random selection happens at the database level for efficiency
-   */
   async getRandomDialogSentence(language: string): Promise<Sentence | null> {
-    const db = this.getDb();
-
-    try {
-      // Single query: join sentences to their primary word
-      // Filter by: language, ignored = FALSE, contextBefore exists and is not empty
-      // Randomly select one result
-      const stmt = db.prepare(`
-        SELECT DISTINCT s.* 
-        FROM sentences s
-        INNER JOIN words w ON s.word_id = w.id
-        WHERE s.language = ?
-          AND w.ignored = FALSE
-          AND s.context_before IS NOT NULL
-          AND TRIM(s.context_before) != ''
-        ORDER BY RANDOM()
-        LIMIT 1
-      `);
-
-      const row = stmt.get(language) as any;
-
-      if (!row) {
-        return null;
-      }
-
-      return this.mapRowToSentence(row);
-    } catch (error) {
-      throw wrapError(error, `Failed to get random dialog sentence`);
-    }
+    const results = await this.getRandomDialogSentences(1, language);
+    return results[0] ?? null;
   }
-
-  /**
-   * Get multiple random sentences suitable for dialog practice (batch query)
-   * Filters by: language, ignored=false, and contextBefore exists
-   * All filtering and random selection happens at the database level for efficiency
-   */
   async getRandomDialogSentences(count: number, language: string): Promise<Sentence[]> {
     const db = this.getDb();
 
@@ -2194,10 +1508,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get random dialog sentences`);
     }
   }
-
-  /**
-   * Insert a dialog correction
-   */
   async insertDialogCorrection(data: {
     sentenceId: number;
     sessionId?: number;
@@ -2224,10 +1534,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to insert dialog correction`);
     }
   }
-
-  /**
-   * Get dialog corrections for a sentence
-   */
   async getDialogCorrections(
     sentenceId: number,
     language: string,
@@ -2259,11 +1565,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get dialog corrections`);
     }
   }
-
-  /**
-   * Get a random sentence with a topic (for topic-based dialog flow)
-   * Prefers sentences with non-zero audio playback (play_count > 0)
-   */
   async getRandomSentenceWithTopic(language: string): Promise<Sentence | null> {
     const db = this.getDb();
 
@@ -2294,10 +1595,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get random sentence with topic`);
     }
   }
-
-  /**
-   * Update related words for a sentence
-   */
   async updateSentenceRelatedWords(sentenceId: number, relatedWords: string[]): Promise<void> {
     const db = this.getDb();
 
@@ -2313,12 +1610,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to update sentence related words`);
     }
   }
-
-  // Settings management operations
-
-  /**
-   * Get a setting value by key
-   */
   async getSetting(key: string): Promise<string | null> {
     const db = this.getDb();
 
@@ -2331,10 +1622,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get setting`);
     }
   }
-
-  /**
-   * Set a setting value
-   */
   async setSetting(key: string, value: string): Promise<void> {
     const db = this.getDb();
 
@@ -2349,25 +1636,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to set setting`);
     }
   }
-
-  /**
-   * Get current language setting
-   */
   async getCurrentLanguage(): Promise<string> {
     const language = await this.getSetting('current_language');
     return language || 'spanish'; // Default fallback
   }
-
-  /**
-   * Set current language setting
-   */
   async setCurrentLanguage(language: string): Promise<void> {
     await this.setSetting('current_language', language);
   }
-
-  /**
-   * Get word count statistics per language
-   */
   // TODO: This needs some caching
   async getLanguageStats(): Promise<
     Array<{
@@ -2434,11 +1709,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get language stats`);
     }
   }
-
-  /**
-   * Get word counts by topic for a given language
-   * Returns an array of topics with their word counts, sorted by count descending
-   */
   async getTopicWordCounts(language: string): Promise<Array<{ topic: string; count: number }>> {
     const db = this.getDb();
 
@@ -2459,10 +1729,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get topic word counts`);
     }
   }
-
-  /**
-   * Lookup dictionary entries for a word in the specified language
-   */
   async lookupDictionary(word: string, language: string): Promise<DictionaryEntry[]> {
     const db = this.getDb();
 
@@ -2747,12 +2013,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to mark job failed`);
     }
   }
-
-  // SRS-specific operations
-
-  /**
-   * Update word with SRS values after review
-   */
   async updateWordSRS(
     wordId: number,
     strength: number,
@@ -2821,10 +2081,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to update word SRS`);
     }
   }
-
-  /**
-   * Get words that are due for review (SRS-based selection)
-   */
   async getWordsDueForReview(language: string, limit?: number): Promise<Word[]> {
     const db = this.getDb();
 
@@ -2851,10 +2107,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get words due for review`);
     }
   }
-
-  /**
-   * Get count of words due for review
-   */
   async getWordsDueCount(language: string): Promise<number> {
     const db = this.getDb();
 
@@ -2873,10 +2125,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get words due count`);
     }
   }
-
-  /**
-   * Get words due for review with priority sorting for SRS
-   */
   async getWordsDueWithPriority(language: string, limit?: number): Promise<Word[]> {
     const db = this.getDb();
 
@@ -2914,10 +2162,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get words due with priority`);
     }
   }
-
-  /**
-   * Get SRS statistics for dashboard
-   */
   async getSRSStats(language: string): Promise<{
     totalWords: number;
     dueToday: number;
@@ -2955,11 +2199,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get SRS stats`);
     }
   }
-
-  /**
-   * Load dictionary entries from JSONL files in the dicts directory
-   * Optimized: Checks markers first before doing any file system operations
-   */
   private async populateDictionaryFromFiles(): Promise<void> {
     const dictDir = path.join(process.cwd(), 'dicts');
 
@@ -2995,8 +2234,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       'INSERT INTO dict (word, pos, glosses, lang) VALUES (?, ?, ?, ?)'
     );
     const hasEntriesStmt = db.prepare('SELECT 1 FROM dict WHERE lang = ? LIMIT 1');
-
-    // Check all markers FIRST before doing any expensive file operations
     const languagesToProcess: string[] = [];
     for (const file of jsonlFiles) {
       const language = file.replace('_dict.jsonl', '');
@@ -3060,10 +2297,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       }
     }
   }
-
-  /**
-   * Parse a JSONL dictionary file into database-ready rows
-   */
   private async parseDictionaryFile(
     filePath: string,
     language: string
@@ -3130,8 +2363,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     return entries;
   }
 
-  // Helper methods for mapping database rows to objects and utilities
-
   private shuffleArray<T>(array: T[]): T[] {
     const shuffled = [...array];
     for (let i = shuffled.length - 1; i > 0; i--) {
@@ -3154,7 +2385,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       lastStudied: row.last_studied
         ? new Date(row.last_studied as string | number | Date)
         : undefined,
-      // SRS fields
       intervalDays: (row.interval_days as number) || 1,
       easeFactor: (row.ease_factor as number) || 2.5,
       lastReview: row.last_review ? new Date(row.last_review as string | number | Date) : undefined,
@@ -3251,12 +2481,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       .map((part) => part.trim())
       .filter(Boolean);
   }
-
-  // Scoring-specific operations
-
-  /**
-   * Get count of new words (words where lastStudied IS NULL)
-   */
   async getNewWordCount(language: string): Promise<number> {
     const db = this.getDb();
 
@@ -3275,10 +2499,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get new word count`);
     }
   }
-
-  /**
-   * Get count of weak words (strength < 30)
-   */
   async getWeakWordCount(language: string): Promise<number> {
     const db = this.getDb();
 
@@ -3297,12 +2517,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get weak word count`);
     }
   }
-
-  /**
-   * Get dialogue readiness ratio (known vocab in cluster / total vocab in cluster)
-   * A "cluster" is words associated with sentences that have contextBefore (dialog sentences)
-   * Known vocab = words with known=true OR strength >= minStrength
-   */
+  // "cluster" = words associated with sentences that have contextBefore (dialog sentences).
   async getDialogueReadinessRatio(language: string, minStrength: number = 40): Promise<number> {
     const db = this.getDb();
 
@@ -3347,11 +2562,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get dialogue readiness ratio`);
     }
   }
-
-  /**
-   * Get average pronunciation score (0-10 scale)
-   * Calculated from pronunciation_attempts.similarity_score (0-1 scale), converted to 0-10
-   */
+  // similarity_score is stored 0-1; this returns it on a 0-10 scale.
   async getAveragePronunciationScore(language: string): Promise<number> {
     const db = this.getDb();
 
@@ -3377,10 +2588,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get average pronunciation score`);
     }
   }
-
-  /**
-   * Get count of available sentences for Flow mode (sentences with audio)
-   */
   async getAvailableSentencesCount(language: string): Promise<number> {
     const db = this.getDb();
 
@@ -3400,13 +2607,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get available sentences count`);
     }
   }
-
-  /**
-   * Get time since last active practice (quiz or dialog) in hours
-   * Returns the most recent timestamp from:
-   * - Study sessions (quiz practice)
-   * - Word last_review or last_studied (quiz/dialog practice)
-   */
   async getTimeSinceLastActivePractice(language: string): Promise<number> {
     const db = this.getDb();
 
@@ -3465,15 +2665,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get time since last active practice`);
     }
   }
-
-  /**
-   * Reset all progress for a specific language
-   * This resets:
-   * - All word SRS/FSRS values to defaults
-   * - Deletes words that were marked as known/ignored
-   * - All sentence progress (last_shown, play_count)
-   * - All pronunciation history for sentences in that language
-   */
   async resetLanguageProgress(language: string): Promise<void> {
     const db = this.getDb();
 
@@ -3547,12 +2738,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to reset language progress`);
     }
   }
-
-  // Tracking operations
-
-  /**
-   * Record SRS adjustment (quiz mode only)
-   */
   async recordSRSAdjustment(data: {
     wordId: number;
     sessionId?: number;
@@ -3581,10 +2766,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to record SRS adjustment`);
     }
   }
-
-  /**
-   * Create learning session
-   */
   async createLearningSession(data: {
     mode: 'learning' | 'quiz' | 'dialog' | 'flow';
     language: string;
@@ -3603,10 +2784,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to create learning session`);
     }
   }
-
-  /**
-   * Update learning session on completion
-   */
   async updateLearningSession(
     sessionId: number,
     data: {
@@ -3648,10 +2825,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to update learning session`);
     }
   }
-
-  /**
-   * Get learning session by ID
-   */
   async getLearningSession(sessionId: number): Promise<{
     id: number;
     mode: string;
@@ -3682,10 +2855,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get learning session`);
     }
   }
-
-  /**
-   * Record audio playback event
-   */
   async recordAudioPlayback(data: {
     sessionId?: number;
     sentenceId?: number;
@@ -3716,10 +2885,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to record audio playback`);
     }
   }
-
-  /**
-   * Record multiple neglected words in a single transaction
-   */
   async recordNeglectedWords(
     data: Array<{
       word: string;
@@ -3761,10 +2926,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to record neglected words`);
     }
   }
-
-  /**
-   * Record dictionary hover event (hover duration > 1s)
-   */
   async recordDictionaryHover(data: {
     word: string;
     language: string;
@@ -3797,17 +2958,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to record dictionary hover event`);
     }
   }
-
-  /**
-   * Process frequently looked-up words from dictionary_hover_events
-   * Finds words that are frequently hovered but not yet in the words table,
-   * then inserts them and enqueues for sentence generation
-   *
-   * @param language - Language to process
-   * @param minHoverCount - Minimum number of hover events to consider (default: 3)
-   * @param lookbackDays - How many days back to look (default: 30)
-   * @returns Number of words added
-   */
   async processFrequentlyLookedUpWords(
     language: string,
     minHoverCount: number = 3,
@@ -3816,8 +2966,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     const db = this.getDb();
 
     try {
-      const currentLanguage = language;
-
       // Calculate the lookback date
       const lookbackDate = new Date();
       lookbackDate.setDate(lookbackDate.getDate() - lookbackDays);
@@ -3841,7 +2989,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       `);
 
       const frequentlyLookedUp = frequentlyLookedUpStmt.all(
-        currentLanguage,
+        language,
         lookbackDateStr,
         minHoverCount
       ) as Array<{
@@ -3853,15 +3001,15 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       if (frequentlyLookedUp.length === 0) {
         this.logger.debug(
-          { language: currentLanguage },
-          `[processFrequentlyLookedUpWords] No frequently looked-up words found for ${currentLanguage}`
+          { language: language },
+          `[processFrequentlyLookedUpWords] No frequently looked-up words found for ${language}`
         );
         return 0;
       }
 
       this.logger.debug(
-        { language: currentLanguage, wordCount: frequentlyLookedUp.length },
-        `[processFrequentlyLookedUpWords] Found ${frequentlyLookedUp.length} frequently looked-up words for ${currentLanguage}`
+        { language: language, wordCount: frequentlyLookedUp.length },
+        `[processFrequentlyLookedUpWords] Found ${frequentlyLookedUp.length} frequently looked-up words for ${language}`
       );
 
       // Check which words already exist in the words table
@@ -3975,10 +3123,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to process frequently looked-up words`);
     }
   }
-
-  /**
-   * Get cached Zipf frequencies for words from the database
-   */
   async getZipfFrequencies(words: string[], language: string): Promise<Record<string, number>> {
     const db = this.getDb();
 
@@ -4009,11 +3153,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get zipf frequencies`);
     }
   }
-
-  /**
-   * Update Zipf frequencies for words in the database
-   * Only updates words that exist in the table
-   */
   async updateZipfFrequencies(
     frequencies: Record<string, number>,
     language: string
@@ -4047,10 +3186,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to update zipf frequencies`);
     }
   }
-
-  /**
-   * Get cached read aloud audio for text and language
-   */
   async getReadAloudCache(
     text: string,
     language: string
@@ -4081,11 +3216,6 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get read aloud cache`);
     }
   }
-
-  /**
-   * Insert or update read aloud cache entry
-   * Uses INSERT OR REPLACE to handle unique constraint on (raw_text, language)
-   */
   async insertReadAloudCache(text: string, language: string, audioPath: string): Promise<number> {
     const db = this.getDb();
 
