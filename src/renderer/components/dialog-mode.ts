@@ -26,6 +26,7 @@ import { getErrorMessage } from '../../shared/utils/error.js';
 import { BaseComponent } from './base-component.js';
 import { logger } from '../utils/logger.js';
 import { markdownToHtml } from '../utils/markdown-utils.js';
+import { startSpeechRecognitionCheck } from '../utils/speech-recognition-checker.js';
 
 // DialogueVariant is now imported from shared/types/core.js
 
@@ -131,7 +132,7 @@ export class DialogMode extends BaseComponent {
 
   private recordingTimer: number | null = null;
   private recordingStatusCheckTimer: number | null = null;
-  private speechRecognitionCheckTimer: number | null = null;
+  private speechRecognitionCheckCleanup: (() => void) | null = null;
   private currentAudioElement: HTMLAudioElement | null = null;
   private transcriptionProgressUnsubscribe: (() => void) | null = null;
   private keyboardUnsubscribe?: () => void;
@@ -217,13 +218,12 @@ export class DialogMode extends BaseComponent {
       });
 
     this.loadDialogSession();
-    this.checkSpeechRecognitionReady();
     this.loadAutoplaySetting();
 
-    // Set up periodic checks
-    this.speechRecognitionCheckTimer = window.setInterval(() => {
-      this.checkSpeechRecognitionReady();
-    }, 5000);
+    this.speechRecognitionCheckCleanup = startSpeechRecognitionCheck((ready) => {
+      this.speechRecognitionReady = ready;
+      this.requestUpdate();
+    });
 
     // Set up transcription progress listener for streaming updates
     this.transcriptionProgressUnsubscribe = window.electronAPI.audio.onTranscriptionProgress(
@@ -260,10 +260,8 @@ export class DialogMode extends BaseComponent {
     // Clean up recording timers
     this.clearRecordingTimer();
     this.clearRecordingStatusCheck();
-    if (this.speechRecognitionCheckTimer) {
-      clearInterval(this.speechRecognitionCheckTimer);
-      this.speechRecognitionCheckTimer = null;
-    }
+    this.speechRecognitionCheckCleanup?.();
+    this.speechRecognitionCheckCleanup = null;
 
     // Cancel any ongoing recording
     if (this.isRecording) {
@@ -629,15 +627,6 @@ export class DialogMode extends BaseComponent {
       logger.error({ error }, 'Failed to load dialog session');
       this.error = getErrorMessage(error, 'Failed to load dialog session');
       this.isLoading = false;
-    }
-  }
-
-  private async checkSpeechRecognitionReady() {
-    try {
-      this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
-    } catch (error) {
-      logger.error({ error }, 'Failed to check speech recognition readiness');
-      this.speechRecognitionReady = false;
     }
   }
 

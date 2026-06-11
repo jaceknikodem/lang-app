@@ -51,9 +51,6 @@ export class SentenceViewer extends LitElement {
   @property({ type: Number })
   currentSessionId?: number;
 
-  @property({ type: Object })
-  audioCache?: Map<string, string>; // audioPath -> blob URL
-
   @property({ type: Number })
   playbackSpeed?: number; // Playback speed multiplier (defaults to 1.0)
 

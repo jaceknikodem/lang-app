@@ -326,6 +326,18 @@ export class AudioPlayerService {
   }
 
   /**
+   * Revoke and remove a single cached audio path
+   */
+  revoke(audioPath: string): void {
+    const blobUrl = this.blobUrlCache.get(audioPath);
+    if (blobUrl) {
+      URL.revokeObjectURL(blobUrl);
+    }
+    this.audioCache.delete(audioPath);
+    this.blobUrlCache.delete(audioPath);
+  }
+
+  /**
    * Get or load audio (returns blob URL)
    */
   private async getOrLoadAudio(audioPath: string): Promise<string> {

@@ -113,12 +113,6 @@ export class LearningMode extends BaseComponent {
   // or when navigating next/previous
   private wordsIncrementedThisSession: Set<number> = new Set();
 
-  // Audio cache: Map of audioPath -> blob URL
-  // Using Blob URLs instead of data URLs for better performance (no base64 encoding/decoding)
-  // Note: We keep this cache for preloading, but use audioPlayer for playback
-  private audioCache: Map<string, string> = new Map(); // audioPath -> blob URL
-  private blobUrlCache: Map<string, string> = new Map(); // audioPath -> blob URL (for cleanup)
-
   protected override handleExternalLanguageChange = async (event: Event): Promise<void> => {
     const detail = (event as CustomEvent<{ language?: string }>).detail;
     const newLanguage = detail?.language;
@@ -248,10 +242,6 @@ export class LearningMode extends BaseComponent {
 
     // Clean up audio cache and playing audio (fire-and-forget is fine here since component is being destroyed)
     void this.stopCachedAudio();
-    // Revoke all blob URLs to free memory
-    this.blobUrlCache.forEach((blobUrl) => URL.revokeObjectURL(blobUrl));
-    this.audioCache.clear();
-    this.blobUrlCache.clear();
 
     this.stopJobMonitoring();
     this.clearInfoTimeout();
@@ -491,9 +481,9 @@ export class LearningMode extends BaseComponent {
         const audioLoadPromises =
           audioPaths.length > 0
             ? audioPaths
-                .filter((path) => path && !this.audioCache.has(path))
+                .filter((path): path is string => !!path)
                 .map((path) =>
-                  this.loadAudioIntoCache(path).catch((err) => {
+                  audioPlayer.preload(path).catch((err) => {
                     logger.warn({ error: err, audioPath: path }, `Failed to preload audio`);
                   })
                 )
@@ -1163,17 +1153,8 @@ export class LearningMode extends BaseComponent {
       }
 
       // Remove old audio from cache if it exists and is different from new one
-      if (
-        oldAudioPath &&
-        oldAudioPath !== newSentence.audioPath &&
-        this.audioCache.has(oldAudioPath)
-      ) {
-        const oldBlobUrl = this.blobUrlCache.get(oldAudioPath);
-        if (oldBlobUrl) {
-          URL.revokeObjectURL(oldBlobUrl);
-        }
-        this.audioCache.delete(oldAudioPath);
-        this.blobUrlCache.delete(oldAudioPath);
+      if (oldAudioPath && oldAudioPath !== newSentence.audioPath) {
+        audioPlayer.revoke(oldAudioPath);
       }
 
       // Replace the sentence in wordsWithSentences
@@ -1361,15 +1342,6 @@ export class LearningMode extends BaseComponent {
     sessionManager.updateLearningProgress(this.currentWordIndex, this.currentSentenceIndex);
   }
 
-  private shuffleArray<T>(array: T[]): T[] {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  }
-
   private isFirstSentence(): boolean {
     return this.currentWordIndex === 0 && this.currentSentenceIndex === 0;
   }
@@ -1548,109 +1520,44 @@ export class LearningMode extends BaseComponent {
     }
   }
 
-  /**
-   * Load a single audio file into cache
-   */
-  private async loadAudioIntoCache(audioPath: string): Promise<void> {
-    if (this.audioCache.has(audioPath)) {
-      return; // Already cached
-    }
-
-    try {
-      // Load audio as ArrayBuffer (more efficient than base64)
-      const result = await window.electronAPI.audio.loadAudioBase64(audioPath);
-      if (result && result.data) {
-        // Create Blob and Blob URL (faster than data URLs for browser)
-        const blob = new Blob([result.data], { type: result.mimeType });
-        const blobUrl = URL.createObjectURL(blob);
-        this.audioCache.set(audioPath, blobUrl);
-        this.blobUrlCache.set(audioPath, blobUrl);
-      }
-    } catch (error) {
-      logger.warn({ error, audioPath }, `Failed to load audio`);
-      throw error;
-    }
-  }
-
-  /**
-   * Ensure before sentence audio is loaded for a given sentence
-   */
   private async ensureBeforeSentenceAudioLoaded(sentence: Sentence): Promise<void> {
     if (!sentence.contextBefore || !sentence.id) {
-      return; // No before sentence text
+      return;
     }
-
     try {
-      // Ensure before sentence audio exists
       const beforeSentenceAudioPath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(
         sentence.id
       );
-      if (!beforeSentenceAudioPath) {
-        return; // No audio generated
+      if (beforeSentenceAudioPath) {
+        await audioPlayer.preload(beforeSentenceAudioPath);
       }
-
-      // If already cached, we're done
-      if (this.audioCache.has(beforeSentenceAudioPath)) {
-        return;
-      }
-
-      // Load into cache
-      await this.loadAudioIntoCache(beforeSentenceAudioPath);
     } catch (error) {
       logger.warn({ error }, `Failed to load before sentence audio`);
-      // Continue anyway - will generate/load on demand
     }
   }
 
-  /**
-   * Ensure after sentence audio is loaded and ready
-   * Optimized: Skips already cached files
-   */
   private async ensureAfterSentenceAudioLoaded(sentence: Sentence): Promise<void> {
     if (!sentence.contextAfter || !sentence.id) {
-      return; // No after sentence text
+      return;
     }
-
     try {
-      // Ensure context sentences audio exists (includes afterSentence)
       const contextAudio = await window.electronAPI.dialog.ensureContextSentences(sentence.id);
-      const afterSentenceAudioPath = contextAudio.afterSentenceAudio;
-      if (!afterSentenceAudioPath) {
-        return; // No audio generated
+      if (contextAudio.afterSentenceAudio) {
+        await audioPlayer.preload(contextAudio.afterSentenceAudio);
       }
-
-      // If already cached, we're done
-      if (this.audioCache.has(afterSentenceAudioPath)) {
-        return;
-      }
-
-      // Load into cache
-      await this.loadAudioIntoCache(afterSentenceAudioPath);
     } catch (error) {
       logger.warn({ error }, `Failed to load after sentence audio`);
-      // Continue anyway - will generate/load on demand
     }
   }
 
-  /**
-   * Ensure current sentence's audio is loaded and ready
-   * Prioritizes current audio for instant playback
-   */
   private async ensureCurrentSentenceAudioLoaded(): Promise<void> {
     const currentSentence = this.getCurrentSentence();
     if (!currentSentence?.audioPath) {
       return;
     }
 
-    const audioPath = currentSentence.audioPath;
-
-    // If already cached, we're done
-    if (this.audioCache.has(audioPath)) {
-      return;
-    }
-
     try {
-      await this.loadAudioIntoCache(audioPath);
+      await audioPlayer.preload(currentSentence.audioPath);
 
       // Also ensure before and after sentence audio is loaded if they exist
       if (currentSentence.contextBefore) {
@@ -1694,15 +1601,8 @@ export class LearningMode extends BaseComponent {
 
     const nextAudioPath = nextSentence.audioPath;
 
-    // Skip if already cached
-    if (this.audioCache.has(nextAudioPath)) {
-      return;
-    }
-
-    // Load next sentence's audio in background (non-blocking)
-    void this.loadAudioIntoCache(nextAudioPath).catch((error) => {
+    void audioPlayer.preload(nextAudioPath).catch((error) => {
       logger.warn({ error, audioPath: nextAudioPath }, `Failed to preload next sentence audio`);
-      // Non-critical - will load on-demand if needed
     });
   }
 
@@ -1720,7 +1620,7 @@ export class LearningMode extends BaseComponent {
       for (const wordWithSentences of wordsWithSentences) {
         for (const sentence of wordWithSentences.sentences) {
           // Collect main sentence audio
-          if (sentence.audioPath && !this.audioCache.has(sentence.audioPath)) {
+          if (sentence.audioPath) {
             audioPaths.push(sentence.audioPath);
           }
 
@@ -1758,11 +1658,7 @@ export class LearningMode extends BaseComponent {
       // Get before sentence audio paths
       const beforeSentenceAudioPaths = await Promise.all(beforeSentencePromises);
       for (const beforeAudioPath of beforeSentenceAudioPaths) {
-        if (
-          beforeAudioPath &&
-          !this.audioCache.has(beforeAudioPath) &&
-          !audioPaths.includes(beforeAudioPath)
-        ) {
+        if (beforeAudioPath && !audioPaths.includes(beforeAudioPath)) {
           audioPaths.push(beforeAudioPath);
         }
       }
@@ -1776,21 +1672,8 @@ export class LearningMode extends BaseComponent {
         `Pre-loading ${audioPaths.length} audio files (including before sentence audio) into cache for review mode...`
       );
 
-      // Load all audio files in parallel (small files, so parallel loading is fine)
-      const loadPromises = audioPaths.map(async (audioPath) => {
-        try {
-          await this.loadAudioIntoCache(audioPath);
-        } catch (error) {
-          logger.warn({ error, audioPath }, `Failed to preload audio`);
-          // Continue loading other files even if one fails
-        }
-      });
-
-      await Promise.all(loadPromises);
-      logger.debug(
-        { cacheSize: this.audioCache.size },
-        `Audio cache ready: ${this.audioCache.size} files loaded`
-      );
+      await audioPlayer.preloadMultiple(audioPaths);
+      logger.debug('Audio cache ready');
     } catch (error) {
       logger.error({ error }, 'Error preloading audio');
       // Don't fail review if audio caching fails - will fall back to file system
@@ -1851,7 +1734,7 @@ export class LearningMode extends BaseComponent {
           const contextAudio = await window.electronAPI.dialog.ensureContextSentences(
             currentSentence.id
           );
-          afterSentenceAudioPath = contextAudio.afterSentenceAudio;
+          afterSentenceAudioPath = contextAudio.afterSentenceAudio ?? undefined;
           if (afterSentenceAudioPath) {
             audioPaths.push(afterSentenceAudioPath);
             audioTypes.push('after');
@@ -1937,12 +1820,9 @@ export class LearningMode extends BaseComponent {
         },
       });
 
-      // Preload audio into cache in background for next time (non-blocking)
-      if (!this.audioCache.has(currentAudioPath)) {
-        void audioPlayer.preload(currentAudioPath).catch((err) => {
-          logger.warn({ error: err, audioPath: currentAudioPath }, `Failed to preload audio`);
-        });
-      }
+      void audioPlayer.preload(currentAudioPath).catch((err) => {
+        logger.warn({ error: err, audioPath: currentAudioPath }, `Failed to preload audio`);
+      });
     } catch (error) {
       logger.error({ error }, 'Failed to play audio');
       this.currentPlayingAudio = null;
@@ -2386,7 +2266,6 @@ export class LearningMode extends BaseComponent {
           .audioOnlyMode=${this.audioOnlyMode}
           .autoScrollEnabled=${this.autoScrollEnabled}
           .currentSessionId=${this.currentSessionId}
-          .audioCache=${this.audioCache}
           .playbackSpeed=${this.playbackSpeed}
           @word-clicked=${this.handleWordClicked}
           @mark-word-known=${this.handleMarkWordKnown}

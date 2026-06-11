@@ -26,6 +26,11 @@ import {
 } from '../../shared/utils/similarity-threshold.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
 import { logger } from '../utils/logger.js';
+import { shuffleArray } from '../utils/array-utils.js';
+import {
+  initializeSpeechRecognition,
+  startSpeechRecognitionCheck,
+} from '../utils/speech-recognition-checker.js';
 
 @customElement('quiz-mode')
 export class QuizMode extends BaseComponent {
@@ -102,13 +107,7 @@ export class QuizMode extends BaseComponent {
   private audioPlayedCount = 0; // Track number of audio playback events in this session
   private recordingTimer: number | null = null;
   private recordingStatusCheckTimer: number | null = null;
-  private speechRecognitionCheckTimer: number | null = null;
-
-  // Audio cache: Map of audioPath -> blob URL
-  // Using Blob URLs instead of data URLs for better performance (no base64 encoding/decoding)
-  // Note: We keep this cache for preloading, but use audioPlayer for playback
-  private audioCache: Map<string, string> = new Map(); // audioPath -> blob URL
-  private blobUrlCache: Map<string, string> = new Map(); // audioPath -> blob URL (for cleanup)
+  private speechRecognitionCheckCleanup: (() => void) | null = null;
 
   private currentProficiencyLevel: ProficiencyLevel | null = null;
 
@@ -172,18 +171,18 @@ export class QuizMode extends BaseComponent {
       }
     );
 
-    // Initialize speech recognition asynchronously (non-blocking, Whisper is optional)
-    // Don't await - let it run in background so quiz can start even if Whisper is unavailable
-    this.initializeSpeechRecognition().catch((err) => {
-      logger.warn({ error: err }, 'Speech recognition initialization failed (non-blocking)');
-    });
+    initializeSpeechRecognition()
+      .then((ready) => {
+        this.speechRecognitionReady = ready;
+      })
+      .catch((err) => {
+        logger.warn({ error: err }, 'Speech recognition initialization failed (non-blocking)');
+        this.speechRecognitionReady = false;
+      });
 
-    // Start periodic check of speech recognition readiness (includes server availability)
-    this.startSpeechRecognitionCheck();
-
-    // Also check immediately in case Whisper is already available
-    this.checkSpeechRecognitionReady().catch((err) => {
-      logger.warn({ error: err }, 'Initial speech recognition check failed');
+    this.speechRecognitionCheckCleanup = startSpeechRecognitionCheck((ready) => {
+      this.speechRecognitionReady = ready;
+      this.requestUpdate();
     });
 
     // Load autoplay preference
@@ -244,7 +243,8 @@ export class QuizMode extends BaseComponent {
     // Clean up recording timers
     this.clearRecordingTimer();
     this.clearRecordingStatusCheck();
-    this.clearSpeechRecognitionCheck();
+    this.speechRecognitionCheckCleanup?.();
+    this.speechRecognitionCheckCleanup = null;
 
     // Cancel any ongoing recording
     if (this.isRecording) {
@@ -260,10 +260,6 @@ export class QuizMode extends BaseComponent {
 
     // Clean up audio cache and playing audio
     this.stopCachedAudio();
-    // Revoke all blob URLs to free memory
-    this.blobUrlCache.forEach((blobUrl) => URL.revokeObjectURL(blobUrl));
-    this.audioCache.clear();
-    this.blobUrlCache.clear();
   }
 
   private async restoreQuizFromSession(savedSession: QuizSessionState) {
@@ -406,7 +402,7 @@ export class QuizMode extends BaseComponent {
       }
 
       // Shuffle questions for variety
-      const shuffledQuestions = this.shuffleArray(questions);
+      const shuffledQuestions = shuffleArray(questions);
       const wordIds = shuffledQuestions.map((q) => q.word.id);
 
       this.quizSession = {
@@ -478,15 +474,6 @@ export class QuizMode extends BaseComponent {
         audioOnlyMode: this.audioOnlyMode,
       });
     }
-  }
-
-  private shuffleArray<T>(array: T[]): T[] {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
   }
 
   private revealAnswer() {
@@ -759,23 +746,11 @@ export class QuizMode extends BaseComponent {
 
     const audioPath = this.currentQuestion.sentence.audioPath;
 
-    // If already cached, we're done
-    if (this.audioCache.has(audioPath)) {
-      return;
-    }
-
-    try {
-      await this.loadAudioIntoCache(audioPath);
-    } catch (error) {
+    void audioPlayer.preload(audioPath).catch((error) => {
       logger.warn({ error, audioPath }, 'Failed to load current question audio');
-      // Continue anyway - will fall back to IPC playback
-    }
+    });
   }
 
-  /**
-   * Preload the next question's audio after current one is ready
-   * This ensures smooth transitions between questions
-   */
   private preloadNextQuestionAudio(): void {
     if (!this.quizSession) {
       return;
@@ -783,85 +758,28 @@ export class QuizMode extends BaseComponent {
 
     const nextIndex = this.quizSession.currentQuestionIndex + 1;
     if (nextIndex >= this.quizSession.questions.length) {
-      return; // No next question
-    }
-
-    const nextQuestion = this.quizSession.questions[nextIndex];
-    if (!nextQuestion?.sentence.audioPath) {
-      return; // No audio path for next question
-    }
-
-    const nextAudioPath = nextQuestion.sentence.audioPath;
-
-    // Skip if already cached
-    if (this.audioCache.has(nextAudioPath)) {
       return;
     }
 
-    // Load next question's audio in background (non-blocking)
-    void this.loadAudioIntoCache(nextAudioPath).catch((error) => {
+    const nextAudioPath = this.quizSession.questions[nextIndex]?.sentence.audioPath;
+    if (!nextAudioPath) {
+      return;
+    }
+
+    void audioPlayer.preload(nextAudioPath).catch((error) => {
       logger.warn({ error, audioPath: nextAudioPath }, 'Failed to preload next question audio');
-      // Non-critical - will load on-demand if needed
     });
   }
 
-  /**
-   * Load a single audio file into cache
-   */
-  private async loadAudioIntoCache(audioPath: string): Promise<void> {
-    if (this.audioCache.has(audioPath)) {
-      return; // Already cached
-    }
-
-    try {
-      // Load audio as ArrayBuffer (more efficient than base64)
-      const result = await window.electronAPI.audio.loadAudioBase64(audioPath);
-      if (result && result.data) {
-        // Create Blob and Blob URL (faster than data URLs for browser)
-        const blob = new Blob([result.data], { type: result.mimeType });
-        const blobUrl = URL.createObjectURL(blob);
-        this.audioCache.set(audioPath, blobUrl);
-        this.blobUrlCache.set(audioPath, blobUrl);
-      }
-    } catch (error) {
-      logger.warn({ error, audioPath }, 'Failed to load audio');
-      throw error;
-    }
-  }
-
-  /**
-   * Pre-load all audio files for the quiz session into memory cache
-   * This allows instant playback without file system access
-   * Optimized: Skips already cached files and loads in parallel
-   */
   private async preloadQuizAudio(questions: QuizQuestion[]): Promise<void> {
     try {
       const audioPaths = questions
         .map((q) => q.sentence.audioPath)
-        .filter((path): path is string => !!path)
-        .filter((path) => !this.audioCache.has(path)); // Skip already cached
-
-      if (audioPaths.length === 0) {
-        return;
-      }
-
-      console.log(`Pre-loading ${audioPaths.length} audio files into cache...`);
-
-      // Load all audio files in parallel (small files, so parallel loading is fine)
-      const loadPromises = audioPaths.map(async (audioPath) => {
-        try {
-          await this.loadAudioIntoCache(audioPath);
-        } catch (error) {
-          logger.warn({ error, audioPath }, 'Failed to preload audio');
-          // Continue loading other files even if one fails
-        }
-      });
-
-      await Promise.all(loadPromises);
-      logger.info({ fileCount: this.audioCache.size }, 'Audio cache ready');
+        .filter((path): path is string => !!path);
+      await audioPlayer.preloadMultiple(audioPaths);
+      logger.info('Audio cache ready');
     } catch (error) {
       logger.error({ error }, 'Error preloading audio');
-      // Don't fail quiz if audio caching fails - will fall back to file system
     }
   }
 
@@ -1262,56 +1180,6 @@ export class QuizMode extends BaseComponent {
     this.audioOnlyMode = !this.audioOnlyMode;
     // Save the audio-only mode setting to session
     this.saveQuizProgressToSession();
-  }
-
-  private async initializeSpeechRecognition() {
-    try {
-      // initializeSpeechRecognition() already checks if server is available
-      logger.info('Initializing speech recognition...');
-      await window.electronAPI.audio.initializeSpeechRecognition();
-      this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
-      logger.info({ ready: this.speechRecognitionReady }, 'Speech recognition initialized');
-
-      if (this.speechRecognitionReady) {
-        logger.info('Speech recognition is ready for use');
-      } else {
-        logger.info('Speech recognition not ready (server may be unavailable)');
-      }
-    } catch (error) {
-      logger.error({ error }, 'Failed to initialize speech recognition');
-      this.speechRecognitionReady = false;
-
-      // Show user-friendly message
-      const errorMessage = getErrorMessage(error);
-      logger.warn({ errorMessage }, 'Speech recognition not available');
-    }
-  }
-
-  private startSpeechRecognitionCheck() {
-    // Clear any existing timer
-    this.clearSpeechRecognitionCheck();
-
-    // Check speech recognition readiness (includes server availability) every 5 seconds
-    this.speechRecognitionCheckTimer = window.setInterval(async () => {
-      await this.checkSpeechRecognitionReady();
-    }, 5000);
-  }
-
-  private clearSpeechRecognitionCheck() {
-    if (this.speechRecognitionCheckTimer !== null) {
-      clearInterval(this.speechRecognitionCheckTimer);
-      this.speechRecognitionCheckTimer = null;
-    }
-  }
-
-  private async checkSpeechRecognitionReady() {
-    try {
-      this.speechRecognitionReady = await window.electronAPI.audio.isSpeechRecognitionReady();
-      logger.debug({ ready: this.speechRecognitionReady }, 'Speech recognition ready');
-    } catch (error) {
-      logger.error({ error }, 'Failed to check speech recognition readiness');
-      this.speechRecognitionReady = false;
-    }
   }
 
   private async performSpeechRecognition() {
