@@ -463,6 +463,13 @@ export class SentenceViewer extends LitElement {
         box-sizing: border-box;
       }
 
+      .japanese-words {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        align-items: baseline;
+      }
+
       .word-in-sentence:hover {
         transform: translateY(-1px);
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -2965,12 +2972,17 @@ export class SentenceViewer extends LitElement {
    * Renders the sentence text with all words
    */
   private renderSentenceText(): TemplateResult {
+    const lang = this.targetWord?.language?.toLowerCase();
+    const isJapanese = lang === 'japanese' || lang === 'ja';
+
     return html`
       <div
         class="sentence-text ${this.localPlayingAudio === 'main' ? 'playing' : ''}"
         @click=${this.handleSentenceTextClick}
       >
-        <div>${this.parsedWords.map((wordInfo) => this.renderWord(wordInfo))}</div>
+        <div class="${isJapanese ? 'japanese-words' : ''}">
+          ${this.parsedWords.map((wordInfo) => this.renderWord(wordInfo))}
+        </div>
         ${this.wordPopup
           ? html`
               <div

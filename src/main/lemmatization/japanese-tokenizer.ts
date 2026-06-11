@@ -124,47 +124,45 @@ export async function getWordReadings(words: string[]): Promise<Record<string, s
  * Tokenize Japanese text using kuromoji
  */
 export async function tokenizeJapanese(sentence: string): Promise<TokenizedToken[]> {
-  // Disable kuromoji for now - use simple tokenization
-  // eslint-disable-next-line no-constant-condition
-  if (true) {
-    return tokenizeJapaneseSimple(sentence);
-  }
-
   try {
     const tokenizer = await getJapaneseTokenizer();
     const tokens = tokenizer.tokenize(sentence);
 
     const result: TokenizedToken[] = [];
-    let lastIndex = 0;
+    let lastIndex = 0; // 0-based char index
 
     for (const token of tokens) {
-      // Add any text before this token as punctuation/whitespace
-      if (token.word_position > lastIndex) {
-        const before = sentence.substring(lastIndex, token.word_position);
-        if (before.trim()) {
-          // Check if it's whitespace or punctuation
-          if (/^\s+$/.test(before)) {
-            result.push({ text: before, type: 'whitespace' });
-          } else {
-            result.push({ text: before, type: 'punctuation' });
-          }
+      const tokenStart = token.word_position - 1; // word_position is 1-based
+
+      // Add any gap text before this token (rare for well-formed Japanese)
+      if (tokenStart > lastIndex) {
+        const before = sentence.substring(lastIndex, tokenStart);
+        if (/^\s+$/.test(before)) {
+          result.push({ text: before, type: 'whitespace' });
+        } else if (before.trim()) {
+          result.push({ text: before, type: 'punctuation' });
         }
       }
 
-      // Add the token as a word
-      result.push({ text: token.surface_form, type: 'word' });
-      lastIndex = token.word_position + token.surface_form.length;
+      const text = token.surface_form;
+      if (/^\s+$/.test(text)) {
+        result.push({ text, type: 'whitespace' });
+      } else if (/^[。、！？：；・…]+$/.test(text) || token.pos === '記号') {
+        result.push({ text, type: 'punctuation' });
+      } else {
+        result.push({ text, type: 'word' });
+      }
+
+      lastIndex = tokenStart + text.length;
     }
 
     // Add any remaining text
     if (lastIndex < sentence.length) {
       const remaining = sentence.substring(lastIndex);
-      if (remaining.trim()) {
-        if (/^\s+$/.test(remaining)) {
-          result.push({ text: remaining, type: 'whitespace' });
-        } else {
-          result.push({ text: remaining, type: 'punctuation' });
-        }
+      if (/^\s+$/.test(remaining)) {
+        result.push({ text: remaining, type: 'whitespace' });
+      } else if (remaining.trim()) {
+        result.push({ text: remaining, type: 'punctuation' });
       }
     }
 
@@ -172,7 +170,6 @@ export async function tokenizeJapanese(sentence: string): Promise<TokenizedToken
   } catch (error) {
     const logger = getLogger();
     logger.error({ error }, 'Failed to tokenize Japanese with kuromoji');
-    // Fallback: simple character-based splitting for Japanese
     return tokenizeJapaneseSimple(sentence);
   }
 }
