@@ -8,6 +8,7 @@ import { Word, QuizQuestion, QuizSession, QuizResult } from '../../shared/types/
 import { STRENGTH_BOOST_CONFIG } from '../../shared/constants/index.js';
 import { sharedStyles } from '../styles/shared.js';
 import { quizModeStyles } from './quiz-mode.styles.js';
+import { recordingStyles } from './recording.styles.js';
 import { router } from '../utils/router.js';
 import { sessionManager, type QuizSessionState } from '../utils/session-manager.js';
 import { useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
@@ -149,7 +150,7 @@ export class QuizMode extends BaseComponent {
     }
   };
 
-  static styles = [sharedStyles, quizModeStyles];
+  static styles = [sharedStyles, quizModeStyles, recordingStyles];
 
   async connectedCallback() {
     super.connectedCallback();
