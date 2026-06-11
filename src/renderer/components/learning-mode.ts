@@ -92,7 +92,6 @@ export class LearningMode extends BaseComponent {
   @state()
   private audioOnlyMode = false;
 
-  private sessionStartTime = Date.now();
   private keyboardUnsubscribe?: () => void;
   private lastRecordedSentenceId: number | null = null;
   private lastSeenSentenceId: number | null = null;
@@ -102,8 +101,6 @@ export class LearningMode extends BaseComponent {
   private isReloadingFromQueue = false;
   private currentSentenceDisplayLastSeen?: Date;
   private autoScrollTimer: number | null = null;
-  private currentSessionId: number | undefined;
-  private audioPlayedCount = 0; // Track number of audio playback events in this session
 
   // Track which sentence last started playing audio (to detect if audio completed vs never started)
   private lastSentenceWithAudioStarted: number | null = null;
@@ -177,14 +174,7 @@ export class LearningMode extends BaseComponent {
 
     await this.loadCurrentLanguage();
 
-    // Create learning session for tracking
-    try {
-      const language = this.currentLanguage || 'spanish';
-      this.currentSessionId = await window.electronAPI.tracking.createSession('learning', language);
-    } catch (error) {
-      logger.warn({ error }, 'Failed to create learning session');
-      // Continue without session tracking
-    }
+    await this.createTrackingSession('learning', this.currentLanguage || 'spanish');
 
     // Setup keyboard bindings
     this.setupKeyboardBindings();
@@ -1388,23 +1378,11 @@ export class LearningMode extends BaseComponent {
   }
 
   private async updateSessionOnCompletion() {
-    if (!this.currentSessionId) return;
-
-    try {
-      // Calculate total sentence count from wordsWithSentences
-      const sentenceCount = this.wordsWithSentences.reduce(
-        (total, word) => total + word.sentences.length,
-        0
-      );
-
-      await window.electronAPI.tracking.updateSession(this.currentSessionId, {
-        wordCount: this.selectedWords.length,
-        sentenceCount,
-        audioPlayedCount: this.audioPlayedCount,
-      });
-    } catch (error) {
-      logger.warn({ error }, 'Failed to update session on completion');
-    }
+    const sentenceCount = this.wordsWithSentences.reduce(
+      (total, word) => total + word.sentences.length,
+      0
+    );
+    await this.finalizeTrackingSession(this.selectedWords.length, sentenceCount);
   }
 
   private showSessionCompletion() {
@@ -1765,21 +1743,14 @@ export class LearningMode extends BaseComponent {
               );
             });
         }
-        // Track audio playback event
         if (currentSentence.id && this.currentLanguage) {
-          this.audioPlayedCount++;
-          void window.electronAPI.tracking
-            .recordAudioPlayback({
-              sessionId: this.currentSessionId,
-              sentenceId: currentSentence.id,
-              audioPath: currentAudioPath,
-              language: this.currentLanguage,
-              mode: 'learning',
-              playbackSpeed: this.playbackSpeed,
-            })
-            .catch((err: unknown) => {
-              logger.warn({ error: err }, 'Failed to record audio playback');
-            });
+          this.trackAudioPlayback({
+            sentenceId: currentSentence.id,
+            audioPath: currentAudioPath,
+            language: this.currentLanguage,
+            mode: 'learning',
+            playbackSpeed: this.playbackSpeed,
+          });
         }
       };
 

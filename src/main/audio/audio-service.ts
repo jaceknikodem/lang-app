@@ -93,9 +93,9 @@ export class AudioService {
       const backend = this.getTTSBackendForLanguage(currentLanguage);
 
       if (backend === 'kokoro') {
-        // Kokoro is handled per-call in generateAudio; non-kokoro generator handles the rest
-        if (!(this.audioGenerator instanceof TTSAudioGenerator) &&
-            !(this.audioGenerator instanceof ElevenLabsAudioGenerator)) {
+        // Kokoro handles generation per-call; ensure audioGenerator is not ElevenLabs, which would
+        // cause getAudioGenerationInfo to report 'elevenlabs' and leak ElevenLabs voice IDs into Kokoro calls.
+        if (!(this.audioGenerator instanceof TTSAudioGenerator)) {
           this.audioGenerator = new TTSAudioGenerator(undefined, database);
         }
         return;

@@ -53,8 +53,6 @@ export class FlowMode extends BaseComponent {
   private dataArray: Uint8Array | null = null;
   private animationFrameId: number | null = null;
   private canvasElement: HTMLCanvasElement | null = null;
-  private currentSessionId: number | undefined;
-  private audioPlayedCount = 0; // Track number of audio playback events in this session
 
   connectedCallback() {
     super.connectedCallback();
@@ -66,12 +64,8 @@ export class FlowMode extends BaseComponent {
     window.electronAPI.database
       .getCurrentLanguage()
       .then(async (language) => {
-        try {
-          this.currentLanguage = language;
-          this.currentSessionId = await window.electronAPI.tracking.createSession('flow', language);
-        } catch (error) {
-          logger.warn({ error, language }, 'Failed to create flow session');
-        }
+        this.currentLanguage = language;
+        await this.createTrackingSession('flow', language);
       })
       .catch((err) => {
         logger.warn({ error: err }, 'Failed to get current language for flow session');
@@ -129,37 +123,19 @@ export class FlowMode extends BaseComponent {
   };
 
   private async updateSessionOnCompletion() {
-    if (!this.currentSessionId) return;
-
-    try {
-      // Calculate how many sentences were actually played based on pause timestamps
-      let sentencesPlayed = 0;
-
-      if (this.pauseEndTimestamps && this.pauseEndTimestamps.length > 0) {
-        // Get current playback position (either current time if playing, or paused position if paused)
-        const currentPosition = this.audioElement?.currentTime ?? this.pausedPosition;
-
-        // Count how many pause end timestamps (sentence boundaries) we've passed
-        // Each pause end timestamp represents the end of a sentence
-        sentencesPlayed = this.pauseEndTimestamps.filter(
-          (timestamp) => timestamp <= currentPosition
-        ).length;
-      } else {
-        // Fallback: if no pause timestamps available, use total sentences if audio was played
-        // This is less accurate but better than 0
-        if (this.audioElement && (this.audioElement.currentTime > 0 || this.pausedPosition > 0)) {
-          sentencesPlayed = this.flowSentences.length;
-        }
-      }
-
-      await window.electronAPI.tracking.updateSession(this.currentSessionId, {
-        wordCount: 0, // Flow mode doesn't track individual words
-        sentenceCount: sentencesPlayed,
-        audioPlayedCount: this.audioPlayedCount,
-      });
-    } catch (error) {
-      logger.warn({ error }, 'Failed to update session on completion');
+    let sentencesPlayed = 0;
+    if (this.pauseEndTimestamps && this.pauseEndTimestamps.length > 0) {
+      const currentPosition = this.audioElement?.currentTime ?? this.pausedPosition;
+      sentencesPlayed = this.pauseEndTimestamps.filter(
+        (timestamp) => timestamp <= currentPosition
+      ).length;
+    } else if (
+      this.audioElement &&
+      (this.audioElement.currentTime > 0 || this.pausedPosition > 0)
+    ) {
+      sentencesPlayed = this.flowSentences.length;
     }
+    await this.finalizeTrackingSession(0, sentencesPlayed);
   }
 
   private async loadFlowSentences() {

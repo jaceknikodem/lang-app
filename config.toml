@@ -130,7 +130,7 @@ speech_recognition_code = "it"
 elevenlabs_voice_ids = ["oCS6WHyqobqW2UapCSHl", "CiwzbDpaN3pQXjTgx3ML", "P951amuWPNCJ0L15rFyC"]
 elevenlabs_model = "eleven_flash_v2_5"
 audio_generator_voice = "Alice"
-tts_backend = "kokoro"
+tts_backend = "elevenlabs"
 
 [[languages]]
 code = "pt"
@@ -142,7 +142,7 @@ speech_recognition_code = "pt"
 elevenlabs_voice_ids = ["GDzHdQOi6jjf8zaXhCYD", "9pDzHy2OpOgeXM8SeL0t"]
 elevenlabs_model = "eleven_flash_v2_5"
 audio_generator_voice = "Luciana"
-tts_backend = "kokoro"
+tts_backend = "elevenlabs"
 
 [[languages]]
 code = "pl"

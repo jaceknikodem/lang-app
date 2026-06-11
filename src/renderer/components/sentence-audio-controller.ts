@@ -205,7 +205,7 @@ export class SentenceAudioController implements ReactiveController {
           word,
           wordId: sentence.wordId || targetWord?.id,
           sentenceId: sentence.id,
-          existingPath: oldPath,
+          existingPath: oldPath || undefined,
         });
         regeneratedPath = result?.audioPath;
       } else {

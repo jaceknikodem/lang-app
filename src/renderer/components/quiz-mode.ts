@@ -17,14 +17,14 @@ import { audioPlayer } from '../utils/audio-player-service.js';
 import './session-complete.js';
 import './progress-bar.js';
 import type { SessionSummary } from './session-complete.js';
-import type { RecordingResult } from './audio-recorder.js';
-import type { RecordingOptions } from '../../shared/types/audio.js';
+import { RecordingController } from './recording-controller.js';
+import { TranscriptionController } from './transcription-controller.js';
+import './recording-status.js';
 import { checkProficiencyLevel } from '../utils/app-initializer.js';
 import {
   getSimilarityClass,
   type ProficiencyLevel,
 } from '../../shared/utils/similarity-threshold.js';
-import { getErrorMessage } from '../../shared/utils/error.js';
 import { logger } from '../utils/logger.js';
 import { shuffleArray } from '../utils/array-utils.js';
 import {
@@ -58,14 +58,15 @@ export class QuizMode extends BaseComponent {
   @state()
   private selectedWords: Word[] = [];
 
-  @state()
-  private isRecording = false;
+  private recording = new RecordingController(this, {
+    onBeforeStart: () => this.stopCachedAudio(),
+    onRecordingComplete: () => this.performSpeechRecognition(),
+    onError: (msg) => {
+      this.error = msg;
+    },
+  });
 
-  @state()
-  private recordingTime = 0;
-
-  @state()
-  private currentRecording: RecordingResult | null = null;
+  private transcription = new TranscriptionController(this);
 
   @state()
   private transcriptionResult: {
@@ -81,12 +82,7 @@ export class QuizMode extends BaseComponent {
   private isTranscribing = false;
 
   @state()
-  private streamingTranscriptionText: string | null = null;
-
-  @state()
   private speechRecognitionReady = false;
-
-  private transcriptionProgressUnsubscribe: (() => void) | null = null;
 
   @state()
   private autoplayEnabled = false;
@@ -100,13 +96,8 @@ export class QuizMode extends BaseComponent {
   @state()
   private textInputValue = '';
 
-  private sessionStartTime = Date.now();
   private keyboardUnsubscribe?: () => void;
   private lastAutoplayKey: string | null = null;
-  private currentSessionId: number | undefined;
-  private audioPlayedCount = 0; // Track number of audio playback events in this session
-  private recordingTimer: number | null = null;
-  private recordingStatusCheckTimer: number | null = null;
   private speechRecognitionCheckCleanup: (() => void) | null = null;
 
   private currentProficiencyLevel: ProficiencyLevel | null = null;
@@ -157,20 +148,6 @@ export class QuizMode extends BaseComponent {
     // Setup keyboard bindings
     this.setupKeyboardBindings();
 
-    // Set up transcription progress listener for streaming updates
-    this.transcriptionProgressUnsubscribe = window.electronAPI.audio.onTranscriptionProgress(
-      (payload) => {
-        if (payload.isFinal) {
-          // Final transcription received, clear streaming text
-          this.streamingTranscriptionText = null;
-        } else {
-          // Intermediate transcription update
-          this.streamingTranscriptionText = payload.text;
-          this.requestUpdate();
-        }
-      }
-    );
-
     initializeSpeechRecognition()
       .then((ready) => {
         this.speechRecognitionReady = ready;
@@ -193,16 +170,11 @@ export class QuizMode extends BaseComponent {
       this.currentLanguage = await window.electronAPI.database.getCurrentLanguage();
       const proficiency = await checkProficiencyLevel(this.currentLanguage);
       this.currentProficiencyLevel = proficiency as ProficiencyLevel | null;
-
-      // Create quiz session for tracking
-      if (this.currentLanguage) {
-        this.currentSessionId = await window.electronAPI.tracking.createSession(
-          'quiz',
-          this.currentLanguage
-        );
-      }
     } catch (error) {
-      logger.warn({ error }, 'Failed to load proficiency level or create session');
+      logger.warn({ error }, 'Failed to load proficiency level');
+    }
+    if (this.currentLanguage) {
+      await this.createTrackingSession('quiz', this.currentLanguage);
     }
 
     // Check if there's an existing quiz session to restore
@@ -234,24 +206,8 @@ export class QuizMode extends BaseComponent {
       void this.updateSessionOnCompletion();
     }
 
-    // Clean up transcription progress listener
-    if (this.transcriptionProgressUnsubscribe) {
-      this.transcriptionProgressUnsubscribe();
-      this.transcriptionProgressUnsubscribe = null;
-    }
-
-    // Clean up recording timers
-    this.clearRecordingTimer();
-    this.clearRecordingStatusCheck();
     this.speechRecognitionCheckCleanup?.();
     this.speechRecognitionCheckCleanup = null;
-
-    // Cancel any ongoing recording
-    if (this.isRecording) {
-      this.cancelRecording().catch((err) => {
-        logger.error({ error: err }, 'Error cancelling recording on disconnect');
-      });
-    }
 
     // Clean up keyboard bindings
     if (this.keyboardUnsubscribe) {
@@ -581,7 +537,7 @@ export class QuizMode extends BaseComponent {
     this.showAnswer = false;
     this.lastResult = null;
     this.transcriptionResult = null;
-    this.currentRecording = null;
+    this.recording.clearRecordingState();
     this.isTranscribing = false;
 
     if (this.quizSession.currentQuestionIndex + 1 >= this.quizSession.totalQuestions) {
@@ -651,17 +607,11 @@ export class QuizMode extends BaseComponent {
   }
 
   private async updateSessionOnCompletion() {
-    if (!this.currentSessionId || !this.quizSession) return;
-
-    try {
-      await window.electronAPI.tracking.updateSession(this.currentSessionId, {
-        wordCount: this.quizSession.totalQuestions,
-        sentenceCount: this.quizSession.totalQuestions,
-        audioPlayedCount: this.audioPlayedCount,
-      });
-    } catch (error) {
-      logger.warn({ error }, 'Failed to update session on completion');
-    }
+    if (!this.quizSession) return;
+    await this.finalizeTrackingSession(
+      this.quizSession.totalQuestions,
+      this.quizSession.totalQuestions
+    );
   }
 
   private showQuizCompletion() {
@@ -806,21 +756,13 @@ export class QuizMode extends BaseComponent {
           logger.warn({ error: err, sentenceId }, 'Failed to increment sentence play count');
         });
 
-        // Track audio playback event
         if (this.currentLanguage) {
-          this.audioPlayedCount++;
-          void window.electronAPI.tracking
-            .recordAudioPlayback({
-              sessionId: this.currentSessionId,
-              sentenceId: sentenceId,
-              audioPath: audioPath,
-              language: this.currentLanguage,
-              mode: 'quiz',
-              playbackSpeed: 1.0, // Quiz mode doesn't have playback speed control
-            })
-            .catch((err: unknown) => {
-              logger.warn({ error: err }, 'Failed to record audio playback');
-            });
+          this.trackAudioPlayback({
+            sentenceId,
+            audioPath,
+            language: this.currentLanguage,
+            mode: 'quiz',
+          });
         }
       }
 
@@ -943,7 +885,7 @@ export class QuizMode extends BaseComponent {
     if (this.quizSession.isComplete) return;
 
     // Don't handle if recording is in progress
-    if (this.isRecording) return;
+    if (this.recording.isRecording) return;
 
     // If showing result, the auto-advance will handle progression
     if (this.showResult) return;
@@ -959,8 +901,8 @@ export class QuizMode extends BaseComponent {
   }
 
   private handleEscape() {
-    if (this.isRecording) {
-      this.cancelRecording();
+    if (this.recording.isRecording) {
+      void this.recording.cancelRecording();
     }
     // ESC in quiz mode no longer navigates away - just cancel recording if active
   }
@@ -968,162 +910,12 @@ export class QuizMode extends BaseComponent {
   private async toggleRecording() {
     if (!this.speechRecognitionReady || !this.currentQuestion) return;
 
-    if (this.isRecording) {
-      await this.stopRecording();
+    if (this.recording.isRecording) {
+      await this.recording.stopRecording();
     } else {
-      await this.startRecording();
-    }
-  }
-
-  private async startRecording() {
-    if (this.isRecording || !this.speechRecognitionReady || !this.currentQuestion) return;
-
-    // Stop any currently playing audio when starting recording
-    this.stopCachedAudio();
-
-    try {
-      const recordingOptions: RecordingOptions = {
-        sampleRate: 16000,
-        channels: 1,
-        threshold: 0.5,
-        silence: '1.0',
-        endOnSilence: true,
-      };
-
-      await window.electronAPI.audio.startRecording(recordingOptions);
-      this.isRecording = true;
-      this.recordingTime = 0;
-      this.currentRecording = null;
       this.transcriptionResult = null;
       this.isTranscribing = false;
-
-      // Start recording timer
-      this.recordingTimer = window.setInterval(() => {
-        this.recordingTime += 1;
-      }, 1000);
-
-      // Set up periodic check for recording status (in case of auto-stop)
-      this.setupRecordingStatusCheck();
-    } catch (error) {
-      logger.error({ error }, 'Error starting recording');
-      this.isRecording = false;
-      this.error = `Failed to start recording: ${getErrorMessage(error)}`;
-    }
-  }
-
-  private async stopRecording() {
-    if (!this.isRecording) return;
-
-    try {
-      const completedSession = await window.electronAPI.audio.stopRecording();
-      this.isRecording = false;
-      this.clearRecordingTimer();
-      this.clearRecordingStatusCheck();
-
-      if (completedSession && !completedSession.isRecording) {
-        // Get the recording file path from the session
-        const filePath = completedSession.filePath;
-
-        // Calculate duration if available
-        const duration =
-          completedSession.duration || (Date.now() - completedSession.startTime) / 1000;
-
-        this.currentRecording = {
-          session: completedSession,
-          filePath,
-          duration,
-        };
-
-        // Automatically perform speech recognition
-        await this.performSpeechRecognition();
-      }
-    } catch (error) {
-      logger.error({ error }, 'Error stopping recording');
-      this.isRecording = false;
-      this.clearRecordingTimer();
-      this.clearRecordingStatusCheck();
-      this.error = `Failed to stop recording: ${getErrorMessage(error)}`;
-    }
-  }
-
-  private async cancelRecording() {
-    if (!this.isRecording) return;
-
-    try {
-      await window.electronAPI.audio.cancelRecording();
-      this.isRecording = false;
-      this.currentRecording = null;
-      this.transcriptionResult = null;
-      this.clearRecordingTimer();
-      this.clearRecordingStatusCheck();
-    } catch (error) {
-      logger.error({ error }, 'Error cancelling recording');
-      this.isRecording = false;
-      this.clearRecordingTimer();
-      this.clearRecordingStatusCheck();
-    }
-  }
-
-  private clearRecordingTimer() {
-    if (this.recordingTimer) {
-      clearInterval(this.recordingTimer);
-      this.recordingTimer = null;
-    }
-  }
-
-  private setupRecordingStatusCheck() {
-    // Clear any existing status check timer
-    this.clearRecordingStatusCheck();
-
-    // Check recording status every 500ms to detect auto-stop
-    this.recordingStatusCheckTimer = window.setInterval(async () => {
-      if (this.isRecording) {
-        try {
-          const isStillRecording = await window.electronAPI.audio.isRecording();
-          if (!isStillRecording) {
-            // Recording was stopped automatically (likely due to silence)
-            await this.handleRecordingAutoStop();
-          }
-        } catch (error) {
-          logger.error({ error }, 'Error checking recording status');
-        }
-      }
-    }, 500);
-  }
-
-  private clearRecordingStatusCheck() {
-    if (this.recordingStatusCheckTimer) {
-      clearInterval(this.recordingStatusCheckTimer);
-      this.recordingStatusCheckTimer = null;
-    }
-  }
-
-  private async handleRecordingAutoStop() {
-    this.isRecording = false;
-    this.clearRecordingTimer();
-    this.clearRecordingStatusCheck();
-
-    try {
-      const completedSession = await window.electronAPI.audio.getCurrentRecordingSession();
-
-      if (completedSession && !completedSession.isRecording) {
-        const filePath = completedSession.filePath;
-        const duration =
-          completedSession.duration || (Date.now() - completedSession.startTime) / 1000;
-
-        this.currentRecording = {
-          session: completedSession,
-          filePath,
-          duration,
-        };
-
-        // Automatically perform speech recognition
-        await this.performSpeechRecognition();
-      }
-    } catch (error) {
-      logger.error({ error }, 'Error handling auto-stop');
-      this.error = 'Recording stopped automatically but there was an error processing it.';
-      this.isRecording = false;
+      await this.recording.startRecording();
     }
   }
 
@@ -1183,44 +975,31 @@ export class QuizMode extends BaseComponent {
   }
 
   private async performSpeechRecognition() {
-    if (!this.currentRecording || !this.currentQuestion || !this.speechRecognitionReady) {
+    const currentRecording = this.recording.currentRecording;
+    if (!currentRecording || !this.currentQuestion || !this.speechRecognitionReady) {
       return;
     }
 
     this.isTranscribing = true;
     this.transcriptionResult = null;
-    this.streamingTranscriptionText = null;
+    this.transcription.clear();
 
     try {
-      // Get the expected sentence (foreign language)
       const expectedSentence = this.currentQuestion.sentence.sentence;
-
-      // Get the current language for transcription
       const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
 
-      // Transcription language is always the foreign language
-      const transcriptionLanguage = currentLanguage;
-
       logger.debug(
-        {
-          filePath: this.currentRecording.filePath,
-          expectedSentence,
-          transcriptionLanguage,
-        },
+        { filePath: currentRecording.filePath, expectedSentence, language: currentLanguage },
         'Transcribing audio'
       );
 
-      // Transcribe the recorded audio (streaming API)
       const transcriptionResult = await window.electronAPI.audio.transcribeAudio(
-        this.currentRecording.filePath,
-        {
-          language: transcriptionLanguage,
-        }
+        currentRecording.filePath,
+        { language: currentLanguage }
       );
 
       logger.debug({ transcriptionResult }, 'Transcription result');
 
-      // Compare transcription with expected sentence
       const comparison = await window.electronAPI.audio.compareTranscription(
         transcriptionResult.text,
         expectedSentence,
@@ -1234,15 +1013,14 @@ export class QuizMode extends BaseComponent {
         ...comparison,
       };
 
-      // Record pronunciation attempt in database (tracks full history)
       if (this.currentQuestion?.sentence?.id) {
         try {
           await window.electronAPI.database.recordPronunciationAttempt(
             this.currentQuestion.sentence.id,
             comparison.similarity,
-            expectedSentence, // Expected text
-            transcriptionResult.text, // Transcribed text
-            this.currentRecording?.filePath || null // Audio path
+            expectedSentence,
+            transcriptionResult.text,
+            currentRecording.filePath || null
           );
         } catch (error) {
           logger.warn({ error }, 'Failed to record pronunciation attempt');
@@ -1409,11 +1187,11 @@ export class QuizMode extends BaseComponent {
                       >
                         <span aria-hidden="true">🔊</span>
                       </button>
-                      ${this.isRecording
+                      ${this.recording.isRecording
                         ? html`
                             <button
                               class="record-button recording"
-                              @click=${this.stopRecording}
+                              @click=${this.recording.stopRecording}
                               title="Stop recording"
                               aria-label="Stop recording"
                             >
@@ -1423,7 +1201,7 @@ export class QuizMode extends BaseComponent {
                         : html`
                             <button
                               class="record-button"
-                              @click=${this.startRecording}
+                              @click=${this.recording.startRecording}
                               ?disabled=${!this.speechRecognitionReady}
                               title=${this.speechRecognitionReady
                                 ? 'Start recording'
@@ -1448,11 +1226,11 @@ export class QuizMode extends BaseComponent {
                       >
                         <span aria-hidden="true">🔊</span>
                       </button>
-                      ${this.isRecording
+                      ${this.recording.isRecording
                         ? html`
                             <button
                               class="record-button recording"
-                              @click=${this.stopRecording}
+                              @click=${this.recording.stopRecording}
                               title="Stop recording"
                               aria-label="Stop recording"
                             >
@@ -1462,7 +1240,7 @@ export class QuizMode extends BaseComponent {
                         : html`
                             <button
                               class="record-button"
-                              @click=${this.startRecording}
+                              @click=${this.recording.startRecording}
                               ?disabled=${!this.speechRecognitionReady}
                               title=${this.speechRecognitionReady
                                 ? 'Start recording'
@@ -1480,7 +1258,9 @@ export class QuizMode extends BaseComponent {
               Do you know what ${questionWord} means in this context?
             </div>
 
-            ${this.isRecording || this.currentRecording || this.transcriptionResult
+            ${this.recording.isRecording ||
+            this.recording.currentRecording ||
+            this.transcriptionResult
               ? this.renderRecordingSection()
               : ''}
             ${this.showResult ? this.renderResult() : this.renderQuizButtons()}
@@ -1559,30 +1339,12 @@ export class QuizMode extends BaseComponent {
 
     return html`
       <div class="recording-section">
-        ${this.isRecording ? this.renderRecordingStatus() : ''} ${this.renderTranscriptionResults()}
-      </div>
-    `;
-  }
-
-  private renderRecordingStatus() {
-    const minutes = Math.floor(this.recordingTime / 60);
-    const seconds = this.recordingTime % 60;
-    const formattedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-
-    return html`
-      <div class="recording-status-container">
-        <div class="recording-status">
-          <div class="recording-dot"></div>
-          <span class="recording-time">${formattedTime}</span>
-          <span class="recording-indicator">Recording…</span>
-        </div>
-        <button
-          class="cancel-recording-button"
-          @click=${this.cancelRecording}
-          title="Cancel recording"
-        >
-          ✕ Cancel
-        </button>
+        <recording-status
+          .isRecording=${this.recording.isRecording}
+          .recordingTime=${this.recording.recordingTime}
+          @cancel-recording=${this.recording.cancelRecording}
+        ></recording-status>
+        ${this.renderTranscriptionResults()}
       </div>
     `;
   }
@@ -1593,14 +1355,14 @@ export class QuizMode extends BaseComponent {
         <div class="transcription-results">
           <div class="transcription-loading">
             <div class="spinner"></div>
-            ${this.streamingTranscriptionText
+            ${this.transcription.streamingTranscriptionText
               ? html`
                   <div class="streaming-transcription">
                     <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">
                       Transcribing...
                     </div>
                     <div style="font-size: 16px; font-style: italic; color: var(--text-primary);">
-                      "${this.streamingTranscriptionText}"
+                      "${this.transcription.streamingTranscriptionText}"
                     </div>
                   </div>
                 `

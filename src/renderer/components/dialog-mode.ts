@@ -15,7 +15,9 @@ import { recordingStyles } from './recording.styles.js';
 import { useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 import { sessionManager } from '../utils/session-manager.js';
 import { router } from '../utils/router.js';
-import type { RecordingOptions, RecordingSession } from '../../shared/types/audio.js';
+import { RecordingController } from './recording-controller.js';
+import { TranscriptionController } from './transcription-controller.js';
+import './recording-status.js';
 import { checkProficiencyLevel } from '../utils/app-initializer.js';
 import {
   getSimilarityThresholds,
@@ -56,27 +58,24 @@ export class DialogMode extends BaseComponent {
   @state()
   private selectedOption: DialogueVariant | null = null;
 
-  @state()
-  private isRecording = false;
+  private recording = new RecordingController(this, {
+    onBeforeStart: () => {
+      if (this.currentAudioElement) this.currentAudioElement.pause();
+      this.isAudioPlaying = false;
+    },
+    onRecordingComplete: () => this.performSpeechRecognition(),
+    onError: (msg) => {
+      this.error = msg;
+    },
+  });
 
-  @state()
-  private recordingTime = 0;
-
-  @state()
-  private currentRecording: {
-    session: RecordingSession;
-    filePath: string;
-    duration: number;
-  } | null = null;
+  private transcription = new TranscriptionController(this);
 
   @state()
   private transcriptionResult: TranscriptionResult | null = null;
 
   @state()
   private isTranscribing = false;
-
-  @state()
-  private streamingTranscriptionText: string | null = null;
 
   @state()
   private speechRecognitionReady = false;
@@ -127,20 +126,14 @@ export class DialogMode extends BaseComponent {
   @state()
   private sessionSummary: SessionSummary | null = null;
 
-  private sessionStartTime = Date.now();
   private initialTotalDialogs = 0; // Track initial total for progress calculation
 
-  private recordingTimer: number | null = null;
-  private recordingStatusCheckTimer: number | null = null;
   private speechRecognitionCheckCleanup: (() => void) | null = null;
   private currentAudioElement: HTMLAudioElement | null = null;
-  private transcriptionProgressUnsubscribe: (() => void) | null = null;
   private keyboardUnsubscribe?: () => void;
   private currentProficiencyLevel: ProficiencyLevel | null = null;
   private dialogCount = 0; // Track number of dialogs completed in this session
   private dialogsWithAudio = 0; // Track number of dialogs where user recorded audio
-  private audioPlayedCount = 0; // Track number of audio playback events in this session
-  private currentSessionId: number | undefined;
 
   protected override handleExternalLanguageChange = async (event: Event): Promise<void> => {
     // Call base class handler first
@@ -158,8 +151,8 @@ export class DialogMode extends BaseComponent {
     this.currentProficiencyLevel = proficiency as ProficiencyLevel | null;
 
     // Cancel any ongoing recording or transcription
-    if (this.isRecording) {
-      await this.cancelRecording();
+    if (this.recording.isRecording) {
+      await this.recording.cancelRecording();
     }
 
     // Reset dialog state
@@ -171,7 +164,7 @@ export class DialogMode extends BaseComponent {
     this.showFollowUp = false;
     this.isGeneratingFollowUp = false;
     this.isTranscribing = false;
-    this.streamingTranscriptionText = null;
+    this.transcription.streamingTranscriptionText = null;
     this.recordedAudioPath = null;
     this.transcriptionAnalysis = null;
     this.isAnalyzingTranscription = false;
@@ -203,15 +196,7 @@ export class DialogMode extends BaseComponent {
         const proficiency = await checkProficiencyLevel(language);
         this.currentProficiencyLevel = proficiency as ProficiencyLevel | null;
 
-        // Create dialog session for tracking
-        try {
-          this.currentSessionId = await window.electronAPI.tracking.createSession(
-            'dialog',
-            language
-          );
-        } catch (error) {
-          logger.warn({ error }, 'Failed to create dialog session');
-        }
+        await this.createTrackingSession('dialog', language);
       })
       .catch((err) => {
         logger.error({ error: err }, 'Failed to load current language');
@@ -226,19 +211,6 @@ export class DialogMode extends BaseComponent {
     });
 
     // Set up transcription progress listener for streaming updates
-    this.transcriptionProgressUnsubscribe = window.electronAPI.audio.onTranscriptionProgress(
-      (payload) => {
-        if (payload.isFinal) {
-          // Final transcription received, clear streaming text
-          this.streamingTranscriptionText = null;
-        } else {
-          // Intermediate transcription update
-          this.streamingTranscriptionText = payload.text;
-          this.requestUpdate();
-        }
-      }
-    );
-
     // Set up keyboard bindings
     this.setupKeyboardBindings();
   }
@@ -246,31 +218,13 @@ export class DialogMode extends BaseComponent {
   disconnectedCallback() {
     super.disconnectedCallback();
 
-    // Update session if it exists and session hasn't been completed
     if (this.currentSessionId && !this.showCompletion) {
       void this.updateSessionOnCompletion();
     }
 
-    // Clean up transcription progress listener
-    if (this.transcriptionProgressUnsubscribe) {
-      this.transcriptionProgressUnsubscribe();
-      this.transcriptionProgressUnsubscribe = null;
-    }
-
-    // Clean up recording timers
-    this.clearRecordingTimer();
-    this.clearRecordingStatusCheck();
     this.speechRecognitionCheckCleanup?.();
     this.speechRecognitionCheckCleanup = null;
 
-    // Cancel any ongoing recording
-    if (this.isRecording) {
-      this.cancelRecording().catch((err) => {
-        logger.error({ error: err }, 'Error cancelling recording on disconnect');
-      });
-    }
-
-    // Clean up keyboard bindings
     if (this.keyboardUnsubscribe) {
       this.keyboardUnsubscribe();
       this.keyboardUnsubscribe = undefined;
@@ -702,19 +656,12 @@ export class DialogMode extends BaseComponent {
             }
             // Track audio playback event
             if (this.currentSentence?.id && this.currentLanguage) {
-              this.audioPlayedCount++;
-              void window.electronAPI.tracking
-                .recordAudioPlayback({
-                  sessionId: this.currentSessionId,
-                  sentenceId: this.currentSentence.id,
-                  audioPath: this.beforeSentenceAudio,
-                  language: this.currentLanguage,
-                  mode: 'dialog',
-                  playbackSpeed: 1.0, // Dialog mode doesn't have playback speed control
-                })
-                .catch((err: unknown) => {
-                  logger.warn({ error: err }, 'Failed to record audio playback');
-                });
+              this.trackAudioPlayback({
+                sentenceId: this.currentSentence.id,
+                audioPath: this.beforeSentenceAudio,
+                language: this.currentLanguage,
+                mode: 'dialog',
+              });
             }
           } catch (error) {
             logger.error({ error }, 'Failed to play trigger audio');
@@ -798,21 +745,13 @@ export class DialogMode extends BaseComponent {
             logger.warn({ error: err }, 'Failed to increment sentence play count');
           });
       }
-      // Track audio playback event
       if (this.currentSentence?.id && this.currentLanguage) {
-        this.audioPlayedCount++;
-        void window.electronAPI.tracking
-          .recordAudioPlayback({
-            sessionId: this.currentSessionId,
-            sentenceId: this.currentSentence.id,
-            audioPath: this.beforeSentenceAudio,
-            language: this.currentLanguage,
-            mode: 'dialog',
-            playbackSpeed: 1.0, // Dialog mode doesn't have playback speed control
-          })
-          .catch((err: unknown) => {
-            logger.warn({ error: err }, 'Failed to record audio playback');
-          });
+        this.trackAudioPlayback({
+          sentenceId: this.currentSentence.id,
+          audioPath: this.beforeSentenceAudio,
+          language: this.currentLanguage,
+          mode: 'dialog',
+        });
       }
     } catch (error) {
       logger.error({ error }, 'Failed to play before sentence audio');
@@ -844,21 +783,13 @@ export class DialogMode extends BaseComponent {
             logger.warn({ error: err }, 'Failed to increment sentence play count');
           });
       }
-      // Track audio playback event
       if (this.currentSentence?.id && this.currentLanguage) {
-        this.audioPlayedCount++;
-        void window.electronAPI.tracking
-          .recordAudioPlayback({
-            sessionId: this.currentSessionId,
-            sentenceId: this.currentSentence.id,
-            audioPath: this.afterSentenceAudio,
-            language: this.currentLanguage,
-            mode: 'dialog',
-            playbackSpeed: 1.0, // Dialog mode doesn't have playback speed control
-          })
-          .catch((err: unknown) => {
-            logger.warn({ error: err }, 'Failed to record audio playback');
-          });
+        this.trackAudioPlayback({
+          sentenceId: this.currentSentence.id,
+          audioPath: this.afterSentenceAudio,
+          language: this.currentLanguage,
+          mode: 'dialog',
+        });
       }
     } catch (error) {
       logger.error({ error }, 'Failed to play after sentence audio');
@@ -935,7 +866,7 @@ export class DialogMode extends BaseComponent {
       {
         key: CommonKeys.SPACE,
         action: () => {
-          if (this.beforeSentenceAudio && !this.isRecording) {
+          if (this.beforeSentenceAudio && !this.recording.isRecording) {
             this.playBeforeSentence();
           }
         },
@@ -957,7 +888,7 @@ export class DialogMode extends BaseComponent {
         key: CommonKeys.ENTER,
         action: () => {
           // Allow skipping dialog anytime, except during recording/transcription or when generating follow-up
-          if (!this.isRecording && !this.isTranscribing && !this.isGeneratingFollowUp) {
+          if (!this.recording.isRecording && !this.isTranscribing && !this.isGeneratingFollowUp) {
             this.nextDialog();
           }
         },
@@ -970,220 +901,25 @@ export class DialogMode extends BaseComponent {
   }
 
   private async toggleRecording() {
-    if (this.isRecording) {
-      // When stopping, we don't need to check speechRecognitionReady or responseOptions
-      await this.stopRecording();
+    if (this.recording.isRecording) {
+      await this.recording.stopRecording();
     } else {
-      // When starting, check prerequisites
       if (
         !this.speechRecognitionReady ||
         (!this.isTopicBasedFlow && !this.responseOptions.length)
       ) {
         return;
       }
-      await this.startRecording();
-    }
-  }
-
-  private async startRecording() {
-    if (
-      this.isRecording ||
-      !this.speechRecognitionReady ||
-      (!this.isTopicBasedFlow && !this.responseOptions.length)
-    ) {
-      return;
-    }
-
-    // Reset audio playing state when starting recording
-    this.isAudioPlaying = false;
-
-    try {
-      // Stop any currently playing audio
-      if (this.currentAudioElement) {
-        this.currentAudioElement.pause();
-      }
-
-      const recordingOptions: RecordingOptions = {
-        sampleRate: 16000,
-        channels: 1,
-        threshold: 0.5,
-        silence: '1.0',
-        endOnSilence: true,
-      };
-
-      await window.electronAPI.audio.startRecording(recordingOptions);
-      this.isRecording = true;
-      this.recordingTime = 0;
-      this.currentRecording = null;
       this.transcriptionResult = null;
       this.isTranscribing = false;
-
-      // Start recording timer
-      this.recordingTimer = window.setInterval(() => {
-        this.recordingTime += 1;
-      }, 1000);
-
-      // Set up periodic check for recording status (in case of auto-stop)
-      this.setupRecordingStatusCheck();
-    } catch (error) {
-      logger.error({ error }, 'Error starting recording');
-      this.isRecording = false;
-      this.error = `Failed to start recording: ${getErrorMessage(error)}`;
-    }
-  }
-
-  private async stopRecording() {
-    if (!this.isRecording) {
-      logger.debug('[DialogMode] stopRecording - not recording, returning');
-      return;
-    }
-
-    try {
-      const completedSession = await window.electronAPI.audio.stopRecording();
-
-      // Handle case where stopRecording returns null (no recording was in progress)
-      if (!completedSession) {
-        logger.warn('[DialogMode] stopRecording - no recording session returned');
-        this.isRecording = false;
-        this.clearRecordingTimer();
-        this.clearRecordingStatusCheck();
-        return;
-      }
-      this.isRecording = false;
-      this.clearRecordingTimer();
-      this.clearRecordingStatusCheck();
-
-      // Hide transcribing box when stopping recording
-      this.isTranscribing = false;
-      this.streamingTranscriptionText = null;
-
-      if (completedSession && !completedSession.isRecording) {
-        // Get the recording file path from the session
-        const filePath = completedSession.filePath;
-
-        // Calculate duration if available
-        const duration =
-          completedSession.duration || (Date.now() - completedSession.startTime) / 1000;
-
-        logger.debug('[DialogMode] stopRecording - recording completed', {
-          filePath,
-          duration: duration.toFixed(2),
-          isTopicBasedFlow: this.isTopicBasedFlow,
-        });
-
-        this.currentRecording = {
-          session: completedSession,
-          filePath,
-          duration,
-        };
-
-        // Automatically perform speech recognition
-        await this.performSpeechRecognition();
-      }
-    } catch (error) {
-      logger.error({ error }, 'Error stopping recording');
-      this.isRecording = false;
-      this.clearRecordingTimer();
-      this.clearRecordingStatusCheck();
-      // Hide transcribing box on error too
-      this.isTranscribing = false;
-      this.streamingTranscriptionText = null;
-      this.error = `Failed to stop recording: ${getErrorMessage(error)}`;
-    }
-  }
-
-  private async cancelRecording() {
-    if (!this.isRecording) {
-      return;
-    }
-
-    try {
-      await window.electronAPI.audio.cancelRecording();
-      this.isRecording = false;
-      this.currentRecording = null;
-      this.transcriptionResult = null;
-      this.clearRecordingTimer();
-      this.clearRecordingStatusCheck();
-      // Hide transcribing box when canceling
-      this.isTranscribing = false;
-      this.streamingTranscriptionText = null;
-    } catch (error) {
-      logger.error({ error }, 'Error cancelling recording');
-      this.isRecording = false;
-      this.clearRecordingTimer();
-      this.clearRecordingStatusCheck();
-      // Hide transcribing box on error too
-      this.isTranscribing = false;
-      this.streamingTranscriptionText = null;
-    }
-  }
-
-  private clearRecordingTimer() {
-    if (this.recordingTimer) {
-      clearInterval(this.recordingTimer);
-      this.recordingTimer = null;
-    }
-  }
-
-  private setupRecordingStatusCheck() {
-    // Clear any existing status check timer
-    this.clearRecordingStatusCheck();
-
-    // Check recording status every 500ms to detect auto-stop
-    this.recordingStatusCheckTimer = window.setInterval(async () => {
-      if (this.isRecording) {
-        try {
-          const isStillRecording = await window.electronAPI.audio.isRecording();
-          if (!isStillRecording) {
-            // Recording was stopped automatically (likely due to silence)
-            await this.handleRecordingAutoStop();
-          }
-        } catch (error) {
-          logger.error({ error }, 'Error checking recording status');
-        }
-      }
-    }, 500);
-  }
-
-  private clearRecordingStatusCheck() {
-    if (this.recordingStatusCheckTimer) {
-      clearInterval(this.recordingStatusCheckTimer);
-      this.recordingStatusCheckTimer = null;
-    }
-  }
-
-  private async handleRecordingAutoStop() {
-    this.isRecording = false;
-    this.clearRecordingTimer();
-    this.clearRecordingStatusCheck();
-
-    try {
-      const completedSession = await window.electronAPI.audio.getCurrentRecordingSession();
-
-      if (completedSession && !completedSession.isRecording) {
-        const filePath = completedSession.filePath;
-        const duration =
-          completedSession.duration || (Date.now() - completedSession.startTime) / 1000;
-
-        this.currentRecording = {
-          session: completedSession,
-          filePath,
-          duration,
-        };
-
-        // Automatically perform speech recognition
-        await this.performSpeechRecognition();
-      }
-    } catch (error) {
-      logger.error({ error }, 'Error handling auto-stop');
-      this.error = 'Recording stopped automatically but there was an error processing it.';
-      this.isRecording = false;
+      await this.recording.startRecording();
     }
   }
 
   private async performSpeechRecognition() {
+    const currentRecording = this.recording.currentRecording;
     if (
-      !this.currentRecording ||
+      !currentRecording ||
       (!this.isTopicBasedFlow && !this.responseOptions.length) ||
       !this.speechRecognitionReady
     ) {
@@ -1192,17 +928,15 @@ export class DialogMode extends BaseComponent {
 
     this.isTranscribing = true;
     this.transcriptionResult = null;
-    this.streamingTranscriptionText = null;
+    this.transcription.clear();
 
     try {
       const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
 
       // Transcribe the recorded audio
       const transcription = await window.electronAPI.audio.transcribeAudio(
-        this.currentRecording.filePath,
-        {
-          language: currentLanguage,
-        }
+        currentRecording.filePath,
+        { language: currentLanguage }
       );
 
       // Compare with response options (only for old flow with variants)
@@ -1246,14 +980,13 @@ export class DialogMode extends BaseComponent {
         this.selectedOption = bestMatch.option;
       }
 
-      // Store the recorded audio path for later playback
-      if (this.currentRecording) {
-        this.recordedAudioPath = this.currentRecording.filePath;
+      if (currentRecording) {
+        this.recordedAudioPath = currentRecording.filePath;
       }
 
       // Mark transcription as complete
       this.isTranscribing = false;
-      this.streamingTranscriptionText = null;
+      this.transcription.streamingTranscriptionText = null;
 
       // Record pronunciation attempt in database (tracks full history)
       if (this.currentSentence?.id && !this.isTopicBasedFlow && this.selectedOption) {
@@ -1263,7 +996,7 @@ export class DialogMode extends BaseComponent {
             this.transcriptionResult.similarity,
             this.selectedOption.variantSentence, // Expected text (the variant that matched)
             transcription.text, // Transcribed text
-            this.currentRecording?.filePath || null // Audio path
+            this.recording.currentRecording?.filePath || null // Audio path
           );
         } catch (error) {
           logger.warn({ error }, 'Failed to record pronunciation attempt');
@@ -1271,7 +1004,7 @@ export class DialogMode extends BaseComponent {
       }
 
       // Track that user recorded audio for this dialog
-      if (this.currentRecording?.filePath) {
+      if (this.recording.currentRecording?.filePath) {
         this.dialogsWithAudio++;
       }
 
@@ -1362,7 +1095,7 @@ export class DialogMode extends BaseComponent {
       };
       // Mark transcription as complete on error
       this.isTranscribing = false;
-      this.streamingTranscriptionText = null;
+      this.transcription.streamingTranscriptionText = null;
     }
   }
 
@@ -1510,7 +1243,7 @@ export class DialogMode extends BaseComponent {
             ? html`
                 <button
                   class="btn btn-primary try-again-button"
-                  @click=${this.startRecording}
+                  @click=${this.recording.startRecording}
                   style="margin-top: var(--spacing-sm); width: 100%;"
                 >
                   Try Again
@@ -1829,17 +1562,7 @@ export class DialogMode extends BaseComponent {
   }
 
   private async updateSessionOnCompletion() {
-    if (!this.currentSessionId) return;
-
-    try {
-      await window.electronAPI.tracking.updateSession(this.currentSessionId, {
-        wordCount: this.dialogsWithAudio,
-        sentenceCount: this.dialogCount,
-        audioPlayedCount: this.audioPlayedCount,
-      });
-    } catch (error) {
-      logger.warn({ error }, 'Failed to update session on completion');
-    }
+    await this.finalizeTrackingSession(this.dialogsWithAudio, this.dialogCount);
   }
 
   private getSimilarityClass(similarity: number): string {
@@ -1856,51 +1579,16 @@ export class DialogMode extends BaseComponent {
   }
 
   private renderRecordingSection() {
-    // Show recording section when response options exist (old flow) or for topic-based flow
     if (!this.isTopicBasedFlow && !this.responseOptions.length) return '';
-
-    // Only show if actively recording or transcribing
-    if (!this.isRecording && !this.isTranscribing) {
-      return '';
-    }
+    if (!this.recording.isRecording && !this.isTranscribing) return '';
 
     return html`
-      <div class="recording-section">${this.isRecording ? this.renderRecordingStatus() : ''}</div>
-    `;
-  }
-
-  private renderRecordingStatus() {
-    const minutes = Math.floor(this.recordingTime / 60);
-    const seconds = this.recordingTime % 60;
-    const formattedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-
-    return html`
-      <div class="recording-status-container">
-        <div class="recording-status">
-          <div class="recording-dot"></div>
-          <span class="recording-time">${formattedTime}</span>
-          <span class="recording-indicator">Recording…</span>
-        </div>
-        <button
-          class="cancel-recording-button"
-          @click=${this.cancelRecording}
-          title="Cancel recording"
-        >
-          ✕ Cancel
-        </button>
-      </div>
-    `;
-  }
-
-  private renderTranscribingStatus() {
-    return html`
-      <div class="recording-status-container">
-        <div class="recording-status">
-          <div class="transcribing-indicator">
-            <div class="spinner"></div>
-            Transcribing...
-          </div>
-        </div>
+      <div class="recording-section">
+        <recording-status
+          .isRecording=${this.recording.isRecording}
+          .recordingTime=${this.recording.recordingTime}
+          @cancel-recording=${this.recording.cancelRecording}
+        ></recording-status>
       </div>
     `;
   }
@@ -1984,7 +1672,7 @@ export class DialogMode extends BaseComponent {
                   <button
                     class="audio-replay-button"
                     @click=${this.playLatestAssistantAudio}
-                    ?disabled=${this.isRecording}
+                    ?disabled=${this.recording.isRecording}
                     title="Replay latest assistant audio"
                     aria-label="Replay latest assistant audio"
                   >
@@ -1995,11 +1683,11 @@ export class DialogMode extends BaseComponent {
             ${(this.isTopicBasedFlow || this.responseOptions.length > 0) &&
             !this.transcriptionResult
               ? html`
-                  ${this.isRecording
+                  ${this.recording.isRecording
                     ? html`
                         <button
                           class="record-button recording"
-                          @click=${this.stopRecording}
+                          @click=${this.recording.stopRecording}
                           title="Stop recording"
                           aria-label="Stop recording"
                         >
@@ -2009,7 +1697,7 @@ export class DialogMode extends BaseComponent {
                     : html`
                         <button
                           class="record-button"
-                          @click=${this.startRecording}
+                          @click=${this.recording.startRecording}
                           ?disabled=${!this.speechRecognitionReady}
                           title=${this.speechRecognitionReady
                             ? 'Start recording'
@@ -2120,9 +1808,9 @@ export class DialogMode extends BaseComponent {
                   ? 'btn-primary'
                   : 'btn-secondary'}"
                 @click=${this.nextDialog}
-                ?disabled=${this.isRecording || this.isTranscribing}
+                ?disabled=${this.recording.isRecording || this.isTranscribing}
                 style="margin-top: var(--spacing-md);"
-                title=${this.isRecording || this.isTranscribing
+                title=${this.recording.isRecording || this.isTranscribing
                   ? 'Wait for recording/transcription to finish'
                   : 'Skip to next dialog'}
               >

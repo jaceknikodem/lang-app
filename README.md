@@ -47,7 +47,7 @@ The app uses intelligent algorithms across four key areas:
 - **Frontend**: Lit web components
 - **Database**: SQLite (better-sqlite3)
 - **LLM**: Ollama (local) or Google Gemini API (cloud)
-- **Audio**: macOS TTS, ElevenLabs API, or Whisper.cpp
+- **Audio**: ElevenLabs API, Kokoro, Whisper.cpp
 - **Lemmatization**: Stanza (Python/FastAPI)
 - **SRS**: FSRS and Classic algorithms
 
