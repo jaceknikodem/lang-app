@@ -9,20 +9,27 @@ import { learningModeStyles } from './learning-mode.styles.js';
 import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
 import { Word, Sentence } from '../../shared/types/core.js';
-import { STRENGTH_BOOST_CONFIG, APP_CONFIG } from '../../shared/constants/index.js';
+import { STRENGTH_BOOST_CONFIG } from '../../shared/constants/index.js';
 import { useKeyboardBindings, GlobalShortcuts } from '../utils/keyboard-manager.js';
 import { loadCurrentLanguage, loadLemmatizationModel } from '../utils/language-manager.js';
 import { BaseComponent } from './base-component.js';
 import { logger } from '../utils/logger.js';
 import { audioPlayer } from '../utils/audio-player-service.js';
+import { JobMonitorController } from './job-monitor-controller.js';
+import {
+  WordWithSentences,
+  loadSelectedWords,
+  loadWordsAndSentences,
+  maybeAppendNewWordsToSession,
+  prepareSentencesForWord,
+  restoreSessionProgress,
+  saveProgressToSession,
+} from '../utils/learning-session-service.js';
 import './sentence-viewer.js';
 import './session-complete.js';
 import './progress-bar.js';
+import './learning-controls.js';
 import type { SessionSummary } from './session-complete.js';
-
-interface WordWithSentences extends Word {
-  sentences: Sentence[];
-}
 
 @customElement('learning-mode')
 export class LearningMode extends BaseComponent {
@@ -51,34 +58,10 @@ export class LearningMode extends BaseComponent {
   private sessionSummary: SessionSummary | null = null;
 
   @state()
-  private queueSummary: {
-    queued: number;
-    processing: number;
-    failed: number;
-    queuedWords: Array<{
-      wordId: number;
-      word: string;
-      status: 'queued' | 'processing' | 'completed' | 'failed';
-      language: string;
-      topic?: string;
-    }>;
-    processingWords: Array<{
-      wordId: number;
-      word: string;
-      status: 'queued' | 'processing' | 'completed' | 'failed';
-      language: string;
-      topic?: string;
-    }>;
-  } = { queued: 0, processing: 0, failed: 0, queuedWords: [], processingWords: [] };
-
-  @state()
   private infoMessage = '';
 
   @state()
   private infoMessageType: 'info' | 'success' | 'error' = 'info';
-
-  @state()
-  private failureMessageExpiresAt: number | null = null;
 
   @state()
   private autoScrollEnabled = false;
@@ -95,10 +78,15 @@ export class LearningMode extends BaseComponent {
   private keyboardUnsubscribe?: () => void;
   private lastRecordedSentenceId: number | null = null;
   private lastSeenSentenceId: number | null = null;
-  private queueIntervalId: number | undefined;
-  private jobListenerCleanup?: () => void;
+  private jobMonitor = new JobMonitorController(this, {
+    getCurrentLanguage: () => this.currentLanguage,
+    loadCurrentLanguage: () => this.loadCurrentLanguage(),
+    onWordReady: (wordId) => this.handleJobWordReady(wordId),
+    onWordFailed: () =>
+      this.showInfo('Sentence generation failed for a word. Please retry from the queue.', 'error'),
+  });
+
   private infoTimeoutId: number | undefined;
-  private isReloadingFromQueue = false;
   private currentSentenceDisplayLastSeen?: Date;
   private autoScrollTimer: number | null = null;
 
@@ -151,7 +139,7 @@ export class LearningMode extends BaseComponent {
       this.loadPlaybackSpeed();
 
       // Refresh queue summary
-      await this.refreshQueueSummary();
+      await this.jobMonitor.refreshQueueSummary();
 
       // Explicitly request update to ensure component re-renders with new language data
       this.requestUpdate();
@@ -214,7 +202,7 @@ export class LearningMode extends BaseComponent {
     // Load playback speed from session manager
     this.loadPlaybackSpeed();
 
-    this.startJobMonitoring();
+    this.jobMonitor.start();
   }
 
   disconnectedCallback() {
@@ -233,7 +221,6 @@ export class LearningMode extends BaseComponent {
     // Clean up audio cache and playing audio (fire-and-forget is fine here since component is being destroyed)
     void this.stopCachedAudio();
 
-    this.stopJobMonitoring();
     this.clearInfoTimeout();
     this.clearAutoScrollTimer();
     window.removeEventListener('stop-auto-scroll', this.handleStopAutoScroll);
@@ -261,342 +248,31 @@ export class LearningMode extends BaseComponent {
     }
   }
 
-  private async loadSelectedWords() {
+  private async loadSelectedWords(): Promise<void> {
+    if (!this.currentLanguage) await this.loadCurrentLanguage();
     try {
-      // Ensure we have current language loaded
-      if (!this.currentLanguage) {
-        await this.loadCurrentLanguage();
-      }
-
-      // Check if specific words were passed via router (from word selection)
-      const routeData = router.getRouteData<{ specificWords?: Word[] }>();
-      if (routeData?.specificWords && routeData.specificWords.length > 0) {
-        const limitedWords: Word[] = [];
-        const seenIds = new Set<number>();
-
-        for (const word of routeData.specificWords) {
-          // Filter by current language to prevent loading words from wrong language
-          if (this.currentLanguage && word.language !== this.currentLanguage) {
-            continue;
-          }
-
-          if (seenIds.has(word.id)) {
-            continue;
-          }
-
-          const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
-          if (!sentences.length) {
-            continue;
-          }
-
-          limitedWords.push(word);
-          seenIds.add(word.id);
-
-          if (limitedWords.length >= APP_CONFIG.MAX_LEARNING_WORDS) {
-            break;
-          }
-        }
-
-        this.selectedWords = limitedWords;
-        if (limitedWords.length > 0) {
-          sessionManager.startNewLearningSession(
-            limitedWords.map((word) => word.id),
-            Math.min(APP_CONFIG.MAX_LEARNING_WORDS, limitedWords.length)
-          );
-        }
-        console.log('Using specific words from current session:', this.selectedWords.length);
-        return;
-      }
-
-      const activeSession = sessionManager.getLearningSession();
-      if (activeSession?.wordIds?.length) {
-        console.log(
-          `Found persisted learning session with ${activeSession.wordIds.length} word IDs: ${JSON.stringify(activeSession.wordIds)}`
-        );
-        const orderedWordIds = activeSession.wordIds;
-        const loadedWords: Word[] = [];
-
-        for (const wordId of orderedWordIds) {
-          const word = await window.electronAPI.database.getWordById(wordId);
-          // Filter by current language to prevent loading words from wrong language
-          if (word && (!this.currentLanguage || word.language === this.currentLanguage)) {
-            loadedWords.push(word);
-            console.log(
-              `  - Loaded word ${wordId} ("${word.word}") - language: ${word.language}, current: ${this.currentLanguage}`
-            );
-          } else if (word) {
-            console.log(
-              `  - Skipped word ${wordId} ("${word.word}") - language mismatch: ${word.language} vs ${this.currentLanguage}`
-            );
-          } else {
-            console.log(`  - Word ${wordId} not found in database`);
-          }
-        }
-
-        if (loadedWords.length > 0) {
-          this.selectedWords = loadedWords;
-          console.log(
-            `Loaded ${this.selectedWords.length} words from persisted learning session: ${this.selectedWords.map((w) => `${w.id}("${w.word}")`).join(', ')}`
-          );
-          return;
-        }
-      }
-
-      // Fallback: Get words that have sentences available for learning, ordered by strength (weakest first)
-      // This handles cases like "Continue Learning" or "Practice Weak Words"
-      const language =
-        this.currentLanguage || (await window.electronAPI.database.getCurrentLanguage());
-      const wordsOrdered = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(
-        language,
-        true,
-        false
-      );
-      console.log(
-        `getWordsWithSentencesOrderedByStrength returned ${wordsOrdered.length} words for language: ${this.currentLanguage}`
-      );
-      const sessionWordIds: number[] = [];
-      const selectableWords: Word[] = [];
-
-      for (const word of wordsOrdered) {
-        const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
-        if (!sentences.length) {
-          console.log(`Word ${word.id} ("${word.word}") has no sentences - skipping`);
-          continue;
-        }
-        console.log(
-          `Word ${word.id} ("${word.word}") has ${sentences.length} sentences - adding to session`
-        );
-
-        selectableWords.push(word);
-        sessionWordIds.push(word.id);
-
-        if (sessionWordIds.length >= APP_CONFIG.MAX_LEARNING_WORDS) {
-          break;
-        }
-      }
-
-      this.selectedWords = selectableWords;
-      if (sessionWordIds.length) {
-        sessionManager.startNewLearningSession(
-          sessionWordIds,
-          Math.min(APP_CONFIG.MAX_LEARNING_WORDS, sessionWordIds.length)
-        );
-      }
-
-      // If no words with sentences were found, check if there are any words at all for this language
-      // This helps us show a better error message
-      if (selectableWords.length === 0) {
-        const language =
-          this.currentLanguage || (await window.electronAPI.database.getCurrentLanguage());
-        const allWordsForLanguage = await window.electronAPI.database.getAllWords(
-          language,
-          true,
-          false
-        );
-        console.log(
-          `No words with sentences found. Total words for language ${this.currentLanguage}: ${allWordsForLanguage.length}`
-        );
-        // Store all words (even without sentences) so we can show a helpful message
-        if (allWordsForLanguage.length > 0) {
-          this.selectedWords = allWordsForLanguage.slice(0, APP_CONFIG.MAX_LEARNING_WORDS); // Store up to max for display purposes
-        }
-      }
-
-      console.log(
-        `Loaded ${this.selectedWords.length} words with sentences for learning session: ${this.selectedWords.map((w) => `${w.id}("${w.word}")`).join(', ')}`
-      );
+      this.selectedWords = await loadSelectedWords(this.currentLanguage);
     } catch (error) {
       logger.error({ error }, 'Failed to load words');
       this.error = 'Failed to load words from database.';
     }
   }
 
-  private prepareSentencesForWord(word: Word, sentences: Sentence[]): Sentence[] {
-    if (!sentences.length) {
-      return [];
-    }
-
-    let orderedSentences = sentences;
-    if ((word.strength ?? 0) < 50) {
-      orderedSentences = [...sentences].sort((a, b) => {
-        const at = a.lastShown ? a.lastShown.getTime() : 0;
-        const bt = b.lastShown ? b.lastShown.getTime() : 0;
-        return at - bt;
-      });
-    }
-
-    return orderedSentences.slice(0, 1);
-  }
-
-  private async loadWordsAndSentences() {
+  private async loadWordsAndSentences(): Promise<void> {
     if (!this.selectedWords.length) {
       this.error = 'No words available for learning. Please start a new learning session.';
       this.isLoading = false;
       return;
     }
 
-    // Reset session tracking when loading a new set of words
     this.wordsIncrementedThisSession.clear();
-
     this.isLoading = true;
     this.error = null;
 
     try {
-      // Check if we have cached IDs in session for fast batch loading
-      const activeSession = sessionManager.getLearningSession();
-      const hasCachedIds =
-        activeSession?.wordIds?.length &&
-        activeSession?.sentenceIds?.length &&
-        activeSession?.audioPaths?.length;
-
-      let wordsWithValidSentences: WordWithSentences[];
-
-      if (
-        hasCachedIds &&
-        activeSession.wordIds.length === this.selectedWords.length &&
-        activeSession.sentenceIds &&
-        activeSession.audioPaths
-      ) {
-        // Fast path: Use cached IDs for batch loading
-        console.log('Using cached IDs for fast batch loading');
-        console.log(
-          `Session wordIds: ${JSON.stringify(activeSession.wordIds)}, Selected words: ${this.selectedWords.map((w) => w.id).join(',')}`
-        );
-
-        const wordIds = activeSession.wordIds;
-        const sentenceIds = activeSession.sentenceIds;
-        const audioPaths = activeSession.audioPaths;
-
-        // Start audio loading in parallel with DB queries (non-blocking)
-        const audioLoadPromises =
-          audioPaths.length > 0
-            ? audioPaths
-                .filter((path): path is string => !!path)
-                .map((path) =>
-                  audioPlayer.preload(path).catch((err) => {
-                    logger.warn({ error: err, audioPath: path }, `Failed to preload audio`);
-                  })
-                )
-            : [];
-
-        // Start DB queries (await these, audio loads in parallel)
-        const [loadedWords, loadedSentences] = await Promise.all([
-          window.electronAPI.database.getWordsByIds(wordIds),
-          window.electronAPI.database.getSentencesByIds(sentenceIds),
-        ]);
-
-        // Note: Audio loading is happening in parallel, we don't await it
-
-        // Build wordId -> sentenceId map from loaded sentences
-        const sentenceMapByWordId = new Map<number, Sentence[]>();
-        console.log(`Loaded ${loadedSentences.length} sentences from cached session`);
-        for (const sentence of loadedSentences) {
-          if (!sentenceMapByWordId.has(sentence.wordId)) {
-            sentenceMapByWordId.set(sentence.wordId, []);
-          }
-          sentenceMapByWordId.get(sentence.wordId)!.push(sentence);
-        }
-        console.log(
-          `Sentence map by wordId:`,
-          Array.from(sentenceMapByWordId.entries())
-            .map(([wordId, sents]) => `${wordId}: ${sents.length} sentences`)
-            .join(', ')
-        );
-
-        // Reconstruct wordsWithSentences array matching wordId -> sentenceIds
-        // Filter by current language to prevent loading words from wrong language
-        wordsWithValidSentences = loadedWords
-          .filter((word: Word) => !this.currentLanguage || word.language === this.currentLanguage)
-          .map((word: Word) => {
-            const sentences = sentenceMapByWordId.get(word.id) || [];
-            console.log(
-              `Word ${word.id} ("${word.word}"): ${sentences.length} sentences from cached session`
-            );
-            // Apply filtering logic (prepareSentencesForWord)
-            const limitedSentences = this.prepareSentencesForWord(word, sentences);
-            return {
-              ...word,
-              sentences: limitedSentences,
-            };
-          })
-          .filter((w: WordWithSentences) => {
-            if (w.sentences.length === 0) {
-              logger.warn(
-                { wordId: w.id, word: w.word },
-                `Word filtered out: no sentences after prepareSentencesForWord`
-              );
-            }
-            return w.sentences.length > 0;
-          });
-
-        // Track audio loading completion (non-blocking)
-        void Promise.all(audioLoadPromises).then(() => {
-          console.log(`Preloaded ${audioPaths.length} audio files in parallel with DB queries`);
-        });
-
-        this.wordsWithSentences = wordsWithValidSentences;
-      } else {
-        // Fallback: Sequential loading (for new sessions or when cache is missing)
-        console.log('Using sequential loading (cache miss or new session)');
-
-        const wordsWithSentences: WordWithSentences[] = [];
-
-        for (const word of this.selectedWords) {
-          // Filter by current language to prevent loading words from wrong language
-          if (this.currentLanguage && word.language !== this.currentLanguage) {
-            continue;
-          }
-
-          // Get sentences for this word
-          const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
-
-          if (!sentences.length) {
-            logger.warn({ word: word.word, wordId: word.id }, `No sentences found for word`);
-          }
-
-          // Keep sentences in their original order for consistent review
-          const limitedSentences = this.prepareSentencesForWord(word, sentences);
-          wordsWithSentences.push({
-            ...word,
-            sentences: limitedSentences,
-          });
-        }
-
-        // Filter out words with no sentences but maintain strength-based order
-        wordsWithValidSentences = wordsWithSentences.filter((w) => w.sentences.length > 0);
-
-        // Extract IDs and audio paths for caching
-        const wordIds = wordsWithValidSentences.map((w) => w.id);
-        const sentenceIds: number[] = [];
-        const audioPaths: string[] = [];
-
-        for (const wordWithSentences of wordsWithValidSentences) {
-          for (const sentence of wordWithSentences.sentences) {
-            sentenceIds.push(sentence.id);
-            if (sentence.audioPath) {
-              audioPaths.push(sentence.audioPath);
-            }
-          }
-        }
-
-        // Store IDs and audio paths in session for future fast loading
-        if (wordIds.length > 0) {
-          sessionManager.startNewLearningSession(
-            wordIds,
-            Math.min(APP_CONFIG.MAX_LEARNING_WORDS, wordIds.length),
-            sentenceIds,
-            audioPaths
-          );
-        }
-
-        this.wordsWithSentences = wordsWithValidSentences;
-
-        // Pre-load all audio files into cache (background)
-        void this.preloadReviewAudio(wordsWithValidSentences);
-      }
-
-      console.log(
-        `Words with sentences: ${wordsWithValidSentences.length} out of ${this.selectedWords.length} total words`
+      this.wordsWithSentences = await loadWordsAndSentences(
+        this.selectedWords,
+        this.currentLanguage
       );
 
       if (this.wordsWithSentences.length === 0) {
@@ -604,12 +280,8 @@ export class LearningMode extends BaseComponent {
         this.error =
           'No sentences available for the selected words. Please generate new words or check if sentence generation completed successfully.';
       } else {
-        console.log(`Ready to learn with ${this.wordsWithSentences.length} words`);
-
-        // Prioritize: Load current sentence's audio first
+        void this.preloadReviewAudio(this.wordsWithSentences);
         await this.ensureCurrentSentenceAudioLoaded();
-
-        // Load next sentence's audio right after current one is ready
         this.preloadNextSentenceAudio();
       }
     } catch (err) {
@@ -621,190 +293,63 @@ export class LearningMode extends BaseComponent {
   }
 
   private async maybeAppendNewWordsToSession(): Promise<boolean> {
-    const activeSession = sessionManager.getLearningSession();
-    if (!activeSession) {
-      return false;
-    }
+    return maybeAppendNewWordsToSession(this.currentLanguage);
+  }
 
+  private async handleJobWordReady(wordId: number): Promise<void> {
     try {
-      const sessionCreatedAt = new Date(activeSession.createdAt);
-      const language =
-        this.currentLanguage || (await window.electronAPI.database.getCurrentLanguage());
-      const wordsOrdered = await window.electronAPI.database.getWordsWithSentencesOrderedByStrength(
-        language,
-        true,
-        false
-      );
+      if (!this.currentLanguage) await this.loadCurrentLanguage();
 
-      const existingWordIds = new Set(activeSession.wordIds);
-      const wordsToAppend: number[] = [];
-
-      for (const word of wordsOrdered) {
-        if (existingWordIds.has(word.id)) {
-          continue;
+      const word = await window.electronAPI.database.getWordById(wordId);
+      if (word) {
+        if (this.currentLanguage && word.language !== this.currentLanguage) {
+          this.allWords = [...this.allWords.filter((existing) => existing.id !== word.id), word];
+          return;
         }
 
-        if (word.createdAt <= sessionCreatedAt) {
-          continue;
-        }
+        this.allWords = [...this.allWords.filter((existing) => existing.id !== word.id), word];
 
         const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
-        if (!sentences.length) {
-          continue;
+        const preparedSentences = prepareSentencesForWord(word, sentences);
+
+        if (!preparedSentences.length) {
+          logger.warn(
+            { word: word.word, wordId: word.id },
+            'Word has no sentences ready after job completion'
+          );
+          return;
         }
 
-        wordsToAppend.push(word.id);
+        const existingWordIndex = this.wordsWithSentences.findIndex((w) => w.id === word.id);
+        const sentenceIds = preparedSentences.map((s) => s.id);
+        const audioPaths = preparedSentences.map((s) => s.audioPath || '');
 
-        if (wordsToAppend.length >= 10) {
-          break;
-        }
-      }
-
-      if (wordsToAppend.length) {
-        sessionManager.appendWordsToLearningSession(wordsToAppend);
-        return true;
-      }
-    } catch (error) {
-      logger.error({ error }, 'Failed to append new words to learning session');
-    }
-
-    return false;
-  }
-
-  private startJobMonitoring(): void {
-    if (!window.electronAPI?.jobs) {
-      return;
-    }
-
-    void this.refreshQueueSummary();
-
-    this.queueIntervalId = window.setInterval(() => {
-      void this.refreshQueueSummary();
-    }, 5000);
-
-    this.jobListenerCleanup = window.electronAPI.jobs.onWordUpdated((update) => {
-      void this.handleJobStatusUpdate(update);
-    });
-  }
-
-  private stopJobMonitoring(): void {
-    if (this.queueIntervalId !== undefined) {
-      window.clearInterval(this.queueIntervalId);
-      this.queueIntervalId = undefined;
-    }
-
-    if (this.jobListenerCleanup) {
-      this.jobListenerCleanup();
-      this.jobListenerCleanup = undefined;
-    }
-  }
-
-  private async refreshQueueSummary(): Promise<void> {
-    if (!window.electronAPI?.jobs) {
-      return;
-    }
-
-    try {
-      if (!this.currentLanguage) {
-        await this.loadCurrentLanguage();
-      }
-
-      const summary = await window.electronAPI.jobs.getQueueSummary(
-        this.currentLanguage ?? undefined
-      );
-      this.queueSummary = summary;
-
-      if (summary.failed > 0) {
-        if (this.failureMessageExpiresAt === null || Date.now() > this.failureMessageExpiresAt) {
-          this.failureMessageExpiresAt = Date.now() + 10000;
-        }
-      } else {
-        this.failureMessageExpiresAt = null;
-      }
-    } catch (error) {
-      logger.warn({ error }, 'Failed to refresh queue summary');
-    }
-  }
-
-  private async handleJobStatusUpdate(update: {
-    wordId: number;
-    processingStatus: 'queued' | 'processing' | 'ready' | 'failed';
-    sentenceCount: number;
-  }): Promise<void> {
-    await this.refreshQueueSummary();
-
-    if (update.processingStatus === 'ready') {
-      try {
-        // Ensure currentLanguage is loaded before checking
-        if (!this.currentLanguage) {
-          await this.loadCurrentLanguage();
-        }
-
-        const word = await window.electronAPI.database.getWordById(update.wordId);
-        if (word) {
-          // Check if the word's language matches the currently active language
-          if (this.currentLanguage && word.language !== this.currentLanguage) {
-            console.log(
-              `[LearningMode] Skipping UI update for word ${word.word} (${word.language}) - active language is ${this.currentLanguage}`
-            );
-            // Still update allWords for consistency, but don't modify the review mode UI
-            this.allWords = [...this.allWords.filter((existing) => existing.id !== word.id), word];
-            return;
-          }
-
-          this.allWords = [...this.allWords.filter((existing) => existing.id !== word.id), word];
-
-          const sentences = await window.electronAPI.database.getSentencesByWord(word.id);
-          const preparedSentences = this.prepareSentencesForWord(word, sentences);
-
-          if (!preparedSentences.length) {
-            logger.warn(
-              { word: word.word, wordId: word.id },
-              `Word has no sentences ready after job completion`
-            );
-            return;
-          }
-
-          const existingWordIndex = this.wordsWithSentences.findIndex((w) => w.id === word.id);
-
-          // Extract sentence IDs and audio paths for session manager update
-          const sentenceIds = preparedSentences.map((s) => s.id);
-          const audioPaths = preparedSentences.map((s) => s.audioPath || '');
-
-          if (existingWordIndex !== -1) {
-            this.wordsWithSentences = this.wordsWithSentences.map((existing, index) =>
-              index === existingWordIndex ? { ...word, sentences: preparedSentences } : existing
-            );
-            this.selectedWords = this.selectedWords.map((existing) =>
-              existing.id === word.id ? word : existing
-            );
-
-            // Update session manager with new sentences
-            if (sentenceIds.length > 0) {
-              sessionManager.appendSentencesToLearningSession(sentenceIds, audioPaths);
-            }
-          } else {
-            sessionManager.appendWordsToLearningSession([word.id]);
-            this.selectedWords = [...this.selectedWords, word];
-            this.wordsWithSentences = [
-              ...this.wordsWithSentences,
-              { ...word, sentences: preparedSentences },
-            ];
-
-            // Update session manager with new sentences
-            if (sentenceIds.length > 0) {
-              sessionManager.appendSentencesToLearningSession(sentenceIds, audioPaths);
-            }
+        if (existingWordIndex !== -1) {
+          this.wordsWithSentences = this.wordsWithSentences.map((existing, index) =>
+            index === existingWordIndex ? { ...word, sentences: preparedSentences } : existing
+          );
+          this.selectedWords = this.selectedWords.map((existing) =>
+            existing.id === word.id ? word : existing
+          );
+          if (sentenceIds.length > 0) {
+            sessionManager.appendSentencesToLearningSession(sentenceIds, audioPaths);
           }
         } else {
-          await this.loadAllWords();
+          sessionManager.appendWordsToLearningSession([word.id]);
+          this.selectedWords = [...this.selectedWords, word];
+          this.wordsWithSentences = [
+            ...this.wordsWithSentences,
+            { ...word, sentences: preparedSentences },
+          ];
+          if (sentenceIds.length > 0) {
+            sessionManager.appendSentencesToLearningSession(sentenceIds, audioPaths);
+          }
         }
-      } catch (error) {
-        logger.error({ error }, 'Unable to fetch word after job completion');
+      } else {
+        await this.loadAllWords();
       }
-    } else if (update.processingStatus === 'failed') {
-      this.failureMessageExpiresAt = Date.now() + 10000;
-      this.showInfo('Sentence generation failed for a word. Please retry from the queue.', 'error');
+    } catch (error) {
+      logger.error({ error }, 'Unable to fetch word after job completion');
     }
   }
 
@@ -964,24 +509,11 @@ export class LearningMode extends BaseComponent {
     }
   }
 
-  private restoreSessionProgress() {
-    // Restore learning progress from session if available
-    const session = sessionManager.getCurrentSession();
-    if (session.learningProgress) {
-      this.currentWordIndex = Math.min(
-        session.learningProgress.currentWordIndex,
-        this.wordsWithSentences.length - 1
-      );
-
-      const currentWord = this.getCurrentWord();
-      if (currentWord) {
-        this.currentSentenceIndex = Math.min(
-          session.learningProgress.currentSentenceIndex,
-          currentWord.sentences.length - 1
-        );
-      }
-
-      console.log('Restored learning progress:', this.currentWordIndex, this.currentSentenceIndex);
+  private restoreSessionProgress(): void {
+    const progress = restoreSessionProgress(this.wordsWithSentences);
+    if (progress) {
+      this.currentWordIndex = progress.wordIndex;
+      this.currentSentenceIndex = progress.sentenceIndex;
     }
   }
 
@@ -1328,8 +860,8 @@ export class LearningMode extends BaseComponent {
     // It will start playing immediately without waiting for loading
   }
 
-  private saveProgressToSession() {
-    sessionManager.updateLearningProgress(this.currentWordIndex, this.currentSentenceIndex);
+  private saveProgressToSession(): void {
+    saveProgressToSession(this.currentWordIndex, this.currentSentenceIndex);
   }
 
   private isFirstSentence(): boolean {
@@ -1918,7 +1450,7 @@ export class LearningMode extends BaseComponent {
     event: CustomEvent<{ wordId: number; word: string; translation: string }>
   ): Promise<void> {
     const { wordId } = event.detail;
-    await this.refreshQueueSummary();
+    await this.jobMonitor.refreshQueueSummary();
 
     try {
       const newWord = await window.electronAPI.database.getWordById(wordId);
@@ -2011,7 +1543,8 @@ export class LearningMode extends BaseComponent {
   }
 
   private renderQueueStatus() {
-    const { queued, processing, failed, processingWords, queuedWords } = this.queueSummary;
+    const { queued, processing, failed, processingWords, queuedWords } =
+      this.jobMonitor.queueSummary;
     const pending = queued + processing - failed;
 
     if (pending <= 0) {
@@ -2155,72 +1688,16 @@ export class LearningMode extends BaseComponent {
                 >Word ${this.currentWordIndex + 1} of ${this.wordsWithSentences.length}</span
               >
             </div>
-            <div style="display: flex; align-items: center; gap: var(--spacing-sm);">
-              <div class="playback-speed-control">
-                <div class="playback-speed-buttons">
-                  <button
-                    class="playback-speed-button ${this.playbackSpeed === 0.7 ? 'active' : ''}"
-                    @click=${() => this.setPlaybackSpeed(0.7)}
-                    title="0.7x speed"
-                  >
-                    0.7x
-                  </button>
-                  <button
-                    class="playback-speed-button ${this.playbackSpeed === 1.0 ? 'active' : ''}"
-                    @click=${() => this.setPlaybackSpeed(1.0)}
-                    title="1x speed (normal)"
-                  >
-                    1x
-                  </button>
-                  <button
-                    class="playback-speed-button ${this.playbackSpeed === 1.2 ? 'active' : ''}"
-                    @click=${() => this.setPlaybackSpeed(1.2)}
-                    title="1.2x speed"
-                  >
-                    1.2x
-                  </button>
-                  <button
-                    class="playback-speed-button ${this.playbackSpeed === 1.5 ? 'active' : ''}"
-                    @click=${() => this.setPlaybackSpeed(1.5)}
-                    title="1.5x speed"
-                  >
-                    1.5x
-                  </button>
-                </div>
-              </div>
-              <div class="auto-scroll-toggle" style="margin-bottom: 0;">
-                <span class="auto-scroll-label" style="font-size: 12px;">Auto-scroll</span>
-                <div
-                  class="auto-scroll-switch ${this.autoScrollEnabled ? 'active' : ''}"
-                  @click=${this.isLastSentence() ? undefined : this.toggleAutoScroll}
-                  title=${this.isLastSentence()
-                    ? 'Auto-scroll disabled at end of session'
-                    : 'Auto-scroll to next sentence 1.5 seconds after audio stops'}
-                  style="width: 40px; height: 20px; ${this.isLastSentence()
-                    ? 'opacity: 0.5; cursor: not-allowed;'
-                    : 'cursor: pointer;'}"
-                >
-                  <div
-                    class="auto-scroll-slider"
-                    style="width: 16px; height: 16px; top: 2px; left: 2px;"
-                  ></div>
-                </div>
-              </div>
-              <div class="audio-only-toggle" style="margin-bottom: 0;">
-                <span class="audio-only-label" style="font-size: 12px;">Hide English</span>
-                <div
-                  class="audio-only-switch ${this.audioOnlyMode ? 'active' : ''}"
-                  @click=${this.toggleAudioOnlyMode}
-                  title="Hide English translations"
-                  style="width: 40px; height: 20px; cursor: pointer;"
-                >
-                  <div
-                    class="audio-only-slider"
-                    style="width: 16px; height: 16px; top: 2px; left: 2px;"
-                  ></div>
-                </div>
-              </div>
-            </div>
+            <learning-controls
+              .playbackSpeed=${this.playbackSpeed}
+              .autoScrollEnabled=${this.autoScrollEnabled}
+              .audioOnlyMode=${this.audioOnlyMode}
+              .isLastSentence=${this.isLastSentence()}
+              @speed-change=${(e: CustomEvent<{ speed: number }>) =>
+                this.setPlaybackSpeed(e.detail.speed)}
+              @auto-scroll-change=${() => this.toggleAutoScroll()}
+              @audio-only-change=${() => this.toggleAudioOnlyMode()}
+            ></learning-controls>
           </div>
           <progress-bar .value=${progressPercent} height="4px"></progress-bar>
         </div>
