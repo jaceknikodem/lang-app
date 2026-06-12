@@ -329,6 +329,7 @@ declare global {
             sentenceId: number;
             variantSentence: string;
             variantTranslation: string;
+            variantPronunciation?: string;
             createdAt: Date;
           }>
         >;
@@ -374,6 +375,7 @@ declare global {
               sentenceId: number;
               variantSentence: string;
               variantTranslation: string;
+              variantPronunciation?: string;
               createdAt: string;
             }>;
           }>

@@ -430,6 +430,7 @@ export class DialogService {
               sentenceId: sentence.id,
               variantSentence: sentence.sentence,
               variantTranslation: sentence.translation,
+              variantPronunciation: sentence.pronunciation,
               createdAt: new Date(),
             };
 
