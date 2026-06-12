@@ -10,6 +10,8 @@ import type { SessionSummary } from './session-complete.js';
 import './session-complete.js';
 import './progress-bar.js';
 import { sharedStyles } from '../styles/shared.js';
+import { buttonStyles } from '../styles/button.styles.js';
+import { stateStyles } from '../styles/state.styles.js';
 import { dialogModeStyles } from './dialog-mode.styles.js';
 import { recordingStyles } from './recording.styles.js';
 import { useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
@@ -1076,7 +1078,7 @@ export class DialogMode extends BaseComponent {
     `;
   }
 
-  static styles = [sharedStyles, dialogModeStyles, recordingStyles];
+  static styles = [sharedStyles, buttonStyles, stateStyles, dialogModeStyles, recordingStyles];
 
   render() {
     // Show completion screen if all cached dialogues are finished

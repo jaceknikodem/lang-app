@@ -7,6 +7,8 @@ import { customElement, state } from 'lit/decorators.js';
 import { Word, QuizQuestion, QuizSession, QuizResult } from '../../shared/types/core.js';
 import { STRENGTH_BOOST_CONFIG } from '../../shared/constants/index.js';
 import { sharedStyles } from '../styles/shared.js';
+import { buttonStyles } from '../styles/button.styles.js';
+import { stateStyles } from '../styles/state.styles.js';
 import { quizModeStyles } from './quiz-mode.styles.js';
 import { router } from '../utils/router.js';
 import { sessionManager, type QuizSessionState } from '../utils/session-manager.js';
@@ -133,7 +135,7 @@ export class QuizMode extends BaseComponent {
     }
   };
 
-  static styles = [sharedStyles, quizModeStyles];
+  static styles = [sharedStyles, buttonStyles, stateStyles, quizModeStyles];
 
   async connectedCallback() {
     super.connectedCallback();

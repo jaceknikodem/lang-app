@@ -5,6 +5,8 @@
 import { html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { sharedStyles } from '../styles/shared.js';
+import { buttonStyles } from '../styles/button.styles.js';
+import { stateStyles } from '../styles/state.styles.js';
 import { learningModeStyles } from './learning-mode.styles.js';
 import { router } from '../utils/router.js';
 import { sessionManager } from '../utils/session-manager.js';
@@ -148,7 +150,7 @@ export class LearningMode extends BaseComponent {
     }
   };
 
-  static styles = [sharedStyles, learningModeStyles];
+  static styles = [sharedStyles, buttonStyles, stateStyles, learningModeStyles];
 
   async connectedCallback() {
     super.connectedCallback();

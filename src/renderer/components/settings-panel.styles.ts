@@ -74,31 +74,6 @@ export const settingsPanelStyles = css`
     background: var(--error-dark);
   }
 
-  .status-message {
-    margin-top: var(--spacing-sm);
-    padding: var(--spacing-sm);
-    border-radius: var(--border-radius-small);
-    font-size: 12px;
-  }
-
-  .status-success {
-    background: var(--success-light);
-    color: var(--success-dark);
-    border: 1px solid var(--success-color);
-  }
-
-  .status-error {
-    background: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
-  }
-
-  .status-info {
-    background: #d1ecf1;
-    color: #0c5460;
-    border: 1px solid #bee5eb;
-  }
-
   .warning-section {
     border-color: #ffc107;
     background: #fff3cd;
@@ -107,39 +82,6 @@ export const settingsPanelStyles = css`
 
   .warning-section h3 {
     color: #856404;
-  }
-
-  .confirmation-dialog {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-
-  .confirmation-content {
-    background: white;
-    padding: 2rem;
-    border-radius: 8px;
-    max-width: 400px;
-    text-align: center;
-  }
-
-  .confirmation-content h3 {
-    color: #dc3545;
-    margin-top: 0;
-  }
-
-  .confirmation-actions {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-    margin-top: 1.5rem;
   }
 
   .checkbox-row {
