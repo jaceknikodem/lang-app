@@ -83,7 +83,7 @@ const DEFAULT_LLM_CONFIG = {
   minSentenceCountThreshold: 0.7,
   maxExistingWordsInPrompt: 50,
   mlxLm: {
-    baseUrl: 'http://localhost:8080',
+    baseUrl: 'http://localhost:8020',
     defaultModel: 'mlx-community/gemma-4-26b-a4b-4bit',
     timeout: 80000,
   },

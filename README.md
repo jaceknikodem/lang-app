@@ -2,6 +2,8 @@
 
 A privacy-first desktop language learning application that operates entirely offline. Learn vocabulary through contextual sentences with full audio support, spaced repetition, and conversational practice.
 
+> **macOS only.** Audio recording relies on `sox` and the system TTS backend uses the macOS `say` command. The mlx-lm provider requires Apple Silicon.
+
 ## Features
 
 - **Immersive Context**: Every word appears in natural sentences with audio
@@ -46,8 +48,8 @@ The app uses intelligent algorithms across four key areas:
 - **Runtime**: Electron (TypeScript)
 - **Frontend**: Lit web components
 - **Database**: SQLite (better-sqlite3)
-- **LLM**: Ollama (local) or Google Gemini API (cloud)
-- **Audio**: ElevenLabs API, Kokoro, Whisper.cpp
+- **LLM**: Ollama (local), mlx-lm (Apple Silicon), or Google Gemini API (cloud)
+- **Audio**: ElevenLabs API, Kokoro, macOS `say` (system TTS), Whisper.cpp
 - **Lemmatization**: Stanza (Python/FastAPI)
 - **SRS**: FSRS and Classic algorithms
 
@@ -56,9 +58,12 @@ The app uses intelligent algorithms across four key areas:
 Most dependencies are automatically installed by `./bootstrap.sh`. The bootstrap script handles:
 - **Ollama**: Installed via Homebrew (default LLM provider)
 - **Whisper (whisper-cpp)**: Installed via Homebrew
+- **sox**: Installed via Homebrew (required for audio recording)
 - **uv package manager**: Installed automatically
 - **Python dependencies**: Set up in the lemmatization directory
 - **Lemmatization service**: Downloads models automatically
+
+**mlx-lm** (optional, Apple Silicon only): install separately with `pip install mlx-lm`, then start the server with `mlx_lm.server --model <model>` before launching the app.
 
 
 ## Setup

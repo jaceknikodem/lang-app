@@ -331,6 +331,10 @@ export class ContentGenerator {
         throw new Error(
           'Gemini API is not available. Please check your API key and internet connection.'
         );
+      } else if (providerName === 'mlx-lm') {
+        throw new Error(
+          'mlx-lm server is not available. Start it with: mlx_lm.server --model <model> --port 8020'
+        );
       } else {
         throw new Error('LLM service is not available. Please check your configuration.');
       }
@@ -620,6 +624,10 @@ export class ContentGenerator {
         } else if (providerName === 'gemini') {
           throw new Error(
             'Gemini API is not available. Please check your API key and internet connection.'
+          );
+        } else if (providerName === 'mlx-lm') {
+          throw new Error(
+            'mlx-lm server is not available. Start it with: mlx_lm.server --model <model> --port 8020'
           );
         } else {
           throw new Error('LLM service is not available. Please check your configuration.');

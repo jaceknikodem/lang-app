@@ -232,7 +232,7 @@ const config = convict({
       baseUrl: {
         doc: 'mlx-lm server base URL',
         format: 'url',
-        default: 'http://localhost:8080',
+        default: 'http://localhost:8020',
         env: 'MLX_LM_BASE_URL',
       },
       defaultModel: {
