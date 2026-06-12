@@ -190,11 +190,15 @@ export interface IPCBridge {
       sentenceId: number
     ) => Promise<string>;
     // Provider management
-    getCurrentProvider: () => Promise<'ollama' | 'gemini'>;
-    switchProvider: (provider: 'ollama' | 'gemini', geminiApiKey?: string) => Promise<void>;
+    getCurrentProvider: () => Promise<'ollama' | 'gemini' | 'mlx-lm'>;
+    switchProvider: (
+      provider: 'ollama' | 'gemini' | 'mlx-lm',
+      geminiApiKey?: string,
+      mlxLmBaseUrl?: string
+    ) => Promise<void>;
     setGeminiApiKey: (apiKey: string, switchToGemini?: boolean) => Promise<void>;
-    getAvailableProviders: () => Promise<Array<'ollama' | 'gemini'>>;
-    getModelsForProvider: (provider: 'ollama' | 'gemini') => Promise<string[]>;
+    getAvailableProviders: () => Promise<Array<'ollama' | 'gemini' | 'mlx-lm'>>;
+    getModelsForProvider: (provider: 'ollama' | 'gemini' | 'mlx-lm') => Promise<string[]>;
   };
 
   // Frequency word management

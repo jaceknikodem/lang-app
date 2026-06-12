@@ -40,6 +40,14 @@ min_sentence_count_threshold = 0.7
 # Maximum existing words to include in prompt
 max_existing_words_in_prompt = 50
 
+[llm.mlx_lm]
+# mlx-lm server base URL
+base_url = "http://localhost:8080"
+# Default model (should match the model loaded in mlx-lm server)
+default_model = "mlx-community/gemma-4-26b-a4b-4bit"
+# mlx-lm request timeout in milliseconds
+timeout = 80000
+
 [llm.gemini]
 # Default Gemini model
 default_model = "gemini-3.1-flash-lite"

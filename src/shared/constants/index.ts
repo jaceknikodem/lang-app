@@ -82,6 +82,11 @@ const DEFAULT_LLM_CONFIG = {
   minWordCountThreshold: 0.4,
   minSentenceCountThreshold: 0.7,
   maxExistingWordsInPrompt: 50,
+  mlxLm: {
+    baseUrl: 'http://localhost:8080',
+    defaultModel: 'mlx-community/gemma-4-26b-a4b-4bit',
+    timeout: 80000,
+  },
   gemini: {
     defaultModel: 'gemini-2.5-flash',
     fastModel: 'gemini-2.5-flash-lite',
@@ -133,6 +138,9 @@ export const LLM_CONFIG = {
     llmConfig?.minSentenceCountThreshold ?? DEFAULT_LLM_CONFIG.minSentenceCountThreshold,
   MAX_EXISTING_WORDS_IN_PROMPT:
     llmConfig?.maxExistingWordsInPrompt ?? DEFAULT_LLM_CONFIG.maxExistingWordsInPrompt,
+  MLX_LM_DEFAULT_BASE_URL: llmConfig?.mlxLm?.baseUrl ?? DEFAULT_LLM_CONFIG.mlxLm.baseUrl,
+  MLX_LM_DEFAULT_MODEL: llmConfig?.mlxLm?.defaultModel ?? DEFAULT_LLM_CONFIG.mlxLm.defaultModel,
+  MLX_LM_DEFAULT_TIMEOUT: llmConfig?.mlxLm?.timeout ?? DEFAULT_LLM_CONFIG.mlxLm.timeout,
   GEMINI_DEFAULT_MODEL: llmConfig?.gemini?.defaultModel ?? DEFAULT_LLM_CONFIG.gemini.defaultModel,
   GEMINI_DEFAULT_FAST_MODEL: llmConfig?.gemini?.fastModel ?? DEFAULT_LLM_CONFIG.gemini.fastModel,
   GEMINI_DEFAULT_FULL_MODEL: llmConfig?.gemini?.fullModel ?? DEFAULT_LLM_CONFIG.gemini.fullModel,

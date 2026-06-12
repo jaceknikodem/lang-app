@@ -1,43 +1,40 @@
-/**
- * Ollama HTTP client for local LLM communication
- */
-
 import { LLMClient, LLMConfig } from '../../shared/types/llm.js';
 import { LLM_CONFIG } from '../../shared/constants/index.js';
 import { BaseLLMClient } from './base-llm-client.js';
 import { ensureError } from '../../shared/utils/error.js';
 import axios from 'axios';
 
-interface OllamaRequest {
+interface MlxLmRequest {
   model: string;
-  prompt: string;
+  messages: Array<{ role: string; content: string }>;
   stream: false;
-  format?: 'json'; // Make format optional
 }
 
-interface OllamaResponse {
-  response: string;
-  done: boolean;
+interface MlxLmResponse {
+  choices: Array<{
+    message: {
+      content: string;
+    };
+  }>;
 }
 
-export class OllamaClient extends BaseLLMClient implements LLMClient {
+export class MlxLmClient extends BaseLLMClient implements LLMClient {
   constructor(config: Partial<LLMConfig> = {}) {
     super({
-      baseUrl: config.baseUrl || LLM_CONFIG.DEFAULT_BASE_URL,
-      model: config.model || LLM_CONFIG.DEFAULT_MODEL,
-      wordGenerationModel: config.wordGenerationModel || LLM_CONFIG.DEFAULT_WORD_GENERATION_MODEL,
-      sentenceGenerationModel:
-        config.sentenceGenerationModel || LLM_CONFIG.DEFAULT_SENTENCE_GENERATION_MODEL,
-      timeout: config.timeout || LLM_CONFIG.DEFAULT_TIMEOUT,
+      baseUrl: config.baseUrl || LLM_CONFIG.MLX_LM_DEFAULT_BASE_URL,
+      model: config.model || LLM_CONFIG.MLX_LM_DEFAULT_MODEL,
+      wordGenerationModel: config.wordGenerationModel || LLM_CONFIG.MLX_LM_DEFAULT_MODEL,
+      sentenceGenerationModel: config.sentenceGenerationModel || LLM_CONFIG.MLX_LM_DEFAULT_MODEL,
+      timeout: config.timeout || LLM_CONFIG.MLX_LM_DEFAULT_TIMEOUT,
       maxRetries: config.maxRetries || LLM_CONFIG.MAX_RETRIES,
     });
   }
 
   async isAvailable(): Promise<boolean> {
     try {
-      const response = await axios.get(`${this.config.baseUrl}/api/tags`, {
+      const response = await axios.get(`${this.config.baseUrl}/v1/models`, {
         timeout: 5000,
-        validateStatus: () => true, // Don't throw on any status
+        validateStatus: () => true,
       });
       return response.status === 200;
     } catch {
@@ -47,53 +44,51 @@ export class OllamaClient extends BaseLLMClient implements LLMClient {
 
   async getAvailableModels(): Promise<string[]> {
     try {
-      const response = await axios.get(`${this.config.baseUrl}/api/tags`, {
+      const response = await axios.get(`${this.config.baseUrl}/v1/models`, {
         timeout: 5000,
       });
-
       const data = response.data;
-
-      if (!data.models || !Array.isArray(data.models)) {
+      if (!data.data || !Array.isArray(data.data)) {
         return [];
       }
-
-      return data.models
+      return data.data
         .map((model: unknown) => {
           if (
             model &&
             typeof model === 'object' &&
-            'name' in model &&
-            typeof model.name === 'string'
+            'id' in model &&
+            typeof (model as any).id === 'string'
           ) {
-            return model.name;
+            return (model as any).id as string;
           }
           return '';
         })
         .filter(Boolean);
     } catch (error) {
-      this.logger.error({ error }, 'Error fetching available models');
+      this.logger.error({ error }, 'Error fetching available models from mlx-lm');
       return [];
     }
   }
 
   protected async fetchText(prompt: string, model?: string): Promise<string> {
-    const requestBody: OllamaRequest = {
+    const requestBody: MlxLmRequest = {
       model: model || this.config.model,
-      prompt,
+      messages: [{ role: 'user', content: prompt }],
       stream: false,
     };
-    const response = await axios.post<OllamaResponse>(
-      `${this.config.baseUrl}/api/generate`,
+    const response = await axios.post<MlxLmResponse>(
+      `${this.config.baseUrl}/v1/chat/completions`,
       requestBody,
       {
         timeout: this.config.timeout || 60000,
         headers: { 'Content-Type': 'application/json' },
       }
     );
-    if (!response.data.response) {
-      throw new Error('Empty response from Ollama');
+    const content = response.data?.choices?.[0]?.message?.content;
+    if (!content) {
+      throw new Error('Empty response from mlx-lm');
     }
-    return response.data.response;
+    return content;
   }
 
   protected async generateResponse(prompt: string, model?: string): Promise<string> {

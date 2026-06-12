@@ -228,6 +228,26 @@ const config = convict({
       default: 50,
       env: 'LLM_MAX_EXISTING_WORDS_IN_PROMPT',
     },
+    mlxLm: {
+      baseUrl: {
+        doc: 'mlx-lm server base URL',
+        format: 'url',
+        default: 'http://localhost:8080',
+        env: 'MLX_LM_BASE_URL',
+      },
+      defaultModel: {
+        doc: 'Default mlx-lm model',
+        format: String,
+        default: 'mlx-community/gemma-4-26b-a4b-4bit',
+        env: 'MLX_LM_DEFAULT_MODEL',
+      },
+      timeout: {
+        doc: 'mlx-lm request timeout in milliseconds',
+        format: 'int',
+        default: 80000,
+        env: 'MLX_LM_TIMEOUT',
+      },
+    },
     gemini: {
       defaultModel: {
         doc: 'Default Gemini model',
@@ -502,6 +522,11 @@ export const llmConfig = {
   minWordCountThreshold: config.get('llm.minWordCountThreshold'),
   minSentenceCountThreshold: config.get('llm.minSentenceCountThreshold'),
   maxExistingWordsInPrompt: config.get('llm.maxExistingWordsInPrompt'),
+  mlxLm: {
+    baseUrl: config.get('llm.mlxLm.baseUrl'),
+    defaultModel: config.get('llm.mlxLm.defaultModel'),
+    timeout: config.get('llm.mlxLm.timeout'),
+  },
   gemini: {
     defaultModel: config.get('llm.gemini.defaultModel'),
     fastModel: config.get('llm.gemini.fastModel'),

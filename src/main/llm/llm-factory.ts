@@ -5,8 +5,9 @@
 import { LLMClient, LLMConfig } from '../../shared/types/llm.js';
 import { OllamaClient } from './ollama-client.js';
 import { GeminiClient } from './gemini-client.js';
+import { MlxLmClient } from './mlx-lm-client.js';
 
-export type LLMProvider = 'ollama' | 'gemini';
+export type LLMProvider = 'ollama' | 'gemini' | 'mlx-lm';
 
 export interface LLMFactoryConfig {
   provider: LLMProvider;
@@ -15,6 +16,7 @@ export interface LLMFactoryConfig {
     apiKey: string;
     config?: Partial<LLMConfig>;
   };
+  mlxLmConfig?: Partial<LLMConfig>;
 }
 
 export class LLMFactory {
@@ -30,6 +32,9 @@ export class LLMFactory {
         const apiKey = config.geminiConfig?.apiKey || '';
         return new GeminiClient(apiKey, config.geminiConfig?.config);
       }
+
+      case 'mlx-lm':
+        return new MlxLmClient(config.mlxLmConfig);
 
       default:
         throw new Error(`Unsupported LLM provider: ${config.provider}`);
@@ -50,6 +55,10 @@ export class LLMFactory {
     return new GeminiClient(apiKey, config);
   }
 
+  static createMlxLmClient(config?: Partial<LLMConfig>): MlxLmClient {
+    return new MlxLmClient(config);
+  }
+
   /**
    * Validate configuration for a specific provider
    */
@@ -60,7 +69,9 @@ export class LLMFactory {
         return { valid: true };
 
       case 'gemini':
-        // Allow Gemini without API key, but it won't be functional
+        return { valid: true };
+
+      case 'mlx-lm':
         return { valid: true };
 
       default:
@@ -72,6 +83,6 @@ export class LLMFactory {
    * Get available providers
    */
   static getAvailableProviders(): LLMProvider[] {
-    return ['ollama', 'gemini'];
+    return ['ollama', 'gemini', 'mlx-lm'];
   }
 }

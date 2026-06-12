@@ -59,13 +59,16 @@ export class SettingsPanel extends BaseComponent {
   private isLoadingLLMModels = false;
 
   @state()
-  private currentLLMProvider: 'ollama' | 'gemini' = 'ollama';
+  private currentLLMProvider: 'ollama' | 'gemini' | 'mlx-lm' = 'ollama';
 
   @state()
-  private availableLLMProviders: Array<'ollama' | 'gemini'> = [];
+  private availableLLMProviders: Array<'ollama' | 'gemini' | 'mlx-lm'> = [];
 
   @state()
   private geminiApiKey = '';
+
+  @state()
+  private mlxLmBaseUrl = '';
 
   @state()
   private isLoadingProviders = false;
@@ -120,6 +123,10 @@ export class SettingsPanel extends BaseComponent {
       const geminiKey = await window.electronAPI.database.getSetting('gemini_api_key');
       this.geminiApiKey = geminiKey || '';
 
+      // Get mlx-lm base URL from settings
+      const mlxLmUrl = await window.electronAPI.database.getSetting('mlx_lm_base_url');
+      this.mlxLmBaseUrl = mlxLmUrl || '';
+
       // Get available LLM models for the current provider
       this.availableLLMModels = await window.electronAPI.llm.getModelsForProvider(
         this.currentLLMProvider
@@ -140,6 +147,7 @@ export class SettingsPanel extends BaseComponent {
       this.availableLLMProviders = ['ollama'];
       this.currentLLMProvider = 'ollama';
       this.geminiApiKey = '';
+      this.mlxLmBaseUrl = '';
       this.availableLLMModels = [];
       this.currentLLMModel = '';
     } finally {
@@ -381,7 +389,7 @@ export class SettingsPanel extends BaseComponent {
 
   private async changeLLMProvider(event: Event) {
     const select = event.target as HTMLSelectElement;
-    const selectedProvider = select.value as 'ollama' | 'gemini';
+    const selectedProvider = select.value as 'ollama' | 'gemini' | 'mlx-lm';
 
     if (!selectedProvider) return;
 
@@ -397,7 +405,11 @@ export class SettingsPanel extends BaseComponent {
       this.availableLLMModels = await window.electronAPI.llm.getModelsForProvider(selectedProvider);
 
       // Switch the actual provider
-      await window.electronAPI.llm.switchProvider(selectedProvider, this.geminiApiKey || undefined);
+      await window.electronAPI.llm.switchProvider(
+        selectedProvider,
+        this.geminiApiKey || undefined,
+        selectedProvider === 'mlx-lm' ? this.mlxLmBaseUrl || undefined : undefined
+      );
 
       // Reload all settings to get the current model selections
       await this.loadLLMSettings();
@@ -440,23 +452,43 @@ export class SettingsPanel extends BaseComponent {
     }
   }
 
-  private getProviderDisplayName(provider: 'ollama' | 'gemini'): string {
+  private async updateMlxLmBaseUrl(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const baseUrl = input.value.trim();
+    try {
+      await window.electronAPI.database.setSetting('mlx_lm_base_url', baseUrl);
+      this.mlxLmBaseUrl = baseUrl;
+      if (this.currentLLMProvider === 'mlx-lm') {
+        await window.electronAPI.llm.switchProvider('mlx-lm', undefined, baseUrl || undefined);
+        await this.loadLLMSettings();
+      }
+    } catch (error) {
+      console.error('Failed to save mlx-lm base URL:', error);
+      input.value = this.mlxLmBaseUrl;
+    }
+  }
+
+  private getProviderDisplayName(provider: 'ollama' | 'gemini' | 'mlx-lm'): string {
     switch (provider) {
       case 'ollama':
         return 'Ollama (Local)';
       case 'gemini':
         return 'Google Gemini (Cloud)';
+      case 'mlx-lm':
+        return 'mlx-lm (Local)';
       default:
         return provider;
     }
   }
 
-  private getProviderDescription(provider: 'ollama' | 'gemini'): string {
+  private getProviderDescription(provider: 'ollama' | 'gemini' | 'mlx-lm'): string {
     switch (provider) {
       case 'ollama':
         return 'Run models locally on your machine. Requires Ollama to be installed and running.';
       case 'gemini':
         return "Use Google's Gemini API for cloud-based generation. Requires API key and internet connection.";
+      case 'mlx-lm':
+        return 'Run Apple MLX models locally via mlx-lm server. Start with: mlx_lm.server --model <model>';
       default:
         return '';
     }
@@ -541,6 +573,24 @@ export class SettingsPanel extends BaseComponent {
                     placeholder="Enter Gemini API key..."
                   />
                 </div>
+
+                ${this.currentLLMProvider === 'mlx-lm'
+                  ? html`
+                      <div class="settings-row">
+                        <div class="settings-description">
+                          <strong>mlx-lm Server URL</strong>
+                          <p>Base URL of the running mlx-lm server</p>
+                        </div>
+                        <input
+                          type="text"
+                          class="text-input"
+                          .value=${this.mlxLmBaseUrl}
+                          @blur=${this.updateMlxLmBaseUrl}
+                          placeholder="http://localhost:8080"
+                        />
+                      </div>
+                    `
+                  : ''}
               `}
           ${this.isLoadingLLMModels
             ? html`
@@ -553,6 +603,13 @@ export class SettingsPanel extends BaseComponent {
                     ${this.currentLLMProvider === 'gemini' && !this.geminiApiKey.trim()
                       ? html` <span style="color: #dc3545;"> (⚠️ API key required)</span> `
                       : html` <span style="color: #28a745;"> (✓ Ready)</span> `}<br />
+                    ${this.currentLLMProvider === 'mlx-lm'
+                      ? html`
+                          <span style="font-size: 0.8rem; color: #666;">
+                            Server: ${this.mlxLmBaseUrl || 'http://localhost:8080'} </span
+                          ><br />
+                        `
+                      : ''}
                     <p style="margin-top: 0.5rem; font-size: 0.85rem; color: #666;">
                       Word and sentence generation models are configured in config.toml
                     </p>

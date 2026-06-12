@@ -309,52 +309,39 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
     }
   }
 
-  protected async generateResponse(prompt: string, model?: string): Promise<string> {
+  protected async fetchText(prompt: string, model?: string): Promise<string> {
     this.ensureApiKey();
+    const selectedModel = model || this.config.model;
+    const requestBody: GeminiRequest = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.7,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 4096,
+      },
+    };
+    const response = await axios.post<GeminiResponse>(
+      `${this.baseUrl}/${selectedModel}:generateContent?key=${this.apiKey}`,
+      requestBody,
+      {
+        timeout: this.config.timeout || 60000,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+    if (!response.data.candidates?.length) {
+      throw new Error('No response candidates from Gemini');
+    }
+    const candidate = response.data.candidates[0];
+    if (!candidate.content?.parts?.length) {
+      throw new Error('Empty response from Gemini');
+    }
+    return candidate.content.parts[0].text;
+  }
 
+  protected async generateResponse(prompt: string, model?: string): Promise<string> {
     try {
-      const selectedModel = model || this.config.model;
-      const requestBody: GeminiRequest = {
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 4096,
-        },
-      };
-
-      const response = await axios.post<GeminiResponse>(
-        `${this.baseUrl}/${selectedModel}:generateContent?key=${this.apiKey}`,
-        requestBody,
-        {
-          timeout: this.config.timeout || 60000,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      const data = response.data;
-
-      if (!data.candidates || data.candidates.length === 0) {
-        throw new Error('No response candidates from Gemini');
-      }
-
-      const candidate = data.candidates[0];
-      if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
-        throw new Error('Empty response from Gemini');
-      }
-
-      return candidate.content.parts[0].text.trim();
+      return (await this.fetchText(prompt, model)).trim();
     } catch (error) {
       if (
         axios.isAxiosError(error) &&
@@ -362,8 +349,7 @@ export class GeminiClient extends BaseLLMClient implements LLMClient {
       ) {
         throw super.createLLMError(error, 'Request timeout', 'TIMEOUT', false);
       }
-      const err = ensureError(error);
-      throw super.createLLMError(err, `Failed to generate response`);
+      throw super.createLLMError(ensureError(error), 'Failed to generate response');
     }
   }
 

@@ -801,11 +801,11 @@ function setupLLMHandlers(
   ipcMain.handle(
     IPC_CHANNELS.LLM.SWITCH_PROVIDER,
     createIPCHandler(
-      [z.enum(['ollama', 'gemini']), z.string().min(1).optional()],
-      async (provider, geminiApiKey) => {
+      [z.enum(['ollama', 'gemini', 'mlx-lm']), z.string().min(1).optional(), z.string().optional()],
+      async (provider, geminiApiKey, mlxLmBaseUrl) => {
         let validatedApiKey = geminiApiKey;
+        let validatedBaseUrl = mlxLmBaseUrl;
 
-        // If switching to Gemini and no API key provided, get it from database
         if (provider === 'gemini' && !validatedApiKey && databaseLayer) {
           const storedApiKey = await databaseLayer.getSetting('gemini_api_key');
           const logger = getLogger();
@@ -813,8 +813,13 @@ function setupLLMHandlers(
           validatedApiKey = storedApiKey || undefined;
         }
 
+        if (provider === 'mlx-lm' && !validatedBaseUrl && databaseLayer) {
+          const storedBaseUrl = await databaseLayer.getSetting('mlx_lm_base_url');
+          validatedBaseUrl = storedBaseUrl || undefined;
+        }
+
         // Switch provider in content generator
-        contentGenerator.switchProvider(provider, validatedApiKey);
+        contentGenerator.switchProvider(provider, validatedApiKey, validatedBaseUrl);
 
         // Persist selected provider so it survives app restarts
         if (databaseLayer) {
@@ -866,14 +871,12 @@ function setupLLMHandlers(
   ipcMain.handle(
     IPC_CHANNELS.LLM.GET_MODELS_FOR_PROVIDER,
     createIPCHandler(
-      z.enum(['ollama', 'gemini']),
+      z.enum(['ollama', 'gemini', 'mlx-lm']),
       async (provider) => {
         if (provider === 'ollama') {
-          // Create a temporary Ollama client to get models
           const ollamaClient = LLMFactory.createOllamaClient();
           return await ollamaClient.getAvailableModels();
         } else if (provider === 'gemini') {
-          // Create a temporary Gemini client to get models
           let apiKey = '';
           if (databaseLayer) {
             const storedApiKey = await databaseLayer.getSetting('gemini_api_key');
@@ -881,6 +884,14 @@ function setupLLMHandlers(
           }
           const geminiClient = LLMFactory.createGeminiClient(apiKey);
           return await geminiClient.getAvailableModels();
+        } else if (provider === 'mlx-lm') {
+          let baseUrl: string | undefined;
+          if (databaseLayer) {
+            const stored = await databaseLayer.getSetting('mlx_lm_base_url');
+            baseUrl = stored || undefined;
+          }
+          const mlxLmClient = LLMFactory.createMlxLmClient(baseUrl ? { baseUrl } : undefined);
+          return await mlxLmClient.getAvailableModels();
         }
 
         return [];

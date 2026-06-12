@@ -8,6 +8,7 @@ import { LLM_CONFIG } from '../../shared/constants/index.js';
 import { ensureError } from '../../shared/utils/error.js';
 import { getLogger } from '../utils/logger.js';
 import { Logger } from '../../shared/utils/logger.js';
+import { cleanLLMResponse } from './utils.js';
 import {
   WordGenerationResponseSchema,
   SentenceGenerationResponseSchema,
@@ -122,15 +123,21 @@ export abstract class BaseLLMClient {
     return this.config.sentenceGenerationModel ?? this.config.model;
   }
 
-  /**
-   * Abstract method for generating plain text responses - must be implemented by subclasses
-   */
+  protected abstract fetchText(prompt: string, model?: string): Promise<string>;
+
   protected abstract generateResponse(prompt: string, model?: string): Promise<string>;
 
-  /**
-   * Abstract method for making requests - must be implemented by subclasses
-   */
-  protected abstract makeRequest(prompt: string, model?: string): Promise<any>;
+  protected async makeRequest(prompt: string, model?: string): Promise<any> {
+    return this.retryWithBackoff(async () => {
+      const raw = await this.fetchText(prompt, model);
+      const clean = cleanLLMResponse(raw);
+      try {
+        return JSON.parse(clean);
+      } catch {
+        throw new Error(`Invalid JSON response: ${clean.substring(0, 1000)}...`);
+      }
+    });
+  }
 
   /**
    * Generate topic words - shared implementation

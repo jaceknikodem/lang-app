@@ -120,7 +120,11 @@ async function initializeServices(): Promise<void> {
     if (!forceLocalServices) {
       try {
         const storedProvider = await databaseLayer.getSetting('llm_provider');
-        if (storedProvider === 'gemini' || storedProvider === 'ollama') {
+        if (
+          storedProvider === 'gemini' ||
+          storedProvider === 'ollama' ||
+          storedProvider === 'mlx-lm'
+        ) {
           initialProvider = storedProvider as LLMProvider;
         }
       } catch {
@@ -148,6 +152,17 @@ async function initializeServices(): Promise<void> {
     // Initialize LLM client based on persisted provider
     if (!forceLocalServices && initialProvider === 'gemini') {
       llmClient = LLMFactory.createGeminiClient(geminiApiKey);
+    } else if (!forceLocalServices && initialProvider === 'mlx-lm') {
+      let mlxLmBaseUrl: string | undefined;
+      try {
+        const stored = await databaseLayer.getSetting('mlx_lm_base_url');
+        mlxLmBaseUrl = stored || undefined;
+      } catch {
+        logger?.warn('Could not read mlx_lm_base_url setting');
+      }
+      llmClient = LLMFactory.createMlxLmClient(
+        mlxLmBaseUrl ? { baseUrl: mlxLmBaseUrl } : undefined
+      );
     } else {
       llmClient = LLMFactory.createOllamaClient(
         forceLocalServices

@@ -31,6 +31,7 @@ export interface ContentGeneratorConfig {
   retryDelay: number;
   llmProvider?: LLMProvider;
   geminiApiKey?: string;
+  mlxLmBaseUrl?: string;
   lemmatizationService?: LemmatizationService;
 }
 
@@ -51,6 +52,7 @@ export class ContentGenerator {
       retryDelay: config?.retryDelay || 1000,
       llmProvider: config?.llmProvider || 'ollama',
       geminiApiKey: config?.geminiApiKey,
+      mlxLmBaseUrl: config?.mlxLmBaseUrl,
     };
 
     // Create LLM client using factory if not provided
@@ -83,6 +85,10 @@ export class ContentGenerator {
       factoryConfig.geminiConfig = {
         apiKey: this.config.geminiApiKey || '',
       };
+    } else if (this.config.llmProvider === 'mlx-lm') {
+      factoryConfig.mlxLmConfig = this.config.mlxLmBaseUrl
+        ? { baseUrl: this.config.mlxLmBaseUrl }
+        : {};
     }
 
     this.logger.info({
@@ -96,7 +102,7 @@ export class ContentGenerator {
   /**
    * Switch LLM provider and recreate client
    */
-  switchProvider(provider: LLMProvider, geminiApiKey?: string): void {
+  switchProvider(provider: LLMProvider, geminiApiKey?: string, mlxLmBaseUrl?: string): void {
     this.logger.info({
       from: this.config.llmProvider,
       to: provider,
@@ -105,11 +111,11 @@ export class ContentGenerator {
     });
 
     this.config.llmProvider = provider;
-    if (provider === 'gemini') {
-      // Update API key if provided, otherwise keep existing one
-      if (geminiApiKey !== undefined) {
-        this.config.geminiApiKey = geminiApiKey;
-      }
+    if (provider === 'gemini' && geminiApiKey !== undefined) {
+      this.config.geminiApiKey = geminiApiKey;
+    }
+    if (provider === 'mlx-lm' && mlxLmBaseUrl !== undefined) {
+      this.config.mlxLmBaseUrl = mlxLmBaseUrl;
     }
     this.llmClient = this.createLLMClient();
   }
