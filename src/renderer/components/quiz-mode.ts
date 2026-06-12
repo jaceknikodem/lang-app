@@ -8,7 +8,6 @@ import { Word, QuizQuestion, QuizSession, QuizResult } from '../../shared/types/
 import { STRENGTH_BOOST_CONFIG } from '../../shared/constants/index.js';
 import { sharedStyles } from '../styles/shared.js';
 import { quizModeStyles } from './quiz-mode.styles.js';
-import { recordingStyles } from './recording.styles.js';
 import { router } from '../utils/router.js';
 import { sessionManager, type QuizSessionState } from '../utils/session-manager.js';
 import { useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
@@ -19,18 +18,19 @@ import './progress-bar.js';
 import type { SessionSummary } from './session-complete.js';
 import { RecordingController } from './recording-controller.js';
 import { TranscriptionController } from './transcription-controller.js';
-import './recording-status.js';
 import { checkProficiencyLevel } from '../utils/app-initializer.js';
-import {
-  getSimilarityClass,
-  type ProficiencyLevel,
-} from '../../shared/utils/similarity-threshold.js';
+import { type ProficiencyLevel } from '../../shared/utils/similarity-threshold.js';
 import { logger } from '../utils/logger.js';
-import { shuffleArray } from '../utils/array-utils.js';
 import {
   initializeSpeechRecognition,
   startSpeechRecognitionCheck,
 } from '../utils/speech-recognition-checker.js';
+import {
+  buildQuizFromWords,
+  restoreQuizFromSession as restoreQuizFromSessionService,
+} from '../utils/quiz-session-service.js';
+import { type QuizTranscriptionResult } from './quiz-question.js';
+import './quiz-question.js';
 
 @customElement('quiz-mode')
 export class QuizMode extends BaseComponent {
@@ -69,14 +69,7 @@ export class QuizMode extends BaseComponent {
   private transcription = new TranscriptionController(this);
 
   @state()
-  private transcriptionResult: {
-    text: string;
-    similarity: number;
-    normalizedTranscribed: string;
-    normalizedExpected: string;
-    expectedWords: Array<{ word: string; similarity: number; matched: boolean }>;
-    transcribedWords: string[];
-  } | null = null;
+  private transcriptionResult: QuizTranscriptionResult | null = null;
 
   @state()
   private isTranscribing = false;
@@ -140,7 +133,7 @@ export class QuizMode extends BaseComponent {
     }
   };
 
-  static styles = [sharedStyles, quizModeStyles, recordingStyles];
+  static styles = [sharedStyles, quizModeStyles];
 
   async connectedCallback() {
     super.connectedCallback();
@@ -223,12 +216,9 @@ export class QuizMode extends BaseComponent {
     this.error = null;
 
     try {
-      // Load words from the saved word IDs in the same order (preserves shuffle)
-      const words = await window.electronAPI.database.getWordsByIds(savedSession.wordIds);
+      const result = await restoreQuizFromSessionService(savedSession);
 
-      if (words.length === 0 || words.length !== savedSession.wordIds.length) {
-        // Some words might have been deleted, clear the session and start fresh
-        sessionManager.clearQuizSession();
+      if (result.status === 'needs_fresh_start') {
         await this.loadSelectedWords();
         if (this.selectedWords.length === 0) {
           this.error = 'No words available for quiz. Please start a new learning session first.';
@@ -238,63 +228,27 @@ export class QuizMode extends BaseComponent {
         return;
       }
 
-      // Restore audio-only mode
-      this.audioOnlyMode = savedSession.audioOnlyMode ?? false;
-
-      // Generate quiz questions from words in the saved order
-      const questions: QuizQuestion[] = [];
-
-      for (const wordId of savedSession.wordIds) {
-        const word = words.find((w) => w.id === wordId);
-        if (!word) continue;
-
-        // Get a random sentence for this word
-        const sentence = await window.electronAPI.quiz.getRandomSentenceForWord(word.id);
-
-        if (sentence) {
-          questions.push({
-            word,
-            sentence,
-          });
-        }
-      }
-
-      if (questions.length === 0) {
-        this.error = 'No sentences found for the saved words. Please start a new quiz.';
-        sessionManager.clearQuizSession();
-        return;
-      }
-
-      // Restore quiz session state
+      this.audioOnlyMode = result.audioOnlyMode;
       this.quizSession = {
-        questions,
-        currentQuestionIndex: savedSession.currentQuestionIndex,
-        score: savedSession.score,
-        totalQuestions: savedSession.totalQuestions,
-        isComplete: savedSession.isComplete,
+        questions: result.questions,
+        currentQuestionIndex: result.currentQuestionIndex,
+        score: result.score,
+        totalQuestions: result.totalQuestions,
+        isComplete: result.isComplete,
       };
 
-      // Restore current question
-      if (this.quizSession.currentQuestionIndex < questions.length) {
-        this.currentQuestion = questions[this.quizSession.currentQuestionIndex];
+      if (this.quizSession.currentQuestionIndex < result.questions.length) {
+        this.currentQuestion = result.questions[this.quizSession.currentQuestionIndex];
       } else {
-        // If we're past the end (shouldn't happen), go to the last question
-        this.quizSession.currentQuestionIndex = questions.length - 1;
-        this.currentQuestion = questions[this.quizSession.currentQuestionIndex];
+        this.quizSession.currentQuestionIndex = result.questions.length - 1;
+        this.currentQuestion = result.questions[this.quizSession.currentQuestionIndex];
       }
 
-      // Set selected words for compatibility
-      this.selectedWords = words;
+      this.selectedWords = result.words;
 
-      // Prioritize: Load current question's audio first
       await this.ensureCurrentQuestionAudioLoaded();
-
-      // Load next question's audio right after current one is ready
       this.preloadNextQuestionAudio();
-
-      // Pre-load remaining audio files in background (non-blocking)
-      void this.preloadQuizAudio(questions);
-
+      void this.preloadQuizAudio(result.questions);
       void this.maybeAutoplayCurrentQuestion(true);
 
       logger.info(
@@ -328,63 +282,32 @@ export class QuizMode extends BaseComponent {
     this.error = null;
 
     try {
-      // Filter out known words - we don't want to quiz on words marked as known
-      const wordsToQuiz = this.selectedWords.filter((word) => !word.known);
+      const result = await buildQuizFromWords(this.selectedWords);
 
-      if (wordsToQuiz.length === 0) {
-        this.error = 'No words available for quiz. All selected words are marked as known.';
-        return;
+      switch (result.status) {
+        case 'no_words':
+          this.error = 'No words available for quiz. All selected words are marked as known.';
+          return;
+        case 'no_sentences':
+          this.error =
+            'No sentences found for the selected words. Please review words in learning mode first.';
+          return;
+        case 'built':
+          this.quizSession = {
+            questions: result.questions,
+            currentQuestionIndex: 0,
+            score: 0,
+            totalQuestions: result.questions.length,
+            isComplete: false,
+          };
+          this.currentQuestion = result.questions[0];
+          sessionManager.startNewQuizSession(result.wordIds, this.audioOnlyMode);
+          await this.ensureCurrentQuestionAudioLoaded();
+          this.preloadNextQuestionAudio();
+          void this.preloadQuizAudio(result.questions);
+          void this.maybeAutoplayCurrentQuestion(true);
+          break;
       }
-
-      // Generate quiz questions from words
-      const questions: QuizQuestion[] = [];
-
-      for (const word of wordsToQuiz) {
-        // Get a random sentence for this word
-        const sentence = await window.electronAPI.quiz.getRandomSentenceForWord(word.id);
-
-        if (sentence) {
-          questions.push({
-            word,
-            sentence,
-          });
-        }
-      }
-
-      if (questions.length === 0) {
-        this.error =
-          'No sentences found for the selected words. Please review words in learning mode first.';
-        return;
-      }
-
-      // Shuffle questions for variety
-      const shuffledQuestions = shuffleArray(questions);
-      const wordIds = shuffledQuestions.map((q) => q.word.id);
-
-      this.quizSession = {
-        questions: shuffledQuestions,
-        currentQuestionIndex: 0,
-        score: 0,
-        totalQuestions: shuffledQuestions.length,
-        isComplete: false,
-      };
-
-      this.currentQuestion = shuffledQuestions[0];
-
-      // Save quiz session to session manager (creates new session)
-      sessionManager.startNewQuizSession(wordIds, this.audioOnlyMode);
-
-      // Prioritize: Load current question's audio first, then autoplay
-      // This ensures audio is ready before playback starts
-      await this.ensureCurrentQuestionAudioLoaded();
-
-      // Load next question's audio right after current one is ready
-      this.preloadNextQuestionAudio();
-
-      // Pre-load remaining audio files in background (non-blocking)
-      void this.preloadQuizAudio(shuffledQuestions);
-
-      void this.maybeAutoplayCurrentQuestion(true);
     } catch (error) {
       logger.error({ error }, 'Error starting quiz');
       this.error = 'Failed to start quiz. Please try again.';
@@ -1139,13 +1062,8 @@ export class QuizMode extends BaseComponent {
 
     const progress =
       ((this.quizSession.currentQuestionIndex + 1) / this.quizSession.totalQuestions) * 100;
-    const question = this.currentQuestion;
-
-    // Always show foreign language sentence
-    const displayText = question.sentence.sentence;
-
-    // The word we're asking about
-    const questionWord = `"${question.word.word}"`;
+    const isLastQuestion =
+      this.quizSession.currentQuestionIndex + 1 >= this.quizSession.totalQuestions;
 
     return html`
       <div class="quiz-container">
@@ -1174,285 +1092,30 @@ export class QuizMode extends BaseComponent {
         </div>
 
         <div class="quiz-content">
-          <div class="question-container">
-            ${this.audioOnlyMode
-              ? html`
-                  <div class="audio-only-controls">
-                    <div class="question-actions">
-                      <button
-                        class="audio-replay-button"
-                        @click=${this.playAudio}
-                        title="Replay audio"
-                        aria-label="Replay audio"
-                      >
-                        <span aria-hidden="true">🔊</span>
-                      </button>
-                      ${this.recording.isRecording
-                        ? html`
-                            <button
-                              class="record-button recording"
-                              @click=${this.recording.stopRecording}
-                              title="Stop recording"
-                              aria-label="Stop recording"
-                            >
-                              <span aria-hidden="true">⏹</span>
-                            </button>
-                          `
-                        : html`
-                            <button
-                              class="record-button"
-                              @click=${this.recording.startRecording}
-                              ?disabled=${!this.speechRecognitionReady}
-                              title=${this.speechRecognitionReady
-                                ? 'Start recording'
-                                : 'Speech recognition not ready'}
-                              aria-label="Start recording"
-                            >
-                              <span aria-hidden="true">🎤</span>
-                            </button>
-                          `}
-                    </div>
-                  </div>
-                `
-              : html`
-                  <div class="question-text-container">
-                    <div class="question-text">${displayText}</div>
-                    <div class="question-actions">
-                      <button
-                        class="audio-replay-button"
-                        @click=${this.playAudio}
-                        title="Replay audio"
-                        aria-label="Replay audio"
-                      >
-                        <span aria-hidden="true">🔊</span>
-                      </button>
-                      ${this.recording.isRecording
-                        ? html`
-                            <button
-                              class="record-button recording"
-                              @click=${this.recording.stopRecording}
-                              title="Stop recording"
-                              aria-label="Stop recording"
-                            >
-                              <span aria-hidden="true">⏹</span>
-                            </button>
-                          `
-                        : html`
-                            <button
-                              class="record-button"
-                              @click=${this.recording.startRecording}
-                              ?disabled=${!this.speechRecognitionReady}
-                              title=${this.speechRecognitionReady
-                                ? 'Start recording'
-                                : 'Speech recognition not ready'}
-                              aria-label="Start recording"
-                            >
-                              <span aria-hidden="true">🎤</span>
-                            </button>
-                          `}
-                    </div>
-                  </div>
-                `}
-
-            <div class="question-translation">
-              Do you know what ${questionWord} means in this context?
-            </div>
-
-            ${this.recording.isRecording ||
-            this.recording.currentRecording ||
-            this.transcriptionResult
-              ? this.renderRecordingSection()
-              : ''}
-            ${this.showResult ? this.renderResult() : this.renderQuizButtons()}
-          </div>
+          <quiz-question
+            .question=${this.currentQuestion}
+            .showAnswer=${this.showAnswer}
+            .showResult=${this.showResult}
+            .lastResult=${this.lastResult}
+            .audioOnlyMode=${this.audioOnlyMode}
+            .transcriptionResult=${this.transcriptionResult}
+            .isTranscribing=${this.isTranscribing}
+            .isRecording=${this.recording.isRecording}
+            .hasRecording=${!!this.recording.currentRecording}
+            .recordingTime=${this.recording.recordingTime}
+            .speechRecognitionReady=${this.speechRecognitionReady}
+            .streamingTranscriptionText=${this.transcription.streamingTranscriptionText}
+            .proficiencyLevel=${this.currentProficiencyLevel}
+            .isLastQuestion=${isLastQuestion}
+            @reveal-answer=${this.revealAnswer}
+            @srs-answer=${(e: CustomEvent<{ recall: 0 | 1 | 2 | 3 }>) =>
+              this.handleSRSAnswer(e.detail.recall)}
+            @play-audio=${this.playAudio}
+            @start-recording=${this.recording.startRecording}
+            @stop-recording=${this.recording.stopRecording}
+            @cancel-recording=${this.recording.cancelRecording}
+          ></quiz-question>
         </div>
-      </div>
-    `;
-  }
-
-  private renderQuizButtons() {
-    // Always show the difficulty prompt and buttons
-    const difficultyButtons = html`
-      <div class="answer-buttons">
-        <div class="difficulty-buttons">
-          <button class="answer-button difficulty-fail" @click=${() => this.handleSRSAnswer(0)}>
-            Failed ✗ <span class="keyboard-hint">(1)</span>
-          </button>
-          <button class="answer-button difficulty-hard" @click=${() => this.handleSRSAnswer(1)}>
-            Hard 😓 <span class="keyboard-hint">(2)</span>
-          </button>
-          <button class="answer-button difficulty-good" @click=${() => this.handleSRSAnswer(2)}>
-            Good ✓ <span class="keyboard-hint">(3)</span>
-          </button>
-          <button class="answer-button difficulty-easy" @click=${() => this.handleSRSAnswer(3)}>
-            Easy 😊 <span class="keyboard-hint">(4)</span>
-          </button>
-        </div>
-      </div>
-    `;
-
-    if (!this.showAnswer) {
-      // Before revealing answer, show both reveal button and difficulty buttons
-      return html`
-        <div class="answer-buttons">
-          <button class="answer-button primary" @click=${this.revealAnswer}>
-            Reveal Answer <span class="keyboard-hint">(Enter)</span>
-          </button>
-        </div>
-        ${difficultyButtons}
-      `;
-    }
-
-    // After reveal, show the answer and self-assessment buttons
-    return html` ${this.renderRevealedAnswer()} ${difficultyButtons} `;
-  }
-
-  private renderRevealedAnswer() {
-    if (!this.currentQuestion) return '';
-
-    const word = this.currentQuestion.word;
-    const sentence = this.currentQuestion.sentence;
-
-    // Show the correct answer (English translation)
-    const correctAnswer = word.translation;
-
-    return html`
-      <div class="revealed-answer">
-        <div class="answer-container">
-          <div class="answer-word">${correctAnswer}</div>
-          ${this.audioOnlyMode
-            ? html`
-                <div class="sentence-pair">
-                  <span class="sentence-label">Sentence:</span>
-                  <div class="sentence-text">${sentence.sentence}</div>
-                  <div class="sentence-translation">${sentence.translation}</div>
-                </div>
-              `
-            : ''}
-        </div>
-      </div>
-    `;
-  }
-
-  private renderRecordingSection() {
-    if (!this.currentQuestion) return '';
-
-    return html`
-      <div class="recording-section">
-        <recording-status
-          .isRecording=${this.recording.isRecording}
-          .recordingTime=${this.recording.recordingTime}
-          @cancel-recording=${this.recording.cancelRecording}
-        ></recording-status>
-        ${this.renderTranscriptionResults()}
-      </div>
-    `;
-  }
-
-  private renderTranscriptionResults() {
-    if (this.isTranscribing) {
-      return html`
-        <div class="transcription-results">
-          <div class="transcription-loading">
-            <div class="spinner"></div>
-            ${this.transcription.streamingTranscriptionText
-              ? html`
-                  <div class="streaming-transcription">
-                    <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">
-                      Transcribing...
-                    </div>
-                    <div style="font-size: 16px; font-style: italic; color: var(--text-primary);">
-                      "${this.transcription.streamingTranscriptionText}"
-                    </div>
-                  </div>
-                `
-              : html`
-                  Analyzing your pronunciation...
-                  ${!this.speechRecognitionReady
-                    ? html`
-                        <div
-                          style="margin-top: var(--spacing-sm); font-size: 14px; color: var(--text-secondary);"
-                        >
-                          First-time setup: This may take 1-2 minutes while speech recognition
-                          compiles...
-                        </div>
-                      `
-                    : ''}
-                `}
-          </div>
-        </div>
-      `;
-    }
-
-    if (!this.transcriptionResult) {
-      return '';
-    }
-
-    const result = this.transcriptionResult;
-    const similarity = result.similarity;
-    const similarityPercentage = Math.round(similarity * 100);
-
-    // Determine similarity level based on proficiency level
-    const similarityClass = getSimilarityClass(similarity, this.currentProficiencyLevel);
-
-    return html`
-      <div class="transcription-results">
-        <div class="transcription-text">
-          <div class="label">Expected:</div>
-          <div class="text color-coded-text">
-            ${result.expectedWords.map((wordInfo, index) => {
-              // Color code based on similarity: green for matched, yellow for partial, red for missing
-              let color = '#28a745'; // green for matched
-              if (!wordInfo.matched) {
-                color = '#dc3545'; // red for missing/not matched
-              } else if (wordInfo.similarity < 0.9) {
-                color = '#ffc107'; // yellow for partial match
-              }
-
-              const isLast = index === result.expectedWords.length - 1;
-              return html`<span
-                  style="color: ${color}; font-weight: ${wordInfo.matched ? 'normal' : 'bold'};"
-                  >${wordInfo.word}</span
-                >${!isLast ? ' ' : ''}`;
-            })}
-          </div>
-        </div>
-
-        <div class="transcription-text">
-          <div class="label">You said:</div>
-          <div class="text">"${result.text}"</div>
-        </div>
-
-        <div class="similarity-score">
-          <span>Similarity:</span>
-          <div class="similarity-bar">
-            <div
-              class="similarity-fill ${similarityClass}"
-              style="width: ${similarityPercentage}%"
-            ></div>
-          </div>
-          <span class="similarity-percentage">${similarityPercentage}%</span>
-        </div>
-      </div>
-    `;
-  }
-
-  private renderResult() {
-    if (!this.lastResult || !this.currentQuestion) return html``;
-
-    const isCorrect = this.lastResult.correct;
-    const word = this.currentQuestion.word;
-
-    return html`
-      <div class="result-feedback ${isCorrect ? 'correct' : 'incorrect'}">
-        <h3>${isCorrect ? 'Correct!' : 'Keep practicing!'}</h3>
-        <p><strong>${word.word}</strong> = <strong>${word.translation}</strong></p>
-        <p>Word strength: ${word.strength}/100</p>
-        <p style="font-size: 14px; color: var(--text-secondary); margin-top: var(--spacing-sm);">
-          ${this.quizSession!.currentQuestionIndex + 1 >= this.quizSession!.totalQuestions
-            ? 'Finishing quiz...'
-            : 'Moving to next question...'}
-        </p>
       </div>
     `;
   }
