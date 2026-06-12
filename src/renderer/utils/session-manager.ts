@@ -41,6 +41,7 @@ export interface DialogSessionState {
     sentenceId: number;
     variantSentence: string;
     variantTranslation: string;
+    variantPronunciation?: string;
     createdAt: string;
   }>;
   createdAt: string;

@@ -171,7 +171,8 @@ export interface DatabaseLayer {
   insertDialogueVariant(
     sentenceId: number,
     variantSentence: string,
-    variantTranslation: string
+    variantTranslation: string,
+    variantPronunciation?: string
   ): Promise<number>;
   getDialogueVariantsBySentenceId(sentenceId: number, limit?: number): Promise<DialogueVariant[]>;
   getDialogueVariantCount(sentenceId: number): Promise<number>;
@@ -182,6 +183,7 @@ export interface DatabaseLayer {
     continuationTranslation: string,
     continuationAudio?: string
   ): Promise<void>;
+  updateDialogueVariantPronunciation(variantId: number, pronunciation: string): Promise<void>;
 
   // Progress tracking
   updateLastStudied(wordId: number): Promise<void>;

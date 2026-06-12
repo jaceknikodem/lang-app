@@ -6,6 +6,8 @@ import {
   getSimilarityClass,
   type ProficiencyLevel,
 } from '../../shared/utils/similarity-threshold.js';
+import { pronunciationStyles } from '../styles/pronunciation.styles.js';
+import { renderPronunciation } from '../utils/pronunciation-render.js';
 
 export interface TranscriptionResult {
   text: string;
@@ -32,231 +34,234 @@ export class DialogBubbles extends LitElement {
   @property({ attribute: false }) proficiencyLevel: ProficiencyLevel | null = null;
   @property({ type: Boolean }) isRecording = false;
 
-  static styles = css`
-    :host {
-      display: flex;
-      flex-direction: column;
-      gap: var(--spacing-md);
-      width: 100%;
-      max-width: 600px;
-      margin: 0 auto;
-    }
+  static styles = [
+    pronunciationStyles,
+    css`
+      :host {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-md);
+        width: 100%;
+        max-width: 600px;
+        margin: 0 auto;
+      }
 
-    .dialog-bubble {
-      padding: var(--spacing-md) var(--spacing-lg);
-      border-radius: 18px;
-      max-width: 75%;
-      position: relative;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-    }
+      .dialog-bubble {
+        padding: var(--spacing-md) var(--spacing-lg);
+        border-radius: 18px;
+        max-width: 75%;
+        position: relative;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      }
 
-    .bubble-left {
-      align-self: flex-start;
-      background: var(--background-secondary);
-      border-top-left-radius: 4px;
-    }
+      .bubble-left {
+        align-self: flex-start;
+        background: var(--background-secondary);
+        border-top-left-radius: 4px;
+      }
 
-    .bubble-right {
-      align-self: flex-end;
-      background: var(--primary-color);
-      color: white;
-      border-top-right-radius: 4px;
-    }
+      .bubble-right {
+        align-self: flex-end;
+        background: var(--primary-color);
+        color: white;
+        border-top-right-radius: 4px;
+      }
 
-    .bubble-content {
-      flex: 1;
-    }
+      .bubble-content {
+        flex: 1;
+      }
 
-    .bubble-text-container {
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-sm);
-      flex-wrap: wrap;
-    }
+      .bubble-text-container {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        flex-wrap: wrap;
+      }
 
-    .bubble-text {
-      font-size: 16px;
-      margin: 0;
-      line-height: 1.5;
-      flex: 1;
-    }
+      .bubble-text {
+        font-size: 16px;
+        margin: 0;
+        line-height: 1.5;
+        flex: 1;
+      }
 
-    .bubble-text span {
-      display: inline;
-      transition: color 0.2s ease;
-    }
+      .bubble-text span {
+        display: inline;
+        transition: color 0.2s ease;
+      }
 
-    .bubble-right .bubble-text {
-      color: white;
-    }
+      .bubble-right .bubble-text {
+        color: white;
+      }
 
-    .bubble-translation {
-      font-size: 14px;
-      margin: var(--spacing-xs) 0 0 0;
-      opacity: 0.8;
-      font-style: italic;
-    }
+      .bubble-translation {
+        font-size: 14px;
+        margin: var(--spacing-xs) 0 0 0;
+        opacity: 0.8;
+        font-style: italic;
+      }
 
-    .bubble-right .bubble-translation {
-      color: rgba(255, 255, 255, 0.9);
-    }
+      .bubble-right .bubble-translation {
+        color: rgba(255, 255, 255, 0.9);
+      }
 
-    .similarity-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: var(--spacing-xs) var(--spacing-sm);
-      border-radius: var(--border-radius-small);
-      font-size: 12px;
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-      min-width: 45px;
-      white-space: nowrap;
-    }
+      .similarity-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-xs) var(--spacing-sm);
+        border-radius: var(--border-radius-small);
+        font-size: 12px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        min-width: 45px;
+        white-space: nowrap;
+      }
 
-    .similarity-badge.excellent {
-      background: var(--success-light);
-      color: var(--success-color);
-    }
-    .similarity-badge.good {
-      background: #d4edda;
-      color: #28a745;
-    }
-    .similarity-badge.fair {
-      background: #fff3cd;
-      color: #856404;
-    }
-    .similarity-badge.poor {
-      background: var(--error-light);
-      color: var(--error-color);
-    }
+      .similarity-badge.excellent {
+        background: var(--success-light);
+        color: var(--success-color);
+      }
+      .similarity-badge.good {
+        background: #d4edda;
+        color: #28a745;
+      }
+      .similarity-badge.fair {
+        background: #fff3cd;
+        color: #856404;
+      }
+      .similarity-badge.poor {
+        background: var(--error-light);
+        color: var(--error-color);
+      }
 
-    .bubble-right .similarity-badge {
-      background: rgba(255, 255, 255, 0.2);
-      color: white;
-    }
-    .bubble-right .similarity-badge.excellent {
-      background: rgba(52, 199, 89, 0.3);
-      color: white;
-    }
-    .bubble-right .similarity-badge.good {
-      background: rgba(40, 167, 69, 0.3);
-      color: white;
-    }
-    .bubble-right .similarity-badge.fair {
-      background: rgba(255, 193, 7, 0.3);
-      color: white;
-    }
-    .bubble-right .similarity-badge.poor {
-      background: rgba(255, 59, 48, 0.3);
-      color: white;
-    }
+      .bubble-right .similarity-badge {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+      }
+      .bubble-right .similarity-badge.excellent {
+        background: rgba(52, 199, 89, 0.3);
+        color: white;
+      }
+      .bubble-right .similarity-badge.good {
+        background: rgba(40, 167, 69, 0.3);
+        color: white;
+      }
+      .bubble-right .similarity-badge.fair {
+        background: rgba(255, 193, 7, 0.3);
+        color: white;
+      }
+      .bubble-right .similarity-badge.poor {
+        background: rgba(255, 59, 48, 0.3);
+        color: white;
+      }
 
-    .try-again-button {
-      font-size: 14px;
-      padding: var(--spacing-sm) var(--spacing-md);
-      margin-top: var(--spacing-sm);
-      width: 100%;
-      background: var(--primary-color);
-      color: white;
-      border: none;
-      border-radius: var(--border-radius-small);
-      cursor: pointer;
-    }
+      .try-again-button {
+        font-size: 14px;
+        padding: var(--spacing-sm) var(--spacing-md);
+        margin-top: var(--spacing-sm);
+        width: 100%;
+        background: var(--primary-color);
+        color: white;
+        border: none;
+        border-radius: var(--border-radius-small);
+        cursor: pointer;
+      }
 
-    .previous-corrections {
-      display: flex;
-      flex-direction: column;
-      gap: var(--spacing-xs);
-      margin-top: var(--spacing-sm);
-      margin-bottom: var(--spacing-sm);
-      padding: var(--spacing-sm);
-      background: var(--background-secondary);
-      border-radius: 8px;
-      border: 1px solid var(--border-color);
-    }
+      .previous-corrections {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-xs);
+        margin-top: var(--spacing-sm);
+        margin-bottom: var(--spacing-sm);
+        padding: var(--spacing-sm);
+        background: var(--background-secondary);
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+      }
 
-    .previous-correction-item {
-      display: flex;
-      align-items: flex-start;
-      gap: var(--spacing-xs);
-      font-size: 13px;
-      color: var(--text-secondary);
-      line-height: 1.4;
-    }
+      .previous-correction-item {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--spacing-xs);
+        font-size: 13px;
+        color: var(--text-secondary);
+        line-height: 1.4;
+      }
 
-    .correction-label {
-      flex-shrink: 0;
-      font-size: 14px;
-    }
-    .correction-text {
-      flex: 1;
-      font-style: italic;
-    }
+      .correction-label {
+        flex-shrink: 0;
+        font-size: 14px;
+      }
+      .correction-text {
+        flex: 1;
+        font-style: italic;
+      }
 
-    .response-options {
-      display: flex;
-      flex-direction: column;
-      gap: var(--spacing-sm);
-      width: 100%;
-    }
+      .response-options {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+        width: 100%;
+      }
 
-    .response-option {
-      padding: var(--spacing-sm) var(--spacing-md);
-      border-radius: var(--border-radius-small);
-      border: 1px solid #ccc;
-      background: var(--background-primary);
-    }
+      .response-option {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border-radius: var(--border-radius-small);
+        border: 1px solid #ccc;
+        background: var(--background-primary);
+      }
 
-    .response-option .sentence {
-      font-size: 18px;
-      margin: 0 0 var(--spacing-xs) 0;
-    }
-    .response-option .translation {
-      font-size: 14px;
-      color: var(--text-secondary);
-      margin: 0;
-    }
+      .response-option .sentence {
+        font-size: 18px;
+        margin: 0 0 var(--spacing-xs) 0;
+      }
+      .response-option .translation {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin: 0;
+      }
 
-    .typing-indicator {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      min-height: 24px;
-    }
+      .typing-indicator {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-height: 24px;
+      }
 
-    .typing-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--text-secondary);
-      opacity: 0.7;
-      animation: typing-bounce 1.4s ease-in-out infinite;
-    }
-
-    .typing-dot:nth-child(1) {
-      animation-delay: 0s;
-    }
-    .typing-dot:nth-child(2) {
-      animation-delay: 0.2s;
-    }
-    .typing-dot:nth-child(3) {
-      animation-delay: 0.4s;
-    }
-
-    @keyframes typing-bounce {
-      0%,
-      60%,
-      100% {
-        transform: translateY(0);
+      .typing-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--text-secondary);
         opacity: 0.7;
+        animation: typing-bounce 1.4s ease-in-out infinite;
       }
-      30% {
-        transform: translateY(-8px);
-        opacity: 1;
+
+      .typing-dot:nth-child(1) {
+        animation-delay: 0s;
       }
-    }
-  `;
+      .typing-dot:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      .typing-dot:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+
+      @keyframes typing-bounce {
+        0%,
+        60%,
+        100% {
+          transform: translateY(0);
+          opacity: 0.7;
+        }
+        30% {
+          transform: translateY(-8px);
+          opacity: 1;
+        }
+      }
+    `,
+  ];
 
   private parseSentenceWords(
     text: string
@@ -390,6 +395,10 @@ export class DialogBubbles extends LitElement {
             <div class="dialog-bubble bubble-left">
               <div class="bubble-content">
                 <p class="bubble-text">${this.sentence.contextBefore}</p>
+                ${renderPronunciation(
+                  this.sentence.contextBeforePronunciation,
+                  'context-pronunciation'
+                )}
                 ${this.showTranslations && this.sentence.contextBeforeTranslation
                   ? html`<p class="bubble-translation">
                       ${this.sentence.contextBeforeTranslation}
@@ -431,6 +440,7 @@ export class DialogBubbles extends LitElement {
                   (option) => html`
                     <div class="response-option">
                       <p class="sentence">${option.variantSentence}</p>
+                      ${renderPronunciation(option.variantPronunciation, 'context-pronunciation')}
                       ${this.showTranslations
                         ? html`<p class="translation">${option.variantTranslation}</p>`
                         : nothing}

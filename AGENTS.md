@@ -60,3 +60,9 @@
 ### Testing
 - Before starting a test, write unit tests (TDD-style)
 - After completing a task, run all unit tests to check if it works
+
+### Lit Components
+- **ReactiveController threshold**: when a feature area has 3+ related `@state()` fields (e.g. recording state, follow-up state), extract them into a `ReactiveController` — the controller owns the fields and calls `host.requestUpdate()`
+- **Service threshold**: component methods that only call `window.electronAPI` and don't read component state (`this.*`) belong in standalone async service functions under `src/renderer/utils/`, returning a union result type (`{ status: 'loaded' | 'error' | ... }`)
+- **Sub-component threshold**: a render helper over ~50 lines, or one that represents a visually/logically distinct UI unit, should be its own `@customElement` with scoped `static styles`
+- **Growth check**: before adding a new feature to an existing component, ask whether it belongs in a new controller, service function, or sub-component first — adding directly to the component is the last resort, not the default

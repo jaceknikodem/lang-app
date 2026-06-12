@@ -29,6 +29,7 @@ function toDialogResponseOption(variant: DialogueVariant): DialogResponseOption 
     sentenceId: variant.sentenceId,
     variantSentence: variant.variantSentence,
     variantTranslation: variant.variantTranslation,
+    variantPronunciation: variant.variantPronunciation,
     createdAt: variant.createdAt,
   };
 }
@@ -91,7 +92,8 @@ export class DialogService {
     const neededCount = Math.max(0, 2 - existingVariants.length);
     if (neededCount === 0) {
       // We have enough variants cached in DB (2+), use them - avoid expensive LLM generation
-      return shuffleAndTake(existingVariants, 2);
+      const selected = shuffleAndTake(existingVariants, 2);
+      return this.ensurePronunciation(selected, language);
     }
 
     // Generate enough variants to have at least 2 options
@@ -155,8 +157,50 @@ export class DialogService {
     const allVariants =
       allStoredVariants.length > 0 ? allStoredVariants : [...existingVariants, ...storedVariants];
 
-    // Return full DialogueVariant objects with IDs
-    return shuffleAndTake(allVariants, 2);
+    // Return full DialogueVariant objects with IDs, with pronunciation filled in
+    const selected = shuffleAndTake(allVariants, 2);
+    return this.ensurePronunciation(selected, language);
+  }
+
+  /**
+   * Ensure all variants have pronunciation filled in for supported languages (Japanese).
+   * Variants that already have pronunciation are left unchanged.
+   * New pronunciations are persisted to the DB and returned on the in-memory objects.
+   */
+  private async ensurePronunciation(
+    variants: DialogueVariant[],
+    language: string
+  ): Promise<DialogueVariant[]> {
+    const lang = language.toLowerCase();
+    if (lang !== 'japanese' && lang !== 'ja') {
+      return variants;
+    }
+
+    const missing = variants.filter((v) => v.id > 0 && !v.variantPronunciation);
+    if (missing.length === 0) {
+      return variants;
+    }
+
+    try {
+      const pronunciations = await this.llmClient.convertToPronunciation(
+        missing.map((v) => v.variantSentence),
+        language
+      );
+
+      await Promise.all(
+        missing.map(async (variant, i) => {
+          const pron = pronunciations[i];
+          if (pron) {
+            variant.variantPronunciation = pron;
+            await this.database.updateDialogueVariantPronunciation(variant.id, pron);
+          }
+        })
+      );
+    } catch (error) {
+      this.logger.warn({ error }, 'Failed to generate pronunciation for dialogue variants');
+    }
+
+    return variants;
   }
 
   /**

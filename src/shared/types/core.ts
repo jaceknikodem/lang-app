@@ -140,6 +140,7 @@ export interface DialogueVariant {
   sentenceId: number;
   variantSentence: string;
   variantTranslation: string;
+  variantPronunciation?: string;
   createdAt: Date;
   continuationText?: string;
   continuationTranslation?: string;
@@ -151,6 +152,7 @@ export interface DialogResponseOption {
   sentenceId: number;
   variantSentence: string;
   variantTranslation: string;
+  variantPronunciation?: string;
   createdAt: Date;
 }
 

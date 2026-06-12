@@ -6,6 +6,8 @@ import {
   type ProficiencyLevel,
 } from '../../shared/utils/similarity-threshold.js';
 import { recordingStyles } from './recording.styles.js';
+import { pronunciationStyles } from '../styles/pronunciation.styles.js';
+import { renderPronunciation } from '../utils/pronunciation-render.js';
 import './recording-status.js';
 
 export interface QuizTranscriptionResult {
@@ -36,6 +38,7 @@ export class QuizQuestionCard extends LitElement {
 
   static styles = [
     recordingStyles,
+    pronunciationStyles,
     css`
       :host {
         display: flex;
@@ -497,6 +500,7 @@ export class QuizQuestionCard extends LitElement {
                 <div class="sentence-pair">
                   <span class="sentence-label">Sentence:</span>
                   <div class="sentence-text">${sentence.sentence}</div>
+                  ${renderPronunciation(sentence.pronunciation)}
                   <div class="sentence-translation">${sentence.translation}</div>
                 </div>
               `
@@ -622,6 +626,7 @@ export class QuizQuestionCard extends LitElement {
           : html`
               <div class="question-text-container">
                 <div class="question-text">${displayText}</div>
+                ${renderPronunciation(this.question.sentence.pronunciation)}
                 <div class="question-actions">
                   <button
                     class="audio-replay-button"

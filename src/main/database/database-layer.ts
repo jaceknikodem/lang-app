@@ -1054,20 +1054,42 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   async insertDialogueVariant(
     sentenceId: number,
     variantSentence: string,
-    variantTranslation: string
+    variantTranslation: string,
+    variantPronunciation?: string
   ): Promise<number> {
     const db = this.getDb();
 
     try {
       const stmt = db.prepare(`
-        INSERT INTO dialogue_variants (sentence_id, variant_sentence, variant_translation)
-        VALUES (?, ?, ?)
+        INSERT INTO dialogue_variants (sentence_id, variant_sentence, variant_translation, variant_pronunciation)
+        VALUES (?, ?, ?, ?)
       `);
 
-      const result = stmt.run(sentenceId, variantSentence, variantTranslation);
+      const result = stmt.run(
+        sentenceId,
+        variantSentence,
+        variantTranslation,
+        variantPronunciation ?? null
+      );
       return result.lastInsertRowid as number;
     } catch (error) {
       throw wrapError(error, `Failed to insert dialogue variant`);
+    }
+  }
+
+  async updateDialogueVariantPronunciation(
+    variantId: number,
+    pronunciation: string
+  ): Promise<void> {
+    const db = this.getDb();
+
+    try {
+      const stmt = db.prepare(`
+        UPDATE dialogue_variants SET variant_pronunciation = ? WHERE id = ?
+      `);
+      stmt.run(pronunciation, variantId);
+    } catch (error) {
+      throw wrapError(error, `Failed to update dialogue variant pronunciation`);
     }
   }
   async getDialogueVariantsBySentenceId(
@@ -1095,6 +1117,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         sentenceId: row.sentence_id,
         variantSentence: row.variant_sentence,
         variantTranslation: row.variant_translation,
+        variantPronunciation: row.variant_pronunciation || undefined,
         createdAt: new Date(row.created_at),
         continuationText: row.continuation_text || undefined,
         continuationTranslation: row.continuation_translation || undefined,
@@ -1138,6 +1161,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         sentenceId: row.sentence_id,
         variantSentence: row.variant_sentence,
         variantTranslation: row.variant_translation,
+        variantPronunciation: row.variant_pronunciation || undefined,
         createdAt: new Date(row.created_at),
         continuationText: row.continuation_text || undefined,
         continuationTranslation: row.continuation_translation || undefined,

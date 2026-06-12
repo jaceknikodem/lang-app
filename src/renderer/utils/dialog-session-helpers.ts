@@ -19,6 +19,7 @@ export interface DialogSessionData {
     sentenceId: number;
     variantSentence: string;
     variantTranslation: string;
+    variantPronunciation?: string;
     createdAt: string;
   }>;
   isTopicBasedFlow?: boolean;
@@ -38,6 +39,7 @@ export function transformDialogSessionData(
       sentenceId: v.sentenceId,
       variantSentence: v.variantSentence,
       variantTranslation: v.variantTranslation,
+      variantPronunciation: v.variantPronunciation,
       createdAt: new Date(v.createdAt),
     }));
 
@@ -58,6 +60,7 @@ export function transformDialogSessionData(
         sentenceId: v.sentenceId,
         variantSentence: v.variantSentence,
         variantTranslation: v.variantTranslation,
+        variantPronunciation: v.variantPronunciation,
         createdAt: v.createdAt.toISOString(),
       })),
       createdAt: new Date().toISOString(),

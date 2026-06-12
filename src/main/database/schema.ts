@@ -146,9 +146,12 @@ export function initializeSchema(db: Database.Database): void {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       continuation_text TEXT,
       continuation_translation TEXT,
-      continuation_audio TEXT
+      continuation_audio TEXT,
+      variant_pronunciation TEXT
     )
   `);
+
+  addColumnIfNotExists(db, 'dialogue_variants', 'variant_pronunciation', 'TEXT');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS pronunciation_attempts (

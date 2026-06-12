@@ -65,6 +65,7 @@ export async function loadDialogSession(dialogCount: number): Promise<DialogLoad
                 sentenceId: v.sentenceId,
                 variantSentence: v.variantSentence,
                 variantTranslation: v.variantTranslation,
+                variantPronunciation: v.variantPronunciation,
                 createdAt: new Date(v.createdAt),
               })),
             };
@@ -143,6 +144,7 @@ export async function loadDialogSession(dialogCount: number): Promise<DialogLoad
           sentenceId: sentence.id,
           variantSentence: sentence.sentence,
           variantTranslation: sentence.translation,
+          variantPronunciation: sentence.pronunciation,
           createdAt: new Date(),
         };
         responseOptions = [originalVariant, ...variants.slice(0, 2)];
@@ -179,6 +181,7 @@ export async function loadDialogSession(dialogCount: number): Promise<DialogLoad
             sentenceId: v.sentenceId,
             variantSentence: v.variantSentence,
             variantTranslation: v.variantTranslation,
+            variantPronunciation: v.variantPronunciation,
             createdAt: v.createdAt.toISOString(),
           })),
           createdAt: new Date().toISOString(),

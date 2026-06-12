@@ -15,6 +15,7 @@ import { logger } from '../utils/logger.js';
 import { audioPlayer } from '../utils/audio-player-service.js';
 import { checkProficiencyLevel } from '../utils/app-initializer.js';
 import { hiraganaToRomaji } from '../utils/hiragana-romaji.js';
+import { renderPronunciation } from '../utils/pronunciation-render.js';
 
 @customElement('sentence-viewer')
 export class SentenceViewer extends LitElement {
@@ -698,16 +699,7 @@ export class SentenceViewer extends LitElement {
     return html`
       <div class="context-section ${isPlaying ? 'playing' : ''}" @click=${onClick}>
         <div class="context-text">${text}</div>
-        ${pronunciation && pronunciation.trim()
-          ? html`
-              <div class="context-pronunciation">
-                ${pronunciation}
-                <div class="word-reading-tooltip">
-                  <span class="tooltip-romaji">${hiraganaToRomaji(pronunciation)}</span>
-                </div>
-              </div>
-            `
-          : nothing}
+        ${renderPronunciation(pronunciation, 'context-pronunciation')}
         <div class="context-translation ${this.audioOnlyMode ? 'hidden' : ''}">${translation}</div>
       </div>
     `;
@@ -767,18 +759,7 @@ export class SentenceViewer extends LitElement {
           @add-to-set=${this.handleAddToLearningSet}
           @explain-grammar=${this.handleExplainGrammar}
         ></word-popup>
-        ${this.sentence.pronunciation && this.sentence.pronunciation.trim()
-          ? html`
-              <div class="sentence-pronunciation">
-                ${this.sentence.pronunciation}
-                <div class="word-reading-tooltip">
-                  <span class="tooltip-romaji"
-                    >${hiraganaToRomaji(this.sentence.pronunciation)}</span
-                  >
-                </div>
-              </div>
-            `
-          : nothing}
+        ${renderPronunciation(this.sentence.pronunciation)}
         <div class="sentence-translation ${this.audioOnlyMode ? 'hidden' : ''}">
           ${this.sentence.translation}
         </div>
