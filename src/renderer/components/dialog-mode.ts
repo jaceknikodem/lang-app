@@ -21,7 +21,6 @@ import './recording-status.js';
 import { checkProficiencyLevel } from '../utils/app-initializer.js';
 import {
   getSimilarityThresholds,
-  getSimilarityClass,
   type ProficiencyLevel,
 } from '../../shared/utils/similarity-threshold.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
@@ -29,17 +28,10 @@ import { BaseComponent } from './base-component.js';
 import { logger } from '../utils/logger.js';
 import { markdownToHtml } from '../utils/markdown-utils.js';
 import { startSpeechRecognitionCheck } from '../utils/speech-recognition-checker.js';
-
-// DialogueVariant is now imported from shared/types/core.js
-
-interface TranscriptionResult {
-  text: string;
-  similarity: number;
-  normalizedTranscribed: string;
-  normalizedExpected: string;
-  expectedWords: Array<{ word: string; similarity: number; matched: boolean }>;
-  transcribedWords: string[];
-}
+import { FollowUpController } from './follow-up-controller.js';
+import { loadDialogSession as loadDialogSessionService } from '../utils/dialog-session-service.js';
+import { type TranscriptionResult } from './dialog-bubbles.js';
+import './dialog-bubbles.js';
 
 @customElement('dialog-mode')
 export class DialogMode extends BaseComponent {
@@ -80,22 +72,37 @@ export class DialogMode extends BaseComponent {
   @state()
   private speechRecognitionReady = false;
 
-  @state()
-  private followUpText = '';
+  private followUp = new FollowUpController(this, {
+    getContext: () => {
+      if (!this.isTopicBasedFlow && !this.selectedOption) return null;
+      const userTranscription = this.transcriptionResult?.text;
+      if (!userTranscription) return null;
 
-  @state()
-  private followUpTranslation = '';
+      const variantId = this.isTopicBasedFlow
+        ? -(this.currentSentence?.id || 0)
+        : this.selectedOption?.id || 0;
 
-  @state()
-  private followUpAudio: string | null = null;
+      const conversationHistory: string[] = [];
+      if (this.currentSentence?.contextBefore)
+        conversationHistory.push(this.currentSentence.contextBefore);
+      if (this.currentSentence?.sentence) conversationHistory.push(this.currentSentence.sentence);
+      if (userTranscription) conversationHistory.push(userTranscription);
+      if (this.followUp.followUpText) conversationHistory.push(this.followUp.followUpText);
 
-  @state()
-  private showFollowUp = false;
+      return { variantId, conversationHistory };
+    },
+    onGenerated: () => {
+      if (this.followUp.followUpAudio && this.autoplayEnabled) {
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            void this.playFollowUpAudio();
+          }, 300);
+        });
+      }
+    },
+  });
 
   private recordedAudioPath: string | null = null;
-
-  @state()
-  private isGeneratingFollowUp = false;
 
   @state()
   private showTranslations = true;
@@ -158,19 +165,15 @@ export class DialogMode extends BaseComponent {
     // Reset dialog state
     this.transcriptionResult = null;
     this.selectedOption = null;
-    this.followUpText = '';
-    this.followUpTranslation = '';
-    this.followUpAudio = null;
-    this.showFollowUp = false;
-    this.isGeneratingFollowUp = false;
+    this.followUp.clear();
     this.isTranscribing = false;
     this.transcription.streamingTranscriptionText = null;
     this.recordedAudioPath = null;
     this.transcriptionAnalysis = null;
     this.isAnalyzingTranscription = false;
     this.transcriptionAnalysisSentenceId = null;
-    this.dialogCount = 0; // Reset dialog count on language change
-    this.dialogsWithAudio = 0; // Reset dialogs with audio count on language change
+    this.dialogCount = 0;
+    this.dialogsWithAudio = 0;
 
     // Reload dialog session for the new language
     await this.loadDialogSession();
@@ -248,334 +251,51 @@ export class DialogMode extends BaseComponent {
       this.currentSentence = null;
       this.responseOptions = [];
       this.selectedOption = null;
-      this.followUpText = '';
-      this.followUpTranslation = '';
-      this.followUpAudio = null;
-      this.showFollowUp = false;
+      this.followUp.clear();
       this.transcriptionResult = null;
       this.transcriptionAnalysis = null;
       this.isAnalyzingTranscription = false;
       this.transcriptionAnalysisSentenceId = null;
       this.recordedAudioPath = null;
 
-      // Check for cached dialog session first
-      const cachedSession = sessionManager.getCurrentDialogSession();
-
-      // Track initial total dialogs if not already set
       if (this.initialTotalDialogs === 0) {
         const session = sessionManager.getCurrentSession();
         this.initialTotalDialogs = session.dialogSessions?.length || 0;
-        console.log('[DialogMode] loadDialogSession - tracking initial total dialogs', {
-          initialTotal: this.initialTotalDialogs,
-        });
       }
 
-      if (cachedSession) {
-        console.log('[DialogMode] loadDialogSession - using cached session from session manager', {
-          sessionId: cachedSession.id,
-          sentenceId: cachedSession.sentenceId,
-          responseOptionsCount: cachedSession.responseOptions.length,
-          isTopicBasedFlow: cachedSession.isTopicBasedFlow,
-        });
-
-        // Reload autoplay setting to ensure it's up-to-date
-        await this.loadAutoplaySetting();
-        await this.loadShowTranslationsSetting();
-
-        // Get current language to verify cached session is for the correct language
-        const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
-
-        // Load from cache
-        try {
-          const sentences = await window.electronAPI.database.getSentencesByIds([
-            cachedSession.sentenceId,
-          ]);
-          const sentence = sentences && sentences.length > 0 ? sentences[0] : null;
-
-          if (!sentence) {
-            console.log(
-              '[DialogMode] loadDialogSession - cached session sentence not found in DB, discarding session',
-              {
-                sessionId: cachedSession.id,
-                cachedSentenceId: cachedSession.sentenceId,
-              }
-            );
-            sessionManager.consumeCurrentDialogSession();
-          } else if (sentence) {
-            // Verify the sentence's language matches the current language
-            const word = await window.electronAPI.database.getWordById(sentence.wordId);
-
-            if (word && word.language === currentLanguage) {
-              console.log('[DialogMode] loadDialogSession - cached session validated and loaded', {
-                sessionId: cachedSession.id,
-                sentenceId: sentence.id,
-                wordId: sentence.wordId,
-                language: currentLanguage,
-                responseOptionsCount: cachedSession.responseOptions.length,
-                isTopicBasedFlow: cachedSession.isTopicBasedFlow,
-              });
-              this.currentSentence = sentence;
-              this.beforeSentenceAudio = cachedSession.beforeSentenceAudio || null;
-              this.afterSentenceAudio = cachedSession.afterSentenceAudio || null;
-
-              // Set flow type from cached session
-              this.isTopicBasedFlow = cachedSession.isTopicBasedFlow ?? false;
-
-              // Load previous corrections from database for topic-based flow
-              if (this.isTopicBasedFlow) {
-                try {
-                  const language = await window.electronAPI.database.getCurrentLanguage();
-                  const corrections = await window.electronAPI.database.getDialogCorrections(
-                    sentence.id,
-                    language,
-                    3
-                  );
-                  this.previousCorrections = corrections
-                    .map((c) => c.correctionText)
-                    .filter((text) => text.length < 100);
-                } catch (error) {
-                  logger.warn({ error }, 'Failed to load dialog corrections from database');
-                  this.previousCorrections = [];
-                }
-              }
-
-              // Convert cached response options back to DialogueVariant format
-              this.responseOptions = cachedSession.responseOptions.map((v) => ({
-                id: v.id,
-                sentenceId: v.sentenceId,
-                variantSentence: v.variantSentence,
-                variantTranslation: v.variantTranslation,
-                createdAt: new Date(v.createdAt),
-              }));
-
-              // Don't consume yet - will be consumed when user completes the dialog (in nextDialog)
-              // This allows the session to persist if the user navigates away and comes back
-
-              this.isLoading = false;
-
-              // Auto-play trigger audio if available and autoplay is enabled
-              if (this.beforeSentenceAudio && this.autoplayEnabled) {
-                requestAnimationFrame(() => {
-                  setTimeout(() => {
-                    this.playBeforeSentence();
-                  }, 300);
-                });
-              }
-              return;
-            } else {
-              // Language mismatch - discard cached session
-              console.log(
-                '[DialogMode] loadDialogSession - language mismatch, discarding cached session',
-                {
-                  sessionId: cachedSession.id,
-                  sentenceId: sentence.id,
-                  wordLanguage: word?.language || 'NOT_FOUND',
-                  currentLanguage: currentLanguage,
-                }
-              );
-              sessionManager.consumeCurrentDialogSession();
-            }
-          }
-        } catch (error) {
-          logger.error(
-            {
-              error,
-              sessionId: cachedSession.id,
-              cachedSentenceId: cachedSession.sentenceId,
-            },
-            '[DialogMode] loadDialogSession - error during validation'
-          );
-          sessionManager.consumeCurrentDialogSession();
-        }
-      }
-
-      // No cached session - check if we should show summary or generate new one
-      const currentSession = sessionManager.getCurrentSession();
-      const hasNoMoreCachedSessions =
-        !currentSession.dialogSessions || currentSession.dialogSessions.length === 0;
-
-      // Check if currentDialogIndex is undefined (meaning we've consumed all sessions)
-      const indexIsUndefined = currentSession.currentDialogIndex === undefined;
-      const allSessionsConsumed =
-        hasNoMoreCachedSessions ||
-        (indexIsUndefined &&
-          currentSession.dialogSessions &&
-          currentSession.dialogSessions.length > 0);
-
-      // If we've completed at least one dialog and all sessions are consumed, show summary
-      if (allSessionsConsumed && this.dialogCount > 0) {
-        console.log(
-          '[DialogMode] loadDialogSession - all cached sessions exhausted, showing summary',
-          {
-            dialogCount: this.dialogCount,
-            hasNoMoreCachedSessions,
-            indexIsUndefined,
-            sessionLength: currentSession.dialogSessions?.length || 0,
-            currentIndex: currentSession.currentDialogIndex,
-          }
-        );
-        await this.showSessionSummary();
-        return;
-      }
-
-      // No cached session - generate new one
-      console.log('[DialogMode] loadDialogSession - no cached session, generating new');
-
-      // Reload autoplay setting to ensure it's up-to-date
       await this.loadAutoplaySetting();
       await this.loadShowTranslationsSetting();
 
-      // Randomly choose between old flow (variants) and new flow (topic-based/open-ended)
-      this.isTopicBasedFlow = Math.random() < 0.5;
+      const result = await loadDialogSessionService(this.dialogCount);
 
-      let sentence: Sentence | null = null;
-
-      if (this.isTopicBasedFlow) {
-        // Step 1: Select a sentence with a topic
-        sentence = await window.electronAPI.dialog.selectSentenceWithTopic();
-      } else {
-        // Step 1: Select a sentence with high word strengths (old flow)
-        sentence = await window.electronAPI.dialog.selectSentence();
-      }
-
-      if (!sentence) {
-        console.log('[DialogMode] loadDialogSession - no sentence available');
-        this.error = 'No sentences available for dialog practice. Please learn more words first.';
-        this.isLoading = false;
-        // Show a retry button
-        return;
-      }
-
-      console.log('[DialogMode] loadDialogSession - selected new sentence', {
-        sentenceId: sentence.id,
-        wordId: sentence.wordId,
-      });
-      this.currentSentence = sentence;
-
-      // Load previous corrections from database for topic-based flow
-      if (this.isTopicBasedFlow) {
-        try {
-          const language = await window.electronAPI.database.getCurrentLanguage();
-          const corrections = await window.electronAPI.database.getDialogCorrections(
-            sentence.id,
-            language,
-            3
-          );
-          this.previousCorrections = corrections
-            .map((c) => c.correctionText)
-            .filter((text) => text.length < 100);
-        } catch (error) {
-          logger.warn({ error }, 'Failed to load dialog corrections from database');
-          this.previousCorrections = [];
-        }
-      }
-
-      // Step 2: Prepare context sentences audio (beforeSentence and afterSentence)
-      try {
-        const contextAudio = await window.electronAPI.dialog.ensureContextSentences(sentence.id);
-        this.beforeSentenceAudio = contextAudio.beforeSentenceAudio || null;
-        this.afterSentenceAudio = contextAudio.afterSentenceAudio || null;
-      } catch (error) {
-        logger.warn({ error }, 'Failed to generate context sentences audio');
-        this.beforeSentenceAudio = null;
-        this.afterSentenceAudio = null;
-      }
-
-      // Step 3: Generate response options based on flow type
-      if (this.isTopicBasedFlow) {
-        // Topic-based flow: No variants needed
-        this.responseOptions = [];
-      } else {
-        // Old flow: Generate variants
-        try {
-          console.log('[DialogMode] loadDialogSession - generating variants', {
-            sentenceId: sentence.id,
-          });
-          const variants = await window.electronAPI.dialog.generateVariants(sentence.id);
-
-          console.log('[DialogMode] loadDialogSession - variants generated', {
-            sentenceId: sentence.id,
-            variantsCount: variants.length,
-            variantIds: variants.map((v) => v.id),
-          });
-
-          // Create a pseudo-variant for the original sentence (using negative ID to indicate it's the original)
-          const originalVariant: DialogueVariant = {
-            id: -sentence.id, // Negative ID to indicate it's the original sentence
-            sentenceId: sentence.id,
-            variantSentence: sentence.sentence,
-            variantTranslation: sentence.translation,
-            createdAt: new Date(),
-          };
-
-          // Combine target sentence with variants
-          this.responseOptions = [
-            originalVariant,
-            ...variants.slice(0, 2), // Take up to 2 variants
-          ];
-
-          // Shuffle options so target isn't always first
-          this.responseOptions.sort(() => Math.random() - 0.5);
-        } catch (error) {
-          logger.error({ error }, 'Failed to generate variants');
-          // Fallback: use only the target sentence
-          this.responseOptions = [
-            {
-              id: -sentence.id,
-              sentenceId: sentence.id,
-              variantSentence: sentence.sentence,
-              variantTranslation: sentence.translation,
-              createdAt: new Date(),
-            },
-          ];
-        }
-      }
-
-      this.isLoading = false;
-
-      // Save the generated session to cache so it persists across navigation
-      // Only save if we have response options
-      if (this.responseOptions && this.responseOptions.length > 0) {
-        try {
-          const dialogSession: import('../utils/session-manager.js').DialogSessionState = {
-            id: `dialog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            sentenceId: sentence.id,
-            sentence: sentence.sentence,
-            translation: sentence.translation,
-            contextBefore: sentence.contextBefore,
-            contextBeforeTranslation: sentence.contextBeforeTranslation,
-            contextAfter: sentence.contextAfter,
-            contextAfterTranslation: sentence.contextAfterTranslation,
-            beforeSentenceAudio: this.beforeSentenceAudio || undefined,
-            afterSentenceAudio: this.afterSentenceAudio || undefined,
-            responseOptions: this.responseOptions.map((v) => ({
-              id: v.id,
-              sentenceId: v.sentenceId,
-              variantSentence: v.variantSentence,
-              variantTranslation: v.variantTranslation,
-              createdAt: v.createdAt.toISOString(),
-            })),
-            createdAt: new Date().toISOString(),
-          };
-
-          // Add to cache (will set currentDialogIndex if it's the first session)
-          sessionManager.addDialogSession(dialogSession);
-        } catch (error) {
-          logger.error(
-            { error },
-            '[DialogMode] loadDialogSession - failed to save session to cache'
-          );
-        }
-      }
-
-      // Auto-play trigger audio if available and autoplay is enabled (after component updates)
-      if (this.beforeSentenceAudio && this.autoplayEnabled) {
-        // Use requestAnimationFrame to ensure component has rendered
-        requestAnimationFrame(() => {
-          setTimeout(() => {
-            this.playBeforeSentence();
-          }, 300);
-        });
+      switch (result.status) {
+        case 'loaded':
+          this.currentSentence = result.sentence;
+          this.beforeSentenceAudio = result.beforeSentenceAudio;
+          this.afterSentenceAudio = result.afterSentenceAudio;
+          this.isTopicBasedFlow = result.isTopicBasedFlow;
+          this.responseOptions = result.responseOptions;
+          this.previousCorrections = result.previousCorrections;
+          this.isLoading = false;
+          if (this.beforeSentenceAudio && this.autoplayEnabled) {
+            requestAnimationFrame(() => {
+              setTimeout(() => {
+                this.playBeforeSentence();
+              }, 300);
+            });
+          }
+          break;
+        case 'show_summary':
+          await this.showSessionSummary();
+          break;
+        case 'no_sentences':
+          this.error = 'No sentences available for dialog practice. Please learn more words first.';
+          this.isLoading = false;
+          break;
+        case 'error':
+          this.error = result.message;
+          this.isLoading = false;
+          break;
       }
     } catch (error) {
       logger.error({ error }, 'Failed to load dialog session');
@@ -618,7 +338,7 @@ export class DialogMode extends BaseComponent {
 
   private async playBeforeSentence() {
     // If continuation is generated, play all 3 in sequence: trigger, user recording, continuation
-    if (this.showFollowUp && this.recordedAudioPath && this.followUpAudio) {
+    if (this.followUp.showFollowUp && this.recordedAudioPath && this.followUp.followUpAudio) {
       try {
         // Stop any currently playing audio (both HTML5 and system audio)
         if (this.currentAudioElement) {
@@ -689,13 +409,13 @@ export class DialogMode extends BaseComponent {
         }
 
         // Play continuation audio and wait for it to complete
-        if (this.followUpAudio) {
+        if (this.followUp.followUpAudio) {
           try {
             logger.debug(
-              { audioPath: this.followUpAudio },
+              { audioPath: this.followUp.followUpAudio },
               '[DialogMode] Playing continuation audio'
             );
-            await window.electronAPI.audio.playAudio(this.followUpAudio);
+            await window.electronAPI.audio.playAudio(this.followUp.followUpAudio);
             logger.debug('[DialogMode] Continuation audio finished');
           } catch (error) {
             logger.error({ error }, 'Failed to play continuation audio');
@@ -798,20 +518,17 @@ export class DialogMode extends BaseComponent {
   }
 
   private async playFollowUpAudio() {
-    if (!this.followUpAudio) {
+    if (!this.followUp.followUpAudio) {
       return;
     }
 
     try {
       this.isAudioPlaying = true;
-      // Stop any currently playing audio
       if (this.currentAudioElement) {
         this.currentAudioElement.pause();
       }
-
-      // Play the audio
-      await window.electronAPI.audio.playAudio(this.followUpAudio);
-      this.isAudioPlaying = false; // Reset when audio finishes
+      await window.electronAPI.audio.playAudio(this.followUp.followUpAudio);
+      this.isAudioPlaying = false;
     } catch (error) {
       logger.error({ error }, 'Failed to play follow-up audio');
       this.isAudioPlaying = false;
@@ -840,14 +557,10 @@ export class DialogMode extends BaseComponent {
   }
 
   private async playLatestAssistantAudio() {
-    // Always prioritize the most recent assistant audio
-    // 1. Check for current follow-up audio (most recent)
-    if (this.followUpAudio) {
+    if (this.followUp.followUpAudio) {
       await this.playFollowUpAudio();
       return;
     }
-
-    // 2. Fallback to before sentence audio (initial trigger)
     if (this.beforeSentenceAudio) {
       await this.playBeforeSentence();
     }
@@ -888,7 +601,11 @@ export class DialogMode extends BaseComponent {
         key: CommonKeys.ENTER,
         action: () => {
           // Allow skipping dialog anytime, except during recording/transcription or when generating follow-up
-          if (!this.recording.isRecording && !this.isTranscribing && !this.isGeneratingFollowUp) {
+          if (
+            !this.recording.isRecording &&
+            !this.isTranscribing &&
+            !this.followUp.isGeneratingFollowUp
+          ) {
             this.nextDialog();
           }
         },
@@ -1041,7 +758,7 @@ export class DialogMode extends BaseComponent {
               )
             : Promise.resolve(null),
           // Follow-up generation
-          this.generateFollowUp(),
+          this.followUp.generate(),
         ]);
 
         // Handle transcription analysis result - only if it's still for the current sentence
@@ -1079,7 +796,7 @@ export class DialogMode extends BaseComponent {
         // Old flow: Only generate follow-up if similarity is high enough
         const thresholds = getSimilarityThresholds(this.currentProficiencyLevel);
         if (this.transcriptionResult.similarity >= thresholds.successThreshold) {
-          await this.generateFollowUp();
+          await this.followUp.generate();
         }
       }
       // If similarity is too low, show "Try Again" button next to the similarity badge
@@ -1097,162 +814,6 @@ export class DialogMode extends BaseComponent {
       this.isTranscribing = false;
       this.transcription.streamingTranscriptionText = null;
     }
-  }
-
-  /**
-   * Parse sentence text into words while preserving punctuation and whitespace
-   */
-  private parseSentenceWords(
-    text: string
-  ): Array<{ word: string; normalized: string; trailing: string; leading: string }> {
-    // Match words (Unicode letters and numbers) and capture surrounding whitespace/punctuation
-    const words: Array<{ word: string; normalized: string; trailing: string; leading: string }> =
-      [];
-    const wordRegex = /[\p{L}\p{N}]+/gu;
-    let lastIndex = 0;
-    let match;
-
-    while ((match = wordRegex.exec(text)) !== null) {
-      // Add any text before this word as leading
-      const leading = match.index > lastIndex ? text.substring(lastIndex, match.index) : '';
-
-      const normalized = match[0].toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
-      words.push({
-        word: match[0],
-        normalized,
-        trailing: '',
-        leading,
-      });
-
-      lastIndex = match.index + match[0].length;
-    }
-
-    // Add any remaining text as trailing from last word
-    if (lastIndex < text.length) {
-      const remaining = text.substring(lastIndex);
-      if (words.length > 0) {
-        words[words.length - 1].trailing = remaining;
-      }
-    }
-
-    return words;
-  }
-
-  /**
-   * Get word color based on similarity score
-   */
-  private getWordColor(wordInfo: { word: string; similarity: number; matched: boolean }): string {
-    if (!wordInfo.matched) {
-      return '#ffcccc'; // Light red for unmatched (visible on blue background)
-    } else if (wordInfo.similarity >= 0.9) {
-      return '#ccffcc'; // Light green for well-matched
-    } else {
-      return '#ffffcc'; // Light yellow for partial match
-    }
-  }
-
-  /**
-   * Unified helper method to render a user bubble
-   */
-  private renderUserBubble(
-    userText: string,
-    userTranslation: string,
-    similarity?: number,
-    expectedWords?: Array<{ word: string; similarity: number; matched: boolean }>
-  ): TemplateResult {
-    // Parse sentence into words if we have expectedWords for color coding
-    let bubbleTextContent: TemplateResult;
-    if (expectedWords && expectedWords.length > 0) {
-      const parsedWords = this.parseSentenceWords(userText);
-
-      // Match parsed words to expectedWords by position and normalized comparison
-      const wordElements: TemplateResult[] = [];
-      let expectedWordIndex = 0;
-
-      for (const parsedWord of parsedWords) {
-        let wordInfo: { word: string; similarity: number; matched: boolean } | null = null;
-
-        // Try to find matching expected word
-        if (expectedWordIndex < expectedWords.length) {
-          const expectedWord = expectedWords[expectedWordIndex];
-          // Normalize expected word for comparison (it's already normalized but may have slight differences)
-          const expectedNormalized = expectedWord.word.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
-
-          if (
-            parsedWord.normalized === expectedNormalized ||
-            parsedWord.normalized.startsWith(expectedNormalized) ||
-            expectedNormalized.startsWith(parsedWord.normalized)
-          ) {
-            wordInfo = expectedWord;
-            expectedWordIndex++;
-          } else {
-            // Try to find a match later in the array (in case of word order differences)
-            for (let i = expectedWordIndex + 1; i < expectedWords.length; i++) {
-              const otherExpected = expectedWords[i];
-              const otherNormalized = otherExpected.word
-                .toLowerCase()
-                .replace(/[^\p{L}\p{N}]/gu, '');
-              if (parsedWord.normalized === otherNormalized) {
-                wordInfo = otherExpected;
-                expectedWordIndex = i + 1;
-                break;
-              }
-            }
-          }
-        }
-
-        const color = wordInfo ? this.getWordColor(wordInfo) : 'white'; // Default to white if no match
-        wordElements.push(html`
-          ${parsedWord.leading}<span
-            style="color: ${color}; font-weight: ${wordInfo && !wordInfo.matched
-              ? 'bold'
-              : 'normal'};"
-          >
-            ${parsedWord.word} </span
-          >${parsedWord.trailing}
-        `);
-      }
-
-      bubbleTextContent = html`${wordElements}`;
-    } else {
-      // No color coding, render as plain text
-      bubbleTextContent = html`${userText}`;
-    }
-
-    return html`
-      <div class="dialog-bubble bubble-right">
-        <div class="bubble-content">
-          <div class="bubble-text-container">
-            <p class="bubble-text">${bubbleTextContent}</p>
-            ${similarity !== undefined
-              ? html`
-                  <span class="similarity-badge ${this.getSimilarityClass(similarity)}">
-                    ${Math.round(similarity * 100)}%
-                  </span>
-                `
-              : nothing}
-          </div>
-          ${this.showTranslations && userTranslation
-            ? html` <p class="bubble-translation">${userTranslation}</p> `
-            : nothing}
-          ${similarity !== undefined &&
-          (() => {
-            const thresholds = getSimilarityThresholds(this.currentProficiencyLevel);
-            return similarity < thresholds.successThreshold;
-          })()
-            ? html`
-                <button
-                  class="btn btn-primary try-again-button"
-                  @click=${this.recording.startRecording}
-                  style="margin-top: var(--spacing-sm); width: 100%;"
-                >
-                  Try Again
-                </button>
-              `
-            : nothing}
-        </div>
-      </div>
-    `;
   }
 
   /**
@@ -1357,76 +918,6 @@ export class DialogMode extends BaseComponent {
     `;
   }
 
-  private async generateFollowUp() {
-    if (this.isGeneratingFollowUp) {
-      logger.debug('[DialogMode] generateFollowUp - already generating, returning');
-      return;
-    }
-
-    // For topic-based flow, we don't have a selectedOption, so we need to create a pseudo-variant
-    // For old flow, we need selectedOption
-    if (!this.isTopicBasedFlow && !this.selectedOption) {
-      logger.warn('[DialogMode] generateFollowUp - no selectedOption for old flow, returning');
-      return;
-    }
-
-    // Get the user's actual transcription
-    const userTranscription = this.transcriptionResult?.text;
-    if (!userTranscription) {
-      logger.warn('[DialogMode] generateFollowUp - no user transcription, returning');
-      return;
-    }
-
-    try {
-      this.isGeneratingFollowUp = true;
-      // For topic-based flow, use the sentence ID as a negative ID (pseudo-variant)
-      // For old flow, use the selected variant's ID
-      const variantId = this.isTopicBasedFlow
-        ? -(this.currentSentence?.id || 0)
-        : this.selectedOption?.id || 0;
-
-      // Build conversation history from previous messages (in foreign language only)
-      const conversationHistory: string[] = [];
-      if (this.currentSentence?.contextBefore) {
-        conversationHistory.push(this.currentSentence.contextBefore);
-      }
-      if (this.currentSentence?.sentence) {
-        conversationHistory.push(this.currentSentence.sentence);
-      }
-      if (userTranscription) {
-        conversationHistory.push(userTranscription);
-      }
-      if (this.followUpText) {
-        conversationHistory.push(this.followUpText);
-      }
-
-      const followUp = await window.electronAPI.dialog.generateFollowUp(
-        variantId,
-        conversationHistory.length > 0 ? conversationHistory : undefined
-      );
-
-      this.followUpText = followUp.text || '';
-      this.followUpTranslation = followUp.translation || '';
-      this.followUpAudio = followUp.audio || null;
-      this.showFollowUp = true;
-
-      // Auto-play continuation audio if available and autoplay is enabled
-      if (this.followUpAudio && this.autoplayEnabled) {
-        requestAnimationFrame(() => {
-          setTimeout(() => {
-            this.playFollowUpAudio();
-          }, 300);
-        });
-      }
-    } catch (error) {
-      logger.error({ error }, 'Failed to generate follow-up');
-      this.followUpText = '';
-      this.followUpTranslation = '';
-    } finally {
-      this.isGeneratingFollowUp = false;
-    }
-  }
-
   private async nextDialog() {
     console.log('[DialogMode] nextDialog - user clicked next, consuming current session');
 
@@ -1455,15 +946,11 @@ export class DialogMode extends BaseComponent {
 
     this.transcriptionResult = null;
     this.selectedOption = null;
-    this.followUpText = '';
-    this.followUpTranslation = '';
-    this.followUpAudio = null;
-    this.showFollowUp = false;
+    this.followUp.clear();
     this.recordedAudioPath = null;
     this.transcriptionAnalysis = null;
     this.isAnalyzingTranscription = false;
     this.transcriptionAnalysisSentenceId = null;
-    // Keep previousCorrections - they persist across dialogs in the same session
 
     // Consume the current dialog session (mark it as used and advance to next)
     const currentSession = sessionManager.getCurrentDialogSession();
@@ -1565,10 +1052,6 @@ export class DialogMode extends BaseComponent {
     await this.finalizeTrackingSession(this.dialogsWithAudio, this.dialogCount);
   }
 
-  private getSimilarityClass(similarity: number): string {
-    return getSimilarityClass(similarity, this.currentProficiencyLevel);
-  }
-
   private goToTopicSelection() {
     router.goToTopicSelection();
   }
@@ -1667,7 +1150,7 @@ export class DialogMode extends BaseComponent {
                 <div class="translations-slider"></div>
               </div>
             </div>
-            ${this.beforeSentenceAudio || this.followUpAudio
+            ${this.beforeSentenceAudio || this.followUp.followUpAudio
               ? html`
                   <button
                     class="audio-replay-button"
@@ -1712,99 +1195,31 @@ export class DialogMode extends BaseComponent {
           </div>
         </div>
 
-        <div class="dialog-bubbles">
-          ${this.currentSentence.contextBefore
-            ? html`
-                <div class="dialog-bubble bubble-left">
-                  <div class="bubble-content">
-                    <p class="bubble-text">${this.currentSentence.contextBefore}</p>
-                    ${this.showTranslations && this.currentSentence.contextBeforeTranslation
-                      ? html`
-                          <p class="bubble-translation">
-                            ${this.currentSentence.contextBeforeTranslation}
-                          </p>
-                        `
-                      : nothing}
-                  </div>
-                </div>
-                ${this.isTopicBasedFlow && this.previousCorrections.length > 0
-                  ? html`
-                      <div class="previous-corrections">
-                        ${this.previousCorrections
-                          .filter((correction) => correction.length < 100)
-                          .map(
-                            (correction) => html`
-                              <div class="previous-correction-item">
-                                <span class="correction-label">💡</span>
-                                <span class="correction-text">${correction}</span>
-                              </div>
-                            `
-                          )}
-                      </div>
-                    `
-                  : nothing}
-              `
-            : nothing}
-          ${this.transcriptionResult
-            ? html`
-                ${this.renderUserBubble(
-                  this.transcriptionResult.text,
-                  this.isTopicBasedFlow ? '' : this.selectedOption?.variantTranslation || '',
-                  this.isTopicBasedFlow ? undefined : this.transcriptionResult.similarity,
-                  this.isTopicBasedFlow ? undefined : this.transcriptionResult.expectedWords
-                )}
-              `
-            : !this.isTopicBasedFlow && this.responseOptions.length > 0 && !this.transcriptionResult
-              ? html`
-                  <div class="response-options">
-                    ${this.responseOptions.map(
-                      (option, _index) => html`
-                        <div class="response-option">
-                          <p class="sentence">${option.variantSentence}</p>
-                          ${this.showTranslations
-                            ? html` <p class="translation">${option.variantTranslation}</p> `
-                            : nothing}
-                        </div>
-                      `
-                    )}
-                  </div>
-                `
-              : nothing}
-          ${this.isGeneratingFollowUp && !this.isTranscribing
-            ? html`
-                <div class="dialog-bubble bubble-left">
-                  <div class="bubble-content">
-                    <p class="bubble-text typing-indicator">
-                      <span class="typing-dot"></span>
-                      <span class="typing-dot"></span>
-                      <span class="typing-dot"></span>
-                    </p>
-                  </div>
-                </div>
-              `
-            : nothing}
-          ${this.showFollowUp && this.followUpText
-            ? html`
-                <div class="dialog-bubble bubble-left">
-                  <div class="bubble-content">
-                    <p class="bubble-text">${this.followUpText}</p>
-                    ${this.showTranslations && this.followUpTranslation
-                      ? html` <p class="bubble-translation">${this.followUpTranslation}</p> `
-                      : nothing}
-                  </div>
-                </div>
-              `
-            : nothing}
-        </div>
+        <dialog-bubbles
+          .sentence=${this.currentSentence}
+          .transcriptionResult=${this.transcriptionResult}
+          .followUpText=${this.followUp.followUpText}
+          .followUpTranslation=${this.followUp.followUpTranslation}
+          .showFollowUp=${this.followUp.showFollowUp}
+          .isGeneratingFollowUp=${this.followUp.isGeneratingFollowUp && !this.isTranscribing}
+          .isTopicBasedFlow=${this.isTopicBasedFlow}
+          .responseOptions=${this.responseOptions}
+          .selectedOption=${this.selectedOption}
+          .showTranslations=${this.showTranslations}
+          .previousCorrections=${this.previousCorrections}
+          .proficiencyLevel=${this.currentProficiencyLevel}
+          .isRecording=${this.recording.isRecording}
+          @start-recording=${this.recording.startRecording}
+        ></dialog-bubbles>
 
         ${this.renderRecordingSection()}
         ${this.isTopicBasedFlow && this.transcriptionAnalysis
           ? this.renderTranscriptionAnalysis()
           : nothing}
-        ${!this.isGeneratingFollowUp
+        ${!this.followUp.isGeneratingFollowUp
           ? html`
               <button
-                class="btn ${this.showFollowUp && this.followUpText
+                class="btn ${this.followUp.showFollowUp && this.followUp.followUpText
                   ? 'btn-primary'
                   : 'btn-secondary'}"
                 @click=${this.nextDialog}

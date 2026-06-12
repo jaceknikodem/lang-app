@@ -109,6 +109,17 @@ declare global {
         getNewWordCount: (language: string) => Promise<number>;
         resetLanguageProgress: (language: string) => Promise<void>;
         getTopicWordCounts: (language: string) => Promise<Array<{ topic: string; count: number }>>;
+        insertDialogCorrection: (data: {
+          sentenceId: number;
+          sessionId?: number;
+          correctionText: string;
+          language: string;
+        }) => Promise<void>;
+        getDialogCorrections: (
+          sentenceId: number,
+          language: string,
+          limit?: number
+        ) => Promise<Array<{ correctionText: string }>>;
       };
       llm: {
         generateWords: (topic: string | undefined, language: string) => Promise<GeneratedWord[]>;
@@ -311,6 +322,7 @@ declare global {
       };
       dialog: {
         selectSentence: () => Promise<Sentence | null>;
+        selectSentenceWithTopic: () => Promise<Sentence | null>;
         generateVariants: (sentenceId: number) => Promise<
           Array<{
             id: number;
@@ -321,7 +333,8 @@ declare global {
           }>
         >;
         generateFollowUp: (
-          variantId: number
+          variantId: number,
+          conversationHistory?: string[]
         ) => Promise<{ text: string; translation: string; audio?: string }>;
         ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
         ensureContextSentences: (
