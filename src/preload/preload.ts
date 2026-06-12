@@ -675,9 +675,11 @@ declare global {
         stopAudio: () => Promise<void>;
         audioExists: (audioPath: string) => Promise<boolean>;
         normalizeAudioVolume: (audioPath: string, targetDb?: number) => Promise<string | null>;
-        loadAudioBase64: (
-          audioPath: string
-        ) => Promise<{ data: ArrayBuffer; mimeType: string } | null>;
+        loadAudioBase64: (audioPath: string) => Promise<{
+          data: ArrayBuffer;
+          mimeType: string;
+          pauseEndTimestamps?: number[] | null;
+        } | null>;
         regenerateAudio: (options: {
           text: string;
           language: string;
@@ -721,7 +723,7 @@ declare global {
         restoreFromBackup: (backupPath: string) => Promise<void>;
         checkForUpdates: () => Promise<boolean>;
         getAppVersion: () => Promise<string>;
-        restartAll: () => Promise<void>;
+        restartAll: (language: string) => Promise<void>;
         openBackupDialog: () => Promise<string | null>;
         openBackupDirectory: () => Promise<void>;
         closeApp: () => Promise<void>;
@@ -807,10 +809,18 @@ declare global {
       };
       dialog: {
         selectSentence: () => Promise<any | null>;
+        selectSentenceWithTopic: () => Promise<any | null>;
         generateVariants: (sentenceId: number) => Promise<any[]>;
         generateFollowUp: (
-          variantId: number
+          variantId: number,
+          conversationHistory?: string[]
         ) => Promise<{ text: string; translation: string; audio?: string }>;
+        analyzeTranscription: (
+          transcription: string,
+          language: string,
+          assistantSentence: string,
+          topic?: string
+        ) => Promise<any>;
         ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
         ensureContextSentences: (
           sentenceId: number

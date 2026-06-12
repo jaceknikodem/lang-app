@@ -64,6 +64,17 @@ export class QuizQuestionCard extends LitElement {
         margin-bottom: var(--spacing-sm);
       }
 
+      .question-text-block {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex: 1;
+      }
+
+      .sentence-pronunciation-line {
+        display: block;
+      }
+
       .question-actions {
         display: flex;
         align-items: center;
@@ -76,7 +87,6 @@ export class QuizQuestionCard extends LitElement {
         font-weight: 500;
         color: var(--text-primary);
         line-height: 1.4;
-        flex: 1;
         text-align: center;
       }
 
@@ -500,7 +510,9 @@ export class QuizQuestionCard extends LitElement {
                 <div class="sentence-pair">
                   <span class="sentence-label">Sentence:</span>
                   <div class="sentence-text">${sentence.sentence}</div>
-                  ${renderPronunciation(sentence.pronunciation)}
+                  <div class="sentence-pronunciation-line">
+                    ${renderPronunciation(sentence.pronunciation)}
+                  </div>
                   <div class="sentence-translation">${sentence.translation}</div>
                 </div>
               `
@@ -625,8 +637,10 @@ export class QuizQuestionCard extends LitElement {
             `
           : html`
               <div class="question-text-container">
-                <div class="question-text">${displayText}</div>
-                ${renderPronunciation(this.question.sentence.pronunciation)}
+                <div class="question-text-block">
+                  <div class="question-text">${displayText}</div>
+                  ${renderPronunciation(this.question.sentence.pronunciation)}
+                </div>
                 <div class="question-actions">
                   <button
                     class="audio-replay-button"

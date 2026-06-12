@@ -708,7 +708,12 @@ export class DialogMode extends BaseComponent {
       this.transcription.streamingTranscriptionText = null;
 
       // Record pronunciation attempt in database (tracks full history)
-      if (this.currentSentence?.id && !this.isTopicBasedFlow && this.selectedOption) {
+      if (
+        this.currentSentence?.id &&
+        !this.isTopicBasedFlow &&
+        this.selectedOption &&
+        this.transcriptionResult
+      ) {
         try {
           await window.electronAPI.database.recordPronunciationAttempt(
             this.currentSentence.id,
@@ -797,7 +802,10 @@ export class DialogMode extends BaseComponent {
 
         // Old flow: Only generate follow-up if similarity is high enough
         const thresholds = getSimilarityThresholds(this.currentProficiencyLevel);
-        if (this.transcriptionResult.similarity >= thresholds.successThreshold) {
+        if (
+          this.transcriptionResult &&
+          this.transcriptionResult.similarity >= thresholds.successThreshold
+        ) {
           await this.followUp.generate();
         }
       }
@@ -821,7 +829,7 @@ export class DialogMode extends BaseComponent {
   /**
    * Render transcription analysis (correction and grammar explanation)
    */
-  private renderTranscriptionAnalysis(): TemplateResult {
+  private renderTranscriptionAnalysis(): TemplateResult | typeof nothing {
     // Show loading state if analysis is in progress
     if (this.isAnalyzingTranscription) {
       return html`
