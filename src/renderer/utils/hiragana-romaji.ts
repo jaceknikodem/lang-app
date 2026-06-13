@@ -126,18 +126,20 @@ export function hiraganaToRomaji(text: string): string {
   let i = 0;
 
   while (i < text.length) {
-    // っ: doubles the consonant of the next mora
+    // っ: doubles the consonant of the next mora (skip spaces when looking ahead)
     if (text[i] === 'っ') {
-      const next = text.slice(i + 1, i + 3);
+      let j = i + 1;
+      while (j < text.length && text[j] === ' ') j++;
+      const next = text.slice(j, j + 2);
       const digraph = DIGRAPHS[next];
       if (digraph) {
         result += digraph[0] + digraph;
-        i += 3;
+        i = j + 2;
       } else {
-        const single = SINGLE[text[i + 1]];
+        const single = SINGLE[text[j]];
         if (single) {
           result += single[0] + single;
-          i += 2;
+          i = j + 1;
         } else {
           result += text[i];
           i++;
