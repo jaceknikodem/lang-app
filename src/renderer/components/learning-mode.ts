@@ -18,6 +18,8 @@ import { BaseComponent } from './base-component.js';
 import { logger } from '../utils/logger.js';
 import { audioPlayer } from '../utils/audio-player-service.js';
 import { JobMonitorController } from './job-monitor-controller.js';
+import { AudioPlaybackController } from './audio-playback-controller.js';
+import { buildSentenceAudioSequence } from './sentence-audio-controller.js';
 import {
   WordWithSentences,
   loadSelectedWords,
@@ -87,6 +89,7 @@ export class LearningMode extends BaseComponent {
     onWordFailed: () =>
       this.showInfo('Sentence generation failed for a word. Please retry from the queue.', 'error'),
   });
+  private audio = new AudioPlaybackController(this);
 
   private infoTimeoutId: number | undefined;
   private currentSentenceDisplayLastSeen?: Date;
@@ -1032,55 +1035,14 @@ export class LearningMode extends BaseComponent {
     }
   }
 
-  private async ensureBeforeSentenceAudioLoaded(sentence: Sentence): Promise<void> {
-    if (!sentence.contextBefore || !sentence.id) {
-      return;
-    }
-    try {
-      const beforeSentenceAudioPath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(
-        sentence.id
-      );
-      if (beforeSentenceAudioPath) {
-        await audioPlayer.preload(beforeSentenceAudioPath);
-      }
-    } catch (error) {
-      logger.warn({ error }, `Failed to load before sentence audio`);
-    }
-  }
-
-  private async ensureAfterSentenceAudioLoaded(sentence: Sentence): Promise<void> {
-    if (!sentence.contextAfter || !sentence.id) {
-      return;
-    }
-    try {
-      const contextAudio = await window.electronAPI.dialog.ensureContextSentences(sentence.id);
-      if (contextAudio.afterSentenceAudio) {
-        await audioPlayer.preload(contextAudio.afterSentenceAudio);
-      }
-    } catch (error) {
-      logger.warn({ error }, `Failed to load after sentence audio`);
-    }
-  }
-
   private async ensureCurrentSentenceAudioLoaded(): Promise<void> {
     const currentSentence = this.getCurrentSentence();
-    if (!currentSentence?.audioPath) {
-      return;
-    }
-
+    if (!currentSentence?.audioPath) return;
     try {
-      await audioPlayer.preload(currentSentence.audioPath);
-
-      // Also ensure before and after sentence audio is loaded if they exist
-      if (currentSentence.contextBefore) {
-        await this.ensureBeforeSentenceAudioLoaded(currentSentence);
-      }
-      if (currentSentence.contextAfter) {
-        await this.ensureAfterSentenceAudioLoaded(currentSentence);
-      }
+      const { audioPaths } = await buildSentenceAudioSequence(currentSentence);
+      await audioPlayer.preloadMultiple(audioPaths);
     } catch (error) {
-      logger.warn({ error }, `Failed to load current sentence audio`);
-      // Continue anyway - will fall back to IPC playback
+      logger.warn({ error }, 'Failed to load current sentence audio');
     }
   }
 
@@ -1118,203 +1080,87 @@ export class LearningMode extends BaseComponent {
     });
   }
 
-  /**
-   * Pre-load all audio files for the review session into memory cache
-   * This allows instant playback without file system access
-   * Optimized: Skips already cached files and loads in parallel
-   */
   private async preloadReviewAudio(wordsWithSentences: WordWithSentences[]): Promise<void> {
     try {
-      // Collect all audio paths from all sentences (both main and before sentence audio)
-      const audioPaths: string[] = [];
-      const beforeSentencePromises: Promise<string | null>[] = [];
-
-      for (const wordWithSentences of wordsWithSentences) {
-        for (const sentence of wordWithSentences.sentences) {
-          // Collect main sentence audio
-          if (sentence.audioPath) {
-            audioPaths.push(sentence.audioPath);
-          }
-
-          // Collect before sentence audio if it exists
-          if (sentence.contextBefore && sentence.id) {
-            beforeSentencePromises.push(
-              window.electronAPI.dialog.ensureBeforeSentenceAudio(sentence.id).catch((err) => {
-                logger.warn(
-                  { error: err, sentenceId: sentence.id },
-                  `Failed to ensure before sentence audio`
-                );
-                return null;
-              })
-            );
-          }
-
-          // Collect after sentence audio if it exists
-          if (sentence.contextAfter && sentence.id) {
-            beforeSentencePromises.push(
-              window.electronAPI.dialog
-                .ensureContextSentences(sentence.id)
-                .then((contextAudio) => contextAudio.afterSentenceAudio || null)
-                .catch((err) => {
-                  logger.warn(
-                    { error: err, sentenceId: sentence.id },
-                    'Failed to ensure after sentence audio'
-                  );
-                  return null;
-                })
-            );
-          }
-        }
-      }
-
-      // Get before sentence audio paths
-      const beforeSentenceAudioPaths = await Promise.all(beforeSentencePromises);
-      for (const beforeAudioPath of beforeSentenceAudioPaths) {
-        if (beforeAudioPath && !audioPaths.includes(beforeAudioPath)) {
-          audioPaths.push(beforeAudioPath);
-        }
-      }
-
-      if (audioPaths.length === 0) {
-        return;
-      }
-
-      logger.debug(
-        { audioFileCount: audioPaths.length },
-        `Pre-loading ${audioPaths.length} audio files (including before sentence audio) into cache for review mode...`
+      const allPaths = new Set<string>();
+      const sentences = wordsWithSentences.flatMap((w) => w.sentences);
+      await Promise.all(
+        sentences.map((s) =>
+          buildSentenceAudioSequence(s)
+            .then(({ audioPaths }) => audioPaths.forEach((p) => allPaths.add(p)))
+            .catch((err) =>
+              logger.warn({ error: err }, 'Failed to build audio sequence for preload')
+            )
+        )
       );
-
-      await audioPlayer.preloadMultiple(audioPaths);
+      if (allPaths.size === 0) return;
+      logger.debug(
+        { audioFileCount: allPaths.size },
+        `Pre-loading ${allPaths.size} audio files into cache for review mode...`
+      );
+      await audioPlayer.preloadMultiple([...allPaths]);
       logger.debug('Audio cache ready');
     } catch (error) {
       logger.error({ error }, 'Error preloading audio');
-      // Don't fail review if audio caching fails - will fall back to file system
     }
   }
 
-  /**
-   * Play audio immediately - don't wait for loading
-   * When called manually (e.g., via space key), plays only the current sentence
-   */
   private async handlePlayCurrentAudio() {
     if (this.isLoading || this.error || this.showCompletion) return;
 
     const currentSentence = this.getCurrentSentence();
     const currentWord = this.getCurrentWord();
-    if (!currentSentence?.audioPath || !currentWord) {
-      return;
-    }
+    if (!currentSentence?.audioPath || !currentWord) return;
 
     try {
-      const currentAudioPath = currentSentence.audioPath;
-
-      // Stop any currently playing audio
       await this.stopCachedAudio();
 
-      // Track that audio has started for this sentence
       if (currentSentence.id) {
         this.lastSentenceWithAudioStarted = currentSentence.id;
       }
 
-      // Build sequence of audio paths (before, main, after)
-      const audioPaths: string[] = [];
-      const audioTypes: ('before' | 'main' | 'after')[] = [];
+      const { audioPaths, audioTypes } = await buildSentenceAudioSequence(currentSentence);
+      if (audioPaths.length === 0) return;
 
-      // Get before sentence audio if it exists
-      if (currentSentence.contextBefore && currentSentence.id) {
-        try {
-          const beforeSentenceAudioPath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(
-            currentSentence.id
-          );
-          if (beforeSentenceAudioPath) {
-            audioPaths.push(beforeSentenceAudioPath);
-            audioTypes.push('before');
-          }
-        } catch (error) {
-          logger.warn({ error }, 'Failed to get before sentence audio');
-        }
-      }
-
-      // Add main sentence audio
-      audioPaths.push(currentAudioPath);
-      audioTypes.push('main');
-
-      // Get after sentence audio if it exists
-      let afterSentenceAudioPath: string | undefined;
-      if (currentSentence.contextAfter && currentSentence.id) {
-        try {
-          const contextAudio = await window.electronAPI.dialog.ensureContextSentences(
-            currentSentence.id
-          );
-          afterSentenceAudioPath = contextAudio.afterSentenceAudio ?? undefined;
-          if (afterSentenceAudioPath) {
-            audioPaths.push(afterSentenceAudioPath);
-            audioTypes.push('after');
-          }
-        } catch (error) {
-          logger.warn({ error }, 'Failed to get after sentence audio');
-        }
-      }
-
-      // Track which audio is currently playing
       let currentIndex = 0;
-      if (audioTypes.length > 0) {
-        this.currentPlayingAudio = audioTypes[0];
-      }
+      this.currentPlayingAudio = audioTypes[0];
 
-      // Helper to track audio completion
-      const trackAudioCompletion = async () => {
-        // Increment strength when audio finishes playing
-        void this.incrementStrengthForWord(currentWord.id);
-        // Track sentence play count
-        if (currentSentence.id) {
-          void window.electronAPI.database
-            .incrementSentencePlayCount(currentSentence.id)
-            .catch((err) => {
-              logger.warn(
-                { error: err, sentenceId: currentSentence.id },
-                'Failed to increment sentence play count'
-              );
-            });
-        }
-        if (currentSentence.id && this.currentLanguage) {
-          this.trackAudioPlayback({
-            sentenceId: currentSentence.id,
-            audioPath: currentAudioPath,
-            language: this.currentLanguage,
-            mode: 'learning',
-            playbackSpeed: this.playbackSpeed,
-          });
-        }
-      };
-
-      // Play sequence
       await audioPlayer.playSequence(audioPaths, {
         playbackSpeed: this.playbackSpeed,
         onEnded: () => {
-          // Move to next audio in sequence
           currentIndex++;
           if (currentIndex < audioTypes.length) {
-            // Update UI to show next audio is playing
             this.currentPlayingAudio = audioTypes[currentIndex];
             this.requestUpdate();
           } else {
-            // All audio finished
             this.currentPlayingAudio = null;
             this.requestUpdate();
-
-            // Track completion
-            void trackAudioCompletion();
-
-            // Auto-scroll to next sentence after 1.5 seconds if enabled
+            void this.incrementStrengthForWord(currentWord.id);
+            if (currentSentence.id) {
+              void window.electronAPI.database
+                .incrementSentencePlayCount(currentSentence.id)
+                .catch((err) =>
+                  logger.warn(
+                    { error: err, sentenceId: currentSentence.id },
+                    'Failed to increment sentence play count'
+                  )
+                );
+            }
+            if (currentSentence.id && this.currentLanguage) {
+              this.trackAudioPlayback({
+                sentenceId: currentSentence.id,
+                audioPath: currentSentence.audioPath!,
+                language: this.currentLanguage,
+                mode: 'learning',
+                playbackSpeed: this.playbackSpeed,
+              });
+            }
             if (this.autoScrollEnabled) {
               this.clearAutoScrollTimer();
               this.autoScrollTimer = window.setTimeout(() => {
-                if (!this.isLastSentence()) {
-                  void this.goToNextSentence();
-                }
+                if (!this.isLastSentence()) void this.goToNextSentence();
                 this.autoScrollTimer = null;
-              }, 1500); // 1.5 seconds delay
+              }, 1500);
             }
           }
         },
@@ -1325,9 +1171,14 @@ export class LearningMode extends BaseComponent {
         },
       });
 
-      void audioPlayer.preload(currentAudioPath).catch((err) => {
-        logger.warn({ error: err, audioPath: currentAudioPath }, `Failed to preload audio`);
-      });
+      void audioPlayer
+        .preload(currentSentence.audioPath)
+        .catch((err) =>
+          logger.warn(
+            { error: err, audioPath: currentSentence.audioPath },
+            'Failed to preload audio'
+          )
+        );
     } catch (error) {
       logger.error({ error }, 'Failed to play audio');
       this.currentPlayingAudio = null;
@@ -1335,27 +1186,10 @@ export class LearningMode extends BaseComponent {
     }
   }
 
-  /**
-   * Stop currently playing audio
-   */
   private async stopCachedAudio(): Promise<void> {
-    // Clear auto-scroll timer when stopping audio
     this.clearAutoScrollTimer();
-
-    // Stop audio player
-    audioPlayer.stop();
-
-    // Reset audio playing state
     this.currentPlayingAudio = null;
-
-    // Also stop any IPC audio playback and wait for it to complete
-    try {
-      await window.electronAPI.audio.stopAudio();
-      // Small delay to ensure audio fully stops before starting new one
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    } catch {
-      // Ignore errors when stopping (might not be playing)
-    }
+    await this.audio.stop();
   }
 
   private handleSentenceAudioPlayed(event: CustomEvent<{ wordId?: number }>) {

@@ -5,6 +5,46 @@ import { sessionManager } from '../utils/session-manager.js';
 import { logger } from '../utils/logger.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
 
+export async function buildSentenceAudioSequence(sentence: Sentence): Promise<{
+  audioPaths: string[];
+  audioTypes: ('before' | 'main' | 'after')[];
+}> {
+  const audioPaths: string[] = [];
+  const audioTypes: ('before' | 'main' | 'after')[] = [];
+
+  if (sentence.contextBefore && sentence.id) {
+    try {
+      const beforePath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(sentence.id);
+      if (beforePath) {
+        audioPaths.push(beforePath);
+        audioTypes.push('before');
+      }
+    } catch (error) {
+      logger.warn({ error }, 'Failed to get before sentence audio');
+    }
+  }
+
+  if (sentence.audioPath) {
+    audioPaths.push(sentence.audioPath);
+    audioTypes.push('main');
+  }
+
+  if (sentence.contextAfter && sentence.id) {
+    try {
+      const contextAudio = await window.electronAPI.dialog.ensureContextSentences(sentence.id);
+      const afterPath = contextAudio.afterSentenceAudio;
+      if (afterPath) {
+        audioPaths.push(afterPath);
+        audioTypes.push('after');
+      }
+    } catch (error) {
+      logger.warn({ error }, 'Failed to get after sentence audio');
+    }
+  }
+
+  return { audioPaths, audioTypes };
+}
+
 export interface AudioHost extends ReactiveControllerHost {
   sentence: Sentence;
   targetWord: Word;
@@ -280,44 +320,7 @@ export class SentenceAudioController implements ReactiveController {
 
   // ─── private ────────────────────────────────────────────────────────────────
 
-  private async buildAudioSequence(): Promise<{
-    audioPaths: string[];
-    audioTypes: ('before' | 'main' | 'after')[];
-  }> {
-    const { sentence } = this.host;
-    const audioPaths: string[] = [];
-    const audioTypes: ('before' | 'main' | 'after')[] = [];
-
-    if (sentence.contextBefore && sentence.id) {
-      try {
-        const beforePath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(sentence.id);
-        if (beforePath) {
-          audioPaths.push(beforePath);
-          audioTypes.push('before');
-        }
-      } catch (error) {
-        logger.warn({ error }, 'Failed to get before sentence audio');
-      }
-    }
-
-    if (sentence.audioPath) {
-      audioPaths.push(sentence.audioPath);
-      audioTypes.push('main');
-    }
-
-    if (sentence.contextAfter && sentence.id) {
-      try {
-        const contextAudio = await window.electronAPI.dialog.ensureContextSentences(sentence.id);
-        const afterPath = contextAudio.afterSentenceAudio;
-        if (afterPath) {
-          audioPaths.push(afterPath);
-          audioTypes.push('after');
-        }
-      } catch (error) {
-        logger.warn({ error }, 'Failed to get after sentence audio');
-      }
-    }
-
-    return { audioPaths, audioTypes };
+  private buildAudioSequence() {
+    return buildSentenceAudioSequence(this.host.sentence);
   }
 }

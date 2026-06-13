@@ -15,6 +15,7 @@ import { sessionManager, type QuizSessionState } from '../utils/session-manager.
 import { useKeyboardBindings, GlobalShortcuts, CommonKeys } from '../utils/keyboard-manager.js';
 import { BaseComponent } from './base-component.js';
 import { audioPlayer } from '../utils/audio-player-service.js';
+import { AudioPlaybackController } from './audio-playback-controller.js';
 import './session-complete.js';
 import './progress-bar.js';
 import type { SessionSummary } from './session-complete.js';
@@ -69,6 +70,7 @@ export class QuizMode extends BaseComponent {
   });
 
   private transcription = new TranscriptionController(this);
+  private audio = new AudioPlaybackController(this);
 
   @state()
   private transcriptionResult: QuizTranscriptionResult | null = null;
@@ -703,15 +705,8 @@ export class QuizMode extends BaseComponent {
     }
   }
 
-  /**
-   * Stop currently playing audio
-   */
   private stopCachedAudio(): void {
-    audioPlayer.stop();
-    // Also stop any IPC audio playback
-    window.electronAPI.audio.stopAudio().catch(() => {
-      // Ignore errors when stopping
-    });
+    this.audio.stopSync();
   }
 
   private restartQuiz() {
