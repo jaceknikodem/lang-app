@@ -31,6 +31,8 @@ All tracking happens locally and never leaves your device. The app tracks:
 
 All data is stored in a local SQLite database and never transmitted anywhere.
 
+Audio files are cached locally under `~/Library/Application Support/KotobaAI/`. Each word generates ~10 WAV files (sentence audio, context clips, English translations), totalling roughly **~1 MB per word**.
+
 ## Intelligence of the System
 
 The app uses intelligent algorithms across four key areas:
