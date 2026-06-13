@@ -47,6 +47,9 @@ export class DialogMode extends BaseComponent {
   private responseOptions: DialogueVariant[] = [];
 
   @state()
+  private isLoadingVariants = false;
+
+  @state()
   private selectedOption: DialogueVariant | null = null;
 
   private recording = new RecordingController(this, {
@@ -274,6 +277,9 @@ export class DialogMode extends BaseComponent {
           this.responseOptions = result.responseOptions;
           this.previousCorrections = result.previousCorrections;
           this.isLoading = false;
+          if (!result.isTopicBasedFlow && result.responseOptions.length === 0) {
+            void this.loadVariantsAsync(result.sentence);
+          }
           if (this.beforeSentenceAudio && this.autoplayEnabled) {
             requestAnimationFrame(() => {
               setTimeout(() => {
@@ -298,6 +304,37 @@ export class DialogMode extends BaseComponent {
       logger.error({ error }, 'Failed to load dialog session');
       this.error = getErrorMessage(error, 'Failed to load dialog session');
       this.isLoading = false;
+    }
+  }
+
+  private async loadVariantsAsync(sentence: Sentence): Promise<void> {
+    this.isLoadingVariants = true;
+    try {
+      const variants = await window.electronAPI.dialog.generateVariants(sentence.id);
+      const originalVariant: DialogueVariant = {
+        id: -sentence.id,
+        sentenceId: sentence.id,
+        variantSentence: sentence.sentence,
+        variantTranslation: sentence.translation,
+        variantPronunciation: sentence.pronunciation,
+        createdAt: new Date(),
+      };
+      const options = [originalVariant, ...variants.slice(0, 2)];
+      options.sort(() => Math.random() - 0.5);
+      this.responseOptions = options;
+    } catch (error) {
+      logger.error({ error }, 'Failed to load variants');
+      this.responseOptions = [
+        {
+          id: -sentence.id,
+          sentenceId: sentence.id,
+          variantSentence: sentence.sentence,
+          variantTranslation: sentence.translation,
+          createdAt: new Date(),
+        },
+      ];
+    } finally {
+      this.isLoadingVariants = false;
     }
   }
 
@@ -1133,6 +1170,7 @@ export class DialogMode extends BaseComponent {
           .showFollowUp=${this.followUp.showFollowUp}
           .isGeneratingFollowUp=${this.followUp.isGeneratingFollowUp && !this.isTranscribing}
           .isTopicBasedFlow=${this.isTopicBasedFlow}
+          .isLoadingVariants=${this.isLoadingVariants}
           .responseOptions=${this.responseOptions}
           .selectedOption=${this.selectedOption}
           .showTranslations=${this.showTranslations}

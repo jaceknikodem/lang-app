@@ -27,6 +27,7 @@ export class DialogBubbles extends LitElement {
   @property({ type: Boolean }) showFollowUp = false;
   @property({ type: Boolean }) isGeneratingFollowUp = false;
   @property({ type: Boolean }) isTopicBasedFlow = false;
+  @property({ type: Boolean }) isLoadingVariants = false;
   @property({ attribute: false }) responseOptions: DialogueVariant[] = [];
   @property({ attribute: false }) selectedOption: DialogueVariant | null = null;
   @property({ type: Boolean }) showTranslations = true;
@@ -433,23 +434,33 @@ export class DialogBubbles extends LitElement {
               this.isTopicBasedFlow ? undefined : this.transcriptionResult.expectedWords
             )}
           `
-        : !this.isTopicBasedFlow && this.responseOptions.length > 0
+        : !this.isTopicBasedFlow && this.isLoadingVariants
           ? html`
               <div class="response-options">
-                ${this.responseOptions.map(
-                  (option) => html`
-                    <div class="response-option">
-                      <p class="sentence">${option.variantSentence}</p>
-                      ${renderPronunciation(option.variantPronunciation, 'context-pronunciation')}
-                      ${this.showTranslations
-                        ? html`<p class="translation">${option.variantTranslation}</p>`
-                        : nothing}
-                    </div>
-                  `
-                )}
+                <p class="translation typing-indicator">
+                  <span class="typing-dot"></span>
+                  <span class="typing-dot"></span>
+                  <span class="typing-dot"></span>
+                </p>
               </div>
             `
-          : nothing}
+          : !this.isTopicBasedFlow && this.responseOptions.length > 0
+            ? html`
+                <div class="response-options">
+                  ${this.responseOptions.map(
+                    (option) => html`
+                      <div class="response-option">
+                        <p class="sentence">${option.variantSentence}</p>
+                        ${renderPronunciation(option.variantPronunciation, 'context-pronunciation')}
+                        ${this.showTranslations
+                          ? html`<p class="translation">${option.variantTranslation}</p>`
+                          : nothing}
+                      </div>
+                    `
+                  )}
+                </div>
+              `
+            : nothing}
       ${this.isGeneratingFollowUp
         ? html`
             <div class="dialog-bubble bubble-left">

@@ -125,80 +125,44 @@ export async function loadDialogSession(dialogCount: number): Promise<DialogLoad
       }
     }
 
-    let beforeSentenceAudio: string | null = null;
-    let afterSentenceAudio: string | null = null;
-    try {
-      const contextAudio = await window.electronAPI.dialog.ensureContextSentences(sentence.id);
-      beforeSentenceAudio = contextAudio.beforeSentenceAudio || null;
-      afterSentenceAudio = contextAudio.afterSentenceAudio || null;
-    } catch (error) {
+    // Fire audio and variant generation in the background — don't block session display
+    window.electronAPI.dialog.ensureContextSentences(sentence.id).catch((error) => {
       logger.warn({ error }, 'Failed to generate context sentences audio');
-    }
+    });
 
-    let responseOptions: DialogueVariant[] = [];
     if (!isTopicBasedFlow) {
-      try {
-        const variants = await window.electronAPI.dialog.generateVariants(sentence.id);
-        const originalVariant: DialogueVariant = {
-          id: -sentence.id,
-          sentenceId: sentence.id,
-          variantSentence: sentence.sentence,
-          variantTranslation: sentence.translation,
-          variantPronunciation: sentence.pronunciation,
-          createdAt: new Date(),
-        };
-        responseOptions = [originalVariant, ...variants.slice(0, 2)];
-        responseOptions.sort(() => Math.random() - 0.5);
-      } catch (error) {
-        logger.error({ error }, 'Failed to generate variants');
-        responseOptions = [
-          {
-            id: -sentence.id,
-            sentenceId: sentence.id,
-            variantSentence: sentence.sentence,
-            variantTranslation: sentence.translation,
-            createdAt: new Date(),
-          },
-        ];
-      }
+      window.electronAPI.dialog.generateVariants(sentence.id).catch((error) => {
+        logger.warn({ error }, 'Failed to pre-warm variants in background');
+      });
     }
 
-    if (responseOptions.length > 0) {
-      try {
-        sessionManager.addDialogSession({
-          id: `dialog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          sentenceId: sentence.id,
-          sentence: sentence.sentence,
-          translation: sentence.translation,
-          contextBefore: sentence.contextBefore,
-          contextBeforeTranslation: sentence.contextBeforeTranslation,
-          contextAfter: sentence.contextAfter,
-          contextAfterTranslation: sentence.contextAfterTranslation,
-          beforeSentenceAudio: beforeSentenceAudio || undefined,
-          afterSentenceAudio: afterSentenceAudio || undefined,
-          responseOptions: responseOptions.map((v) => ({
-            id: v.id,
-            sentenceId: v.sentenceId,
-            variantSentence: v.variantSentence,
-            variantTranslation: v.variantTranslation,
-            variantPronunciation: v.variantPronunciation,
-            createdAt: v.createdAt.toISOString(),
-          })),
-          createdAt: new Date().toISOString(),
-          isTopicBasedFlow,
-        });
-      } catch (error) {
-        logger.error({ error }, '[DialogSessionService] failed to save session to cache');
-      }
+    try {
+      sessionManager.addDialogSession({
+        id: `dialog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        sentenceId: sentence.id,
+        sentence: sentence.sentence,
+        translation: sentence.translation,
+        contextBefore: sentence.contextBefore,
+        contextBeforeTranslation: sentence.contextBeforeTranslation,
+        contextAfter: sentence.contextAfter,
+        contextAfterTranslation: sentence.contextAfterTranslation,
+        beforeSentenceAudio: undefined,
+        afterSentenceAudio: undefined,
+        responseOptions: [],
+        createdAt: new Date().toISOString(),
+        isTopicBasedFlow,
+      });
+    } catch (error) {
+      logger.error({ error }, '[DialogSessionService] failed to save session to cache');
     }
 
     return {
       status: 'loaded',
       sentence,
-      beforeSentenceAudio,
-      afterSentenceAudio,
+      beforeSentenceAudio: null,
+      afterSentenceAudio: null,
       isTopicBasedFlow,
-      responseOptions,
+      responseOptions: [],
       previousCorrections,
     };
   } catch (error) {

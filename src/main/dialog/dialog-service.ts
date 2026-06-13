@@ -5,12 +5,7 @@
 
 import { DatabaseLayer } from '../../shared/types/database.js';
 import { LLMClient } from '../../shared/types/llm.js';
-import {
-  Sentence,
-  DialogueVariant,
-  DialogSession,
-  DialogResponseOption,
-} from '../../shared/types/core.js';
+import { Sentence, DialogueVariant, DialogSession } from '../../shared/types/core.js';
 import { getLogger } from '../utils/logger.js';
 import { Logger } from '../../shared/utils/logger.js';
 
@@ -18,20 +13,6 @@ export interface DialogServiceConfig {
   minWordStrength?: number;
   maxVariantsPerSentence?: number;
   maxKnownWordsForVariants?: number;
-}
-
-/**
- * Convert DialogueVariant to DialogResponseOption by extracting only the relevant fields
- */
-function toDialogResponseOption(variant: DialogueVariant): DialogResponseOption {
-  return {
-    id: variant.id,
-    sentenceId: variant.sentenceId,
-    variantSentence: variant.variantSentence,
-    variantTranslation: variant.variantTranslation,
-    variantPronunciation: variant.variantPronunciation,
-    createdAt: variant.createdAt,
-  };
 }
 
 /**
@@ -390,72 +371,23 @@ export class DialogService {
       );
 
       if (variantSentences.length > 0) {
-        // Extract known words once (used for all variant generations)
-        const knownWords = await this.database.getKnownWords(
-          language,
-          this.config.minWordStrength!,
-          this.config.maxKnownWordsForVariants!
-        );
-
-        // Batch query - get existing variants for all sentences at once
-        const sentenceIds = variantSentences.map((s) => s.id);
-        const allExistingVariantsMap = new Map<number, DialogueVariant[]>();
-
-        // Fetch existing variants for all sentences (can be done in parallel)
-        await Promise.all(
-          sentenceIds.map(async (sentenceId) => {
-            const variants = await this.database.getDialogueVariantsBySentenceId(sentenceId);
-            allExistingVariantsMap.set(sentenceId, variants);
-          })
-        );
-
-        // Process each variant-based sentence sequentially to avoid flooding the LLM service
         for (let i = 0; i < variantSentences.length && i < variantBasedIndices.length; i++) {
           const sentence = variantSentences[i];
           const index = variantBasedIndices[i];
 
-          try {
-            // Generate variants (LLM call)
-            const existingVariants = allExistingVariantsMap.get(sentence.id) || [];
-            const variants = await this.generateDialogueVariants(
-              sentence,
-              existingVariants,
-              knownWords,
-              language
-            );
-
-            // Create pseudo-variant for original sentence
-            const originalVariant = {
-              id: -sentence.id,
-              sentenceId: sentence.id,
-              variantSentence: sentence.sentence,
-              variantTranslation: sentence.translation,
-              variantPronunciation: sentence.pronunciation,
-              createdAt: new Date(),
-            };
-
-            // Combine response options
-            const responseOptions: DialogueVariant[] = shuffleAndTake(
-              [originalVariant, ...variants],
-              3 // original + up to 2 variants = 3 total
-            );
-
-            sessions[index] = {
-              sentenceId: sentence.id,
-              sentence: sentence.sentence,
-              translation: sentence.translation,
-              contextBefore: sentence.contextBefore,
-              contextBeforeTranslation: sentence.contextBeforeTranslation,
-              contextAfter: sentence.contextAfter,
-              contextAfterTranslation: sentence.contextAfterTranslation,
-              beforeSentenceAudio: undefined, // Will be set by IPC handler
-              afterSentenceAudio: undefined, // Will be set by IPC handler
-              responseOptions: responseOptions.map(toDialogResponseOption),
-              isTopicBasedFlow: false,
-            };
-          } catch {
-            // Continue with other sentences even if one fails
-          }
+          sessions[index] = {
+            sentenceId: sentence.id,
+            sentence: sentence.sentence,
+            translation: sentence.translation,
+            contextBefore: sentence.contextBefore,
+            contextBeforeTranslation: sentence.contextBeforeTranslation,
+            contextAfter: sentence.contextAfter,
+            contextAfterTranslation: sentence.contextAfterTranslation,
+            beforeSentenceAudio: undefined,
+            afterSentenceAudio: undefined,
+            responseOptions: [],
+            isTopicBasedFlow: false,
+          };
         }
       }
     }
