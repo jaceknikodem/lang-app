@@ -24,6 +24,7 @@ export class DialogBubbles extends LitElement {
   @property({ attribute: false }) transcriptionResult: TranscriptionResult | null = null;
   @property({ type: String }) followUpText = '';
   @property({ type: String }) followUpTranslation = '';
+  @property({ type: String }) followUpPronunciation = '';
   @property({ type: Boolean }) showFollowUp = false;
   @property({ type: Boolean }) isGeneratingFollowUp = false;
   @property({ type: Boolean }) isTopicBasedFlow = false;
@@ -479,6 +480,7 @@ export class DialogBubbles extends LitElement {
             <div class="dialog-bubble bubble-left">
               <div class="bubble-content">
                 <p class="bubble-text">${this.followUpText}</p>
+                ${renderPronunciation(this.followUpPronunciation, 'context-pronunciation')}
                 ${this.showTranslations && this.followUpTranslation
                   ? html`<p class="bubble-translation">${this.followUpTranslation}</p>`
                   : nothing}

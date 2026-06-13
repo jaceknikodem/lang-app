@@ -331,7 +331,7 @@ export interface IPCBridge {
     generateFollowUp: (
       variantId: number,
       conversationHistory?: string[]
-    ) => Promise<{ text: string; translation: string; audio?: string }>;
+    ) => Promise<{ text: string; translation: string; audio?: string; pronunciation?: string }>;
     analyzeTranscription: (
       transcription: string,
       language: string,

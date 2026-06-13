@@ -1979,6 +1979,7 @@ function setupDialogHandlers(
           text: followUp.text,
           translation: followUp.translation,
           audio: continuationAudio,
+          pronunciation: followUp.pronunciation,
         };
       },
       'generate follow-up'

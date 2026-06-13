@@ -340,7 +340,7 @@ declare global {
         generateFollowUp: (
           variantId: number,
           conversationHistory?: string[]
-        ) => Promise<{ text: string; translation: string; audio?: string }>;
+        ) => Promise<{ text: string; translation: string; audio?: string; pronunciation?: string }>;
         ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
         ensureContextSentences: (
           sentenceId: number

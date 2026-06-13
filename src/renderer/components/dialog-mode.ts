@@ -1167,6 +1167,7 @@ export class DialogMode extends BaseComponent {
           .transcriptionResult=${this.transcriptionResult}
           .followUpText=${this.followUp.followUpText}
           .followUpTranslation=${this.followUp.followUpTranslation}
+          .followUpPronunciation=${this.followUp.followUpPronunciation}
           .showFollowUp=${this.followUp.showFollowUp}
           .isGeneratingFollowUp=${this.followUp.isGeneratingFollowUp && !this.isTranscribing}
           .isTopicBasedFlow=${this.isTopicBasedFlow}

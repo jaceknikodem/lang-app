@@ -17,6 +17,7 @@ export class FollowUpController implements ReactiveController {
 
   followUpText = '';
   followUpTranslation = '';
+  followUpPronunciation = '';
   followUpAudio: string | null = null;
   showFollowUp = false;
   isGeneratingFollowUp = false;
@@ -50,6 +51,7 @@ export class FollowUpController implements ReactiveController {
 
       this.followUpText = followUp.text || '';
       this.followUpTranslation = followUp.translation || '';
+      this.followUpPronunciation = followUp.pronunciation || '';
       this.followUpAudio = followUp.audio || null;
       this.showFollowUp = true;
 
@@ -68,6 +70,7 @@ export class FollowUpController implements ReactiveController {
   clear(): void {
     this.followUpText = '';
     this.followUpTranslation = '';
+    this.followUpPronunciation = '';
     this.followUpAudio = null;
     this.showFollowUp = false;
     this.isGeneratingFollowUp = false;

@@ -246,7 +246,7 @@ export class DialogService {
     variantId: number,
     language: string,
     conversationHistory?: string[]
-  ): Promise<{ text: string; translation: string }> {
+  ): Promise<{ text: string; translation: string; pronunciation?: string }> {
     const variant = await this.getOrCreateVariant(variantId);
     if (!variant) {
       return { text: '', translation: '' };
@@ -265,42 +265,60 @@ export class DialogService {
       fullHistory.push(...conversationHistory);
     }
 
+    let followUpText: string;
+    let followUpTranslation: string;
+
     // Return cached continuation if available (only if no additional conversation history, as history changes the context)
     if (
       variant.continuationText &&
       variant.continuationTranslation &&
       (!conversationHistory || conversationHistory.length === 0)
     ) {
-      return {
-        text: variant.continuationText,
-        translation: variant.continuationTranslation,
-      };
-    }
+      followUpText = variant.continuationText;
+      followUpTranslation = variant.continuationTranslation;
+    } else {
+      const proficiencyLevel = await this.getProficiencyLevel(language);
 
-    const proficiencyLevel = await this.getProficiencyLevel(language);
+      // Use unified history-based approach
+      const result = await this.llmClient.generateFollowUp(fullHistory, language, proficiencyLevel);
+      followUpText = result.text;
+      followUpTranslation = result.translation;
 
-    // Use unified history-based approach
-    const result = await this.llmClient.generateFollowUp(fullHistory, language, proficiencyLevel);
-
-    // Cache the continuation for this variant (use actual variant ID, not the pseudo ID)
-    // Only cache if no additional conversation history was provided
-    if (
-      result.text &&
-      result.translation &&
-      (!conversationHistory || conversationHistory.length === 0)
-    ) {
-      try {
-        await this.database.updateDialogueVariantContinuation(
-          variant.id,
-          result.text,
-          result.translation
-        );
-      } catch (error) {
-        this.logger.warn({ error, variantId: variant.id }, 'Failed to cache continuation');
+      // Cache the continuation for this variant (use actual variant ID, not the pseudo ID)
+      // Only cache if no additional conversation history was provided
+      if (
+        followUpText &&
+        followUpTranslation &&
+        (!conversationHistory || conversationHistory.length === 0)
+      ) {
+        try {
+          await this.database.updateDialogueVariantContinuation(
+            variant.id,
+            followUpText,
+            followUpTranslation
+          );
+        } catch (error) {
+          this.logger.warn({ error, variantId: variant.id }, 'Failed to cache continuation');
+        }
       }
     }
 
-    return result;
+    // Generate pronunciation for supported languages (Japanese)
+    let pronunciation: string | undefined;
+    const lang = language.toLowerCase();
+    if (followUpText && (lang === 'japanese' || lang === 'ja')) {
+      try {
+        const pronunciations = await this.llmClient.convertToPronunciation(
+          [followUpText],
+          language
+        );
+        pronunciation = pronunciations[0] || undefined;
+      } catch (error) {
+        this.logger.warn({ error }, 'Failed to generate pronunciation for follow-up');
+      }
+    }
+
+    return { text: followUpText, translation: followUpTranslation, pronunciation };
   }
 
   /**
