@@ -67,43 +67,133 @@ export class KokoroAudioGenerator extends BaseAudioGenerator {
     return audioPath;
   }
 
-  private async callTTSEndpoint(
-    text: string,
-    language: string,
-    outputPath: string,
-    voiceId?: string
-  ): Promise<void> {
-    const voice = voiceId || this.getVoiceForLanguage(language);
-    const url = `${serviceConfig.lemmatization.serverUrl}/tts`;
+  async generateAudioBatch(
+    items: Array<{ text: string; language: string; outputPath: string; voiceId?: string }>
+  ): Promise<Array<{ outputPath: string; success: boolean; error?: string }>> {
+    if (items.length === 0) return [];
 
-    this.logger.debug({ voice, language, outputPath }, 'Calling Python TTS endpoint');
+    // Split into uncached (need generation) and cached (already on disk)
+    const toGenerate: typeof items = [];
+    const cached: Array<{ outputPath: string; success: boolean }> = [];
+    for (const item of items) {
+      if (await this.audioExists(item.outputPath)) {
+        cached.push({ outputPath: item.outputPath, success: true });
+      } else {
+        const dir = dirname(item.outputPath);
+        if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+        toGenerate.push(item);
+      }
+    }
+
+    if (toGenerate.length === 0) return cached;
+
+    const url = `${serviceConfig.lemmatization.serverUrl}/tts-batch`;
+    const payload = toGenerate.map((item) => ({
+      text: item.text,
+      language: item.language,
+      output_path: item.outputPath,
+      voice: item.voiceId || this.getVoiceForLanguage(item.language),
+    }));
 
     let response: Response;
     try {
       response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, language, output_path: outputPath, voice }),
-        signal: AbortSignal.timeout(60000),
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(120000),
       });
     } catch (error) {
-      throw createAudioError(
-        `TTS service unreachable: ${error instanceof Error ? error.message : String(error)}`,
-        'GENERATION_FAILED',
-        { cause: error }
-      );
+      // If batch endpoint is unreachable, mark all as failed
+      return [
+        ...cached,
+        ...toGenerate.map((item) => ({
+          outputPath: item.outputPath,
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        })),
+      ];
     }
 
     if (!response.ok) {
       const body = await response.json().catch(() => ({ detail: response.statusText }));
-      throw createAudioError(
-        `TTS generation failed: ${(body as { detail?: string }).detail ?? response.statusText}`,
-        'GENERATION_FAILED'
-      );
+      const errMsg = (body as { detail?: string }).detail ?? response.statusText;
+      return [
+        ...cached,
+        ...toGenerate.map((item) => ({ outputPath: item.outputPath, success: false, error: errMsg })),
+      ];
     }
 
-    if (!await this.audioExists(outputPath)) {
-      throw createAudioError(`File not found after TTS generation: ${outputPath}`, 'GENERATION_FAILED');
+    const data = (await response.json()) as {
+      results: Array<{ output_path?: string; success: boolean; error?: string }>;
+    };
+
+    const batchResults = data.results.map((r, i) => ({
+      outputPath: r.output_path ?? toGenerate[i].outputPath,
+      success: r.success,
+      error: r.error,
+    }));
+
+    return [...cached, ...batchResults];
+  }
+
+  async generateTextAudioRaw(
+    items: Array<{ text: string; language: string }>
+  ): Promise<Array<{ text: string; audioData: ArrayBuffer | null }>> {
+    if (items.length === 0) return [];
+
+    const url = `${serviceConfig.lemmatization.serverUrl}/tts-batch`;
+    const payload = items.map((item) => ({
+      text: item.text,
+      language: item.language,
+      voice: this.getVoiceForLanguage(item.language),
+      // no output_path → server returns audio_data
+    }));
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(120000),
+      });
+    } catch (error) {
+      this.logger.warn({ error }, 'TTS raw batch service unreachable');
+      return items.map((item) => ({ text: item.text, audioData: null }));
+    }
+
+    if (!response.ok) {
+      this.logger.warn({ status: response.status }, 'TTS raw batch failed');
+      return items.map((item) => ({ text: item.text, audioData: null }));
+    }
+
+    const data = (await response.json()) as {
+      results: Array<{ success: boolean; audio_data?: string; error?: string }>;
+    };
+
+    return data.results.map((r, i) => {
+      if (!r.success || !r.audio_data) return { text: items[i].text, audioData: null };
+      const binary = Buffer.from(r.audio_data, 'base64');
+      const arrayBuffer = new ArrayBuffer(binary.length);
+      new Uint8Array(arrayBuffer).set(binary);
+      return { text: items[i].text, audioData: arrayBuffer };
+    });
+  }
+
+  private async callTTSEndpoint(
+    text: string,
+    language: string,
+    outputPath: string,
+    voiceId?: string
+  ): Promise<void> {
+    const results = await this.generateAudioBatch([{ text, language, outputPath, voiceId }]);
+    const result = results[0];
+    if (!result?.success) {
+      throw createAudioError(
+        `TTS generation failed: ${result?.error ?? 'unknown error'}`,
+        'GENERATION_FAILED'
+      );
     }
   }
 

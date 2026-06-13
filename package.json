@@ -199,7 +199,7 @@
       "title": "Local Language Learning ${version}",
       "backgroundColor": "#ffffff",
       "window": {
-        "width": 900,
+        "width": 920,
         "height": 700
       },
       "contents": [

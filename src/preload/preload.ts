@@ -232,6 +232,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
         sentenceId,
         variantId
       ),
+    generateAudioBatch: (
+      items: Array<{ word: string; wordId: number; language: string; voiceId?: string }>
+    ) => ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GENERATE_AUDIO_BATCH, items),
+    generateTextAudioRaw: (items: Array<{ text: string; language: string }>) =>
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO.GENERATE_TEXT_AUDIO_RAW, items),
     playAudio: (audioPath: string) => ipcRenderer.invoke(IPC_CHANNELS.AUDIO.PLAY_AUDIO, audioPath),
     stopAudio: () => ipcRenderer.invoke(IPC_CHANNELS.AUDIO.STOP_AUDIO),
     audioExists: (audioPath: string) =>

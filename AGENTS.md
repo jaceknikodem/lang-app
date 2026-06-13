@@ -24,6 +24,7 @@
 - Use explicit exports, avoid default exports for classes/interfaces
 - Refactor large functions
 - Prefer modifying old code, rather than creating new similar functions.
+- **Python imports**: all `import` and `from … import` statements must appear at the top of the file, never inside functions or mid-file blocks. This applies to all `.py` files including FastAPI services.
 
 ### Async/Await
 - Always use async/await, never promise chains

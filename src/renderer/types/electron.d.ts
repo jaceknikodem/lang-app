@@ -155,6 +155,12 @@ declare global {
           sentenceId?: number,
           variantId?: number
         ) => Promise<string>;
+        generateAudioBatch: (
+          items: Array<{ word: string; wordId: number; language: string; voiceId?: string }>
+        ) => Promise<Array<{ wordId: number; audioPath: string | null; error?: string }>>;
+        generateTextAudioRaw: (
+          items: Array<{ text: string; language: string }>
+        ) => Promise<Array<{ text: string; audioData: ArrayBuffer | null }>>;
         playAudio: (audioPath: string) => Promise<void>;
         stopAudio: () => Promise<void>;
         audioExists: (audioPath: string) => Promise<boolean>;

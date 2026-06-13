@@ -1071,6 +1071,80 @@ export class AudioService {
   }
 
   /**
+   * Batch generate word audio in parallel via the /tts-batch endpoint (Kokoro only).
+   * Falls back to serial generation for non-Kokoro backends.
+   * Each item needs wordId so paths are deterministic and cacheable.
+   */
+  async generateWordAudioBatch(
+    items: Array<{ word: string; wordId: number; language: string; voiceId?: string }>
+  ): Promise<Array<{ wordId: number; audioPath: string | null; error?: string }>> {
+    if (this.database) {
+      await this.checkAndSwitchToAudioBackend(this.database);
+    }
+
+    const lang = items[0]?.language?.toLowerCase() ?? '';
+    const isKokoro = this.getTTSBackendForLanguage(lang) === 'kokoro';
+
+    if (isKokoro) {
+      if (!this.kokoroGenerator) {
+        this.kokoroGenerator = new KokoroAudioGenerator();
+      }
+      const audioDir = join(app.getPath('userData'), 'audio');
+      const batchItems = items.map((item) => ({
+        text: item.word,
+        language: item.language,
+        outputPath: join(audioDir, item.language.toLowerCase(), `word_${item.wordId}.wav`),
+        voiceId: item.voiceId,
+      }));
+
+      const results = await this.kokoroGenerator.generateAudioBatch(batchItems);
+      return results.map((r, i) => ({
+        wordId: items[i].wordId,
+        audioPath: r.success ? AudioService.getRelativeAudioPath(r.outputPath) : null,
+        error: r.error,
+      }));
+    }
+
+    // Non-Kokoro: fall back to serial
+    const results: Array<{ wordId: number; audioPath: string | null; error?: string }> = [];
+    for (const item of items) {
+      try {
+        const path = await this.generateAudio(item.word, item.language, item.word, item.wordId);
+        results.push({ wordId: item.wordId, audioPath: path });
+      } catch (err) {
+        results.push({ wordId: item.wordId, audioPath: null, error: String(err) });
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Batch generate audio for arbitrary text, returning raw WAV bytes — nothing written to disk.
+   * Kokoro only; returns null for unsupported backends.
+   */
+  async generateTextAudioRaw(
+    items: Array<{ text: string; language: string }>
+  ): Promise<Array<{ text: string; audioData: ArrayBuffer | null }>> {
+    if (items.length === 0) return [];
+
+    if (this.database) {
+      await this.checkAndSwitchToAudioBackend(this.database);
+    }
+
+    const lang = items[0].language.toLowerCase();
+    if (this.getTTSBackendForLanguage(lang) !== 'kokoro') {
+      return items.map((item) => ({ text: item.text, audioData: null }));
+    }
+
+    if (!this.kokoroGenerator) {
+      this.kokoroGenerator = new KokoroAudioGenerator();
+    }
+
+    const results = await this.kokoroGenerator.generateTextAudioRaw(items);
+    return results;
+  }
+
+  /**
    * Batch generate audio for multiple texts
    * Returns array of paths in same order as input
    */

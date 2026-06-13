@@ -464,6 +464,8 @@ export const IPC_CHANNELS = {
   },
   AUDIO: {
     GENERATE_AUDIO: 'audio:generateAudio',
+    GENERATE_AUDIO_BATCH: 'audio:generateAudioBatch',
+    GENERATE_TEXT_AUDIO_RAW: 'audio:generateTextAudioRaw',
     PLAY_AUDIO: 'audio:playAudio',
     STOP_AUDIO: 'audio:stopAudio',
     AUDIO_EXISTS: 'audio:audioExists',

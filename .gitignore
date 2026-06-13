@@ -160,3 +160,5 @@ test-results/*
 *.py
 !src/main/lemmatization/stanza-service.py
 *.bin
+.playwright-mcp
+data

@@ -3,12 +3,23 @@
 FastAPI service wrapping Stanza for lemmatization
 """
 
+import asyncio
+import os
+import random
+import sys
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+import soundfile as sf
+import stanza
+import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from kokoro_onnx import Kokoro
+from misaki import ja as misaki_ja
 from pydantic import BaseModel
 from typing import List, Dict, Optional
-import stanza
-import sys
 from wordfreq import zipf_frequency
 
 app = FastAPI(title="Stanza Lemmatization Service")
@@ -250,9 +261,6 @@ async def freqword(request: FreqWordRequest):
         )
 
 
-import os
-from pathlib import Path
-
 # ---------------------------------------------------------------------------
 # Kokoro TTS
 # ---------------------------------------------------------------------------
@@ -280,7 +288,6 @@ VOICES_BY_LANGUAGE: dict[str, list[str]] = {
 }
 
 def _get_voice_for_language(language: str) -> str:
-    import random
     voices = VOICES_BY_LANGUAGE.get(language.lower(), ['af_heart'])
     return random.choice(voices)
 
@@ -294,7 +301,6 @@ _KOKORO_VOICES_URL = (
 )
 
 def _download_file(url: str, dest: Path, label: str) -> Path:
-    import urllib.request
     if dest.exists():
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -320,8 +326,6 @@ def _get_voices_path() -> Path:
 def _get_kokoro():
     global _kokoro
     if _kokoro is None:
-        from kokoro_onnx import Kokoro
-
         print("[TTS] Loading Kokoro ONNX model...", flush=True)
         model_path = _get_model_path()
         voices_path = _get_voices_path()
@@ -332,8 +336,7 @@ def _get_kokoro():
 def _get_ja_g2p():
     global _ja_g2p
     if _ja_g2p is None:
-        from misaki import ja
-        _ja_g2p = ja.JAG2P()
+        _ja_g2p = misaki_ja.JAG2P()
     return _ja_g2p
 
 # Maps language name/code → espeak-ng language code used by kokoro-onnx phonemizer
@@ -351,45 +354,61 @@ LANG_TO_ESPEAK: dict[str, str] = {
 }
 
 
-class TTSRequest(BaseModel):
+class TTSBatchItem(BaseModel):
     text: str
     language: str
-    output_path: str
+    output_path: Optional[str] = None  # omit to get audio_data back instead
     voice: Optional[str] = None
 
-class TTSResponse(BaseModel):
+class TTSBatchResultItem(BaseModel):
     success: bool
+    output_path: Optional[str] = None
+    audio_data: Optional[str] = None  # base64-encoded WAV, when output_path is omitted
+    error: Optional[str] = None
 
-@app.post("/tts", response_model=TTSResponse)
-async def text_to_speech(request: TTSRequest):
+class TTSBatchResponse(BaseModel):
+    results: List[TTSBatchResultItem]
+
+def _run_inference(text: str, language: str, voice: str):
+    lang = language.lower()
+    kokoro = _get_kokoro()
+    if lang in ('japanese', 'ja'):
+        ipa = _get_ja_g2p()(text)
+        return kokoro.create(ipa, voice=voice, is_phonemes=True)
+    else:
+        return kokoro.create(text, voice=voice, lang=LANG_TO_ESPEAK.get(lang, 'en-us'))
+
+def _generate_one(item: TTSBatchItem) -> TTSBatchResultItem:
+    import io, base64
     try:
-        import soundfile as sf
-        lang = request.language.lower()
-        is_japanese = lang in ('japanese', 'ja')
+        voice = item.voice or _get_voice_for_language(item.language)
+        audio, sample_rate = _run_inference(item.text, item.language, voice)
 
-        voice = request.voice or _get_voice_for_language(lang)
-        kokoro = _get_kokoro()
-
-        if is_japanese:
-            g2p = _get_ja_g2p()
-            ipa = g2p(request.text)
-            audio, sample_rate = kokoro.create(ipa, voice=voice, is_phonemes=True)
+        if item.output_path:
+            out = Path(item.output_path)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            sf.write(str(out), audio, sample_rate)
+            return TTSBatchResultItem(success=True, output_path=item.output_path)
         else:
-            espeak_lang = LANG_TO_ESPEAK.get(lang, 'en-us')
-            audio, sample_rate = kokoro.create(request.text, voice=voice, lang=espeak_lang)
-
-        out = Path(request.output_path)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        sf.write(str(out), audio, sample_rate)
-        return {"success": True}
+            buf = io.BytesIO()
+            sf.write(buf, audio, sample_rate, format='WAV')
+            return TTSBatchResultItem(
+                success=True,
+                audio_data=base64.b64encode(buf.getvalue()).decode('utf-8'),
+            )
     except Exception as e:
-        print(f"[TTS] Generation failed: {e}", file=sys.stderr)
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[TTS] Generation failed for '{item.text}': {e}", file=sys.stderr)
+        return TTSBatchResultItem(success=False, output_path=item.output_path, error=str(e))
+
+@app.post("/tts-batch", response_model=TTSBatchResponse)
+async def text_to_speech_batch(requests: List[TTSBatchItem]):
+    loop = asyncio.get_event_loop()
+    with ThreadPoolExecutor(max_workers=len(requests)) as pool:
+        futures = [loop.run_in_executor(pool, _generate_one, item) for item in requests]
+        results = await asyncio.gather(*futures)
+    return TTSBatchResponse(results=list(results))
 
 
 if __name__ == "__main__":
-    import uvicorn
     port = int(os.environ.get("STANZA_PORT", "8888"))
     uvicorn.run(app, host="127.0.0.1", port=port)
-
-

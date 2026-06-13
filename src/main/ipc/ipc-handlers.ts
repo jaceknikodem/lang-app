@@ -933,6 +933,44 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
   );
 
   ipcMain.handle(
+    IPC_CHANNELS.AUDIO.GENERATE_AUDIO_BATCH,
+    createIPCHandler(
+      [
+        z.array(
+          z.object({
+            word: z.string().min(1),
+            wordId: z.number().int().positive(),
+            language: z.string().min(1),
+            voiceId: z.string().optional(),
+          })
+        ),
+      ],
+      async (items) => {
+        return await audioService.generateWordAudioBatch(items);
+      },
+      'generate audio batch'
+    )
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.AUDIO.GENERATE_TEXT_AUDIO_RAW,
+    createIPCHandler(
+      [
+        z.array(
+          z.object({
+            text: z.string().min(1),
+            language: z.string().min(1),
+          })
+        ),
+      ],
+      async (items) => {
+        return await audioService.generateTextAudioRaw(items);
+      },
+      'generate text audio raw'
+    )
+  );
+
+  ipcMain.handle(
     IPC_CHANNELS.AUDIO.PLAY_AUDIO,
     createIPCHandler(
       AudioPathSchema,

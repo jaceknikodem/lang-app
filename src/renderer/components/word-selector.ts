@@ -60,6 +60,7 @@ export class WordSelector extends LitElement {
   @state()
   private wordReadings: Record<string, string> = {}; // word -> hiragana reading (Japanese only)
 
+  private wordAudioData: Map<string, ArrayBuffer> = new Map(); // word text -> raw WAV bytes
   private keyboardUnsubscribe?: () => void;
   private autoNavigateTimeout?: number;
 
@@ -83,6 +84,7 @@ export class WordSelector extends LitElement {
       this.initializeWords();
       this.fetchZipfFrequencies();
       this.fetchWordReadings();
+      void this.prefetchWordAudio();
     }
   }
 
@@ -95,6 +97,7 @@ export class WordSelector extends LitElement {
       clearTimeout(this.autoNavigateTimeout);
     }
     window.removeEventListener('language-changed', this.handleExternalLanguageChange);
+    this.wordAudioData.clear();
   }
 
   private initializeWords() {
@@ -145,6 +148,32 @@ export class WordSelector extends LitElement {
     }
   }
 
+  private async prefetchWordAudio() {
+    if (this.generatedWords.length === 0) return;
+    try {
+      const items = this.generatedWords.map((w) => ({ text: w.word, language: this.language }));
+      const results = await window.electronAPI.audio.generateTextAudioRaw(items);
+      for (const result of results) {
+        if (result.audioData) {
+          this.wordAudioData.set(result.text, result.audioData);
+        }
+      }
+    } catch (error) {
+      console.warn('[WordSelector] Failed to prefetch word audio:', error);
+    }
+  }
+
+  private playWordAudio(word: string) {
+    const audioData = this.wordAudioData.get(word);
+    if (!audioData) return;
+
+    const blob = new Blob([audioData], { type: 'audio/wav' });
+    const blobUrl = URL.createObjectURL(blob);
+    const audio = new Audio(blobUrl);
+    audio.addEventListener('ended', () => URL.revokeObjectURL(blobUrl));
+    audio.play().catch(() => URL.revokeObjectURL(blobUrl));
+  }
+
   private handleExternalLanguageChange = async (event: Event) => {
     const detail = (event as CustomEvent<{ language?: string }>).detail;
     const newLanguage = detail?.language;
@@ -165,6 +194,9 @@ export class WordSelector extends LitElement {
     const word = this.selectableWords[index];
     if (word && !word.markedAsKnown) {
       word.selected = !word.selected;
+      if (word.selected) {
+        this.playWordAudio(word.word);
+      }
       this.requestUpdate();
     }
   }
