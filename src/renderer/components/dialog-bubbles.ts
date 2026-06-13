@@ -25,6 +25,7 @@ export class DialogBubbles extends LitElement {
   @property({ type: String }) followUpText = '';
   @property({ type: String }) followUpTranslation = '';
   @property({ type: String }) followUpPronunciation = '';
+  @property({ type: String }) followUpAudio: string | null = null;
   @property({ type: Boolean }) showFollowUp = false;
   @property({ type: Boolean }) isGeneratingFollowUp = false;
   @property({ type: Boolean }) isTopicBasedFlow = false;
@@ -528,7 +529,21 @@ export class DialogBubbles extends LitElement {
         : nothing}
       ${this.showFollowUp && this.followUpText
         ? html`
-            <div class="dialog-bubble bubble-left">
+            <div
+              class="dialog-bubble bubble-left ${this.followUpAudio ? 'has-audio' : ''}"
+              @click=${() => {
+                if (this.followUpAudio) {
+                  this.dispatchEvent(
+                    new CustomEvent('play-variant-audio', {
+                      detail: { audioPath: this.followUpAudio },
+                      bubbles: true,
+                      composed: true,
+                    })
+                  );
+                }
+              }}
+              title=${this.followUpAudio ? 'Click to hear pronunciation' : ''}
+            >
               <div class="bubble-content">
                 <p class="bubble-text">${this.followUpText}</p>
                 ${renderPronunciation(this.followUpPronunciation, 'context-pronunciation')}

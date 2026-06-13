@@ -516,16 +516,6 @@ export class DialogMode extends BaseComponent {
     }
   }
 
-  private async playLatestAssistantAudio() {
-    if (this.followUp.followUpAudio) {
-      await this.playFollowUpAudio();
-      return;
-    }
-    if (this.beforeSentenceAudio) {
-      await this.playBeforeSentence();
-    }
-  }
-
   private setupKeyboardBindings() {
     const bindings = [
       // Recording
@@ -534,17 +524,6 @@ export class DialogMode extends BaseComponent {
         action: () => this.toggleRecording(),
         context: 'dialog',
         description: 'Toggle pronunciation recorder',
-      },
-      // Audio replay (speaker button)
-      {
-        key: CommonKeys.SPACE,
-        action: () => {
-          if (this.beforeSentenceAudio && !this.recording.isRecording) {
-            this.playBeforeSentence();
-          }
-        },
-        context: 'dialog',
-        description: 'Play trigger audio',
       },
       // Toggle translation visibility
       {
@@ -1118,19 +1097,6 @@ export class DialogMode extends BaseComponent {
                 <div class="translations-slider"></div>
               </div>
             </div>
-            ${this.beforeSentenceAudio || this.followUp.followUpAudio
-              ? html`
-                  <button
-                    class="audio-replay-button"
-                    @click=${this.playLatestAssistantAudio}
-                    ?disabled=${this.recording.isRecording}
-                    title="Replay latest assistant audio"
-                    aria-label="Replay latest assistant audio"
-                  >
-                    <span aria-hidden="true">🔊</span>
-                  </button>
-                `
-              : nothing}
             ${(this.isTopicBasedFlow || this.responseOptions.length > 0) &&
             !this.transcriptionResult
               ? html`
@@ -1169,6 +1135,7 @@ export class DialogMode extends BaseComponent {
           .followUpText=${this.followUp.followUpText}
           .followUpTranslation=${this.followUp.followUpTranslation}
           .followUpPronunciation=${this.followUp.followUpPronunciation}
+          .followUpAudio=${this.followUp.followUpAudio ?? null}
           .showFollowUp=${this.followUp.showFollowUp}
           .isGeneratingFollowUp=${this.followUp.isGeneratingFollowUp && !this.isTranscribing}
           .isTopicBasedFlow=${this.isTopicBasedFlow}
