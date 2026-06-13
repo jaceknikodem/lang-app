@@ -54,7 +54,7 @@ default_model = "gemini-3.1-flash-lite"
 # Gemini model for word generation and pronunciation (~500 tokens/10-word session)
 fast_model = "gemini-3.1-flash-lite"
 # Gemini model for sentence generation (~5k tokens/10-word session)
-full_model = "gemini-3.1-flash-lite"
+full_model = "gemini-2.5-flash"
 # Gemini request timeout in milliseconds
 timeout = 30000
 
