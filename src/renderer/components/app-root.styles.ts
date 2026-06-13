@@ -5,7 +5,7 @@ export const appRootStyles = css`
     display: block;
     width: 100%;
     height: 100vh;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans', sans-serif;
   }
 
   .app-container {

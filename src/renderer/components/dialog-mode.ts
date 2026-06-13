@@ -317,6 +317,7 @@ export class DialogMode extends BaseComponent {
         variantSentence: sentence.sentence,
         variantTranslation: sentence.translation,
         variantPronunciation: sentence.pronunciation,
+        variantSentenceAudio: sentence.audioPath || undefined,
         createdAt: new Date(),
       };
       const options = [originalVariant, ...variants.slice(0, 2)];
@@ -1177,8 +1178,16 @@ export class DialogMode extends BaseComponent {
           .showTranslations=${this.showTranslations}
           .previousCorrections=${this.previousCorrections}
           .proficiencyLevel=${this.currentProficiencyLevel}
+          .beforeSentenceAudio=${this.beforeSentenceAudio}
           .isRecording=${this.recording.isRecording}
           @start-recording=${this.recording.startRecording}
+          @play-variant-audio=${(e: CustomEvent<{ audioPath: string }>) => {
+            if (!this.isAudioPlaying && !this.recording.isRecording) {
+              void window.electronAPI.audio.playAudio(e.detail.audioPath).catch((err) => {
+                logger.warn({ error: err }, 'Failed to play variant audio');
+              });
+            }
+          }}
         ></dialog-bubbles>
 
         ${this.renderRecordingSection()}

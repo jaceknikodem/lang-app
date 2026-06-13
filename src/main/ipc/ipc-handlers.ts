@@ -1895,12 +1895,38 @@ function setupDialogHandlers(
           .map((w) => w.word);
 
         // Generate variants
-        return await dialogService.generateDialogueVariants(
+        const variants = await dialogService.generateDialogueVariants(
           sentence,
           existingVariants,
           knownWords,
           language
         );
+
+        // Batch-generate TTS audio for each variant sentence
+        const variantsWithAudio = await Promise.all(
+          variants.map(async (variant) => {
+            try {
+              const audioPath = await audioService.generateAudio(
+                variant.variantSentence,
+                language,
+                '_variant_sentence',
+                undefined,
+                undefined,
+                variant.id
+              );
+              return { ...variant, variantSentenceAudio: audioPath };
+            } catch (audioError) {
+              const logger = getLogger();
+              logger.warn(
+                { error: audioError, variantId: variant.id },
+                '[IPC] Failed to generate variant sentence audio'
+              );
+              return variant;
+            }
+          })
+        );
+
+        return variantsWithAudio;
       },
       'generate dialogue variants'
     )

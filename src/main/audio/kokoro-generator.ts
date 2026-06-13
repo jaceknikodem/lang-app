@@ -216,6 +216,10 @@ export class KokoroAudioGenerator extends BaseAudioGenerator {
   ): string {
     const lang = language.toLowerCase();
 
+    if (variantId !== undefined && word === '_variant_sentence') {
+      return join(this.audioDirectory, lang, `variant_sentence_${variantId}${this.fileExtension}`);
+    }
+
     if (variantId !== undefined) {
       return join(this.audioDirectory, lang, `variant_${variantId}${this.fileExtension}`);
     }

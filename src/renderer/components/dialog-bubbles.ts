@@ -35,6 +35,7 @@ export class DialogBubbles extends LitElement {
   @property({ attribute: false }) previousCorrections: string[] = [];
   @property({ attribute: false }) proficiencyLevel: ProficiencyLevel | null = null;
   @property({ type: Boolean }) isRecording = false;
+  @property({ type: String }) beforeSentenceAudio: string | null = null;
 
   static styles = [
     pronunciationStyles,
@@ -60,6 +61,15 @@ export class DialogBubbles extends LitElement {
         align-self: flex-start;
         background: var(--background-secondary);
         border-top-left-radius: 4px;
+      }
+
+      .bubble-left.has-audio {
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+
+      .bubble-left.has-audio:hover {
+        background: color-mix(in srgb, var(--background-secondary) 80%, var(--primary-color) 20%);
       }
 
       .bubble-right {
@@ -212,6 +222,19 @@ export class DialogBubbles extends LitElement {
         border-radius: var(--border-radius-small);
         border: 1px solid #ccc;
         background: var(--background-primary);
+        cursor: pointer;
+        transition:
+          background 0.15s ease,
+          border-color 0.15s ease;
+      }
+
+      .response-option:hover {
+        background: var(--background-secondary);
+        border-color: var(--primary-color);
+      }
+
+      .response-option.has-audio:active {
+        background: color-mix(in srgb, var(--primary-color) 10%, var(--background-primary));
       }
 
       .response-option .sentence {
@@ -394,7 +417,21 @@ export class DialogBubbles extends LitElement {
     return html`
       ${this.sentence?.contextBefore
         ? html`
-            <div class="dialog-bubble bubble-left">
+            <div
+              class="dialog-bubble bubble-left ${this.beforeSentenceAudio ? 'has-audio' : ''}"
+              @click=${() => {
+                if (this.beforeSentenceAudio) {
+                  this.dispatchEvent(
+                    new CustomEvent('play-variant-audio', {
+                      detail: { audioPath: this.beforeSentenceAudio },
+                      bubbles: true,
+                      composed: true,
+                    })
+                  );
+                }
+              }}
+              title=${this.beforeSentenceAudio ? 'Click to hear pronunciation' : ''}
+            >
               <div class="bubble-content">
                 <p class="bubble-text">${this.sentence.contextBefore}</p>
                 ${renderPronunciation(
@@ -450,7 +487,21 @@ export class DialogBubbles extends LitElement {
                 <div class="response-options">
                   ${this.responseOptions.map(
                     (option) => html`
-                      <div class="response-option">
+                      <div
+                        class="response-option ${option.variantSentenceAudio ? 'has-audio' : ''}"
+                        @click=${() => {
+                          if (option.variantSentenceAudio) {
+                            this.dispatchEvent(
+                              new CustomEvent('play-variant-audio', {
+                                detail: { audioPath: option.variantSentenceAudio },
+                                bubbles: true,
+                                composed: true,
+                              })
+                            );
+                          }
+                        }}
+                        title=${option.variantSentenceAudio ? 'Click to hear pronunciation' : ''}
+                      >
                         <p class="sentence">${option.variantSentence}</p>
                         ${renderPronunciation(option.variantPronunciation, 'context-pronunciation')}
                         ${this.showTranslations

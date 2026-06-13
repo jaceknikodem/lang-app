@@ -145,6 +145,7 @@ export interface DialogueVariant {
   continuationText?: string;
   continuationTranslation?: string;
   continuationAudio?: string;
+  variantSentenceAudio?: string;
 }
 
 export interface DialogResponseOption {

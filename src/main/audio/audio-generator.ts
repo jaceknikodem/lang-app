@@ -89,6 +89,11 @@ export class TTSAudioGenerator extends BaseAudioGenerator {
    * Requires wordId for word/sentence audio, variantId for continuation audio, or uses text hash for custom text
    */
   private getAudioPath(text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number): string {
+    if (variantId !== undefined && word === '_variant_sentence') {
+      // Variant sentence audio: /audio/<lang>/variant_sentence_<variant_id>.<extension>
+      return join(this.config.audioDirectory, language, `variant_sentence_${variantId}${this.config.fileExtension}`);
+    }
+
     if (variantId !== undefined) {
       // Continuation audio: /audio/<lang>/variant_<variant_id>.<extension>
       return join(this.config.audioDirectory, language, `variant_${variantId}${this.config.fileExtension}`);
