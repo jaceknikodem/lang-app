@@ -43,8 +43,8 @@ export class DialogService {
    * Select a sentence for dialog practice
    * All filtering and random selection is handled at the database level for efficiency
    */
-  async selectSentence(language: string): Promise<Sentence | null> {
-    const sentence = await this.database.getRandomDialogSentence(language);
+  async selectSentence(language: string, excludeIds?: number[]): Promise<Sentence | null> {
+    const sentence = await this.database.getRandomDialogSentence(language, excludeIds);
 
     return sentence;
   }
@@ -53,8 +53,8 @@ export class DialogService {
    * Select a sentence with a topic for topic-based dialog flow
    * Prefers sentences with non-zero audio playback
    */
-  async selectSentenceWithTopic(language: string): Promise<Sentence | null> {
-    const sentence = await this.database.getRandomSentenceWithTopic(language);
+  async selectSentenceWithTopic(language: string, excludeIds?: number[]): Promise<Sentence | null> {
+    const sentence = await this.database.getRandomSentenceWithTopic(language, excludeIds);
 
     return sentence;
   }
@@ -352,15 +352,20 @@ export class DialogService {
     const sessions: DialogSession[] = new Array(count);
 
     // Step 3: Process topic-based sessions
+    const usedSentenceIds: number[] = [];
     if (topicBasedIndices.length > 0) {
       for (const index of topicBasedIndices) {
         try {
-          const sentence = await this.database.getRandomSentenceWithTopic(language);
+          const sentence = await this.database.getRandomSentenceWithTopic(
+            language,
+            usedSentenceIds
+          );
           if (!sentence) {
             // If no topic-based sentence available, skip this session
             continue;
           }
 
+          usedSentenceIds.push(sentence.id);
           sessions[index] = {
             sentenceId: sentence.id,
             sentence: sentence.sentence,
@@ -382,10 +387,11 @@ export class DialogService {
 
     // Step 4: Process variant-based sessions (batch query for efficiency)
     if (variantBasedIndices.length > 0) {
-      // Batch query - get all variant-based sentences at once
+      // Batch query - get all variant-based sentences at once, excluding already-selected ones
       const variantSentences = await this.database.getRandomDialogSentences(
         variantBasedIndices.length,
-        language
+        language,
+        usedSentenceIds.length > 0 ? usedSentenceIds : undefined
       );
 
       if (variantSentences.length > 0) {

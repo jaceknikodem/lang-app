@@ -325,8 +325,8 @@ export interface IPCBridge {
 
   // Dialog operations
   dialog: {
-    selectSentence: () => Promise<Sentence | null>;
-    selectSentenceWithTopic: () => Promise<Sentence | null>;
+    selectSentence: (excludeIds?: number[]) => Promise<Sentence | null>;
+    selectSentenceWithTopic: (excludeIds?: number[]) => Promise<Sentence | null>;
     generateVariants: (sentenceId: number) => Promise<DialogueVariant[]>;
     generateFollowUp: (
       variantId: number,

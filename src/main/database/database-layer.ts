@@ -1499,11 +1499,15 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get flow sentences`);
     }
   }
-  async getRandomDialogSentence(language: string): Promise<Sentence | null> {
-    const results = await this.getRandomDialogSentences(1, language);
+  async getRandomDialogSentence(language: string, excludeIds?: number[]): Promise<Sentence | null> {
+    const results = await this.getRandomDialogSentences(1, language, excludeIds);
     return results[0] ?? null;
   }
-  async getRandomDialogSentences(count: number, language: string): Promise<Sentence[]> {
+  async getRandomDialogSentences(
+    count: number,
+    language: string,
+    excludeIds?: number[]
+  ): Promise<Sentence[]> {
     const db = this.getDb();
 
     try {
@@ -1511,21 +1515,26 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         return [];
       }
 
-      // Batch query: filter by language, ignored = FALSE, contextBefore exists and is not empty
-      // Randomly select multiple results
+      const excludeClause =
+        excludeIds && excludeIds.length > 0
+          ? `AND s.id NOT IN (${excludeIds.map(() => '?').join(',')})`
+          : '';
+
       const stmt = db.prepare(`
-        SELECT DISTINCT s.* 
+        SELECT DISTINCT s.*
         FROM sentences s
         INNER JOIN words w ON s.word_id = w.id
         WHERE s.language = ?
           AND w.ignored = FALSE
           AND s.context_before IS NOT NULL
           AND TRIM(s.context_before) != ''
+          ${excludeClause}
         ORDER BY RANDOM()
         LIMIT ?
       `);
 
-      const rows = stmt.all(language, count) as any[];
+      const params: unknown[] = [language, ...(excludeIds ?? []), count];
+      const rows = stmt.all(...params) as any[];
 
       return rows.map((row) => this.mapRowToSentence(row));
     } catch (error) {
@@ -1589,26 +1598,33 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get dialog corrections`);
     }
   }
-  async getRandomSentenceWithTopic(language: string): Promise<Sentence | null> {
+  async getRandomSentenceWithTopic(
+    language: string,
+    excludeIds?: number[]
+  ): Promise<Sentence | null> {
     const db = this.getDb();
 
     try {
-      // Query: Select random sentence where word.topic IS NOT NULL AND word.topic != ''
-      // Prefer sentences with non-zero audio playback (play_count > 0)
-      // Order by: play_count DESC, then random selection
+      const excludeClause =
+        excludeIds && excludeIds.length > 0
+          ? `AND s.id NOT IN (${excludeIds.map(() => '?').join(',')})`
+          : '';
+
       const stmt = db.prepare(`
-        SELECT DISTINCT s.* 
+        SELECT DISTINCT s.*
         FROM sentences s
         INNER JOIN words w ON s.word_id = w.id
         WHERE s.language = ?
           AND w.ignored = FALSE
           AND w.topic IS NOT NULL
           AND TRIM(w.topic) != ''
+          ${excludeClause}
         ORDER BY s.play_count DESC, RANDOM()
         LIMIT 1
       `);
 
-      const row = stmt.get(language) as any;
+      const params: unknown[] = [language, ...(excludeIds ?? [])];
+      const row = stmt.get(...params) as any;
 
       if (!row) {
         return null;

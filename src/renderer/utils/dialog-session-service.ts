@@ -94,14 +94,19 @@ export async function loadDialogSession(dialogCount: number): Promise<DialogLoad
       return { status: 'show_summary' };
     }
 
-    // Generate a fresh session
+    // Generate a fresh session, excluding sentences already seen this session
     const isTopicBasedFlow = Math.random() < 0.5;
+    const excludeIds = (currentSession.dialogSessions ?? []).map((s) => s.sentenceId);
 
     let sentence: Sentence | null = null;
     if (isTopicBasedFlow) {
-      sentence = await window.electronAPI.dialog.selectSentenceWithTopic();
+      sentence = await window.electronAPI.dialog.selectSentenceWithTopic(
+        excludeIds.length > 0 ? excludeIds : undefined
+      );
     } else {
-      sentence = await window.electronAPI.dialog.selectSentence();
+      sentence = await window.electronAPI.dialog.selectSentence(
+        excludeIds.length > 0 ? excludeIds : undefined
+      );
     }
 
     if (!sentence) {

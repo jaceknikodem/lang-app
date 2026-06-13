@@ -1845,13 +1845,15 @@ function setupDialogHandlers(
 ): void {
   const dialogService = new DialogService(databaseLayer, llmClient);
 
+  const ExcludeIdsSchema = z.array(z.number().int().nonnegative()).optional();
+
   ipcMain.handle(
     IPC_CHANNELS.DIALOG.SELECT_SENTENCE,
     createIPCHandler(
-      undefined,
-      async () => {
+      ExcludeIdsSchema,
+      async (excludeIds) => {
         const language = await databaseLayer.getCurrentLanguage();
-        return await dialogService.selectSentence(language);
+        return await dialogService.selectSentence(language, excludeIds);
       },
       'select sentence for dialog'
     )
@@ -1860,10 +1862,10 @@ function setupDialogHandlers(
   ipcMain.handle(
     IPC_CHANNELS.DIALOG.SELECT_SENTENCE_WITH_TOPIC,
     createIPCHandler(
-      undefined,
-      async () => {
+      ExcludeIdsSchema,
+      async (excludeIds) => {
         const language = await databaseLayer.getCurrentLanguage();
-        return await dialogService.selectSentenceWithTopic(language);
+        return await dialogService.selectSentenceWithTopic(language, excludeIds);
       },
       'select sentence with topic for dialog'
     )

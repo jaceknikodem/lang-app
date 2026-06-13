@@ -198,9 +198,13 @@ export interface DatabaseLayer {
   getRandomSentenceForWord(wordId: number): Promise<Sentence | null>;
 
   // Dialog-specific operations
-  getRandomDialogSentence(language: string): Promise<Sentence | null>;
-  getRandomDialogSentences(count: number, language: string): Promise<Sentence[]>;
-  getRandomSentenceWithTopic(language: string): Promise<Sentence | null>;
+  getRandomDialogSentence(language: string, excludeIds?: number[]): Promise<Sentence | null>;
+  getRandomDialogSentences(
+    count: number,
+    language: string,
+    excludeIds?: number[]
+  ): Promise<Sentence[]>;
+  getRandomSentenceWithTopic(language: string, excludeIds?: number[]): Promise<Sentence | null>;
   updateSentenceRelatedWords(sentenceId: number, relatedWords: string[]): Promise<void>;
 
   // Settings management

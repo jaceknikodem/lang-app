@@ -417,9 +417,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Dialog operations
   dialog: {
-    selectSentence: () => ipcRenderer.invoke(IPC_CHANNELS.DIALOG.SELECT_SENTENCE),
-    selectSentenceWithTopic: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.DIALOG.SELECT_SENTENCE_WITH_TOPIC),
+    selectSentence: (excludeIds?: number[]) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DIALOG.SELECT_SENTENCE, excludeIds),
+    selectSentenceWithTopic: (excludeIds?: number[]) =>
+      ipcRenderer.invoke(IPC_CHANNELS.DIALOG.SELECT_SENTENCE_WITH_TOPIC, excludeIds),
     generateVariants: (sentenceId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_VARIANTS, sentenceId),
     generateFollowUp: (variantId: number, conversationHistory?: string[]) =>
@@ -813,8 +814,8 @@ declare global {
         getWordFrequencies: (words: string[], language: string) => Promise<Record<string, number>>;
       };
       dialog: {
-        selectSentence: () => Promise<any | null>;
-        selectSentenceWithTopic: () => Promise<any | null>;
+        selectSentence: (excludeIds?: number[]) => Promise<any | null>;
+        selectSentenceWithTopic: (excludeIds?: number[]) => Promise<any | null>;
         generateVariants: (sentenceId: number) => Promise<any[]>;
         generateFollowUp: (
           variantId: number,
