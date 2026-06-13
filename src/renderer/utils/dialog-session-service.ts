@@ -125,10 +125,15 @@ export async function loadDialogSession(dialogCount: number): Promise<DialogLoad
       }
     }
 
-    // Fire audio and variant generation in the background — don't block session display
-    window.electronAPI.dialog.ensureContextSentences(sentence.id).catch((error) => {
-      logger.warn({ error }, 'Failed to generate context sentences audio');
-    });
+    // Use cached audio paths from DB if already available; otherwise generate in background
+    const beforeSentenceAudio = sentence.beforeSentenceAudioPath || null;
+    const afterSentenceAudio = sentence.afterSentenceAudioPath || null;
+
+    if (!beforeSentenceAudio || !afterSentenceAudio) {
+      window.electronAPI.dialog.ensureContextSentences(sentence.id).catch((error) => {
+        logger.warn({ error }, 'Failed to generate context sentences audio');
+      });
+    }
 
     if (!isTopicBasedFlow) {
       window.electronAPI.dialog.generateVariants(sentence.id).catch((error) => {
@@ -146,8 +151,8 @@ export async function loadDialogSession(dialogCount: number): Promise<DialogLoad
         contextBeforeTranslation: sentence.contextBeforeTranslation,
         contextAfter: sentence.contextAfter,
         contextAfterTranslation: sentence.contextAfterTranslation,
-        beforeSentenceAudio: undefined,
-        afterSentenceAudio: undefined,
+        beforeSentenceAudio: beforeSentenceAudio || undefined,
+        afterSentenceAudio: afterSentenceAudio || undefined,
         responseOptions: [],
         createdAt: new Date().toISOString(),
         isTopicBasedFlow,
@@ -159,8 +164,8 @@ export async function loadDialogSession(dialogCount: number): Promise<DialogLoad
     return {
       status: 'loaded',
       sentence,
-      beforeSentenceAudio: null,
-      afterSentenceAudio: null,
+      beforeSentenceAudio,
+      afterSentenceAudio,
       isTopicBasedFlow,
       responseOptions: [],
       previousCorrections,
