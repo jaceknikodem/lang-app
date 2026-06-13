@@ -44,9 +44,6 @@ export class DialogMode extends BaseComponent {
   private beforeSentenceAudio: string | null = null;
 
   @state()
-  private afterSentenceAudio: string | null = null;
-
-  @state()
   private responseOptions: DialogueVariant[] = [];
 
   @state()
@@ -112,7 +109,6 @@ export class DialogMode extends BaseComponent {
   @state()
   private autoplayEnabled = false;
 
-  @state()
   private isAudioPlaying = false;
 
   @state()
@@ -274,7 +270,6 @@ export class DialogMode extends BaseComponent {
         case 'loaded':
           this.currentSentence = result.sentence;
           this.beforeSentenceAudio = result.beforeSentenceAudio;
-          this.afterSentenceAudio = result.afterSentenceAudio;
           this.isTopicBasedFlow = result.isTopicBasedFlow;
           this.responseOptions = result.responseOptions;
           this.previousCorrections = result.previousCorrections;
@@ -339,221 +334,146 @@ export class DialogMode extends BaseComponent {
   }
 
   private async playBeforeSentence() {
-    // If continuation is generated, play all 3 in sequence: trigger, user recording, continuation
-    if (this.followUp.showFollowUp && this.recordedAudioPath && this.followUp.followUpAudio) {
+    if (this.isAudioPlaying) return;
+    this.isAudioPlaying = true;
+    try {
+      // If continuation is generated, play all 3 in sequence: trigger, user recording, continuation
+      if (this.followUp.showFollowUp && this.recordedAudioPath && this.followUp.followUpAudio) {
+        try {
+          // Stop any currently playing audio (both HTML5 and system audio)
+          if (this.currentAudioElement) {
+            this.currentAudioElement.pause();
+            this.currentAudioElement = null;
+          }
+          // Stop system audio playback to ensure clean sequential playback
+          // Stop multiple times to ensure any queued auto-play is cancelled
+          try {
+            await window.electronAPI.audio.stopAudio();
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            await window.electronAPI.audio.stopAudio(); // Stop again to catch any late-starting audio
+            await new Promise((resolve) => setTimeout(resolve, 200));
+          } catch {
+            // Ignore errors when stopping (might not be playing)
+          }
+
+          // Play trigger audio and wait for it to complete
+          if (this.beforeSentenceAudio) {
+            try {
+              logger.debug(
+                { audioPath: this.beforeSentenceAudio },
+                '[DialogMode] Playing trigger audio'
+              );
+              await window.electronAPI.audio.playAudio(this.beforeSentenceAudio);
+              logger.debug('[DialogMode] Trigger audio finished');
+
+              // Track sentence play count
+              if (this.currentSentence?.id) {
+                void window.electronAPI.database
+                  .incrementSentencePlayCount(this.currentSentence.id)
+                  .catch((err) => {
+                    logger.warn({ error: err }, 'Failed to increment sentence play count');
+                  });
+              }
+              // Track audio playback event
+              if (this.currentSentence?.id && this.currentLanguage) {
+                this.trackAudioPlayback({
+                  sentenceId: this.currentSentence.id,
+                  audioPath: this.beforeSentenceAudio,
+                  language: this.currentLanguage,
+                  mode: 'dialog',
+                });
+              }
+            } catch (error) {
+              logger.error({ error }, 'Failed to play trigger audio');
+              // Continue with next audio even if this one fails
+            }
+          }
+
+          // Play user's recording (normalized for better volume) and wait for it to complete
+          if (this.recordedAudioPath) {
+            try {
+              // Normalize/amplify the recording for better playback volume (5dB amplification)
+              const normalizedPath = await window.electronAPI.audio.normalizeAudioVolume(
+                this.recordedAudioPath,
+                5
+              );
+              const audioPathToPlay = normalizedPath || this.recordedAudioPath;
+
+              logger.debug({ audioPath: audioPathToPlay }, '[DialogMode] Playing user recording');
+              await window.electronAPI.audio.playAudio(audioPathToPlay);
+              logger.debug('[DialogMode] User recording finished');
+            } catch (error) {
+              logger.error({ error }, 'Failed to play user recording');
+              // Continue with next audio even if this one fails
+            }
+          }
+
+          // Play continuation audio and wait for it to complete
+          if (this.followUp.followUpAudio) {
+            try {
+              logger.debug(
+                { audioPath: this.followUp.followUpAudio },
+                '[DialogMode] Playing continuation audio'
+              );
+              await window.electronAPI.audio.playAudio(this.followUp.followUpAudio);
+              logger.debug('[DialogMode] Continuation audio finished');
+            } catch (error) {
+              logger.error({ error }, 'Failed to play continuation audio');
+            }
+          }
+        } catch (error) {
+          logger.error({ error }, 'Failed to play dialog sequence');
+        }
+        return;
+      }
+
+      // Before user speaks: just play trigger audio
+      if (!this.beforeSentenceAudio) return;
+
       try {
-        // Stop any currently playing audio (both HTML5 and system audio)
+        // Stop any currently playing audio
         if (this.currentAudioElement) {
           this.currentAudioElement.pause();
-          this.currentAudioElement = null;
-        }
-        // Stop system audio playback to ensure clean sequential playback
-        // Stop multiple times to ensure any queued auto-play is cancelled
-        try {
-          await window.electronAPI.audio.stopAudio();
-          await new Promise((resolve) => setTimeout(resolve, 200));
-          await window.electronAPI.audio.stopAudio(); // Stop again to catch any late-starting audio
-          await new Promise((resolve) => setTimeout(resolve, 200));
-        } catch {
-          // Ignore errors when stopping (might not be playing)
         }
 
-        // Play trigger audio and wait for it to complete
-        if (this.beforeSentenceAudio) {
-          try {
-            logger.debug(
-              { audioPath: this.beforeSentenceAudio },
-              '[DialogMode] Playing trigger audio'
-            );
-            await window.electronAPI.audio.playAudio(this.beforeSentenceAudio);
-            logger.debug('[DialogMode] Trigger audio finished');
+        // Play the trigger audio
+        await window.electronAPI.audio.playAudio(this.beforeSentenceAudio);
 
-            // Track sentence play count
-            if (this.currentSentence?.id) {
-              void window.electronAPI.database
-                .incrementSentencePlayCount(this.currentSentence.id)
-                .catch((err) => {
-                  logger.warn({ error: err }, 'Failed to increment sentence play count');
-                });
-            }
-            // Track audio playback event
-            if (this.currentSentence?.id && this.currentLanguage) {
-              this.trackAudioPlayback({
-                sentenceId: this.currentSentence.id,
-                audioPath: this.beforeSentenceAudio,
-                language: this.currentLanguage,
-                mode: 'dialog',
-              });
-            }
-          } catch (error) {
-            logger.error({ error }, 'Failed to play trigger audio');
-            // Continue with next audio even if this one fails
-          }
+        // Track sentence play count
+        if (this.currentSentence?.id) {
+          void window.electronAPI.database
+            .incrementSentencePlayCount(this.currentSentence.id)
+            .catch((err) => {
+              logger.warn({ error: err }, 'Failed to increment sentence play count');
+            });
         }
-
-        // Play user's recording (normalized for better volume) and wait for it to complete
-        if (this.recordedAudioPath) {
-          try {
-            // Normalize/amplify the recording for better playback volume (5dB amplification)
-            const normalizedPath = await window.electronAPI.audio.normalizeAudioVolume(
-              this.recordedAudioPath,
-              5
-            );
-            const audioPathToPlay = normalizedPath || this.recordedAudioPath;
-
-            logger.debug({ audioPath: audioPathToPlay }, '[DialogMode] Playing user recording');
-            await window.electronAPI.audio.playAudio(audioPathToPlay);
-            logger.debug('[DialogMode] User recording finished');
-          } catch (error) {
-            logger.error({ error }, 'Failed to play user recording');
-            // Continue with next audio even if this one fails
-          }
-        }
-
-        // Play continuation audio and wait for it to complete
-        if (this.followUp.followUpAudio) {
-          try {
-            logger.debug(
-              { audioPath: this.followUp.followUpAudio },
-              '[DialogMode] Playing continuation audio'
-            );
-            await window.electronAPI.audio.playAudio(this.followUp.followUpAudio);
-            logger.debug('[DialogMode] Continuation audio finished');
-          } catch (error) {
-            logger.error({ error }, 'Failed to play continuation audio');
-          }
-        }
-
-        // Play afterSentence audio if available
-        if (this.afterSentenceAudio) {
-          try {
-            logger.debug(
-              { audioPath: this.afterSentenceAudio },
-              '[DialogMode] Playing afterSentence audio'
-            );
-            await window.electronAPI.audio.playAudio(this.afterSentenceAudio);
-            logger.debug('[DialogMode] AfterSentence audio finished');
-          } catch (error) {
-            logger.error({ error }, 'Failed to play afterSentence audio');
-          }
+        if (this.currentSentence?.id && this.currentLanguage) {
+          this.trackAudioPlayback({
+            sentenceId: this.currentSentence.id,
+            audioPath: this.beforeSentenceAudio,
+            language: this.currentLanguage,
+            mode: 'dialog',
+          });
         }
       } catch (error) {
-        logger.error({ error }, 'Failed to play dialog sequence');
+        logger.error({ error }, 'Failed to play before sentence audio');
       }
-      return;
-    }
-
-    // Before user speaks: just play trigger audio
-    if (!this.beforeSentenceAudio) {
-      return;
-    }
-
-    try {
-      // Stop any currently playing audio
-      if (this.currentAudioElement) {
-        this.currentAudioElement.pause();
-      }
-
-      this.isAudioPlaying = true;
-      // Play the trigger audio
-      await window.electronAPI.audio.playAudio(this.beforeSentenceAudio);
-      this.isAudioPlaying = false; // Reset when audio finishes
-
-      // Track sentence play count
-      if (this.currentSentence?.id) {
-        void window.electronAPI.database
-          .incrementSentencePlayCount(this.currentSentence.id)
-          .catch((err) => {
-            logger.warn({ error: err }, 'Failed to increment sentence play count');
-          });
-      }
-      if (this.currentSentence?.id && this.currentLanguage) {
-        this.trackAudioPlayback({
-          sentenceId: this.currentSentence.id,
-          audioPath: this.beforeSentenceAudio,
-          language: this.currentLanguage,
-          mode: 'dialog',
-        });
-      }
-    } catch (error) {
-      logger.error({ error }, 'Failed to play before sentence audio');
-      this.isAudioPlaying = false;
-    }
-  }
-
-  private async playAfterSentence() {
-    if (!this.afterSentenceAudio) {
-      return;
-    }
-
-    try {
-      // Stop any currently playing audio
-      if (this.currentAudioElement) {
-        this.currentAudioElement.pause();
-      }
-
-      this.isAudioPlaying = true;
-      // Play the afterSentence audio
-      await window.electronAPI.audio.playAudio(this.afterSentenceAudio);
-      this.isAudioPlaying = false; // Reset when audio finishes
-
-      // Track sentence play count
-      if (this.currentSentence?.id) {
-        void window.electronAPI.database
-          .incrementSentencePlayCount(this.currentSentence.id)
-          .catch((err) => {
-            logger.warn({ error: err }, 'Failed to increment sentence play count');
-          });
-      }
-      if (this.currentSentence?.id && this.currentLanguage) {
-        this.trackAudioPlayback({
-          sentenceId: this.currentSentence.id,
-          audioPath: this.afterSentenceAudio,
-          language: this.currentLanguage,
-          mode: 'dialog',
-        });
-      }
-    } catch (error) {
-      logger.error({ error }, 'Failed to play after sentence audio');
+    } finally {
       this.isAudioPlaying = false;
     }
   }
 
   private async playFollowUpAudio() {
-    if (!this.followUp.followUpAudio) {
-      return;
-    }
-
+    if (!this.followUp.followUpAudio || this.isAudioPlaying) return;
+    this.isAudioPlaying = true;
     try {
-      this.isAudioPlaying = true;
       if (this.currentAudioElement) {
         this.currentAudioElement.pause();
       }
       await window.electronAPI.audio.playAudio(this.followUp.followUpAudio);
-      this.isAudioPlaying = false;
     } catch (error) {
       logger.error({ error }, 'Failed to play follow-up audio');
-      this.isAudioPlaying = false;
-    }
-  }
-
-  private async playAssistantAudio(audioPath: string) {
-    if (!audioPath) {
-      return;
-    }
-
-    try {
-      this.isAudioPlaying = true;
-      // Stop any currently playing audio
-      if (this.currentAudioElement) {
-        this.currentAudioElement.pause();
-      }
-
-      // Play the audio
-      await window.electronAPI.audio.playAudio(audioPath);
-      this.isAudioPlaying = false; // Reset when audio finishes
-    } catch (error) {
-      logger.error({ error }, 'Failed to play assistant audio');
+    } finally {
       this.isAudioPlaying = false;
     }
   }
