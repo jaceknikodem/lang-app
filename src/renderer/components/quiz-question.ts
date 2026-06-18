@@ -516,7 +516,7 @@ export class QuizQuestionCard extends LitElement {
                   <div class="sentence-translation">${sentence.translation}</div>
                 </div>
               `
-            : nothing}
+            : html`<div class="sentence-translation">${sentence.translation}</div>`}
         </div>
       </div>
     `;
