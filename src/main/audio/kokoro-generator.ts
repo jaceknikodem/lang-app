@@ -63,7 +63,13 @@ export class KokoroAudioGenerator extends BaseAudioGenerator {
       mkdirSync(dir, { recursive: true });
     }
 
-    await this.callTTSEndpoint(text, language, audioPath, voiceId);
+    // English translation audio (flow mode) is stored under the selected language's
+    // directory, but must be voiced and phonemized as English — otherwise the server
+    // would route it through the selected language's voice/G2P (e.g. a Japanese voice
+    // phonemizing English, producing a heavy accent).
+    const ttsLanguage = word === 'english_sentence' ? 'english' : language;
+
+    await this.callTTSEndpoint(text, ttsLanguage, audioPath, voiceId);
     return audioPath;
   }
 
