@@ -26,6 +26,12 @@ export class SettingsPanel extends BaseComponent {
   private isCreatingBackup = false;
 
   @state()
+  private exportStatus = '';
+
+  @state()
+  private isExporting = false;
+
+  @state()
   private restartStatus = '';
 
   @state()
@@ -194,6 +200,30 @@ export class SettingsPanel extends BaseComponent {
       this.backupStatus = `Failed to create backup: ${getErrorMessage(error)}`;
     } finally {
       this.isCreatingBackup = false;
+    }
+  }
+
+  private async exportToAnki() {
+    this.isExporting = true;
+    this.exportStatus = '';
+
+    try {
+      const language =
+        this.currentLanguage || (await window.electronAPI.database.getCurrentLanguage());
+      const result = await window.electronAPI.export.toAnki(language);
+
+      if (result.canceled) {
+        this.exportStatus = '';
+      } else if (result.cardCount === 0) {
+        this.exportStatus = `No sentences to export for ${this.capitalizeLanguage(language)}.`;
+      } else {
+        this.exportStatus = `Exported ${result.cardCount} cards (${result.mediaCount} audio files) to: ${result.filePath}`;
+      }
+    } catch (error) {
+      console.error('Failed to export to Anki:', error);
+      this.exportStatus = `Failed to export: ${getErrorMessage(error)}`;
+    } finally {
+      this.isExporting = false;
     }
   }
 
@@ -686,6 +716,31 @@ export class SettingsPanel extends BaseComponent {
                     <status-message
                       type=${this.backupStatus.includes('Failed') ? 'error' : 'success'}
                       message=${this.backupStatus}
+                    ></status-message>
+                  `
+                : ''}
+            </div>
+            <div class="backup-action">
+              <div class="settings-description">
+                <strong>Export to Anki</strong>
+                <p>
+                  Export ${this.capitalizeLanguage(this.currentLanguage || 'the current language')}
+                  sentences and audio as an Anki deck (.apkg) to study on your phone
+                </p>
+              </div>
+              <app-button
+                variant="primary"
+                ?disabled=${this.isExporting}
+                ?loading=${this.isExporting}
+                @click=${this.exportToAnki}
+              >
+                ${this.isExporting ? 'Exporting...' : 'Export to Anki'}
+              </app-button>
+              ${this.exportStatus
+                ? html`
+                    <status-message
+                      type=${this.exportStatus.includes('Failed') ? 'error' : 'success'}
+                      message=${this.exportStatus}
                     ></status-message>
                   `
                 : ''}

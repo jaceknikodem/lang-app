@@ -329,6 +329,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     closeApp: () => ipcRenderer.invoke(IPC_CHANNELS.LIFECYCLE.CLOSE_APP),
   },
 
+  export: {
+    toAnki: (language: string) => ipcRenderer.invoke(IPC_CHANNELS.EXPORT.EXPORT_ANKI, language),
+  },
+
   // Frequency word management
   frequency: {
     getProgress: (language: string) =>

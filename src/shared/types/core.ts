@@ -92,6 +92,17 @@ export interface StudyStats {
   lastStudyDate?: Date;
 }
 
+/** One sentence row joined with its primary word, used for Anki export. */
+export interface AnkiExportRow {
+  sentenceId: number;
+  sentence: string;
+  translation: string;
+  pronunciation: string | null;
+  audioPath: string | null;
+  word: string;
+  wordTranslation: string;
+}
+
 export interface GeneratedWord {
   word: string; // Foreign language word
   translation: string; // English translation

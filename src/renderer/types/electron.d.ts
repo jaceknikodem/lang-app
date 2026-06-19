@@ -273,6 +273,14 @@ declare global {
         openBackupDirectory: () => Promise<void>;
         closeApp: () => Promise<void>;
       };
+      export: {
+        toAnki: (language: string) => Promise<{
+          canceled: boolean;
+          filePath: string | null;
+          cardCount: number;
+          mediaCount: number;
+        }>;
+      };
       tracking: {
         createSession: (
           mode: 'learning' | 'quiz' | 'dialog' | 'flow',

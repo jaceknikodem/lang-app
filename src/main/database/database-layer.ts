@@ -18,6 +18,7 @@ import {
   DictionaryEntry,
   DialogueVariant,
   PrecomputedToken,
+  AnkiExportRow,
 } from '../../shared/types/core.js';
 import { DatabaseConnection } from './connection.js';
 import { initializeSchema } from './schema.js';
@@ -757,6 +758,37 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get sentences by word`);
     }
   }
+
+  /**
+   * Fetch all non-ignored sentences for a language together with their primary
+   * word, for export (e.g. to an Anki deck). One row per sentence.
+   */
+  async getSentencesForExport(language: string): Promise<AnkiExportRow[]> {
+    const db = this.getDb();
+
+    try {
+      const stmt = db.prepare(`
+        SELECT
+          s.id            AS sentenceId,
+          s.sentence      AS sentence,
+          s.translation   AS translation,
+          s.pronunciation AS pronunciation,
+          s.audio_path    AS audioPath,
+          w.word          AS word,
+          w.translation   AS wordTranslation
+        FROM sentences s
+        JOIN words w ON w.id = s.word_id
+        WHERE s.language = ?
+          AND (s.ignored IS NULL OR s.ignored = FALSE)
+        ORDER BY w.word, s.id
+      `);
+
+      return stmt.all(language) as AnkiExportRow[];
+    } catch (error) {
+      throw wrapError(error, `Failed to get sentences for export`);
+    }
+  }
+
   async getSentencesByIds(sentenceIds: number[]): Promise<Sentence[]> {
     const db = this.getDb();
 

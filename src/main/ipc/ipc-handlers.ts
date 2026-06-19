@@ -14,6 +14,7 @@ import { WordGenerationRunner } from '../jobs/word-generation-runner.js';
 import { LemmatizationService } from '../lemmatization/index.js';
 import { tokenizeJapanese, getWordReadings } from '../lemmatization/japanese-tokenizer.js';
 import { DialogService } from '../dialog/index.js';
+import { exportLanguageToApkg } from '../services/anki/anki-export-service.js';
 import { promises as fsPromises } from 'fs';
 import { join } from 'path';
 import { createIPCHandler } from './ipc-handler-helper.js';
@@ -97,6 +98,7 @@ export function setupIPCHandlers(
   setupLogHandlers();
   setupTopicsHandlers();
   setupTrackingHandlers(databaseLayer);
+  setupExportHandlers(databaseLayer);
 
   const logger = getLogger();
   logger.info('IPC handlers registered successfully');
@@ -1305,6 +1307,7 @@ export function cleanupIPCHandlers(): void {
   );
   Object.values(IPC_CHANNELS.DIALOG).forEach((channel) => ipcMain.removeAllListeners(channel));
   Object.values(IPC_CHANNELS.FLOW).forEach((channel) => ipcMain.removeAllListeners(channel));
+  Object.values(IPC_CHANNELS.EXPORT).forEach((channel) => ipcMain.removeAllListeners(channel));
 
   getLogger().info('IPC handlers cleaned up');
 }
@@ -1976,6 +1979,42 @@ function setupTopicsHandlers(): void {
       schema: [],
       description: 'get topics',
       handler: () => loadTopicsFromFile(),
+    },
+  ]);
+}
+
+function setupExportHandlers(databaseLayer: SQLiteDatabaseLayer): void {
+  registerHandlers([
+    {
+      channel: IPC_CHANNELS.EXPORT.EXPORT_ANKI,
+      schema: z.string().min(2).max(20),
+      description: 'export language to Anki',
+      handler: async (language: string) => {
+        const result = await exportLanguageToApkg(databaseLayer, language);
+
+        if (result.cardCount === 0) {
+          return { canceled: false, filePath: null, cardCount: 0, mediaCount: 0 };
+        }
+
+        const saveResult = await dialog.showSaveDialog({
+          title: 'Export to Anki',
+          defaultPath: `kotoba-${language}.apkg`,
+          filters: [{ name: 'Anki Deck', extensions: ['apkg'] }],
+        });
+
+        if (saveResult.canceled || !saveResult.filePath) {
+          return { canceled: true, filePath: null, cardCount: 0, mediaCount: 0 };
+        }
+
+        await fsPromises.writeFile(saveResult.filePath, result.data);
+
+        return {
+          canceled: false,
+          filePath: saveResult.filePath,
+          cardCount: result.cardCount,
+          mediaCount: result.mediaCount,
+        };
+      },
     },
   ]);
 }

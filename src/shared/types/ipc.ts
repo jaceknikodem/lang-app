@@ -565,4 +565,7 @@ export const IPC_CHANNELS = {
   TOPICS: {
     GET_TOPICS: 'topics:getTopics',
   },
+  EXPORT: {
+    EXPORT_ANKI: 'export:exportAnki',
+  },
 } as const;
