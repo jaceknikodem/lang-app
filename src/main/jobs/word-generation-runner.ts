@@ -296,7 +296,7 @@ export class WordGenerationRunner {
               audioVoiceId = audioInfo.voiceId;
             } catch (error) {
               this.logger.warn(
-                { error, sentenceId, wordId: word.id },
+                { err: error, sentenceId, wordId: word.id },
                 '[WordGenerationRunner] Failed to generate audio'
               );
               audioPath = '';
@@ -346,7 +346,7 @@ export class WordGenerationRunner {
               await this.database.updateBeforeSentenceAudioPath(sentenceId, beforeAudioPath);
             } catch (error) {
               this.logger.warn(
-                { error, sentenceId },
+                { err: error, sentenceId },
                 '[WordGenerationRunner] Failed to generate context before audio'
               );
             }
@@ -368,7 +368,7 @@ export class WordGenerationRunner {
               await this.database.updateAfterSentenceAudioPath(sentenceId, afterAudioPath);
             } catch (error) {
               this.logger.warn(
-                { error, sentenceId },
+                { err: error, sentenceId },
                 '[WordGenerationRunner] Failed to generate context after audio'
               );
             }

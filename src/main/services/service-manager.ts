@@ -150,6 +150,56 @@ export class ServiceManager {
   }
 
   /**
+   * Kill whatever process is listening on the given port, if any.
+   * Uses lsof to find the PID, then sends SIGTERM followed by SIGKILL.
+   */
+  private async killProcessOnPort(port: number): Promise<void> {
+    const inUse = await this.isPortInUse(port);
+    if (!inUse) {
+      return;
+    }
+
+    try {
+      const { execSync } = require('child_process');
+      const output = execSync(`lsof -ti tcp:${port}`, { encoding: 'utf8' }).trim();
+      if (!output) {
+        return;
+      }
+      const pids = output
+        .split('\n')
+        .map((p: string) => p.trim())
+        .filter(Boolean);
+      for (const pid of pids) {
+        this.logger.info(
+          { port, pid },
+          '[ServiceManager] Killing orphaned process on lemmatization port'
+        );
+        try {
+          process.kill(parseInt(pid, 10), 'SIGTERM');
+        } catch {
+          // Process may have already exited
+        }
+      }
+      // Give it a moment to shut down
+      await this.delay(500);
+      // Force-kill anything that's still alive
+      for (const pid of pids) {
+        try {
+          process.kill(parseInt(pid, 10), 'SIGKILL');
+        } catch {
+          // Already gone
+        }
+      }
+    } catch (error) {
+      // lsof failed (e.g. no process found) — not fatal
+      this.logger.debug(
+        { port, error },
+        '[ServiceManager] killProcessOnPort: lsof returned no results'
+      );
+    }
+  }
+
+  /**
    * Simple delay helper for async operations
    */
   private async delay(ms: number): Promise<void> {
@@ -358,48 +408,11 @@ export class ServiceManager {
     }
 
     try {
-      // Check if stanza is already running and responding (e.g. orphaned process from previous run)
-      try {
-        const existingUrl = `http://127.0.0.1:${this.lemmatizationPort}`;
-        const response = await fetch(`${existingUrl}/status`, {
-          method: 'GET',
-          signal: AbortSignal.timeout(2000),
-        });
-        if (response.ok) {
-          this.logger.info(
-            { port: this.lemmatizationPort },
-            '[ServiceManager] stanza-service already running on port, adopting existing instance'
-          );
-          this.lemmatizationService = {
-            name: 'stanza-service',
-            port: this.lemmatizationPort,
-            url: existingUrl,
-            process: null,
-            restartCount: inheritedRestartCount,
-          };
-          process.env.LEMMATIZATION_SERVER_URL = existingUrl;
-          this.logger.info(
-            { url: existingUrl, port: this.lemmatizationPort },
-            '[ServiceManager] stanza-service started successfully'
-          );
-          return;
-        }
-      } catch {
-        // Not running, proceed with fresh start
-      }
+      // Kill any orphaned stanza-service on the port before starting fresh.
+      // We never adopt existing instances because they may be running stale code.
+      await this.killProcessOnPort(this.lemmatizationPort);
 
-      // Check if port is already in use
-      const portInUse = await this.isPortInUse(this.lemmatizationPort);
-      let actualPort = this.lemmatizationPort;
-
-      if (portInUse) {
-        this.logger.info(
-          { port: this.lemmatizationPort },
-          '[ServiceManager] Lemmatization port is in use, finding available port'
-        );
-        actualPort = await this.findAvailablePort(this.lemmatizationPort);
-        this.logger.info({ port: actualPort }, '[ServiceManager] Using Lemmatization port instead');
-      }
+      const actualPort = this.lemmatizationPort;
 
       const url = `http://127.0.0.1:${actualPort}`;
 

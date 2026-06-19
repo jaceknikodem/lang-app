@@ -4,6 +4,7 @@ FastAPI service wrapping Stanza for lemmatization
 """
 
 import asyncio
+import datetime
 import os
 import random
 import sys
@@ -88,6 +89,8 @@ class StatusResponse(BaseModel):
     status: str
     loaded_models: List[str]
     service: str
+    script_path: str
+    script_mtime: str
 
 
 class LemmatizeWordsResponse(BaseModel):
@@ -103,6 +106,9 @@ class FreqWordResponse(BaseModel):
     frequencies: Dict[str, float]  # word -> zipf_frequency
 
 
+_SCRIPT_PATH = os.path.abspath(__file__)
+_SCRIPT_MTIME = os.path.getmtime(_SCRIPT_PATH)
+
 @app.get("/status", response_model=StatusResponse)
 async def get_status():
     """Get service status and list of loaded models"""
@@ -110,7 +116,9 @@ async def get_status():
     return {
         "status": "running",
         "loaded_models": list(models.keys()),
-        "service": "stanza-lemmatization"
+        "service": "stanza-lemmatization",
+        "script_path": _SCRIPT_PATH,
+        "script_mtime": datetime.datetime.fromtimestamp(_SCRIPT_MTIME).isoformat(),
     }
 
 
@@ -351,6 +359,10 @@ LANG_TO_ESPEAK: dict[str, str] = {
     'it': 'it',
     'portuguese': 'pt-br',
     'pt': 'pt-br',
+    'chinese': 'cmn',
+    'zh': 'cmn',
+    'korean': 'ko',
+    'ko': 'ko',
 }
 
 
