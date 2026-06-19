@@ -327,10 +327,12 @@ export class ServiceManager {
 
       // Handle stdout/stderr
       whisperProcess.stdout?.on('data', (data) => {
+        if (this.isShuttingDown) return;
         this.logger.debug({ service: 'whisper' }, data.toString().trim());
       });
 
       whisperProcess.stderr?.on('data', (data) => {
+        if (this.isShuttingDown) return;
         this.logger.warn({ service: 'whisper' }, data.toString().trim());
       });
 
@@ -465,6 +467,7 @@ export class ServiceManager {
       // Handle stdout/stderr
       // stdout contains normal informational logs from the Python service
       lemmatizationProcess.stdout?.on('data', (data) => {
+        if (this.isShuttingDown) return;
         const message = data.toString().trim();
         // Parse log level from message if it contains [Lemmatization] prefix
         if (message.includes('[Lemmatization]')) {
@@ -481,6 +484,7 @@ export class ServiceManager {
 
       // stderr should only contain actual errors/warnings from the Python service
       lemmatizationProcess.stderr?.on('data', (data) => {
+        if (this.isShuttingDown) return;
         const message = data.toString().trim();
         // Check if it's a critical error or just a warning
         if (
