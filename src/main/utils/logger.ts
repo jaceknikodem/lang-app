@@ -125,6 +125,16 @@ export async function initializeLogger(): Promise<Logger> {
     });
   }
 
+  // Create the worker-thread transport. thread-stream reports failures by
+  // emitting 'error' asynchronously (setImmediate) rather than throwing from
+  // write(). During shutdown the worker can exit before the last log lines are
+  // flushed, producing "the worker has exited"; without a listener that becomes
+  // an uncaught exception that crashes the quitting app. Swallow it here.
+  const transport = pino.transport({ targets });
+  transport.on('error', () => {
+    // Transport worker is gone (e.g. during shutdown); drop pending lines.
+  });
+
   // Create logger with transports
   const pinoLogger = pino(
     {
@@ -135,9 +145,7 @@ export async function initializeLogger(): Promise<Logger> {
       },
       timestamp: pino.stdTimeFunctions.isoTime,
     },
-    pino.transport({
-      targets,
-    })
+    transport
   );
 
   loggerInstance = makeSafeLogger(pinoLogger);
