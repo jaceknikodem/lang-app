@@ -775,7 +775,12 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           s.pronunciation AS pronunciation,
           s.audio_path    AS audioPath,
           w.word          AS word,
-          w.translation   AS wordTranslation
+          w.translation   AS wordTranslation,
+          w.interval_days AS intervalDays,
+          w.ease_factor   AS easeFactor,
+          w.fsrs_lapses   AS lapses,
+          w.last_review   AS lastReview,
+          w.next_due      AS nextDue
         FROM sentences s
         JOIN words w ON w.id = s.word_id
         WHERE s.language = ?

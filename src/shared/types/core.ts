@@ -101,6 +101,12 @@ export interface AnkiExportRow {
   audioPath: string | null;
   word: string;
   wordTranslation: string;
+  // Primary word's SRS state, for seeding Anki scheduling.
+  intervalDays: number | null;
+  easeFactor: number | null;
+  lapses: number | null;
+  lastReview: string | null;
+  nextDue: string | null;
 }
 
 export interface GeneratedWord {

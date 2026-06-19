@@ -19,6 +19,20 @@ import JSZip from 'jszip';
 
 const FIELD_SEPARATOR = '';
 
+/** Classic (SM-2) review scheduling for a card that has been studied before. */
+export interface CardScheduling {
+  /** Current interval in days. */
+  ivl: number;
+  /** Ease factor, ×1000 (e.g. 2500 = 250%). */
+  factor: number;
+  /** Total reviews so far. */
+  reps: number;
+  /** Times the card has lapsed. */
+  lapses: number;
+  /** Day the card is next due, relative to today (0 = today, negative = overdue). */
+  dueDay: number;
+}
+
 /** A single note (one card, single-template model). */
 export interface AnkiNote {
   /** Field values, in model field order. */
@@ -28,6 +42,11 @@ export interface AnkiNote {
    * updated deck overwrites the existing note instead of duplicating it.
    */
   guidSeed: string;
+  /**
+   * Existing review state to seed onto the card. When omitted the card is
+   * imported as new (unstudied).
+   */
+  scheduling?: CardScheduling;
 }
 
 /** A media file to bundle into the package. */
@@ -254,12 +273,17 @@ export async function buildApkg(options: BuildApkgOptions): Promise<Buffer> {
 
     const nowSec = Math.floor(Date.now() / 1000);
     const nowMs = Date.now();
+    // Collection creation anchored to the start of today, so a review card's
+    // day index (days since `crt`) lines up with `dueDay` (0 = today).
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const crtSec = Math.floor(startOfToday.getTime() / 1000);
 
     db.prepare(
       `INSERT INTO col (id, crt, mod, scm, ver, dty, usn, ls, conf, models, decks, dconf, tags)
        VALUES (1, ?, ?, ?, 11, 0, 0, 0, ?, ?, ?, ?, '{}')`
     ).run(
-      nowSec,
+      crtSec,
       nowMs,
       nowMs,
       buildConfJson(model.id),
@@ -274,13 +298,14 @@ export async function buildApkg(options: BuildApkgOptions): Promise<Buffer> {
     );
     const insertCard = db.prepare(
       `INSERT INTO cards (id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, left, odue, odid, flags, data)
-       VALUES (?, ?, ?, 0, ?, -1, 0, 0, ?, 0, 0, 0, 0, 0, 0, 0, 0, '')`
+       VALUES (?, ?, ?, 0, ?, -1, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, '')`
     );
 
     // Allocate unique, monotonically increasing ids for notes and cards.
     let nextId = nowMs;
+    let newCardPos = 0;
     const insertAll = db.transaction(() => {
-      notes.forEach((note, index) => {
+      notes.forEach((note) => {
         const noteId = nextId++;
         const cardId = nextId++;
         const flds = note.fields.join(FIELD_SEPARATOR);
@@ -294,8 +319,15 @@ export async function buildApkg(options: BuildApkgOptions): Promise<Buffer> {
           sfld,
           fieldChecksum(note.fields[0] ?? '')
         );
-        // `due` orders new cards; keep the source order stable.
-        insertCard.run(cardId, noteId, deckId, nowSec, index + 1);
+
+        if (note.scheduling) {
+          // Review card seeded from existing progress.
+          const { ivl, factor, reps, lapses, dueDay } = note.scheduling;
+          insertCard.run(cardId, noteId, deckId, nowSec, 2, 2, dueDay, ivl, factor, reps, lapses);
+        } else {
+          // New card; `due` is its position in the new queue.
+          insertCard.run(cardId, noteId, deckId, nowSec, 0, 0, newCardPos++, 0, 0, 0, 0);
+        }
       });
     });
     insertAll();
