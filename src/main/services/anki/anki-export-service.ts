@@ -8,38 +8,7 @@ import { createHash } from 'crypto';
 import { SQLiteDatabaseLayer } from '../../database/database-layer.js';
 import { AudioService } from '../../audio/audio-service.js';
 import { getLogger } from '../../utils/logger.js';
-import { AnkiExportRow } from '../../../shared/types/core.js';
-import { buildApkg, AnkiMedia, AnkiNote, ApkgModel, CardScheduling } from './apkg-builder.js';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-const MIN_EASE_FACTOR = 1300; // Anki's floor for the ease factor (×1000).
-
-/**
- * Map a word's internal SRS state onto Anki review scheduling. Returns
- * `undefined` for words that have never been studied (imported as new cards).
- */
-function schedulingFromRow(row: AnkiExportRow): CardScheduling | undefined {
-  if (!row.lastReview || !row.nextDue) {
-    return undefined;
-  }
-
-  const nextDueMs = Date.parse(row.nextDue);
-  if (Number.isNaN(nextDueMs)) {
-    return undefined;
-  }
-
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  const dueDay = Math.round((nextDueMs - startOfToday.getTime()) / DAY_MS);
-
-  const ivl = Math.max(1, Math.round(row.intervalDays ?? 1));
-  const factor = Math.max(MIN_EASE_FACTOR, Math.round((row.easeFactor ?? 2.5) * 1000));
-  const lapses = Math.max(0, row.lapses ?? 0);
-  // `reps` isn't tracked per word; approximate so stats look sane.
-  const reps = lapses + 1;
-
-  return { ivl, factor, reps, lapses, dueDay };
-}
+import { buildApkg, AnkiMedia, AnkiNote, ApkgModel } from './apkg-builder.js';
 
 export interface AnkiExportResult {
   data: Buffer;
@@ -143,6 +112,8 @@ export async function exportLanguageToApkg(
       continue;
     }
 
+    // No scheduling: Anki owns its review state. Seeding it from the app would
+    // overwrite Anki's progress on every re-import.
     notes.push({
       guidSeed: `kotoba:${language}:sentence:${row.sentenceId}`,
       fields: [
@@ -152,7 +123,6 @@ export async function exportLanguageToApkg(
         audioField,
         escapeHtml(`${row.word} — ${row.wordTranslation}`),
       ],
-      scheduling: schedulingFromRow(row),
     });
   }
 

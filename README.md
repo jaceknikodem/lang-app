@@ -12,6 +12,8 @@ A privacy-first desktop language learning application that operates entirely off
 - **Micro-Dialogues**: Choose your reply, speak it aloud, and hear the natural response — real conversation built from what you already know
 - **Flow Mode**: Hands-free listening sessions (10–60 min) that train your ear and rhythm without screens or clicks
 - **Autopilot Learning**: The app glides between modes — review, quiz, dialogue, flow — so you can just focus on language
+- **Anki Export**: Export your vocabulary as an `.apkg` deck with audio, sentences, and translations — re-import anytime to add new cards without overwriting Anki's review progress
+- **Learn from Articles**: Paste any URL and the app extracts vocabulary from the article so you can study words in their original context
 - **Multiple LLM Providers**: Use Gemini or local LLMs — your choice of engine and privacy
 - **Privacy-First Design**: No accounts. No cloud tracking. Your data never leaves your device
 - **Adaptive Intelligence**: The system quietly tracks what you struggle with and targets it — no manual tweaking needed
