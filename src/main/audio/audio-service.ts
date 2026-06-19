@@ -950,14 +950,10 @@ export class AudioService {
 
   /**
    * Regenerate audio while ensuring the original file is only replaced on success.
-   * Ensures the currently selected TTS engine is used for regeneration.
+   * When forceElevenLabs is true, generates using a local ElevenLabs instance with
+   * eleven_v3 without touching the shared audioGenerator.
    */
-  async regenerateAudio(text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, existingPath?: string): Promise<string> {
-    // Ensure we're using the currently selected TTS engine
-    if (this.database) {
-      await this.checkAndSwitchToAudioBackend(this.database);
-    }
-
+  async regenerateAudio(text: string, language: string, word?: string, wordId?: number, sentenceId?: number, variantId?: number, existingPath?: string, forceElevenLabs?: boolean): Promise<string> {
     // Resolve existing path to absolute for file operations
     const absoluteExistingPath = existingPath ? AudioService.resolveAudioPath(existingPath) : null;
     let backupPath: string | null = null;
@@ -966,22 +962,40 @@ export class AudioService {
     if (absoluteExistingPath && await this.audioExists(absoluteExistingPath)) {
       const parsed = parse(absoluteExistingPath);
       backupPath = join(parsed.dir, `${parsed.name}.bak${parsed.ext}`);
-      
+
       // Remove any stale backup (log errors but don't fail)
       try {
         await fsPromises.unlink(backupPath);
       } catch (error) {
-        // Only log if it's not a "file not found" error (expected for first-time backup)
         if (error instanceof Error && 'code' in error && (error as any).code !== 'ENOENT') {
           this.logger.warn({ error, backupPath }, 'Failed to remove stale backup file');
         }
       }
-      
+
       await fsPromises.rename(absoluteExistingPath, backupPath);
     }
 
     try {
-      const newPath = await this.generateAudio(text, language, word, wordId, sentenceId, variantId);
+      let newAbsPath: string;
+
+      if (forceElevenLabs && this.database) {
+        const apiKey = await this.database.getSetting('elevenlabs_api_key');
+        if (!apiKey) throw new Error('ElevenLabs API key not configured');
+        const generator = new ElevenLabsAudioGenerator(
+          { elevenLabsApiKey: apiKey, elevenLabsModel: 'eleven_v3' },
+          this.database
+        );
+        newAbsPath = await generator.generateAudio(text.trim(), language.toLowerCase(), word, wordId, sentenceId, variantId);
+      } else {
+        if (this.database) {
+          await this.checkAndSwitchToAudioBackend(this.database);
+        }
+        newAbsPath = await this.audioGenerator.generateAudio(text.trim(), language.toLowerCase(), word, wordId, sentenceId, variantId);
+      }
+
+      if (!await this.audioExists(newAbsPath)) {
+        throw new Error(`Audio generation succeeded but file not found: ${newAbsPath}`);
+      }
 
       // Clean up backup on success (log errors but don't fail)
       if (backupPath) {
@@ -992,8 +1006,7 @@ export class AudioService {
         }
       }
 
-      // Return relative path (generateAudio already returns relative path)
-      return newPath;
+      return AudioService.getRelativeAudioPath(newAbsPath);
     } catch (error) {
       // Restore backup on failure if it exists
       if (backupPath && absoluteExistingPath) {

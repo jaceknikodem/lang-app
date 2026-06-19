@@ -262,6 +262,8 @@ export interface IPCBridge {
       sentenceId?: number;
       variantId?: number;
       existingPath?: string;
+      audioType?: 'before' | 'main' | 'after';
+      forceElevenLabs?: boolean;
     }) => Promise<{ audioPath: string }>;
     startRecording: (options?: RecordingOptions) => Promise<RecordingSession>;
     stopRecording: () => Promise<RecordingSession | null>;

@@ -161,17 +161,26 @@ const sentenceViewerOwnStyles = css`
   }
 
   .context-section {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
     margin-bottom: var(--spacing-sm);
     padding: var(--spacing-md);
     background: var(--background-secondary);
     border-radius: var(--border-radius-small);
     border-left: 2px solid var(--primary-color);
     transition: all 0.3s ease;
-    cursor: pointer;
+    cursor: default;
   }
 
   .context-section.playing {
     background: #e3f2fd;
+  }
+
+  .context-section-body {
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
   }
 
   .context-label {
@@ -203,27 +212,33 @@ const sentenceViewerOwnStyles = css`
     user-select: none;
   }
 
-  .sentence-text {
-    font-size: 27px;
-    line-height: 1.5;
+  .sentence-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
     margin-bottom: var(--spacing-sm);
-    color: var(--text-primary);
-    width: 100%;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    hyphens: auto;
     padding: var(--spacing-md);
-    padding-right: var(--spacing-md);
     background: var(--background-secondary);
     border-radius: var(--border-radius-small);
     border-left: 2px solid var(--primary-color);
-    transition: all 0.3s ease;
-    box-sizing: border-box;
-    cursor: pointer;
+    transition: background 0.3s ease;
   }
 
-  .sentence-text.playing {
+  .sentence-row.playing {
     background: #e3f2fd;
+  }
+
+  .sentence-text {
+    font-size: 27px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    flex: 1;
+    min-width: 0;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    box-sizing: border-box;
+    cursor: pointer;
   }
 
   .sentence-translation {

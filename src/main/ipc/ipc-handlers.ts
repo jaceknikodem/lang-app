@@ -825,6 +825,8 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
           sentenceId: z.number().int().positive().optional(),
           variantId: z.number().int().optional(),
           existingPath: AudioPathSchema.optional(),
+          audioType: z.enum(['before', 'main', 'after']).optional(),
+          forceElevenLabs: z.boolean().optional(),
         })
         .optional(),
       description: 'regenerate audio',
@@ -841,23 +843,34 @@ function setupAudioHandlers(audioService: AudioService, databaseLayer?: SQLiteDa
           validatedPayload.wordId,
           validatedPayload.sentenceId,
           validatedPayload.variantId,
-          validatedPayload.existingPath
+          validatedPayload.existingPath,
+          validatedPayload.forceElevenLabs
         );
 
-        let voiceId: string | undefined;
         if (validatedPayload.sentenceId && databaseLayer) {
           try {
-            const audioInfo = audioService.getAudioGenerationInfo();
-            voiceId = audioInfo.voiceId;
-            if (voiceId) {
-              await databaseLayer.updateSentenceAudioPath(
+            if (validatedPayload.audioType === 'before') {
+              await databaseLayer.updateBeforeSentenceAudioPath(
                 validatedPayload.sentenceId,
-                audioPath,
-                voiceId
+                audioPath
               );
+            } else if (validatedPayload.audioType === 'after') {
+              await databaseLayer.updateAfterSentenceAudioPath(
+                validatedPayload.sentenceId,
+                audioPath
+              );
+            } else {
+              const voiceId = audioService.getAudioGenerationInfo().voiceId;
+              if (voiceId) {
+                await databaseLayer.updateSentenceAudioPath(
+                  validatedPayload.sentenceId,
+                  audioPath,
+                  voiceId
+                );
+              }
             }
           } catch (error) {
-            getLogger().warn({ error }, 'Failed to update voiceID after regeneration');
+            getLogger().warn({ error }, 'Failed to update audio path after regeneration');
           }
         }
 

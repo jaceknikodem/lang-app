@@ -25,6 +25,8 @@ export interface RegenerateAudioOptions {
   sentenceId?: number;
   variantId?: number;
   existingPath?: string;
+  audioType?: 'before' | 'main' | 'after';
+  forceElevenLabs?: boolean;
 }
 
 export interface AudioConfig {

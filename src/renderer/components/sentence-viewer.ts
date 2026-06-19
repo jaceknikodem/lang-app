@@ -655,32 +655,18 @@ export class SentenceViewer extends LitElement {
           </span>
         </div>
 
-        <div
-          class="flex gap-xs"
-          style="display: flex; align-items: center; gap: var(--spacing-xs);"
-        >
-          ${this.sentence.audioPath
-            ? html`
-                <button
-                  class="audio-button"
-                  @click=${() => this.audioCtrl.handlePlayAudio()}
-                  ?disabled=${audioPlayer.getState().isPlaying ||
-                  this.audioCtrl.isRegeneratingAudio}
-                  title="Play audio (Space)"
-                >
-                  <span aria-hidden="true">🔊</span>
-                </button>
-              `
-            : ''}
-          <button
-            class="audio-button secondary"
-            @click=${() => this.audioCtrl.handleRecreateAudio()}
-            ?disabled=${audioPlayer.getState().isPlaying || this.audioCtrl.isRegeneratingAudio}
-            title="Recreate audio"
-          >
-            <span aria-hidden="true">♻</span>
-          </button>
-        </div>
+        ${this.sentence.audioPath
+          ? html`
+              <button
+                class="audio-button"
+                @click=${() => this.audioCtrl.handlePlayAudio()}
+                ?disabled=${audioPlayer.getState().isPlaying || this.audioCtrl.isRegeneratingAudio}
+                title="Play audio (Space)"
+              >
+                <span aria-hidden="true">🔊</span>
+              </button>
+            `
+          : ''}
       </div>
     `;
   }
@@ -690,17 +676,34 @@ export class SentenceViewer extends LitElement {
     pronunciation: string | undefined,
     translation: string | undefined,
     audioType: 'before' | 'after',
-    onClick: (e: MouseEvent) => void
+    onClick: (e: MouseEvent) => void,
+    onRegenerate: () => void,
+    isRegenerating: boolean
   ): TemplateResult {
     if (!text) return html``;
 
     const isPlaying = this.audioCtrl.localPlayingAudio === audioType;
 
     return html`
-      <div class="context-section ${isPlaying ? 'playing' : ''}" @click=${onClick}>
-        <div class="context-text">${text}</div>
-        ${renderPronunciation(pronunciation, 'context-pronunciation')}
-        <div class="context-translation ${this.audioOnlyMode ? 'hidden' : ''}">${translation}</div>
+      <div class="context-section ${isPlaying ? 'playing' : ''}">
+        <div class="context-section-body" @click=${onClick}>
+          <div class="context-text">${text}</div>
+          ${renderPronunciation(pronunciation, 'context-pronunciation')}
+          <div class="context-translation ${this.audioOnlyMode ? 'hidden' : ''}">
+            ${translation}
+          </div>
+        </div>
+        <button
+          class="audio-button secondary context-regen-button"
+          @click=${(e: MouseEvent) => {
+            e.stopPropagation();
+            onRegenerate();
+          }}
+          ?disabled=${isRegenerating || audioPlayer.getState().isPlaying}
+          title="Recreate audio"
+        >
+          <span aria-hidden="true">♻</span>
+        </button>
       </div>
     `;
   }
@@ -741,10 +744,7 @@ export class SentenceViewer extends LitElement {
     const isJapanese = lang === 'japanese' || lang === 'ja';
 
     return html`
-      <div
-        class="sentence-text ${this.audioCtrl.localPlayingAudio === 'main' ? 'playing' : ''}"
-        @click=${this.audioCtrl.handleSentenceTextClick}
-      >
+      <div class="sentence-text" @click=${this.audioCtrl.handleSentenceTextClick}>
         <div class="${isJapanese ? 'japanese-words' : ''}">
           ${this.tokenizationCtrl.parsedWords.map((wordInfo) => this.renderWord(wordInfo))}
         </div>
@@ -842,15 +842,29 @@ export class SentenceViewer extends LitElement {
             this.sentence.contextBeforePronunciation,
             this.sentence.contextBeforeTranslation,
             'before',
-            this.audioCtrl.handleContextBeforeClick
+            this.audioCtrl.handleContextBeforeClick,
+            () => this.audioCtrl.handleRecreateBeforeAudio(),
+            this.audioCtrl.isRegeneratingBeforeAudio
           )}
-          ${this.renderSentenceText()}
+          <div class="sentence-row ${this.audioCtrl.localPlayingAudio === 'main' ? 'playing' : ''}">
+            ${this.renderSentenceText()}
+            <button
+              class="audio-button secondary"
+              @click=${() => this.audioCtrl.handleRecreateAudio()}
+              ?disabled=${audioPlayer.getState().isPlaying || this.audioCtrl.isRegeneratingAudio}
+              title="Recreate audio"
+            >
+              <span aria-hidden="true">♻</span>
+            </button>
+          </div>
           ${this.renderContextSection(
             this.sentence.contextAfter,
             this.sentence.contextAfterPronunciation,
             this.sentence.contextAfterTranslation,
             'after',
-            this.audioCtrl.handleContextAfterClick
+            this.audioCtrl.handleContextAfterClick,
+            () => this.audioCtrl.handleRecreateAfterAudio(),
+            this.audioCtrl.isRegeneratingAfterAudio
           )}
         </div>
 

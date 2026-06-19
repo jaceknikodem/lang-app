@@ -178,6 +178,8 @@ declare global {
           sentenceId?: number;
           variantId?: number;
           existingPath?: string;
+          audioType?: 'before' | 'main' | 'after';
+          forceElevenLabs?: boolean;
         }) => Promise<{ audioPath: string }>;
         startRecording: (options?: any) => Promise<any>;
         stopRecording: () => Promise<any>;

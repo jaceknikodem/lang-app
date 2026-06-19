@@ -54,6 +54,8 @@ export class SentenceAudioController implements ReactiveController {
 
   localPlayingAudio: 'before' | 'main' | 'after' | null = null;
   isRegeneratingAudio = false;
+  isRegeneratingBeforeAudio = false;
+  isRegeneratingAfterAudio = false;
 
   constructor(host: AudioHost) {
     this.host = host;
@@ -186,95 +188,23 @@ export class SentenceAudioController implements ReactiveController {
 
   async handleRecreateAudio(): Promise<void> {
     if (this.isRegeneratingAudio || !this.host.sentence?.sentence) return;
-
+    const { sentence, targetWord } = this.host;
+    const language =
+      targetWord?.language || (await window.electronAPI.database.getCurrentLanguage());
     this.isRegeneratingAudio = true;
+    this.host.requestUpdate();
     try {
-      try {
-        audioPlayer.stop();
-        await window.electronAPI.audio.stopAudio();
-      } catch (e) {
-        logger.warn({ error: e }, 'Stop audio before regenerate failed (non-fatal)');
-      }
-
-      const { sentence, targetWord } = this.host;
-      const oldPath = sentence.audioPath;
-      const language =
-        targetWord?.language || (await window.electronAPI.database.getCurrentLanguage());
-      const word = targetWord?.word;
-
-      let regeneratedPath: string | undefined;
-
-      if (typeof window.electronAPI.audio.regenerateAudio === 'function') {
-        const result = await window.electronAPI.audio.regenerateAudio({
-          text: sentence.sentence,
-          language,
-          word,
-          wordId: sentence.wordId || targetWord?.id,
-          sentenceId: sentence.id,
-          existingPath: oldPath || undefined,
-        });
-        regeneratedPath = result?.audioPath;
-      } else {
-        logger.warn('Recreate audio: regenerateAudio not available, using fallback flow');
-        const fallbackLanguage =
-          language ||
-          targetWord?.language ||
-          (await window.electronAPI.database.getCurrentLanguage());
-
-        regeneratedPath = await window.electronAPI.audio.generateAudio(
-          sentence.sentence,
-          fallbackLanguage,
-          word || targetWord?.word || undefined,
-          sentence.wordId || targetWord?.id || undefined,
-          sentence.id || undefined
-        );
-
-        if (oldPath && oldPath !== regeneratedPath) {
-          await window.electronAPI.database.updateSentenceAudioPath(sentence.id, regeneratedPath);
-          try {
-            await window.electronAPI.audio.deleteRecording(oldPath);
-          } catch (deleteError) {
-            logger.warn(
-              { error: deleteError, oldPath },
-              'Recreate audio (fallback): failed to delete previous audio'
-            );
-          }
-        }
-      }
-
-      if (!regeneratedPath) throw new Error('Audio regeneration returned an empty path');
-
-      if (
-        typeof window.electronAPI.audio.regenerateAudio === 'function' &&
-        (!oldPath || regeneratedPath !== oldPath)
-      ) {
-        await window.electronAPI.database.updateSentenceAudioPath(sentence.id, regeneratedPath);
-      }
-
-      this.host.updateSentence({ ...sentence, audioPath: regeneratedPath });
-
-      this.host.dispatchEvent(
-        new CustomEvent('sentence-audio-regenerated', {
-          detail: { sentenceId: sentence.id, audioPath: regeneratedPath },
-          bubbles: true,
-          composed: true,
-        })
+      const newPath = await this.regeneratePart(
+        sentence.sentence,
+        language,
+        'main',
+        targetWord?.word,
+        sentence.wordId || targetWord?.id,
+        sentence.audioPath || undefined
       );
-
-      setTimeout(async () => {
-        try {
-          audioPlayer.stop();
-          await window.electronAPI.audio.stopAudio();
-          await new Promise((resolve) => setTimeout(resolve, 50));
-          if (regeneratedPath) {
-            const playbackSpeed =
-              this.host.playbackSpeed ?? sessionManager.getPlaybackSpeed() ?? 1.0;
-            await audioPlayer.play(regeneratedPath, { playbackSpeed });
-          }
-        } catch (playError) {
-          logger.warn({ error: playError }, 'Failed to play newly regenerated audio');
-        }
-      }, 100);
+      this.host.updateSentence({ ...sentence, audioPath: newPath });
+      this.dispatchRegenerated(sentence.id, newPath, 'main');
+      this.playAfterRegen(newPath);
     } catch (error) {
       logger.error({ error }, 'Failed to regenerate audio');
       window.alert(`Failed to recreate audio: ${getErrorMessage(error)}`);
@@ -284,7 +214,129 @@ export class SentenceAudioController implements ReactiveController {
     }
   }
 
+  async handleRecreateBeforeAudio(): Promise<void> {
+    if (this.isRegeneratingBeforeAudio || !this.host.sentence?.contextBefore) return;
+    const { sentence, targetWord } = this.host;
+    const language =
+      targetWord?.language || (await window.electronAPI.database.getCurrentLanguage());
+    const isJapanese = language === 'japanese' || language === 'ja';
+    const text =
+      isJapanese && sentence.contextBeforePronunciation
+        ? sentence.contextBeforePronunciation
+        : sentence.contextBefore!;
+    this.isRegeneratingBeforeAudio = true;
+    this.host.requestUpdate();
+    try {
+      const newPath = await this.regeneratePart(
+        text,
+        language,
+        'before',
+        '_before_sentence',
+        sentence.wordId || targetWord?.id,
+        sentence.beforeSentenceAudioPath || undefined
+      );
+      this.host.updateSentence({ ...sentence, beforeSentenceAudioPath: newPath });
+      this.dispatchRegenerated(sentence.id, newPath, 'before');
+      this.playAfterRegen(newPath);
+    } catch (error) {
+      logger.error({ error }, 'Failed to regenerate before-context audio');
+      window.alert(`Failed to recreate audio: ${getErrorMessage(error)}`);
+    } finally {
+      this.isRegeneratingBeforeAudio = false;
+      this.host.requestUpdate();
+    }
+  }
+
+  async handleRecreateAfterAudio(): Promise<void> {
+    if (this.isRegeneratingAfterAudio || !this.host.sentence?.contextAfter) return;
+    const { sentence, targetWord } = this.host;
+    const language =
+      targetWord?.language || (await window.electronAPI.database.getCurrentLanguage());
+    const isJapanese = language === 'japanese' || language === 'ja';
+    const text =
+      isJapanese && sentence.contextAfterPronunciation
+        ? sentence.contextAfterPronunciation
+        : sentence.contextAfter!;
+    this.isRegeneratingAfterAudio = true;
+    this.host.requestUpdate();
+    try {
+      const newPath = await this.regeneratePart(
+        text,
+        language,
+        'after',
+        '_after_sentence',
+        sentence.wordId || targetWord?.id,
+        sentence.afterSentenceAudioPath || undefined
+      );
+      this.host.updateSentence({ ...sentence, afterSentenceAudioPath: newPath });
+      this.dispatchRegenerated(sentence.id, newPath, 'after');
+      this.playAfterRegen(newPath);
+    } catch (error) {
+      logger.error({ error }, 'Failed to regenerate after-context audio');
+      window.alert(`Failed to recreate audio: ${getErrorMessage(error)}`);
+    } finally {
+      this.isRegeneratingAfterAudio = false;
+      this.host.requestUpdate();
+    }
+  }
+
   // ─── private ────────────────────────────────────────────────────────────────
+
+  private async regeneratePart(
+    text: string,
+    language: string,
+    audioType: 'before' | 'main' | 'after',
+    word?: string,
+    wordId?: number,
+    existingPath?: string
+  ): Promise<string> {
+    try {
+      audioPlayer.stop();
+      await window.electronAPI.audio.stopAudio();
+    } catch (e) {
+      logger.warn({ error: e }, 'Stop audio before regenerate failed (non-fatal)');
+    }
+    const result = await window.electronAPI.audio.regenerateAudio({
+      text,
+      language,
+      word,
+      wordId,
+      sentenceId: this.host.sentence.id,
+      existingPath,
+      audioType,
+      forceElevenLabs: true,
+    });
+    if (!result?.audioPath) throw new Error('Audio regeneration returned an empty path');
+    return result.audioPath;
+  }
+
+  private dispatchRegenerated(
+    sentenceId: number,
+    audioPath: string,
+    audioType: 'before' | 'main' | 'after'
+  ) {
+    this.host.dispatchEvent(
+      new CustomEvent('sentence-audio-regenerated', {
+        detail: { sentenceId, audioPath, audioType },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  private playAfterRegen(audioPath: string) {
+    setTimeout(async () => {
+      try {
+        audioPlayer.stop();
+        await window.electronAPI.audio.stopAudio();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        const playbackSpeed = this.host.playbackSpeed ?? sessionManager.getPlaybackSpeed() ?? 1.0;
+        await audioPlayer.play(audioPath, { playbackSpeed });
+      } catch (playError) {
+        logger.warn({ error: playError }, 'Failed to play newly regenerated audio');
+      }
+    }, 100);
+  }
 
   private buildAudioSequence() {
     return buildSentenceAudioSequence(this.host.sentence);

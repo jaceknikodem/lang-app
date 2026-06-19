@@ -1214,13 +1214,15 @@ export class LearningMode extends BaseComponent {
   }
 
   private handleSentenceAudioRegenerated(
-    event: CustomEvent<{ sentenceId: number; audioPath: string }>
+    event: CustomEvent<{
+      sentenceId: number;
+      audioPath: string;
+      audioType?: 'before' | 'main' | 'after';
+    }>
   ) {
-    const { sentenceId, audioPath } = event.detail || ({} as any);
+    const { sentenceId, audioPath, audioType } = event.detail || ({} as any);
     if (!sentenceId || !audioPath) return;
 
-    // Update the audioPath inside our wordsWithSentences structure so
-    // parent-level keyboard shortcuts use the fresh path too
     const wIndex = this.currentWordIndex;
     const sIndex = this.currentSentenceIndex;
     const currentWord = this.wordsWithSentences[wIndex];
@@ -1229,15 +1231,17 @@ export class LearningMode extends BaseComponent {
     const targetIndex = currentWord.sentences.findIndex((s) => s.id === sentenceId);
     if (targetIndex === -1) return;
 
-    const updatedSentences = currentWord.sentences.map((s, idx) =>
-      idx === targetIndex ? { ...s, audioPath } : s
-    );
+    const updatedSentences = currentWord.sentences.map((s, idx) => {
+      if (idx !== targetIndex) return s;
+      if (audioType === 'before') return { ...s, beforeSentenceAudioPath: audioPath };
+      if (audioType === 'after') return { ...s, afterSentenceAudioPath: audioPath };
+      return { ...s, audioPath };
+    });
     const updatedWords = this.wordsWithSentences.map((w, idx) =>
       idx === wIndex ? { ...w, sentences: updatedSentences } : w
     );
     this.wordsWithSentences = updatedWords;
 
-    // Ensure our current pointer stays in sync
     this.currentSentenceIndex = sIndex;
   }
 
