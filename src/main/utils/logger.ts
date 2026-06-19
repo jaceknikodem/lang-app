@@ -13,6 +13,34 @@ import { env } from '../../shared/config/index.js';
 
 let loggerInstance: Logger | null = null;
 
+const LOG_METHODS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'] as const;
+
+/**
+ * Wrap a pino logger so that log calls can never throw.
+ *
+ * The production logger writes through worker-thread transports (pino-roll,
+ * pino-pretty) backed by thread-stream. During shutdown the worker thread can
+ * exit before the final log lines are written — a subsequent write then throws
+ * "the worker has exited". Because services log while tearing down (e.g.
+ * ServiceManager.stop awaits child processes for up to 5s, then logs), this
+ * surfaced as an uncaught exception when quitting the app. A logging call must
+ * never crash the app, so we swallow transport errors here.
+ */
+function makeSafeLogger(pinoLogger: pino.Logger<string>): Logger {
+  const safe: Record<string, unknown> = {};
+  for (const method of LOG_METHODS) {
+    safe[method] = (...args: unknown[]) => {
+      try {
+        (pinoLogger as unknown as Record<string, (...a: unknown[]) => void>)[method](...args);
+      } catch {
+        // Transport worker is gone (e.g. during shutdown); drop the line.
+      }
+    };
+  }
+  safe.child = (bindings: Record<string, unknown>) => makeSafeLogger(pinoLogger.child(bindings));
+  return safe as unknown as Logger;
+}
+
 /**
  * Initialize the main process logger
  * Must be called before any other services that might log
@@ -112,7 +140,7 @@ export async function initializeLogger(): Promise<Logger> {
     })
   );
 
-  loggerInstance = pinoLogger as unknown as Logger;
+  loggerInstance = makeSafeLogger(pinoLogger);
   return loggerInstance;
 }
 

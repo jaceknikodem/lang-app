@@ -217,7 +217,7 @@ export class SettingsPanel extends BaseComponent {
       } else if (result.cardCount === 0) {
         this.exportStatus = `No sentences to export for ${this.capitalizeLanguage(language)}.`;
       } else {
-        this.exportStatus = `Exported ${result.cardCount} cards (${result.mediaCount} audio files) to: ${result.filePath}`;
+        this.exportStatus = `Exported ${result.cardCount} cards`;
       }
     } catch (error) {
       console.error('Failed to export to Anki:', error);
