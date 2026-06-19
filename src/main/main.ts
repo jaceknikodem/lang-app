@@ -451,6 +451,13 @@ app.on('window-all-closed', async () => {
 
 // Handle app termination
 app.on('before-quit', async (event) => {
+  // Always stop managed services to prevent data handlers from writing to a dead pino thread.
+  // This must happen regardless of whether lifecycle shutdown already ran (e.g. macOS "x" button
+  // fires window-all-closed → lifecycleManager.handleShutdown before before-quit runs).
+  if (serviceManager && !(serviceManager as any)['isShuttingDown']) {
+    serviceManager.stop().catch(() => {});
+  }
+
   if (lifecycleManager && !(lifecycleManager as any)['isShuttingDown']) {
     event.preventDefault();
     try {
@@ -476,7 +483,7 @@ app.on('before-quit', async (event) => {
         }
       }
 
-      // Stop managed services
+      // Stop managed services (already initiated above, await completion here)
       if (serviceManager) {
         await serviceManager.stop();
       }

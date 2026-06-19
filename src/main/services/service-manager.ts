@@ -118,53 +118,34 @@ export class ServiceManager {
    * Find an available port starting from the given port
    */
   private async findAvailablePort(startPort: number): Promise<number> {
-    return new Promise((resolve, reject) => {
-      const server = net.createServer();
-
-      server.listen(startPort, () => {
-        const port = (server.address() as net.AddressInfo)?.port;
-        server.close(() => {
-          if (port) {
-            resolve(port);
-          } else {
-            reject(new Error('Could not determine port'));
-          }
-        });
-      });
-
-      server.on('error', (err: NodeJS.ErrnoException) => {
-        if (err.code === 'EADDRINUSE') {
-          // Port is in use, try next port
-          this.findAvailablePort(startPort + 1)
-            .then(resolve)
-            .catch(reject);
-        } else {
-          reject(err);
-        }
-      });
-    });
+    const inUse = await this.isPortInUse(startPort);
+    if (!inUse) {
+      return startPort;
+    }
+    return this.findAvailablePort(startPort + 1);
   }
 
   /**
-   * Check if a port is already in use
+   * Check if a port is already in use by attempting a TCP connection.
+   * More reliable than trying to bind, since bind can succeed on macOS even
+   * when another process holds the port (SO_REUSEADDR).
    */
   private async isPortInUse(port: number): Promise<boolean> {
     return new Promise((resolve) => {
-      const server = net.createServer();
-
-      server.listen(port, () => {
-        server.close(() => {
-          resolve(false); // Port is available
-        });
+      const socket = new net.Socket();
+      socket.setTimeout(500);
+      socket.on('connect', () => {
+        socket.destroy();
+        resolve(true);
       });
-
-      server.on('error', (err: NodeJS.ErrnoException) => {
-        if (err.code === 'EADDRINUSE') {
-          resolve(true); // Port is in use
-        } else {
-          resolve(false); // Other error, assume available
-        }
+      socket.on('timeout', () => {
+        socket.destroy();
+        resolve(false);
       });
+      socket.on('error', () => {
+        resolve(false);
+      });
+      socket.connect(port, '127.0.0.1');
     });
   }
 
@@ -371,12 +352,42 @@ export class ServiceManager {
   /**
    * Start stanza-service.py
    */
-  private async startLemmatizationService(): Promise<void> {
+  private async startLemmatizationService(inheritedRestartCount: number = 0): Promise<void> {
     if (!this.enabled || this.isShuttingDown) {
       return;
     }
 
     try {
+      // Check if stanza is already running and responding (e.g. orphaned process from previous run)
+      try {
+        const existingUrl = `http://127.0.0.1:${this.lemmatizationPort}`;
+        const response = await fetch(`${existingUrl}/status`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(2000),
+        });
+        if (response.ok) {
+          this.logger.info(
+            { port: this.lemmatizationPort },
+            '[ServiceManager] stanza-service already running on port, adopting existing instance'
+          );
+          this.lemmatizationService = {
+            name: 'stanza-service',
+            port: this.lemmatizationPort,
+            url: existingUrl,
+            process: null,
+            restartCount: inheritedRestartCount,
+          };
+          process.env.LEMMATIZATION_SERVER_URL = existingUrl;
+          this.logger.info(
+            { url: existingUrl, port: this.lemmatizationPort },
+            '[ServiceManager] stanza-service started successfully'
+          );
+          return;
+        }
+      } catch {
+        // Not running, proceed with fresh start
+      }
+
       // Check if port is already in use
       const portInUse = await this.isPortInUse(this.lemmatizationPort);
       let actualPort = this.lemmatizationPort;
@@ -458,7 +469,7 @@ export class ServiceManager {
         port: actualPort,
         url,
         process: lemmatizationProcess,
-        restartCount: 0,
+        restartCount: inheritedRestartCount,
       };
 
       // Set environment variable so other services can use it
@@ -469,9 +480,7 @@ export class ServiceManager {
       lemmatizationProcess.stdout?.on('data', (data) => {
         if (this.isShuttingDown) return;
         const message = data.toString().trim();
-        // Parse log level from message if it contains [Lemmatization] prefix
         if (message.includes('[Lemmatization]')) {
-          // Check if it's an error message
           if (message.toLowerCase().includes('error') || message.toLowerCase().includes('failed')) {
             this.logger.warn({ service: 'stanza' }, message);
           } else {
@@ -486,7 +495,6 @@ export class ServiceManager {
       lemmatizationProcess.stderr?.on('data', (data) => {
         if (this.isShuttingDown) return;
         const message = data.toString().trim();
-        // Check if it's a critical error or just a warning
         if (
           message.toLowerCase().includes('error') ||
           message.toLowerCase().includes('exception')
@@ -499,12 +507,13 @@ export class ServiceManager {
 
       // Handle process exit
       lemmatizationProcess.on('exit', (code, signal) => {
+        const svc = this.lemmatizationService;
         this.handleServiceExit(
-          this.lemmatizationService,
+          svc,
           'stanza-service',
           code,
           signal,
-          () => this.startLemmatizationService(),
+          () => this.startLemmatizationService(svc?.restartCount ?? 0),
           () => {
             this.lemmatizationService = null;
           }
