@@ -31,8 +31,10 @@ export async function loadDialogSession(dialogCount: number): Promise<DialogLoad
         if (!sentence) {
           sessionManager.consumeCurrentDialogSession();
         } else {
-          const currentLanguage = await window.electronAPI.database.getCurrentLanguage();
-          const word = await window.electronAPI.database.getWordById(sentence.wordId);
+          const [currentLanguage, word] = await Promise.all([
+            window.electronAPI.database.getCurrentLanguage(),
+            window.electronAPI.database.getWordById(sentence.wordId),
+          ]);
 
           if (word && word.language === currentLanguage) {
             const previousCorrections: string[] = [];

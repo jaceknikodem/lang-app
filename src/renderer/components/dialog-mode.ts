@@ -264,10 +264,11 @@ export class DialogMode extends BaseComponent {
         this.initialTotalDialogs = session.dialogSessions?.length || 0;
       }
 
-      await this.loadAutoplaySetting();
-      await this.loadShowTranslationsSetting();
-
-      const result = await loadDialogSessionService(this.dialogCount);
+      const [result] = await Promise.all([
+        loadDialogSessionService(this.dialogCount),
+        this.loadAutoplaySetting(),
+        this.loadShowTranslationsSetting(),
+      ]);
 
       switch (result.status) {
         case 'loaded':

@@ -5,6 +5,7 @@ import {
 } from '../../shared/types/database.js';
 import { ContentGenerator } from '../llm/content-generator.js';
 import { AudioService } from '../audio/audio-service.js';
+import { DialogService } from '../dialog/dialog-service.js';
 import { splitSentenceIntoParts } from '../../shared/utils/sentence.js';
 import { precomputeSentenceTokens } from '../database/sentence-preprocessor.js';
 import type { LemmatizationService } from '../lemmatization/index.js';
@@ -38,6 +39,7 @@ export class WordGenerationRunner {
   private readonly retryBackoffMs: number;
   private readonly defaultSentenceCount: number;
   private readonly onWordUpdated?: WordGenerationRunnerOptions['onWordUpdated'];
+  private readonly dialogService: DialogService;
   private readonly logger: Logger;
 
   private running = false;
@@ -54,6 +56,10 @@ export class WordGenerationRunner {
     this.retryBackoffMs = options.retryBackoffMs ?? 2000;
     this.defaultSentenceCount = options.desiredSentenceCount ?? 3;
     this.onWordUpdated = options.onWordUpdated;
+    this.dialogService = new DialogService(
+      options.database,
+      options.contentGenerator.getCurrentClient()
+    );
   }
 
   start(): void {
@@ -181,6 +187,14 @@ export class WordGenerationRunner {
           },
           '[WordGenerationRunner] Requesting additional sentences'
         );
+
+        // Fetch known words once per job for variant generation
+        const allWords = await this.database.getAllWords(language, false, false);
+        const knownWords = allWords
+          .filter((w) => w.known || (w.strength ?? 0) >= 40)
+          .slice(0, 50)
+          .map((w) => w.word);
+
         const generatedSentences = await this.contentGenerator.generateWordSentences(
           word.word,
           language,
@@ -435,6 +449,38 @@ export class WordGenerationRunner {
               '[WordGenerationRunner] Failed to precompute tokens for sentence'
             );
             // Non-fatal - sentence will work without precomputed tokens
+          }
+
+          // Pre-generate dialogue variants for sentences eligible for dialog mode
+          // (contextBefore is required for dialog sentence selection)
+          if (sentence.contextBefore) {
+            this.dialogService
+              .generateDialogueVariants(
+                {
+                  id: sentenceId,
+                  wordId: word.id,
+                  sentence: sentence.sentence,
+                  translation: sentence.translation,
+                  audioPath: audioPath,
+                  createdAt: new Date(),
+                  playCount: 0,
+                  contextBefore: sentence.contextBefore,
+                  contextBeforeTranslation: sentence.contextBeforeTranslation,
+                  contextAfter: sentence.contextAfter,
+                  contextAfterTranslation: sentence.contextAfterTranslation,
+                  language,
+                  pronunciation: sentence.pronunciation,
+                },
+                [],
+                knownWords,
+                language
+              )
+              .catch((err) => {
+                this.logger.warn(
+                  { error: err, sentenceId },
+                  '[WordGenerationRunner] Failed to pre-generate dialogue variants'
+                );
+              });
           }
 
           normalizedExisting.add(normalizedSentence);
