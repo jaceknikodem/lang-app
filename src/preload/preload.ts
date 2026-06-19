@@ -70,7 +70,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       audioGenerationVoiceId?: string,
       pronunciation?: string,
       contextBeforePronunciation?: string,
-      contextAfterPronunciation?: string
+      contextAfterPronunciation?: string,
+      proficiencyLevel?: string
     ) =>
       ipcRenderer.invoke(
         IPC_CHANNELS.DATABASE.INSERT_SENTENCE,
@@ -89,7 +90,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         audioGenerationVoiceId,
         pronunciation,
         contextBeforePronunciation,
-        contextAfterPronunciation
+        contextAfterPronunciation,
+        proficiencyLevel
       ),
     getSentencesByWord: (wordId: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.DATABASE.GET_SENTENCES_BY_WORD, wordId),
@@ -562,7 +564,8 @@ declare global {
           contextBefore?: string,
           contextAfter?: string,
           contextBeforeTranslation?: string,
-          contextAfterTranslation?: string
+          contextAfterTranslation?: string,
+          proficiencyLevel?: string
         ) => Promise<number>;
         getSentencesByWord: (wordId: number) => Promise<any[]>;
         getSentencesByIds: (sentenceIds: number[]) => Promise<any[]>;

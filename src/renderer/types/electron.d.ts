@@ -56,7 +56,8 @@ declare global {
           sentenceGenerationModel?: string,
           audioGenerationService?: string,
           audioGenerationModel?: string,
-          audioGenerationVoiceId?: string
+          audioGenerationVoiceId?: string,
+          proficiencyLevel?: string
         ) => Promise<number>;
         getSentencesByWord: (wordId: number) => Promise<Sentence[]>;
         getSentencesByIds: (sentenceIds: number[]) => Promise<Sentence[]>;

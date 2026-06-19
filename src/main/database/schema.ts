@@ -67,7 +67,8 @@ export function initializeSchema(db: Database.Database): void {
       after_sentence_audio_path TEXT,
       pronunciation TEXT,
       context_before_pronunciation TEXT,
-      context_after_pronunciation TEXT
+      context_after_pronunciation TEXT,
+      proficiency_level TEXT
     )
   `);
 
@@ -76,6 +77,7 @@ export function initializeSchema(db: Database.Database): void {
   addColumnIfNotExists(db, 'sentences', 'pronunciation', 'TEXT');
   addColumnIfNotExists(db, 'sentences', 'context_before_pronunciation', 'TEXT');
   addColumnIfNotExists(db, 'sentences', 'context_after_pronunciation', 'TEXT');
+  addColumnIfNotExists(db, 'sentences', 'proficiency_level', 'TEXT');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS progress (

@@ -581,7 +581,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     tokenizedTokens?: PrecomputedToken[],
     pronunciation?: string,
     contextBeforePronunciation?: string,
-    contextAfterPronunciation?: string
+    contextAfterPronunciation?: string,
+    proficiencyLevel?: string
   ): Promise<number> {
     const db = this.getDb();
 
@@ -602,9 +603,10 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           word_id, language, sentence, translation, audio_path,
           context_before, context_after, context_before_translation, context_after_translation,
           sentence_parts, sentence_generation_model, audio_generation_service, audio_generation_model,
-          audio_generation_voice_id, sentence_tokens, pronunciation, context_before_pronunciation, context_after_pronunciation
+          audio_generation_voice_id, sentence_tokens, pronunciation, context_before_pronunciation, context_after_pronunciation,
+          proficiency_level
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const result = stmt.run(
@@ -625,7 +627,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         serializedTokens,
         pronunciation || null,
         contextBeforePronunciation || null,
-        contextAfterPronunciation || null
+        contextAfterPronunciation || null,
+        proficiencyLevel || null
       );
 
       const sentenceId = result.lastInsertRowid as number;
@@ -2360,6 +2363,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       pronunciation: (row.pronunciation as string) || undefined,
       contextBeforePronunciation: (row.context_before_pronunciation as string) || undefined,
       contextAfterPronunciation: (row.context_after_pronunciation as string) || undefined,
+      proficiencyLevel: (row.proficiency_level as string) || undefined,
     };
   }
 

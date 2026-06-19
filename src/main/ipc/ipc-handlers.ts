@@ -193,6 +193,7 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
         TextSchema.optional(),
         TextSchema.optional(),
         TextSchema.optional(),
+        z.string().optional(),
       ],
       description: 'insert sentence',
       handler: (
@@ -211,7 +212,8 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
         audioGenerationVoiceId,
         pronunciation,
         contextBeforePronunciation,
-        contextAfterPronunciation
+        contextAfterPronunciation,
+        proficiencyLevel
       ) =>
         databaseLayer.insertSentence(
           wordId,
@@ -230,7 +232,8 @@ function setupDatabaseHandlers(databaseLayer: SQLiteDatabaseLayer): void {
           undefined, // tokenizedTokens
           pronunciation,
           contextBeforePronunciation,
-          contextAfterPronunciation
+          contextAfterPronunciation,
+          proficiencyLevel
         ),
     },
     {

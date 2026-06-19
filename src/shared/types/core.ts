@@ -64,6 +64,7 @@ export interface Sentence {
   pronunciation?: string; // Phonetic reading (hiragana for Japanese)
   contextBeforePronunciation?: string; // Pronunciation of context before
   contextAfterPronunciation?: string; // Pronunciation of context after
+  proficiencyLevel?: string;
 }
 
 /**

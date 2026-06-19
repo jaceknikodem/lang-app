@@ -188,6 +188,9 @@ export class WordGenerationRunner {
           '[WordGenerationRunner] Requesting additional sentences'
         );
 
+        const proficiencyKey = `language_proficiency_${language.toLowerCase()}`;
+        const proficiencyLevel = (await this.database.getSetting(proficiencyKey)) || undefined;
+
         // Fetch known words once per job for variant generation
         const allWords = await this.database.getAllWords(language, false, false);
         const knownWords = allWords
@@ -234,7 +237,8 @@ export class WordGenerationRunner {
             undefined, // tokenizedTokens
             sentence.pronunciation,
             sentence.contextBeforePronunciation,
-            sentence.contextAfterPronunciation
+            sentence.contextAfterPronunciation,
+            proficiencyLevel
           );
 
           // Generate audio now that we have sentenceId
