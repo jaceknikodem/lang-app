@@ -70,6 +70,77 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   private getDb(): Database.Database {
     return this.connection.getDatabase();
   }
+
+  private requireChange(result: { changes: number }, entity: string, id: number): void {
+    if (result.changes === 0) {
+      throw new Error(`${entity} with ID ${id} not found`);
+    }
+  }
+
+  private updateSentenceColumn(sentenceId: number, column: string, value: unknown): void {
+    const result = this.getDb()
+      .prepare(`UPDATE sentences SET ${column} = ? WHERE id = ?`)
+      .run(value, sentenceId);
+    this.requireChange(result, 'Sentence', sentenceId);
+  }
+
+  private storeLemmas(
+    db: Database.Database,
+    sentenceId: number,
+    tokens: PrecomputedToken[],
+    replace = false
+  ): void {
+    const lemmas = new Set<string>();
+    for (const token of tokens) {
+      const lemma = token.lemma || token.dictionaryForm;
+      if (lemma) lemmas.add(lemma.toLowerCase().trim());
+    }
+    if (lemmas.size === 0) return;
+    if (replace) {
+      db.prepare('DELETE FROM sentence_lemmas WHERE sentence_id = ?').run(sentenceId);
+    }
+    const insertLemma = db.prepare(
+      'INSERT OR IGNORE INTO sentence_lemmas (sentence_id, lemma) VALUES (?, ?)'
+    );
+    for (const lemma of lemmas) {
+      if (lemma.length > 0) insertLemma.run(sentenceId, lemma);
+    }
+    this.logger.debug(
+      { sentenceId, lemmaCount: lemmas.size },
+      `Stored ${lemmas.size} lemmas for sentence ${sentenceId}`
+    );
+  }
+
+  private getWordsWithSentencesBase(
+    language: string,
+    includeKnown: boolean,
+    includeIgnored: boolean,
+    order: 'random' | 'studied'
+  ): Word[] {
+    const db = this.getDb();
+    const where: string[] = ['w.language = ?'];
+    if (!includeKnown) where.push('w.known = FALSE');
+    if (!includeIgnored) where.push('w.ignored = FALSE');
+    const orderBy =
+      order === 'random'
+        ? 'ORDER BY w.strength ASC, RANDOM()'
+        : 'ORDER BY w.last_studied ASC NULLS FIRST';
+    const stmt = db.prepare(`
+      SELECT DISTINCT w.* FROM words w
+      INNER JOIN sentence_words sw ON w.id = sw.word_id
+      WHERE ${where.join(' AND ')}
+      ${orderBy}
+    `);
+    return (stmt.all(language) as any[]).map(this.mapRowToWord);
+  }
+
+  private setWordBooleanField(wordId: number, field: 'known' | 'ignored', value: boolean): void {
+    const result = this.getDb()
+      .prepare(`UPDATE words SET ${field} = ?, last_studied = CURRENT_TIMESTAMP WHERE id = ?`)
+      .run(value ? 1 : 0, wordId);
+    this.requireChange(result, 'Word', wordId);
+  }
+
   // Also back-links the word to any existing sentences that contain its lemma.
   async insertWord(wordData: CreateWordRequest): Promise<number> {
     const db = this.getDb();
@@ -137,49 +208,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     return wordId;
   }
   async updateWordStrength(wordId: number, strength: number): Promise<void> {
-    const db = this.getDb();
-
-    const stmt = db.prepare(`
-      UPDATE words 
-      SET strength = ?, last_studied = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `);
-
-    const result = stmt.run(strength, wordId);
-
-    if (result.changes === 0) {
-      throw new Error(`Word with ID ${wordId} not found`);
-    }
+    const result = this.getDb()
+      .prepare('UPDATE words SET strength = ?, last_studied = CURRENT_TIMESTAMP WHERE id = ?')
+      .run(strength, wordId);
+    this.requireChange(result, 'Word', wordId);
   }
   async markWordKnown(wordId: number, known: boolean): Promise<void> {
-    const db = this.getDb();
-
-    const stmt = db.prepare(`
-      UPDATE words 
-      SET known = ?, last_studied = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `);
-
-    const result = stmt.run(known ? 1 : 0, wordId);
-
-    if (result.changes === 0) {
-      throw new Error(`Word with ID ${wordId} not found`);
-    }
+    this.setWordBooleanField(wordId, 'known', known);
   }
   async markWordIgnored(wordId: number, ignored: boolean): Promise<void> {
-    const db = this.getDb();
-
-    const stmt = db.prepare(`
-      UPDATE words 
-      SET ignored = ?, last_studied = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `);
-
-    const result = stmt.run(ignored ? 1 : 0, wordId);
-
-    if (result.changes === 0) {
-      throw new Error(`Word with ID ${wordId} not found`);
-    }
+    this.setWordBooleanField(wordId, 'ignored', ignored);
   }
   async getWordsToStudy(limit: number, language: string): Promise<Word[]> {
     const db = this.getDb();
@@ -243,62 +281,16 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     includeKnown: boolean = true,
     includeIgnored: boolean = false
   ): Promise<Word[]> {
-    const db = this.getDb();
-
-    const whereConditions: string[] = [`w.language = ?`];
-
-    if (!includeKnown) {
-      whereConditions.push('w.known = FALSE');
-    }
-
-    if (!includeIgnored) {
-      whereConditions.push('w.ignored = FALSE');
-    }
-
-    const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
-
-    // Use sentence_words junction table instead of direct join on sentences.word_id
-    const stmt = db.prepare(`
-      SELECT DISTINCT w.* FROM words w
-      INNER JOIN sentence_words sw ON w.id = sw.word_id
-      ${whereClause}
-      ORDER BY w.strength ASC, RANDOM()
-    `);
-
-    const rows = stmt.all(language) as any[];
-    const words = rows.map(this.mapRowToWord);
-
-    return this.shuffleArray(words);
+    return this.shuffleArray(
+      this.getWordsWithSentencesBase(language, includeKnown, includeIgnored, 'random')
+    );
   }
   async getWordsWithSentencesOrderedByStrength(
     language: string,
     includeKnown: boolean = true,
     includeIgnored: boolean = false
   ): Promise<Word[]> {
-    const db = this.getDb();
-
-    const whereConditions: string[] = [`w.language = ?`];
-
-    if (!includeKnown) {
-      whereConditions.push('w.known = FALSE');
-    }
-
-    if (!includeIgnored) {
-      whereConditions.push('w.ignored = FALSE');
-    }
-
-    const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
-
-    // Use sentence_words junction table instead of direct join on sentences.word_id
-    const stmt = db.prepare(`
-      SELECT DISTINCT w.* FROM words w
-      INNER JOIN sentence_words sw ON w.id = sw.word_id
-      ${whereClause}
-      ORDER BY w.last_studied ASC NULLS FIRST
-    `);
-
-    const rows = stmt.all(language) as any[];
-    return rows.map(this.mapRowToWord);
+    return this.getWordsWithSentencesBase(language, includeKnown, includeIgnored, 'studied');
   }
   // TODO: Review - querying the whole table is not efficient, we should use a more efficient query
   async getAllWords(
@@ -683,36 +675,9 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         updateSentenceCount.run(wordId);
       }
 
-      // If tokenizedTokens were provided, also store lemmas immediately
       if (tokenizedTokens && tokenizedTokens.length > 0) {
         try {
-          const lemmas = new Set<string>();
-
-          tokenizedTokens.forEach((token: PrecomputedToken) => {
-            if (token.lemma) {
-              lemmas.add(token.lemma.toLowerCase().trim());
-            } else if (token.dictionaryForm) {
-              lemmas.add(token.dictionaryForm.toLowerCase().trim());
-            }
-          });
-
-          if (lemmas.size > 0) {
-            const insertLemma = db.prepare(`
-              INSERT OR IGNORE INTO sentence_lemmas (sentence_id, lemma)
-              VALUES (?, ?)
-            `);
-
-            lemmas.forEach((lemma) => {
-              if (lemma && lemma.length > 0) {
-                insertLemma.run(sentenceId, lemma);
-              }
-            });
-
-            this.logger.debug(
-              { sentenceId, lemmaCount: lemmas.size },
-              `[insertSentence] Stored ${lemmas.size} lemmas for sentence ${sentenceId}`
-            );
-          }
+          this.storeLemmas(db, sentenceId, tokenizedTokens);
         } catch (error) {
           this.logger.warn(
             { error, sentenceId },
@@ -814,20 +779,11 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
   async updateSentenceLastShown(sentenceId: number): Promise<void> {
-    const db = this.getDb();
-
     try {
-      const stmt = db.prepare(`
-        UPDATE sentences 
-        SET last_shown = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `);
-
-      const result = stmt.run(sentenceId);
-
-      if (result.changes === 0) {
-        throw new Error(`Sentence with ID ${sentenceId} not found`);
-      }
+      const result = this.getDb()
+        .prepare('UPDATE sentences SET last_shown = CURRENT_TIMESTAMP WHERE id = ?')
+        .run(sentenceId);
+      this.requireChange(result, 'Sentence', sentenceId);
     } catch (error) {
       throw wrapError(error, `Failed to update sentence last shown`);
     }
@@ -847,9 +803,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           WHERE id = ?
         `);
         const result = stmt.run(audioPath, audioGenerationVoiceId || null, sentenceId);
-        if (result.changes === 0) {
-          throw new Error(`Sentence with ID ${sentenceId} not found`);
-        }
+        this.requireChange(result, 'Sentence', sentenceId);
       } else {
         // Update only audio path
         const stmt = db.prepare(`
@@ -858,136 +812,59 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           WHERE id = ?
         `);
         const result = stmt.run(audioPath, sentenceId);
-        if (result.changes === 0) {
-          throw new Error(`Sentence with ID ${sentenceId} not found`);
-        }
+        this.requireChange(result, 'Sentence', sentenceId);
       }
     } catch (error) {
       throw wrapError(error, `Failed to update sentence audio path`);
     }
   }
   async updateBeforeSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void> {
-    const db = this.getDb();
     try {
-      const stmt = db.prepare(`
-        UPDATE sentences
-        SET before_sentence_audio_path = ?
-        WHERE id = ?
-      `);
-      const result = stmt.run(audioPath, sentenceId);
-      if (result.changes === 0) {
-        throw new Error(`Sentence with ID ${sentenceId} not found`);
-      }
+      this.updateSentenceColumn(sentenceId, 'before_sentence_audio_path', audioPath);
     } catch (error) {
       throw wrapError(error, `Failed to update before sentence audio path`);
     }
   }
 
   async updateAfterSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void> {
-    const db = this.getDb();
     try {
-      const stmt = db.prepare(`
-        UPDATE sentences
-        SET after_sentence_audio_path = ?
-        WHERE id = ?
-      `);
-      const result = stmt.run(audioPath, sentenceId);
-      if (result.changes === 0) {
-        throw new Error(`Sentence with ID ${sentenceId} not found`);
-      }
+      this.updateSentenceColumn(sentenceId, 'after_sentence_audio_path', audioPath);
     } catch (error) {
       throw wrapError(error, `Failed to update after sentence audio path`);
     }
   }
   async updateSentenceTokens(sentenceId: number, tokens: PrecomputedToken[]): Promise<void> {
     const db = this.getDb();
-
     try {
-      const serializedTokens = serializeTokenizedTokens(tokens);
-      const stmt = db.prepare(`
-        UPDATE sentences
-        SET sentence_tokens = ?
-        WHERE id = ?
-      `);
-      const result = stmt.run(serializedTokens, sentenceId);
-      if (result.changes === 0) {
-        throw new Error(`Sentence with ID ${sentenceId} not found`);
+      const result = db
+        .prepare('UPDATE sentences SET sentence_tokens = ? WHERE id = ?')
+        .run(serializeTokenizedTokens(tokens), sentenceId);
+      this.requireChange(result, 'Sentence', sentenceId);
+      if (tokens && tokens.length > 0) {
+        this.storeLemmas(db, sentenceId, tokens, true);
       }
-
-      if (!tokens || tokens.length === 0) {
-        return;
-      }
-
-      const lemmas = new Set<string>();
-
-      tokens.forEach((token: PrecomputedToken) => {
-        // Collect lemmas (normalized)
-        if (token.lemma) {
-          lemmas.add(token.lemma.toLowerCase().trim());
-        }
-        // Also use dictionaryForm as fallback if no lemma
-        else if (token.dictionaryForm) {
-          lemmas.add(token.dictionaryForm.toLowerCase().trim());
-        }
-      });
-
-      // Store all lemmas in sentence_lemmas table (even for words not in database yet)
-      const insertLemma = db.prepare(`
-        INSERT OR IGNORE INTO sentence_lemmas (sentence_id, lemma)
-        VALUES (?, ?)
-      `);
-
-      // Remove old lemmas for this sentence
-      const deleteOldLemmas = db.prepare(`
-        DELETE FROM sentence_lemmas WHERE sentence_id = ?
-      `);
-      deleteOldLemmas.run(sentenceId);
-
-      // Insert all lemmas
-      lemmas.forEach((lemma) => {
-        if (lemma && lemma.length > 0) {
-          insertLemma.run(sentenceId, lemma);
-        }
-      });
-
-      this.logger.debug(
-        { sentenceId, lemmaCount: lemmas.size },
-        `[updateSentenceTokens] Stored ${lemmas.size} lemmas for sentence ${sentenceId}`
-      );
     } catch (error) {
       throw wrapError(error, `Failed to update sentence tokens`);
     }
   }
   async incrementSentencePlayCount(sentenceId: number): Promise<void> {
-    const db = this.getDb();
-
     try {
-      const stmt = db.prepare(`
-        UPDATE sentences
-        SET play_count = play_count + 1
-        WHERE id = ?
-      `);
-      const result = stmt.run(sentenceId);
-      if (result.changes === 0) {
-        throw new Error(`Sentence with ID ${sentenceId} not found`);
-      }
+      const result = this.getDb()
+        .prepare('UPDATE sentences SET play_count = play_count + 1 WHERE id = ?')
+        .run(sentenceId);
+      this.requireChange(result, 'Sentence', sentenceId);
     } catch (error) {
       throw wrapError(error, `Failed to increment sentence play count`);
     }
   }
   async incrementGrammarExplanationCount(wordId: number): Promise<void> {
-    const db = this.getDb();
-
     try {
-      const stmt = db.prepare(`
-        UPDATE words
-        SET grammar_explanation_count = grammar_explanation_count + 1
-        WHERE id = ?
-      `);
-      const result = stmt.run(wordId);
-      if (result.changes === 0) {
-        throw new Error(`Word with ID ${wordId} not found`);
-      }
+      const result = this.getDb()
+        .prepare(
+          'UPDATE words SET grammar_explanation_count = grammar_explanation_count + 1 WHERE id = ?'
+        )
+        .run(wordId);
+      this.requireChange(result, 'Word', wordId);
     } catch (error) {
       throw wrapError(error, `Failed to increment grammar explanation count`);
     }
@@ -1149,17 +1026,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       const stmt = db.prepare(query);
       const rows = limit ? (stmt.all(sentenceId, limit) as any[]) : (stmt.all(sentenceId) as any[]);
 
-      return rows.map((row) => ({
-        id: row.id,
-        sentenceId: row.sentence_id,
-        variantSentence: row.variant_sentence,
-        variantTranslation: row.variant_translation,
-        variantPronunciation: row.variant_pronunciation || undefined,
-        createdAt: new Date(row.created_at),
-        continuationText: row.continuation_text || undefined,
-        continuationTranslation: row.continuation_translation || undefined,
-        continuationAudio: row.continuation_audio || undefined,
-      }));
+      return rows.map((row) => this.mapRowToDialogueVariant(row));
     } catch (error) {
       throw wrapError(error, `Failed to get dialogue variants`);
     }
@@ -1193,17 +1060,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         return null;
       }
 
-      return {
-        id: row.id,
-        sentenceId: row.sentence_id,
-        variantSentence: row.variant_sentence,
-        variantTranslation: row.variant_translation,
-        variantPronunciation: row.variant_pronunciation || undefined,
-        createdAt: new Date(row.created_at),
-        continuationText: row.continuation_text || undefined,
-        continuationTranslation: row.continuation_translation || undefined,
-        continuationAudio: row.continuation_audio || undefined,
-      };
+      return this.mapRowToDialogueVariant(row);
     } catch (error) {
       throw wrapError(error, `Failed to get dialogue variant`);
     }
@@ -1241,35 +1098,21 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     }
   }
   async deleteSentence(sentenceId: number): Promise<void> {
-    const db = this.getDb();
-
     try {
-      // Mark the sentence as ignored instead of deleting it
-      const stmt = db.prepare('UPDATE sentences SET ignored = TRUE WHERE id = ?');
-      const result = stmt.run(sentenceId);
-
-      if (result.changes === 0) {
-        throw new Error(`Sentence with ID ${sentenceId} not found`);
-      }
+      const result = this.getDb()
+        .prepare('UPDATE sentences SET ignored = TRUE WHERE id = ?')
+        .run(sentenceId);
+      this.requireChange(result, 'Sentence', sentenceId);
     } catch (error) {
       throw wrapError(error, `Failed to mark sentence as ignored`);
     }
   }
   async updateLastStudied(wordId: number): Promise<void> {
-    const db = this.getDb();
-
     try {
-      const stmt = db.prepare(`
-        UPDATE words 
-        SET last_studied = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `);
-
-      const result = stmt.run(wordId);
-
-      if (result.changes === 0) {
-        throw new Error(`Word with ID ${wordId} not found`);
-      }
+      const result = this.getDb()
+        .prepare('UPDATE words SET last_studied = CURRENT_TIMESTAMP WHERE id = ?')
+        .run(wordId);
+      this.requireChange(result, 'Word', wordId);
     } catch (error) {
       throw wrapError(error, `Failed to update last studied`);
     }
@@ -2150,10 +1993,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       `);
 
       const result = stmt.run(...params, wordId);
-
-      if (result.changes === 0) {
-        throw new Error(`Word with ID ${wordId} not found`);
-      }
+      this.requireChange(result, 'Word', wordId);
     } catch (error) {
       throw wrapError(error, `Failed to update word SRS`);
     }
@@ -2520,6 +2360,20 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       pronunciation: (row.pronunciation as string) || undefined,
       contextBeforePronunciation: (row.context_before_pronunciation as string) || undefined,
       contextAfterPronunciation: (row.context_after_pronunciation as string) || undefined,
+    };
+  }
+
+  private mapRowToDialogueVariant(row: Record<string, unknown>): DialogueVariant {
+    return {
+      id: row.id as number,
+      sentenceId: row.sentence_id as number,
+      variantSentence: row.variant_sentence as string,
+      variantTranslation: row.variant_translation as string,
+      variantPronunciation: (row.variant_pronunciation as string) || undefined,
+      createdAt: new Date(row.created_at as string | number | Date),
+      continuationText: (row.continuation_text as string) || undefined,
+      continuationTranslation: (row.continuation_translation as string) || undefined,
+      continuationAudio: (row.continuation_audio as string) || undefined,
     };
   }
 
