@@ -1166,6 +1166,35 @@ Return your response in Markdown format. The explanation HAS TO BE IN ENGLISH`;
     );
   }
 
+  async translateWords(words: string[], language: string): Promise<GeneratedWord[]> {
+    const wordList = words.join(', ');
+    const prompt = `Translate these ${language} words to English.
+Return ONLY a JSON array, no explanations or extra text.
+
+Words: ${wordList}
+
+Expected output format:
+[
+  {"word": "${language.toLowerCase()}_word", "translation": "english_translation"}
+]
+
+Rules:
+1. Preserve the exact word form provided (do not lemmatize or change)
+2. One object per word, in the same order
+3. Translation should be concise (1-4 words)`;
+
+    const response = await this.makeRequest(prompt, this.getWordGenerationModel());
+    const parseResult = WordGenerationResponseSchema.safeParse(response);
+
+    if (!parseResult.success) {
+      throw new Error(
+        `Failed to parse translations: ${parseResult.error.issues.map((i) => i.message).join(', ')}`
+      );
+    }
+
+    return parseResult.data;
+  }
+
   /**
    * Create LLM error with proper typing and cause chaining
    */

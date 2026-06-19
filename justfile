@@ -34,3 +34,7 @@ deep-clean: clean
 # Pre-generate 20 random topics × 5 words and run the full generation pipeline
 seed-words:
     npm run build:main && node -r ./src/main/scripts/electron-mock.cjs dist/main/scripts/seed-words.js
+
+# Add specific words to the learning queue: just add-words "word1,word2,word3" [topic]
+add-words words topic='':
+    npm run build:main && node -r ./src/main/scripts/electron-mock.cjs dist/main/scripts/add-words.js "{{words}}" "{{topic}}"
