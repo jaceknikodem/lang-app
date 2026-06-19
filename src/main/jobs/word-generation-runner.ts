@@ -328,6 +328,52 @@ export class WordGenerationRunner {
             }
           }
 
+          // Generate context before/after audio
+          const isJapanese = language === 'japanese' || language === 'ja';
+          if (sentence.contextBefore) {
+            try {
+              const contextBeforeText =
+                isJapanese && sentence.contextBeforePronunciation
+                  ? sentence.contextBeforePronunciation
+                  : sentence.contextBefore;
+              const beforeAudioPath = await this.audioService.generateAudio(
+                contextBeforeText,
+                language,
+                '_before_sentence',
+                word.id,
+                sentenceId
+              );
+              await this.database.updateBeforeSentenceAudioPath(sentenceId, beforeAudioPath);
+            } catch (error) {
+              this.logger.warn(
+                { error, sentenceId },
+                '[WordGenerationRunner] Failed to generate context before audio'
+              );
+            }
+          }
+
+          if (sentence.contextAfter) {
+            try {
+              const contextAfterText =
+                isJapanese && sentence.contextAfterPronunciation
+                  ? sentence.contextAfterPronunciation
+                  : sentence.contextAfter;
+              const afterAudioPath = await this.audioService.generateAudio(
+                contextAfterText,
+                language,
+                '_after_sentence',
+                word.id,
+                sentenceId
+              );
+              await this.database.updateAfterSentenceAudioPath(sentenceId, afterAudioPath);
+            } catch (error) {
+              this.logger.warn(
+                { error, sentenceId },
+                '[WordGenerationRunner] Failed to generate context after audio'
+              );
+            }
+          }
+
           // Update sentence with audio path and metadata
           if (audioPath) {
             await this.database.updateSentenceAudioPath(sentenceId, audioPath, audioVoiceId);

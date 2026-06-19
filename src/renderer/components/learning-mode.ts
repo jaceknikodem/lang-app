@@ -1039,7 +1039,7 @@ export class LearningMode extends BaseComponent {
     const currentSentence = this.getCurrentSentence();
     if (!currentSentence?.audioPath) return;
     try {
-      const { audioPaths } = await buildSentenceAudioSequence(currentSentence);
+      const { audioPaths } = buildSentenceAudioSequence(currentSentence);
       await audioPlayer.preloadMultiple(audioPaths);
     } catch (error) {
       logger.warn({ error }, 'Failed to load current sentence audio');
@@ -1084,15 +1084,14 @@ export class LearningMode extends BaseComponent {
     try {
       const allPaths = new Set<string>();
       const sentences = wordsWithSentences.flatMap((w) => w.sentences);
-      await Promise.all(
-        sentences.map((s) =>
-          buildSentenceAudioSequence(s)
-            .then(({ audioPaths }) => audioPaths.forEach((p) => allPaths.add(p)))
-            .catch((err) =>
-              logger.warn({ error: err }, 'Failed to build audio sequence for preload')
-            )
-        )
-      );
+      for (const s of sentences) {
+        try {
+          const { audioPaths } = buildSentenceAudioSequence(s);
+          audioPaths.forEach((p) => allPaths.add(p));
+        } catch (err) {
+          logger.warn({ error: err }, 'Failed to build audio sequence for preload');
+        }
+      }
       if (allPaths.size === 0) return;
       logger.debug(
         { audioFileCount: allPaths.size },
@@ -1119,7 +1118,7 @@ export class LearningMode extends BaseComponent {
         this.lastSentenceWithAudioStarted = currentSentence.id;
       }
 
-      const { audioPaths, audioTypes } = await buildSentenceAudioSequence(currentSentence);
+      const { audioPaths, audioTypes } = buildSentenceAudioSequence(currentSentence);
       if (audioPaths.length === 0) return;
 
       let currentIndex = 0;

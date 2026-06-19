@@ -347,10 +347,6 @@ declare global {
           variantId: number,
           conversationHistory?: string[]
         ) => Promise<{ text: string; translation: string; audio?: string; pronunciation?: string }>;
-        ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
-        ensureContextSentences: (
-          sentenceId: number
-        ) => Promise<{ beforeSentenceAudio?: string; afterSentenceAudio?: string }>;
         pregenerateSession: () => Promise<{
           sentenceId: number;
           sentence: string;

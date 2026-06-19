@@ -130,15 +130,8 @@ export async function loadDialogSession(dialogCount: number): Promise<DialogLoad
       }
     }
 
-    // Use cached audio paths from DB if already available; otherwise generate in background
     const beforeSentenceAudio = sentence.beforeSentenceAudioPath || null;
     const afterSentenceAudio = sentence.afterSentenceAudioPath || null;
-
-    if (!beforeSentenceAudio || !afterSentenceAudio) {
-      window.electronAPI.dialog.ensureContextSentences(sentence.id).catch((error) => {
-        logger.warn({ error }, 'Failed to generate context sentences audio');
-      });
-    }
 
     if (!isTopicBasedFlow) {
       window.electronAPI.dialog.generateVariants(sentence.id).catch((error) => {

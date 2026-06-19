@@ -346,10 +346,6 @@ export interface IPCBridge {
       wordId: number,
       sentenceId: number
     ) => Promise<string>;
-    ensureBeforeSentenceAudio: (sentenceId: number) => Promise<string | null>;
-    ensureContextSentences: (
-      sentenceId: number
-    ) => Promise<{ beforeSentenceAudio: string | null; afterSentenceAudio: string | null }>;
     pregenerateSession: () => Promise<DialogSession | null>;
     pregenerateSessions: (count: number) => Promise<DialogSession[]>;
   };
@@ -541,8 +537,6 @@ export const IPC_CHANNELS = {
     GENERATE_VARIANTS: 'dialog:generateVariants',
     GENERATE_FOLLOW_UP: 'dialog:generateFollowUp',
     ANALYZE_TRANSCRIPTION: 'dialog:analyzeTranscription',
-    ENSURE_BEFORE_SENTENCE_AUDIO: 'dialog:ensureBeforeSentenceAudio',
-    ENSURE_CONTEXT_SENTENCES: 'dialog:ensureContextSentences',
     PREGENERATE_SESSION: 'dialog:pregenerateSession',
     PREGENERATE_SESSIONS: 'dialog:pregenerateSessions',
   },

@@ -5,23 +5,16 @@ import { sessionManager } from '../utils/session-manager.js';
 import { logger } from '../utils/logger.js';
 import { getErrorMessage } from '../../shared/utils/error.js';
 
-export async function buildSentenceAudioSequence(sentence: Sentence): Promise<{
+export function buildSentenceAudioSequence(sentence: Sentence): {
   audioPaths: string[];
   audioTypes: ('before' | 'main' | 'after')[];
-}> {
+} {
   const audioPaths: string[] = [];
   const audioTypes: ('before' | 'main' | 'after')[] = [];
 
-  if (sentence.contextBefore && sentence.id) {
-    try {
-      const beforePath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(sentence.id);
-      if (beforePath) {
-        audioPaths.push(beforePath);
-        audioTypes.push('before');
-      }
-    } catch (error) {
-      logger.warn({ error }, 'Failed to get before sentence audio');
-    }
+  if (sentence.contextBefore && sentence.beforeSentenceAudioPath) {
+    audioPaths.push(sentence.beforeSentenceAudioPath);
+    audioTypes.push('before');
   }
 
   if (sentence.audioPath) {
@@ -29,17 +22,9 @@ export async function buildSentenceAudioSequence(sentence: Sentence): Promise<{
     audioTypes.push('main');
   }
 
-  if (sentence.contextAfter && sentence.id) {
-    try {
-      const contextAudio = await window.electronAPI.dialog.ensureContextSentences(sentence.id);
-      const afterPath = contextAudio.afterSentenceAudio;
-      if (afterPath) {
-        audioPaths.push(afterPath);
-        audioTypes.push('after');
-      }
-    } catch (error) {
-      logger.warn({ error }, 'Failed to get after sentence audio');
-    }
+  if (sentence.contextAfter && sentence.afterSentenceAudioPath) {
+    audioPaths.push(sentence.afterSentenceAudioPath);
+    audioTypes.push('after');
   }
 
   return { audioPaths, audioTypes };
@@ -134,31 +119,22 @@ export class SentenceAudioController implements ReactiveController {
 
   handleContextBeforeClick = async (_e: MouseEvent): Promise<void> => {
     const { sentence } = this.host;
-    if (!sentence.contextBefore || !sentence.id) return;
+    if (!sentence.contextBefore || !sentence.beforeSentenceAudioPath) return;
 
-    try {
-      const beforePath = await window.electronAPI.dialog.ensureBeforeSentenceAudio(sentence.id);
-      if (beforePath) {
-        const playbackSpeed = this.host.playbackSpeed ?? sessionManager.getPlaybackSpeed() ?? 1.0;
-        this.localPlayingAudio = 'before';
+    const playbackSpeed = this.host.playbackSpeed ?? sessionManager.getPlaybackSpeed() ?? 1.0;
+    this.localPlayingAudio = 'before';
+    this.host.requestUpdate();
+    await audioPlayer.play(sentence.beforeSentenceAudioPath, {
+      playbackSpeed,
+      onEnded: () => {
+        this.localPlayingAudio = null;
         this.host.requestUpdate();
-        await audioPlayer.play(beforePath, {
-          playbackSpeed,
-          onEnded: () => {
-            this.localPlayingAudio = null;
-            this.host.requestUpdate();
-          },
-          onError: () => {
-            this.localPlayingAudio = null;
-            this.host.requestUpdate();
-          },
-        });
-      }
-    } catch (error) {
-      logger.warn({ error }, 'Failed to get before sentence audio');
-      this.localPlayingAudio = null;
-      this.host.requestUpdate();
-    }
+      },
+      onError: () => {
+        this.localPlayingAudio = null;
+        this.host.requestUpdate();
+      },
+    });
   };
 
   handleSentenceTextClick = async (e: MouseEvent): Promise<void> => {
@@ -190,32 +166,22 @@ export class SentenceAudioController implements ReactiveController {
 
   handleContextAfterClick = async (_e: MouseEvent): Promise<void> => {
     const { sentence } = this.host;
-    if (!sentence.contextAfter || !sentence.id) return;
+    if (!sentence.contextAfter || !sentence.afterSentenceAudioPath) return;
 
-    try {
-      const contextAudio = await window.electronAPI.dialog.ensureContextSentences(sentence.id);
-      const afterPath = contextAudio.afterSentenceAudio;
-      if (afterPath) {
-        const playbackSpeed = this.host.playbackSpeed ?? sessionManager.getPlaybackSpeed() ?? 1.0;
-        this.localPlayingAudio = 'after';
+    const playbackSpeed = this.host.playbackSpeed ?? sessionManager.getPlaybackSpeed() ?? 1.0;
+    this.localPlayingAudio = 'after';
+    this.host.requestUpdate();
+    await audioPlayer.play(sentence.afterSentenceAudioPath, {
+      playbackSpeed,
+      onEnded: () => {
+        this.localPlayingAudio = null;
         this.host.requestUpdate();
-        await audioPlayer.play(afterPath, {
-          playbackSpeed,
-          onEnded: () => {
-            this.localPlayingAudio = null;
-            this.host.requestUpdate();
-          },
-          onError: () => {
-            this.localPlayingAudio = null;
-            this.host.requestUpdate();
-          },
-        });
-      }
-    } catch (error) {
-      logger.warn({ error }, 'Failed to get after sentence audio');
-      this.localPlayingAudio = null;
-      this.host.requestUpdate();
-    }
+      },
+      onError: () => {
+        this.localPlayingAudio = null;
+        this.host.requestUpdate();
+      },
+    });
   };
 
   async handleRecreateAudio(): Promise<void> {
