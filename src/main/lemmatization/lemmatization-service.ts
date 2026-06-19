@@ -205,7 +205,10 @@ export class LemmatizationService {
           '[Lemmatization] Cache check complete'
         );
       } catch (error) {
-        this.logger.warn({ error }, '[Lemmatization] Failed to check cache, fetching all words');
+        this.logger.warn(
+          { err: error },
+          '[Lemmatization] Failed to check cache, fetching all words'
+        );
         // If cache check fails, fetch all words
         wordsToFetch = words;
       }
@@ -259,7 +262,7 @@ export class LemmatizationService {
           );
         } catch (error) {
           this.logger.warn(
-            { error },
+            { err: error },
             '[Lemmatization] Failed to cache frequencies, continuing anyway'
           );
         }

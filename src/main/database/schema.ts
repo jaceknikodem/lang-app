@@ -152,6 +152,7 @@ export function initializeSchema(db: Database.Database): void {
   `);
 
   addColumnIfNotExists(db, 'dialogue_variants', 'variant_pronunciation', 'TEXT');
+  addColumnIfNotExists(db, 'words', 'zipf_frequency', 'REAL');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS pronunciation_attempts (
