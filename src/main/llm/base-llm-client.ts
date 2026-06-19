@@ -458,6 +458,13 @@ export abstract class BaseLLMClient {
     return '';
   }
 
+  private createScriptNote(language: string): string {
+    const lang = language.toLowerCase();
+    return lang === 'japanese' || lang === 'ja'
+      ? '\nCRITICAL: Write all words in kanji/kana (Japanese script), NOT romaji. e.g. "空港" not "kuko", "食べる" not "taberu".'
+      : '';
+  }
+
   /**
    * Get follow-up sentence count based on proficiency level
    */
@@ -486,34 +493,24 @@ export abstract class BaseLLMClient {
     existingWords: string[] = [],
     proficiencyLevel?: string
   ): string {
-    const example = `  {"word": "${language.toLowerCase()}_word1", "translation": "english_translation1"}`;
+    const lang = language.toLowerCase();
+    const example = `  {"word": "${lang}_word1", "translation": "english_translation1"}`;
 
-    // Create exclusion list for prompt
-    // Safeguard: truncate if somehow more words are passed than the config limit
-    // (normally this is handled at the database layer, but this protects against edge cases)
     const wordsToInclude = existingWords.slice(0, LLM_CONFIG.MAX_EXISTING_WORDS_IN_PROMPT);
-    const hasMore = existingWords.length > LLM_CONFIG.MAX_EXISTING_WORDS_IN_PROMPT;
     const exclusionText =
       wordsToInclude.length > 0
-        ? `\nIMPORTANT: Do NOT include any of these existing words: ${wordsToInclude.join(', ')}${hasMore ? '...' : ''}`
+        ? `\nIMPORTANT: Do NOT include any of these existing words: ${wordsToInclude.join(', ')}`
         : '';
 
-    // Create proficiency level guidance
     const proficiencyText = this.createProficiencyGuidance(
       proficiencyLevel,
       'vocabulary',
       language
     );
+    const scriptNote = this.createScriptNote(language);
 
-    const scriptNote =
-      language.toLowerCase() === 'japanese' || language.toLowerCase() === 'ja'
-        ? '\nCRITICAL: Write all words in kanji/kana (Japanese script), NOT romaji. e.g. "空港" not "kuko", "食べる" not "taberu".'
-        : '';
-
-    // Topic is always specified when this method is called
-    return `CRITICAL: You must return exactly ${count} words in a JSON array. No more, no less.
-CRITICAL: Return ONLY the JSON array, no explanations or extra text.
-CRITICAL: All words must be in their canonical dictionary form (infinitive for verbs, singular for nouns, base form for adjectives).${scriptNote}
+    return `CRITICAL: Return exactly ${count} words in a JSON array. No more, no less.
+CRITICAL: Return ONLY the JSON array, no explanations or extra text.${scriptNote}
 
 Task: Generate exactly ${count} different ${language} words related to "${topic}".${proficiencyText}${exclusionText}
 
@@ -524,16 +521,13 @@ ${example}
 ]
 
 Rules:
-1. Must be exactly ${count} words
-2. Each word must be different and unique
-3. All words should relate to "${topic}"
-4. Include nouns, verbs, and adjectives
-5. CRITICAL: Use only canonical dictionary forms:
+1. Each word must be different and unique
+2. All words should relate to "${topic}"
+3. Include nouns, verbs, and adjectives
+4. Use only canonical dictionary forms:
    - Verbs: infinitive form (e.g., "robić" not "robimy", "do" not "does")
    - Nouns: singular form (e.g., "cat" not "cats", "dom" not "domy")
-   - Adjectives: base form (e.g., "good" not "better", "dobry" not "dobrzy")
-6. Do NOT use any words from the exclusion list above
-7. Return ONLY the JSON array, nothing else`;
+   - Adjectives: base form (e.g., "good" not "better", "dobry" not "dobrzy")`;
   }
 
   /**

@@ -183,7 +183,7 @@ export class ContentGenerator {
       }
 
       // Otherwise, use LLM-based topic generation (including B1 proficiency)
-      return await this.generateLLMTopicVocabulary(topicText, targetLanguage, wordCount, database);
+      return await this.generateLLMTopicVocabulary(topicText, targetLanguage, wordCount);
     } catch (error) {
       // If it's an LLMError, preserve it
       if (error instanceof Error && 'code' in error) {
@@ -318,8 +318,7 @@ export class ContentGenerator {
   private async generateLLMTopicVocabulary(
     topicText: string,
     targetLanguage: string,
-    wordCount: number,
-    database?: DatabaseLayer
+    wordCount: number
   ): Promise<GeneratedWord[]> {
     // Validate LLM availability before attempting generation
     const isAvailable = await this.llmClient.isAvailable();
@@ -345,25 +344,8 @@ export class ContentGenerator {
       'Generating LLM vocabulary'
     );
 
-    // Get proficiency level for the language
-    let proficiencyLevel: string | undefined;
-    if (database) {
-      try {
-        const proficiencyKey = `language_proficiency_${targetLanguage.toLowerCase()}`;
-        proficiencyLevel = (await database.getSetting(proficiencyKey)) || undefined;
-      } catch (error) {
-        this.logger.warn({ error }, 'Failed to retrieve proficiency level');
-      }
-    }
-
     try {
-      // Retries are now handled at the HTTP level in the LLM clients
-      const words = await this.llmClient.generateTopicWords(
-        topicText,
-        targetLanguage,
-        wordCount,
-        proficiencyLevel
-      );
+      const words = await this.llmClient.generateTopicWords(topicText, targetLanguage, wordCount);
 
       // Validate and filter results
       const validWords = this.validateGeneratedWords(words);
@@ -411,24 +393,8 @@ export class ContentGenerator {
         return result;
       });
 
-      // Step 3: Filter based on proficiency level
-      let filteredWords = wordsWithFrequencyInfo;
-      if (proficiencyLevel && database) {
-        filteredWords = this.filterWordsByProficiencyLevel(
-          wordsWithFrequencyInfo,
-          proficiencyLevel,
-          targetLanguage.toLowerCase()
-        );
-      }
-
-      if (filteredWords.length === 0) {
-        throw new Error(
-          'No words remain after filtering. Please try again or adjust your proficiency level.'
-        );
-      }
-
       // Shuffle the words to ensure variety in presentation order
-      return this.shuffleArray(filteredWords);
+      return this.shuffleArray(wordsWithFrequencyInfo);
     } catch (error) {
       // If it's an LLMError, preserve it
       if (error instanceof Error && 'code' in error) {
