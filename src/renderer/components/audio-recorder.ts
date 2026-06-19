@@ -36,9 +36,6 @@ export class AudioRecorder extends LitElement {
   private isRecording = false;
 
   @state()
-  private currentSession: RecordingSession | null = null;
-
-  @state()
   private recordingTime = 0;
 
   @state()
@@ -46,9 +43,6 @@ export class AudioRecorder extends LitElement {
 
   @state()
   private lastRecording: RecordingResult | null = null;
-
-  @state()
-  private isPlaying = false;
 
   private recordingTimer: number | null = null;
   private statusCheckTimer: number | null = null;
@@ -303,7 +297,6 @@ export class AudioRecorder extends LitElement {
     try {
       const session = await window.electronAPI.audio.getCurrentRecordingSession();
       if (session && session.isRecording) {
-        this.currentSession = session;
         this.isRecording = true;
         this.startTimer();
       }
@@ -319,7 +312,6 @@ export class AudioRecorder extends LitElement {
       this.error = null;
       const session = await window.electronAPI.audio.startRecording(this.recordingOptions);
 
-      this.currentSession = session;
       this.isRecording = true;
       this.recordingTime = 0;
       this.startTimer();
@@ -363,8 +355,6 @@ export class AudioRecorder extends LitElement {
           })
         );
       }
-
-      this.currentSession = null;
     } catch (error) {
       logger.error({ error }, 'Error stopping recording');
       this.error = `Failed to stop recording: ${getErrorMessage(error)}`;
@@ -381,7 +371,6 @@ export class AudioRecorder extends LitElement {
       await window.electronAPI.audio.cancelRecording();
 
       this.isRecording = false;
-      this.currentSession = null;
       this.clearTimer();
       this.clearStatusCheck();
 
@@ -394,39 +383,6 @@ export class AudioRecorder extends LitElement {
     } catch (error) {
       logger.error({ error }, 'Error cancelling recording');
       this.error = `Failed to cancel recording: ${getErrorMessage(error)}`;
-    }
-  }
-
-  private async playRecording() {
-    if (!this.lastRecording || this.isPlaying) return;
-
-    try {
-      this.isPlaying = true;
-      await window.electronAPI.audio.playAudio(this.lastRecording.filePath);
-      this.isPlaying = false;
-    } catch (error) {
-      logger.error({ error }, 'Error playing recording');
-      this.error = `Failed to play recording: ${getErrorMessage(error)}`;
-      this.isPlaying = false;
-    }
-  }
-
-  private async deleteRecording() {
-    if (!this.lastRecording) return;
-
-    try {
-      await window.electronAPI.audio.deleteRecording(this.lastRecording.filePath);
-      this.lastRecording = null;
-
-      // Dispatch delete event
-      this.dispatchEvent(
-        new CustomEvent('recording-deleted', {
-          bubbles: true,
-        })
-      );
-    } catch (error) {
-      logger.error({ error }, 'Error deleting recording');
-      this.error = `Failed to delete recording: ${getErrorMessage(error)}`;
     }
   }
 
@@ -448,11 +404,6 @@ export class AudioRecorder extends LitElement {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-
-  private formatDuration(ms: number): string {
-    const seconds = Math.floor(ms / 1000);
-    return this.formatTime(seconds);
   }
 
   private setupRecordingStatusCheck() {
@@ -510,8 +461,6 @@ export class AudioRecorder extends LitElement {
           })
         );
       }
-
-      this.currentSession = null;
     } catch (error) {
       logger.error({ error }, 'Error handling auto-stop');
       this.error = 'Recording stopped automatically but there was an error processing it.';

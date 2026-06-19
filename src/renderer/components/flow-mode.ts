@@ -41,13 +41,9 @@ export class FlowMode extends BaseComponent {
   private directKeyHandler?: (event: KeyboardEvent) => void;
   private audioElement: HTMLAudioElement | null = null;
   private playbackTimer: number | null = null;
-  private playbackStartTime: number | 0 = 0;
-  private totalPlaybackTime: number = 0; // Cumulative playback time in seconds
-  private lastPauseTime: number | null = null;
-  private pausedPosition: number = 0; // Position where audio was paused (in seconds)
-  private pauseEndTimestamps: number[] | null = null; // Pause end timestamps from JSON file
-  private currentAudioPath: string | null = null; // Track which audio file is currently playing
-  private previousPauseTimestamp: number | null = null; // Previous pause timestamp when pausing
+  private pausedPosition: number = 0;
+  private pauseEndTimestamps: number[] | null = null;
+  private previousPauseTimestamp: number | null = null;
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private dataArray: Uint8Array | null = null;
@@ -410,7 +406,6 @@ export class FlowMode extends BaseComponent {
           this.startVisualization();
         });
 
-        this.lastPauseTime = null;
         return;
       }
 
@@ -425,9 +420,8 @@ export class FlowMode extends BaseComponent {
         throw new Error('Failed to load audio file');
       }
 
-      // Store pause timestamps and current audio path
+      // Store pause timestamps
       this.pauseEndTimestamps = audioData.pauseEndTimestamps ?? null;
-      this.currentAudioPath = selectedPath;
       logger.debug(
         `[Flow] Pause timestamps ${this.pauseEndTimestamps ? `loaded (${this.pauseEndTimestamps.length} pauses)` : 'not available'}`
       );
@@ -492,10 +486,6 @@ export class FlowMode extends BaseComponent {
         this.startVisualization();
       });
 
-      // When starting/resuming playback, the audio element will continue from its current position
-      // We track totalPlaybackTime separately to handle pauses correctly
-      this.lastPauseTime = null;
-      this.playbackStartTime = Date.now();
       this.playbackTimer = null; // Reset timer trigger flag
     } catch (err) {
       logger.error({ error: err }, 'Error playing audio');
@@ -527,9 +517,6 @@ export class FlowMode extends BaseComponent {
 
       // Stop visualization
       this.stopVisualization();
-
-      // Keep currentTime as-is (don't reset to 0) so we can resume from this position
-      this.lastPauseTime = Date.now();
     }
   }
 
@@ -562,14 +549,10 @@ export class FlowMode extends BaseComponent {
     }
     this.isPlaying = false;
     this.showOverlay = false;
-    this.playbackStartTime = 0;
     this.playbackTimer = null;
-    this.totalPlaybackTime = 0;
-    this.lastPauseTime = null;
-    this.pausedPosition = 0; // Reset pause position when stopping
-    this.pauseEndTimestamps = null; // Reset pause timestamps when stopping
-    this.currentAudioPath = null; // Reset current audio path when stopping
-    this.previousPauseTimestamp = null; // Reset previous pause timestamp when stopping
+    this.pausedPosition = 0;
+    this.pauseEndTimestamps = null;
+    this.previousPauseTimestamp = null;
   }
 
   private handleDirectKeyDown(event: KeyboardEvent): void {

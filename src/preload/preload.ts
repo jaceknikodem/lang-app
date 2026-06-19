@@ -525,7 +525,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }) => ipcRenderer.invoke(IPC_CHANNELS.TRACKING.RECORD_DICTIONARY_HOVER, data),
   },
 });
-
 // Type declaration for the exposed API
 declare global {
   interface Window {
@@ -667,11 +666,15 @@ declare global {
           sentenceId: number
         ) => Promise<string>;
         // Provider management
-        getCurrentProvider: () => Promise<'ollama' | 'gemini'>;
-        switchProvider: (provider: 'ollama' | 'gemini', geminiApiKey?: string) => Promise<void>;
+        getCurrentProvider: () => Promise<'ollama' | 'gemini' | 'mlx-lm'>;
+        switchProvider: (
+          provider: 'ollama' | 'gemini' | 'mlx-lm',
+          geminiApiKey?: string,
+          mlxLmBaseUrl?: string
+        ) => Promise<void>;
         setGeminiApiKey: (apiKey: string, switchToGemini?: boolean) => Promise<void>;
-        getAvailableProviders: () => Promise<Array<'ollama' | 'gemini'>>;
-        getModelsForProvider: (provider: 'ollama' | 'gemini') => Promise<string[]>;
+        getAvailableProviders: () => Promise<Array<'ollama' | 'gemini' | 'mlx-lm'>>;
+        getModelsForProvider: (provider: 'ollama' | 'gemini' | 'mlx-lm') => Promise<string[]>;
       };
       audio: {
         generateAudio: (
@@ -682,6 +685,9 @@ declare global {
           sentenceId?: number,
           variantId?: number
         ) => Promise<string>;
+        generateTextAudioRaw: (
+          items: Array<{ text: string; language: string }>
+        ) => Promise<Array<{ text: string; audioData: ArrayBuffer | null }>>;
         playAudio: (audioPath: string) => Promise<void>;
         stopAudio: () => Promise<void>;
         audioExists: (audioPath: string) => Promise<boolean>;
@@ -699,6 +705,8 @@ declare global {
           sentenceId?: number;
           variantId?: number;
           existingPath?: string;
+          audioType?: 'before' | 'main' | 'after';
+          forceElevenLabs?: boolean;
         }) => Promise<{ audioPath: string }>;
         startRecording: (options?: any) => Promise<any>;
         stopRecording: () => Promise<any>;
@@ -738,6 +746,14 @@ declare global {
         openBackupDialog: () => Promise<string | null>;
         openBackupDirectory: () => Promise<void>;
         closeApp: () => Promise<void>;
+      };
+      export: {
+        toAnki: (language: string) => Promise<{
+          canceled: boolean;
+          filePath: string | null;
+          cardCount: number;
+          mediaCount: number;
+        }>;
       };
       frequency: {
         getProgress: (language: string) => Promise<{

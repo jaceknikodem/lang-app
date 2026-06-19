@@ -91,7 +91,6 @@ interface SessionStoragePayload {
 
 export class SessionManager {
   private static instance: SessionManager;
-  private currentSession: SessionState | null = null;
   private sessionsByLanguage: Record<string, SessionState> = {};
   private activeLanguage: string | null = null;
   private storageLoaded = false;
@@ -146,7 +145,6 @@ export class SessionManager {
     }
 
     this.activeLanguage = normalizedLanguage;
-    this.currentSession = this.sessionsByLanguage[normalizedLanguage];
     this.persistSessions();
   }
 
@@ -164,7 +162,6 @@ export class SessionManager {
 
       const languageKey = this.getActiveLanguageKey();
       this.sessionsByLanguage[languageKey] = updatedSession;
-      this.currentSession = updatedSession;
       this.persistSessions();
 
       logger.debug({ mode: updatedSession.currentMode }, 'Session saved');
@@ -188,7 +185,6 @@ export class SessionManager {
       this.persistSessions();
     }
 
-    this.currentSession = session;
     return session;
   }
 
@@ -202,7 +198,6 @@ export class SessionManager {
       const languageKey = this.getActiveLanguageKey();
       const defaultSession = this.createDefaultSession();
       this.sessionsByLanguage[languageKey] = defaultSession;
-      this.currentSession = defaultSession;
 
       this.persistSessions();
       logger.debug('Session cleared');
@@ -361,7 +356,6 @@ export class SessionManager {
 
     const languageKey = this.getActiveLanguageKey();
     this.sessionsByLanguage[languageKey] = updatedSession;
-    this.currentSession = updatedSession;
 
     try {
       this.persistSessions();
@@ -495,7 +489,6 @@ export class SessionManager {
 
     const languageKey = this.getActiveLanguageKey();
     this.sessionsByLanguage[languageKey] = updatedSession;
-    this.currentSession = updatedSession;
 
     try {
       this.persistSessions();
@@ -633,7 +626,6 @@ export class SessionManager {
     };
 
     this.sessionsByLanguage[languageKey] = updatedSession;
-    this.currentSession = updatedSession;
 
     try {
       this.persistSessions();
@@ -672,7 +664,6 @@ export class SessionManager {
     };
 
     this.sessionsByLanguage[languageKey] = updatedSession;
-    this.currentSession = updatedSession;
 
     try {
       this.persistSessions();
@@ -698,7 +689,6 @@ export class SessionManager {
     delete updatedSession.currentDialogIndex;
 
     this.sessionsByLanguage[languageKey] = updatedSession;
-    this.currentSession = updatedSession;
 
     try {
       this.persistSessions();
@@ -722,7 +712,6 @@ export class SessionManager {
     };
 
     this.sessionsByLanguage[languageKey] = updatedSession;
-    this.currentSession = updatedSession;
 
     try {
       this.persistSessions();
@@ -804,15 +793,11 @@ export class SessionManager {
             this.sessionsByLanguage[storedActiveLanguage] = this.createDefaultSession();
           }
           this.activeLanguage = storedActiveLanguage;
-          this.currentSession = this.sessionsByLanguage[storedActiveLanguage];
-        } else if (this.sessionsByLanguage[LEGACY_LANGUAGE_KEY]) {
-          this.currentSession = this.sessionsByLanguage[LEGACY_LANGUAGE_KEY];
         } else if (sessionEntries.length > 0) {
           const [firstLanguage] = sessionEntries[0];
           if (firstLanguage !== LEGACY_LANGUAGE_KEY) {
             this.activeLanguage = firstLanguage;
           }
-          this.currentSession = this.sessionsByLanguage[firstLanguage];
         }
         return;
       }
@@ -822,7 +807,6 @@ export class SessionManager {
           parsed as Partial<Omit<SessionState, 'lastActivity'>> & { lastActivity?: string }
         );
         this.sessionsByLanguage[LEGACY_LANGUAGE_KEY] = legacySession;
-        this.currentSession = legacySession;
       }
     } catch (error) {
       logger.error({ error }, 'Failed to load session from storage');

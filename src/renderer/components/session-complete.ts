@@ -277,21 +277,6 @@ export class SessionComplete extends LitElement {
     }
   }
 
-  private getRecommendationText(): string {
-    switch (this.sessionSummary.nextRecommendation) {
-      case 'take-quiz':
-        return "Ready to test your knowledge? Take a quiz to reinforce what you've learned.";
-      case 'continue-learning':
-        return 'Keep the momentum going! Continue learning with more sentences.';
-      case 'practice-weak':
-        return 'Focus on your weakest words to improve your overall mastery.';
-      case 'new-topic':
-        return 'Great progress! Try exploring a new topic to expand your vocabulary.';
-      default:
-        return 'Choose your next learning activity.';
-    }
-  }
-
   private async handleRecommendedAction() {
     this.isLoading = true;
 
@@ -350,19 +335,6 @@ export class SessionComplete extends LitElement {
     } finally {
       this.isLoading = false;
     }
-  }
-
-  private handleTakeQuiz() {
-    router.goToQuiz(this.sessionSummary.completedWords);
-  }
-
-  private handleNewSession() {
-    this.dispatchEvent(
-      new CustomEvent('start-new-learning-session', {
-        bubbles: true,
-        composed: true,
-      })
-    );
   }
 
   private getAutopilotEnabled(): boolean {

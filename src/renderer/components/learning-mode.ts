@@ -531,24 +531,6 @@ export class LearningMode extends BaseComponent {
     return currentWord?.sentences[this.currentSentenceIndex] || null;
   }
 
-  private getPreviousSentence(): Sentence | null {
-    // Check if we can go back within the current word
-    if (this.currentSentenceIndex > 0) {
-      const currentWord = this.getCurrentWord();
-      return currentWord?.sentences[this.currentSentenceIndex - 1] || null;
-    }
-
-    // Otherwise, check the previous word's last sentence
-    if (this.currentWordIndex > 0) {
-      const previousWord = this.wordsWithSentences[this.currentWordIndex - 1];
-      if (previousWord && previousWord.sentences.length > 0) {
-        return previousWord.sentences[previousWord.sentences.length - 1];
-      }
-    }
-
-    return null;
-  }
-
   private getTotalSentences(): number {
     return this.wordsWithSentences.reduce((total, word) => total + word.sentences.length, 0);
   }
@@ -1360,65 +1342,6 @@ export class LearningMode extends BaseComponent {
     this.allWords = this.allWords.map((word) =>
       word.id === wordId ? { ...word, strength } : word
     );
-  }
-
-  private goToFirstSentence() {
-    if (this.isLoading || this.error || this.showCompletion || this.isProcessing) return;
-
-    this.currentWordIndex = 0;
-    this.currentSentenceIndex = 0;
-    this.saveProgressToSession();
-  }
-
-  private goToLastSentence() {
-    if (this.isLoading || this.error || this.showCompletion || this.isProcessing) return;
-
-    if (this.wordsWithSentences.length > 0) {
-      this.currentWordIndex = this.wordsWithSentences.length - 1;
-      const lastWord = this.wordsWithSentences[this.currentWordIndex];
-      this.currentSentenceIndex = Math.max(0, lastWord.sentences.length - 1);
-      this.saveProgressToSession();
-    }
-  }
-
-  private renderQueueStatus() {
-    const { queued, processing, failed, processingWords, queuedWords } =
-      this.jobMonitor.queueSummary;
-    const pending = queued + processing - failed;
-
-    if (pending <= 0) {
-      return null;
-    }
-
-    const formatWordList = (words: Array<{ word: string }>, max = 3) => {
-      if (!words.length) {
-        return '';
-      }
-      const names = words.map((item) => `"${item.word}"`);
-      if (names.length <= max) {
-        return names.join(', ');
-      }
-      return `${names.slice(0, max).join(', ')} + ${names.length - max} more`;
-    };
-
-    const runningWords = processingWords?.filter((w) => w.status === 'processing');
-
-    const processingList = runningWords?.length ? formatWordList(runningWords) : '';
-    const queuedList = queuedWords?.length ? formatWordList(queuedWords) : '';
-
-    const detailParts = [
-      processing > 0 && processingList ? `Running: ${processingList}` : '',
-      queued > 0 && queuedList ? `Queued: ${queuedList}` : '',
-    ].filter(Boolean);
-
-    return html`
-      <div class="queue-status">
-        <span>
-          Generating sentences for ${pending} ${pending === 1 ? 'word' : 'words'}.
-          ${detailParts.length ? html`<span> ${detailParts.join(' • ')}</span>` : ''}
-        </span>
-      </div>
-    `;
   }
 
   render() {

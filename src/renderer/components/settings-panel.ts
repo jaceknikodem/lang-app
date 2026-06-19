@@ -374,50 +374,6 @@ export class SettingsPanel extends BaseComponent {
     }
   }
 
-  private getModelDisplayName(modelPath: string): string {
-    if (!modelPath) return '';
-
-    // Extract just the filename from the full path
-    const filename = modelPath.split('/').pop() || modelPath;
-    return filename;
-  }
-
-  private getModelDescription(modelName: string): string {
-    if (!modelName) return '';
-
-    if (modelName.includes('tiny')) {
-      return '(Fastest, least accurate ~39MB)';
-    } else if (modelName.includes('base')) {
-      return '(Good balance ~74MB)';
-    } else if (modelName.includes('small')) {
-      return '(Better accuracy ~244MB)';
-    } else if (modelName.includes('medium')) {
-      return '(High accuracy ~769MB)';
-    } else if (modelName.includes('large')) {
-      return '(Best accuracy ~1550MB)';
-    }
-
-    return '';
-  }
-
-  private async changeLLMModel(event: Event) {
-    const select = event.target as HTMLSelectElement;
-    const selectedModel = select.value;
-
-    if (!selectedModel) return;
-
-    try {
-      await window.electronAPI.llm.setModel(selectedModel);
-      this.currentLLMModel = selectedModel;
-
-      console.log('LLM model changed to:', this.currentLLMModel);
-    } catch (error) {
-      console.error('Failed to change LLM model:', error);
-      // Revert the selection
-      select.value = this.currentLLMModel;
-    }
-  }
-
   private capitalizeLanguage(language: string): string {
     return language.charAt(0).toUpperCase() + language.slice(1);
   }
@@ -550,35 +506,6 @@ export class SettingsPanel extends BaseComponent {
       default:
         return '';
     }
-  }
-
-  private getLLMModelDescription(modelName: string): string {
-    if (!modelName) return '';
-
-    // Gemini model descriptions
-    if (modelName.includes('gemini')) {
-      if (modelName.includes('2.5-pro')) {
-        return '(Highest quality, best for complex tasks)';
-      } else if (modelName.includes('2.5-flash-lite')) {
-        return '(Fastest, most cost-effective)';
-      } else if (modelName.includes('2.5-flash')) {
-        return '(Fast, good balance of speed and quality)';
-      } else if (modelName.includes('2.0-flash-lite')) {
-        return '(Fast and cost-effective)';
-      } else if (modelName.includes('2.0-flash')) {
-        return '(Good performance and speed)';
-      }
-      return '(Gemini model)';
-    }
-
-    // Ollama model descriptions (generic)
-    if (modelName.includes('tiny') || modelName.includes('small')) {
-      return '(Fast, lightweight)';
-    } else if (modelName.includes('large') || modelName.includes('big')) {
-      return '(High quality, slower)';
-    }
-
-    return '';
   }
 
   render() {

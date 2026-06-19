@@ -415,12 +415,6 @@ export class TopicSelector extends BaseComponent {
     }
   }
 
-  private handleSkipTopic() {
-    // Generate general vocabulary without topic
-    this.topic = '';
-    this.handleGenerateWords();
-  }
-
   private handleKeyPress(e: KeyboardEvent) {
     if (e.key === 'Enter' && !this.isGenerating) {
       this.handleGenerateWords();
@@ -438,14 +432,6 @@ export class TopicSelector extends BaseComponent {
     ];
 
     this.keyboardUnsubscribe = useKeyboardBindings(bindings);
-  }
-
-  private clearTopic() {
-    this.topic = '';
-    const input = this.shadowRoot?.querySelector('#topic-input') as HTMLInputElement;
-    if (input) {
-      input.focus();
-    }
   }
 
   render() {

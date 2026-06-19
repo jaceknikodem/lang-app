@@ -5,7 +5,7 @@
 import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { router, RouteState, AppMode } from '../utils/router.js';
-import { sessionManager, SessionState } from '../utils/session-manager.js';
+import { sessionManager } from '../utils/session-manager.js';
 import { sharedStyles } from '../styles/shared.js';
 import { appRootStyles } from './app-root.styles.js';
 import {
@@ -57,9 +57,6 @@ export class AppRoot extends LitElement {
 
   @state()
   private uiState: UIState = createInitialUIState();
-
-  @state()
-  private sessionState: SessionState | null = null;
 
   @state()
   private languageDataState: LanguageDataState = createInitialLanguageDataState();
@@ -165,9 +162,6 @@ export class AppRoot extends LitElement {
       // Load language stats (for all languages)
       await this.loadLanguageStats();
 
-      // Load saved session
-      await this.loadSession();
-
       // Check for existing words in database (non-blocking - deferred)
       // This optimization speeds up initial render by deferring the check
       scheduleDeferred(async () => {
@@ -186,16 +180,6 @@ export class AppRoot extends LitElement {
     } catch (error) {
       logger.error({ error }, 'Failed to initialize app');
       this.uiState = { ...this.uiState, isLoading: false };
-    }
-  }
-
-  private async loadSession() {
-    try {
-      // Load persisted session state (includes learning session metadata)
-      this.sessionState = sessionManager.getCurrentSession();
-    } catch (error) {
-      logger.error({ error }, 'Failed to load session');
-      this.sessionState = sessionManager.getCurrentSession();
     }
   }
 
@@ -291,7 +275,6 @@ export class AppRoot extends LitElement {
   // Method to refresh current language (can be called when language changes)
   async refreshCurrentLanguage() {
     await this.loadCurrentLanguage();
-    this.sessionState = sessionManager.getCurrentSession();
     await this.checkExistingWords();
     await this.checkFlowSentences();
     await this.ensureLearningSession();
@@ -349,7 +332,6 @@ export class AppRoot extends LitElement {
         this.languageDataState = { ...this.languageDataState, currentLanguage: newLanguage };
         // Reload language stats after language change
         await this.loadLanguageStats();
-        this.sessionState = sessionManager.getCurrentSession();
 
         await this.checkExistingWords();
         await this.checkFlowSentences();
@@ -552,10 +534,6 @@ export class AppRoot extends LitElement {
         flowModeElement.handlePlay();
       }
     }, 50);
-  }
-
-  private handleAutopilotToggle(event: Event) {
-    this.handleToggleAutopilot(event);
   }
 
   private handleToggleAutopilot(event: Event) {

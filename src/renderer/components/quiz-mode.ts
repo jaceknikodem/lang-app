@@ -87,12 +87,6 @@ export class QuizMode extends BaseComponent {
   @state()
   private audioOnlyMode = false;
 
-  @state()
-  private useTextInput = false;
-
-  @state()
-  private textInputValue = '';
-
   private keyboardUnsubscribe?: () => void;
   private lastAutoplayKey: string | null = null;
   private speechRecognitionCheckCleanup: (() => void) | null = null;
@@ -361,12 +355,6 @@ export class QuizMode extends BaseComponent {
 
   private revealAnswer() {
     this.showAnswer = true;
-  }
-
-  private async handleAnswer(correct: boolean) {
-    // Legacy method - map to SRS values
-    const srsRecall = correct ? 2 : 0;
-    await this.handleSRSAnswer(srsRecall);
   }
 
   private async handleSRSAnswer(recall: 0 | 1 | 2 | 3) {
@@ -836,55 +824,6 @@ export class QuizMode extends BaseComponent {
       this.transcriptionResult = null;
       this.isTranscribing = false;
       await this.recording.startRecording();
-    }
-  }
-
-  private handleTextInputSubmit() {
-    if (!this.textInputValue.trim() || !this.currentQuestion) {
-      return;
-    }
-
-    // Directly compare the typed text with the expected sentence
-    this.performTextComparison(this.textInputValue.trim());
-  }
-
-  private async performTextComparison(typedText: string) {
-    if (!this.currentQuestion) {
-      return;
-    }
-
-    this.isTranscribing = true;
-    this.transcriptionResult = null;
-
-    try {
-      // Get the expected sentence (foreign language)
-      const expectedSentence = this.currentQuestion.sentence.sentence;
-
-      // Compare typed text with expected sentence (same logic as transcription comparison)
-      const comparison = await window.electronAPI.audio.compareTranscription(
-        typedText,
-        expectedSentence,
-        this.currentProficiencyLevel
-      );
-
-      logger.debug({ comparison }, 'Text comparison');
-
-      this.transcriptionResult = {
-        text: typedText,
-        ...comparison,
-      };
-    } catch (error) {
-      logger.error({ error }, 'Text comparison failed');
-      this.transcriptionResult = {
-        text: typedText,
-        similarity: 0,
-        normalizedTranscribed: typedText,
-        normalizedExpected: '',
-        expectedWords: [],
-        transcribedWords: [],
-      };
-    } finally {
-      this.isTranscribing = false;
     }
   }
 
