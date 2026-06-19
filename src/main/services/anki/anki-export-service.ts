@@ -62,6 +62,7 @@ const MODEL_CSS = `
 .sentence .kw { color: #2563eb; font-weight: 700; }
 .reading { color: #6b6b6b; font-size: 18px; margin-top: 8px; }
 .translation { margin-top: 8px; }
+.word { color: #888; font-size: 16px; margin-top: 12px; }
 hr#answer { margin: 18px 0; }
 `;
 
@@ -110,7 +111,9 @@ export async function exportLanguageToApkg(
     qfmt:
       '{{Audio}}<div class="sentence">{{Sentence}}</div>' +
       '{{#Reading}}<div class="reading">{{Reading}}</div>{{/Reading}}',
-    afmt: '{{FrontSide}}\n<hr id=answer>\n<div class="translation">{{Translation}}</div>',
+    afmt:
+      '{{FrontSide}}\n<hr id=answer>\n<div class="translation">{{Translation}}</div>' +
+      '{{#Word}}<div class="word">{{Word}}</div>{{/Word}}',
     requiredFieldOrds: [0],
   };
 
@@ -147,7 +150,7 @@ export async function exportLanguageToApkg(
         escapeHtml(row.translation),
         escapeHtml(row.pronunciation ?? ''),
         audioField,
-        escapeHtml(row.word),
+        escapeHtml(`${row.word} — ${row.wordTranslation}`),
       ],
       scheduling: schedulingFromRow(row),
     });

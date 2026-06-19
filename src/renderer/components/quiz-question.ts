@@ -259,6 +259,10 @@ export class QuizQuestionCard extends LitElement {
         font-weight: 500;
         margin: var(--spacing-xs) 0;
       }
+      .kw {
+        color: #2563eb;
+        font-weight: 700;
+      }
       .sentence-translation {
         display: block;
         color: var(--text-secondary);
@@ -495,6 +499,20 @@ export class QuizQuestionCard extends LitElement {
     `;
   }
 
+  /**
+   * Render a sentence with the key word highlighted wherever it appears in that
+   * exact form. Splitting via Lit templates keeps the text safely escaped.
+   */
+  private renderHighlightedSentence(text: string, keyword: string) {
+    if (!keyword || !text.includes(keyword)) {
+      return html`${text}`;
+    }
+    const parts = text.split(keyword);
+    return html`${parts.map((part, i) =>
+      i < parts.length - 1 ? html`${part}<span class="kw">${keyword}</span>` : html`${part}`
+    )}`;
+  }
+
   private renderRevealedAnswer() {
     if (!this.question) return nothing;
 
@@ -509,7 +527,9 @@ export class QuizQuestionCard extends LitElement {
             ? html`
                 <div class="sentence-pair">
                   <span class="sentence-label">Sentence:</span>
-                  <div class="sentence-text">${sentence.sentence}</div>
+                  <div class="sentence-text">
+                    ${this.renderHighlightedSentence(sentence.sentence, word.word)}
+                  </div>
                   <div class="sentence-pronunciation-line">
                     ${renderPronunciation(sentence.pronunciation)}
                   </div>
@@ -638,7 +658,9 @@ export class QuizQuestionCard extends LitElement {
           : html`
               <div class="question-text-container">
                 <div class="question-text-block">
-                  <div class="question-text">${displayText}</div>
+                  <div class="question-text">
+                    ${this.renderHighlightedSentence(displayText, this.question.word.word)}
+                  </div>
                   ${renderPronunciation(this.question.sentence.pronunciation)}
                 </div>
                 <div class="question-actions">
