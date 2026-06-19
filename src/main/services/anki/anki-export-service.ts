@@ -59,15 +59,29 @@ const MODEL_CSS = `
   background-color: #ffffff;
 }
 .sentence { font-size: 26px; margin: 12px 0; }
+.sentence .kw { color: #2563eb; font-weight: 700; }
 .reading { color: #6b6b6b; font-size: 18px; margin-top: 8px; }
 .translation { margin-top: 8px; }
-.word { color: #888; font-size: 15px; margin-top: 14px; }
 hr#answer { margin: 18px 0; }
 `;
 
 /** HTML-escape a field value so it renders literally inside templates. */
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
+ * Escape the sentence and wrap the key word in a highlight span wherever it
+ * appears verbatim. If the word isn't present in that exact form (e.g. it's
+ * conjugated), the sentence is returned unchanged.
+ */
+function highlightWordInSentence(sentence: string, word: string): string {
+  const escaped = escapeHtml(sentence);
+  const escapedWord = escapeHtml(word);
+  if (!escapedWord || !escaped.includes(escapedWord)) {
+    return escaped;
+  }
+  return escaped.split(escapedWord).join(`<span class="kw">${escapedWord}</span>`);
 }
 
 function capitalize(language: string): string {
@@ -95,8 +109,7 @@ export async function exportLanguageToApkg(
     css: MODEL_CSS,
     qfmt:
       '{{Audio}}<div class="sentence">{{Sentence}}</div>' +
-      '{{#Reading}}<div class="reading">{{Reading}}</div>{{/Reading}}' +
-      '{{#Word}}<div class="word">{{Word}}</div>{{/Word}}',
+      '{{#Reading}}<div class="reading">{{Reading}}</div>{{/Reading}}',
     afmt: '{{FrontSide}}\n<hr id=answer>\n<div class="translation">{{Translation}}</div>',
     requiredFieldOrds: [0],
   };
@@ -130,7 +143,7 @@ export async function exportLanguageToApkg(
     notes.push({
       guidSeed: `kotoba:${language}:sentence:${row.sentenceId}`,
       fields: [
-        escapeHtml(row.sentence),
+        highlightWordInSentence(row.sentence, row.word),
         escapeHtml(row.translation),
         escapeHtml(row.pronunciation ?? ''),
         audioField,
