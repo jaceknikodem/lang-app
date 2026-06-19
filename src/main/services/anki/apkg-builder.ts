@@ -151,13 +151,15 @@ function fieldChecksum(firstField: string): number {
   return parseInt(digest.slice(0, 8), 16);
 }
 
-function buildModelsJson(model: ApkgModel): string {
+function buildModelsJson(model: ApkgModel, modSec: number): string {
   const models = {
     [model.id]: {
       id: String(model.id),
       name: model.name,
       type: 0,
-      mod: 0,
+      // Real, increasing mod time so Anki treats a re-imported note type as
+      // newer than the copy on the device and applies template changes.
+      mod: modSec,
       usn: 0,
       sortf: 0,
       did: null,
@@ -287,7 +289,7 @@ export async function buildApkg(options: BuildApkgOptions): Promise<Buffer> {
       nowMs,
       nowMs,
       buildConfJson(model.id),
-      buildModelsJson(model),
+      buildModelsJson(model, nowSec),
       buildDecksJson(deckId, deckName),
       DCONF_JSON
     );
