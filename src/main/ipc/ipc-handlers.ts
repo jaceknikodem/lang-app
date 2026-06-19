@@ -512,6 +512,16 @@ function setupLLMHandlers(
         ),
     },
     {
+      channel: IPC_CHANNELS.LLM.EXTRACT_ARTICLE_WORDS,
+      schema: [z.string().url(), LanguageSchema],
+      description: 'extract words from article',
+      handler: async (url, language) => {
+        const { extractArticleText } = await import('../services/article/article-service.js');
+        const { text } = await extractArticleText(url);
+        return contentGenerator.extractArticleVocabulary(text, language, undefined, databaseLayer);
+      },
+    },
+    {
       channel: IPC_CHANNELS.LLM.GENERATE_SENTENCES,
       schema: [TextSchema, LanguageSchema, TopicSchema.optional()],
       description: 'generate sentences',
@@ -1794,6 +1804,57 @@ function setupFlowHandlers(databaseLayer: SQLiteDatabaseLayer, audioService: Aud
         } catch {
           return null;
         }
+      },
+    },
+    {
+      channel: IPC_CHANNELS.FLOW.EXPORT_FLOW_MP3,
+      schema: LanguageSchema,
+      description: 'export bilingual flow mp3',
+      handler: async (language) => {
+        const flowSentences = await databaseLayer.getFlowSentences(language);
+        const audioPathPairs: Array<[string, string]> = [];
+
+        for (const item of flowSentences) {
+          if (!item.audioPath || !(await audioService.audioExists(item.audioPath))) continue;
+          if (item.englishAudioPath && (await audioService.audioExists(item.englishAudioPath))) {
+            audioPathPairs.push([item.englishAudioPath, item.audioPath]);
+          }
+        }
+
+        if (audioPathPairs.length === 0) {
+          throw new Error(
+            'No bilingual audio available. Generate sentences with English audio first.'
+          );
+        }
+
+        // Delete cached file to force fresh generation
+        const audioDir = join(app.getPath('userData'), 'audio');
+        const cachedPath = join(audioDir, `flow_stitched_english_${language}.mp3`);
+        try {
+          await fsPromises.unlink(cachedPath);
+        } catch {
+          // File doesn't exist yet, that's fine
+        }
+
+        const relativePath = await audioService.stitchAudioWithEnglish(audioPathPairs, language);
+        if (!relativePath) {
+          throw new Error('Failed to generate bilingual flow audio. Ensure ffmpeg is installed.');
+        }
+
+        const absolutePath = AudioService.resolveAudioPath(relativePath);
+
+        const saveResult = await dialog.showSaveDialog({
+          title: 'Export Flow MP3',
+          defaultPath: join(app.getPath('documents'), `flow-${language}.mp3`),
+          filters: [{ name: 'MP3 Audio', extensions: ['mp3'] }],
+        });
+
+        if (saveResult.canceled || !saveResult.filePath) {
+          return { canceled: true, filePath: null };
+        }
+
+        await fsPromises.copyFile(absolutePath, saveResult.filePath);
+        return { canceled: false, filePath: saveResult.filePath };
       },
     },
   ]);

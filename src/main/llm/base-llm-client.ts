@@ -234,6 +234,66 @@ export abstract class BaseLLMClient {
   }
 
   /**
+   * Extract key vocabulary from a block of article text. Unlike
+   * generateTopicWords this does not enforce a minimum word count - an article
+   * may only contain a handful of words new to the learner.
+   */
+  async extractWordsFromText(
+    text: string,
+    language: string,
+    count: number,
+    proficiencyLevel?: string
+  ): Promise<GeneratedWord[]> {
+    const existingWords = await this.getExistingWords(
+      language,
+      undefined,
+      LLM_CONFIG.MAX_EXISTING_WORDS_IN_PROMPT
+    );
+    const prompt = this.createArticleWordsPrompt(
+      text,
+      language,
+      count,
+      existingWords,
+      proficiencyLevel
+    );
+
+    try {
+      const response = await this.makeRequest(prompt, this.getWordGenerationModel());
+      const parseResult = WordGenerationResponseSchema.safeParse(response);
+      if (!parseResult.success) {
+        throw new Error(
+          `Invalid response format: ${parseResult.error.issues
+            .map((i) => `${i.path.join('.')}: ${i.message}`)
+            .join(', ')}`
+        );
+      }
+
+      // Dedupe within the response, then drop words already in the database.
+      const uniqueWords = parseResult.data.filter(
+        (word, index, arr) =>
+          arr.findIndex((w) => w.word.toLowerCase() === word.word.toLowerCase()) === index
+      );
+      const existingWordsSet = await this.checkWordsExist(
+        language,
+        uniqueWords.map((w) => w.word)
+      );
+      const newWords = uniqueWords.filter((w) => !existingWordsSet.has(w.word.toLowerCase()));
+
+      this.logger.info(
+        { extracted: uniqueWords.length, newWords: newWords.length },
+        `Extracted ${newWords.length} new words from article text`
+      );
+      return newWords;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw this.createLLMError(error, 'Response validation failed', 'INVALID_RESPONSE', false);
+      }
+      const err = ensureError(error);
+      throw this.createLLMError(err, `Failed to extract words from article`);
+    }
+  }
+
+  /**
    * Generate sentences - shared implementation
    */
   async generateSentences(
@@ -528,6 +588,58 @@ Rules:
    - Verbs: infinitive form (e.g., "robić" not "robimy", "do" not "does")
    - Nouns: singular form (e.g., "cat" not "cats", "dom" not "domy")
    - Adjectives: base form (e.g., "good" not "better", "dobry" not "dobrzy")`;
+  }
+
+  /**
+   * Create prompt for extracting key vocabulary from article text.
+   */
+  protected createArticleWordsPrompt(
+    text: string,
+    language: string,
+    count: number,
+    existingWords: string[] = [],
+    proficiencyLevel?: string
+  ): string {
+    const lang = language.toLowerCase();
+    const example = `  {"word": "${lang}_word1", "translation": "english_translation1"}`;
+
+    const wordsToInclude = existingWords.slice(0, LLM_CONFIG.MAX_EXISTING_WORDS_IN_PROMPT);
+    const exclusionText =
+      wordsToInclude.length > 0
+        ? `\nIMPORTANT: Do NOT include any of these words the learner already has: ${wordsToInclude.join(', ')}`
+        : '';
+
+    const proficiencyText = this.createProficiencyGuidance(
+      proficiencyLevel,
+      'vocabulary',
+      language
+    );
+    const scriptNote = this.createScriptNote(language);
+
+    return `CRITICAL: Return up to ${count} words in a JSON array (fewer is fine).
+CRITICAL: Return ONLY the JSON array, no explanations or extra text.${scriptNote}
+
+Task: From the ${language} article text below, select the most useful key vocabulary words for a learner to study.${proficiencyText}${exclusionText}
+
+Expected output format:
+[
+${example}
+  ...
+]
+
+Rules:
+1. Only choose words that actually appear in the text
+2. Pick meaningful content words (nouns, verbs, adjectives); skip function words, names, and numbers
+3. Each word must be unique
+4. Use only canonical dictionary forms:
+   - Verbs: infinitive form (e.g., "robić" not "robimy", "do" not "does")
+   - Nouns: singular form (e.g., "cat" not "cats", "dom" not "domy")
+   - Adjectives: base form (e.g., "good" not "better", "dobry" not "dobrzy")
+
+ARTICLE TEXT:
+"""
+${text}
+"""`;
   }
 
   /**

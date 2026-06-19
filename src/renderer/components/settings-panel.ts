@@ -32,6 +32,12 @@ export class SettingsPanel extends BaseComponent {
   private isExporting = false;
 
   @state()
+  private flowExportStatus = '';
+
+  @state()
+  private isExportingFlow = false;
+
+  @state()
   private restartStatus = '';
 
   @state()
@@ -224,6 +230,28 @@ export class SettingsPanel extends BaseComponent {
       this.exportStatus = `Failed to export: ${getErrorMessage(error)}`;
     } finally {
       this.isExporting = false;
+    }
+  }
+
+  private async exportFlowMp3() {
+    this.isExportingFlow = true;
+    this.flowExportStatus = '';
+
+    try {
+      const language =
+        this.currentLanguage || (await window.electronAPI.database.getCurrentLanguage());
+      const result = await window.electronAPI.flow.exportFlowMp3(language);
+
+      if (result.canceled) {
+        this.flowExportStatus = '';
+      } else {
+        this.flowExportStatus = 'Saved';
+      }
+    } catch (error) {
+      console.error('Failed to export flow MP3:', error);
+      this.flowExportStatus = `Failed to export: ${getErrorMessage(error)}`;
+    } finally {
+      this.isExportingFlow = false;
     }
   }
 
@@ -745,6 +773,32 @@ export class SettingsPanel extends BaseComponent {
                   `
                 : ''}
             </div>
+            <div class="backup-action">
+              <div class="settings-description">
+                <strong>Export Flow MP3</strong>
+                <p>
+                  Freshly generate and export the bilingual (English +
+                  ${this.capitalizeLanguage(this.currentLanguage || 'target language')}) Flow audio
+                  as an MP3 file
+                </p>
+              </div>
+              <app-button
+                variant="primary"
+                ?disabled=${this.isExportingFlow}
+                ?loading=${this.isExportingFlow}
+                @click=${this.exportFlowMp3}
+              >
+                ${this.isExportingFlow ? 'Generating...' : 'Export Flow MP3'}
+              </app-button>
+            </div>
+            ${this.flowExportStatus
+              ? html`
+                  <status-message
+                    type=${this.flowExportStatus.includes('Failed') ? 'error' : 'success'}
+                    message=${this.flowExportStatus}
+                  ></status-message>
+                `
+              : ''}
             <div class="backup-action">
               <div class="settings-description">
                 <strong>Restore Backup</strong>

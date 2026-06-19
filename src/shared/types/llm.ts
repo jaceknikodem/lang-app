@@ -11,6 +11,12 @@ export interface LLMClient {
     count: number,
     proficiencyLevel?: string
   ): Promise<GeneratedWord[]>;
+  extractWordsFromText(
+    text: string,
+    language: string,
+    count: number,
+    proficiencyLevel?: string
+  ): Promise<GeneratedWord[]>;
   generateSentences(
     word: string,
     language: string,

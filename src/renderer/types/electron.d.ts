@@ -123,6 +123,7 @@ declare global {
       };
       llm: {
         generateWords: (topic: string | undefined, language: string) => Promise<GeneratedWord[]>;
+        extractArticleWords: (url: string, language: string) => Promise<GeneratedWord[]>;
         generateSentences: (
           word: string,
           language: string,
@@ -262,6 +263,9 @@ declare global {
           language: string
         ) => Promise<string>;
         getFileStats: (filePath: string) => Promise<{ mtime: Date } | null>;
+        exportFlowMp3: (
+          language: string
+        ) => Promise<{ canceled: boolean; filePath: string | null }>;
       };
       lifecycle: {
         createBackup: () => Promise<string>;

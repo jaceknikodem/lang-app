@@ -24,6 +24,9 @@ export class TopicSelector extends BaseComponent {
   private isGenerating = false;
 
   @state()
+  private articleUrl = '';
+
+  @state()
   private suggestions: string[] = [];
 
   @state()
@@ -375,6 +378,43 @@ export class TopicSelector extends BaseComponent {
     }
   }
 
+  private handleArticleUrlChange(e: Event) {
+    this.articleUrl = (e.target as HTMLInputElement).value;
+    this.error = null;
+  }
+
+  private async handleImportFromArticle() {
+    if (this.isGenerating) return;
+    const url = this.articleUrl.trim();
+    if (!url) {
+      this.error = 'Enter an article URL to import from.';
+      return;
+    }
+
+    this.isGenerating = true;
+    this.error = null;
+
+    try {
+      const language = this.currentLanguage || 'spanish';
+      const words = await window.electronAPI.llm.extractArticleWords(url, language);
+
+      if (!words || words.length === 0) {
+        throw new Error('No new words found in that article.');
+      }
+
+      router.navigateTo('word-selection', {
+        topic: undefined,
+        generatedWords: words,
+        language: this.currentLanguage,
+      });
+    } catch (error) {
+      logger.error({ error, url: this.articleUrl }, 'Failed to import words from article');
+      this.error = getErrorMessage(error, 'Failed to import words from that article.');
+    } finally {
+      this.isGenerating = false;
+    }
+  }
+
   private handleSkipTopic() {
     // Generate general vocabulary without topic
     this.topic = '';
@@ -465,6 +505,31 @@ export class TopicSelector extends BaseComponent {
                 </div>
               `
             : ''}
+        </div>
+
+        <div class="topic-input-section" style="margin-top: 18px;">
+          <div class="input-group">
+            <label class="input-label" for="article-url-input">Or import from an article</label>
+            <div class="input-row">
+              <input
+                id="article-url-input"
+                class="topic-input"
+                type="url"
+                .value=${this.articleUrl}
+                @input=${this.handleArticleUrlChange}
+                placeholder="https://… (a page in your target language)"
+                ?disabled=${this.isGenerating}
+              />
+              <button
+                class="btn btn-primary generate-btn inline"
+                @click=${this.handleImportFromArticle}
+                ?disabled=${this.isGenerating}
+                title="Extract key words from the article"
+              >
+                Import
+              </button>
+            </div>
+          </div>
         </div>
 
         ${this.error ? html` <div class="error-message">${this.error}</div> ` : ''}

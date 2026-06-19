@@ -38,6 +38,11 @@ export const settingsPanelStyles = css`
     min-width: 120px;
   }
 
+  .settings-description strong {
+    font-size: 13px;
+    font-weight: 500;
+  }
+
   .settings-description p {
     margin: 0;
     color: var(--text-secondary);
@@ -223,18 +228,23 @@ export const settingsPanelStyles = css`
 
   .backup-actions {
     display: flex;
-    gap: var(--spacing-md);
-    margin-bottom: var(--spacing-md);
+    flex-direction: column;
+    gap: 0;
   }
 
   .backup-action {
-    flex: 1;
     display: flex;
-    flex-direction: column;
-    gap: var(--spacing-sm);
+    align-items: center;
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .backup-action:last-child {
+    margin-bottom: 0;
   }
 
   .backup-action .settings-description {
+    flex: 1;
     margin-right: 0;
     margin-bottom: 0;
   }

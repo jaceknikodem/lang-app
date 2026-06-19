@@ -151,6 +151,64 @@ export class ContentGenerator {
   }
 
   /**
+   * Extract key vocabulary from article text, applying the same validation,
+   * proficiency awareness, and frequency tagging as topic generation.
+   */
+  async extractArticleVocabulary(
+    text: string,
+    language?: string,
+    count?: number,
+    database?: DatabaseLayer
+  ): Promise<GeneratedWord[]> {
+    const targetLanguage = language || this.config.defaultLanguage;
+    const wordCount = count || this.config.defaultWordCount;
+
+    const isAvailable = await this.llmClient.isAvailable();
+    if (!isAvailable) {
+      throw new Error('LLM service is not available. Please check your configuration.');
+    }
+
+    let proficiencyLevel: string | undefined;
+    if (database) {
+      const proficiencyKey = `language_proficiency_${targetLanguage.toLowerCase()}`;
+      proficiencyLevel = (await database.getSetting(proficiencyKey)) || undefined;
+    }
+
+    try {
+      const words = await this.llmClient.extractWordsFromText(
+        text,
+        targetLanguage,
+        wordCount,
+        proficiencyLevel
+      );
+      const validWords = this.validateGeneratedWords(words);
+
+      // Tag with frequency info so the selector can show tiers, then shuffle.
+      const wordsWithFrequencyInfo: GeneratedWord[] = validWords.map((word) => {
+        const frequencyPosition = this.frequencyWordManager.getWordFrequencyPosition(
+          word.word,
+          targetLanguage.toLowerCase()
+        );
+        const frequencyTier = frequencyPosition
+          ? this.frequencyWordManager.getFrequencyTier(frequencyPosition)
+          : undefined;
+        return {
+          ...word,
+          ...(frequencyPosition !== undefined && { frequencyPosition }),
+          ...(frequencyTier !== undefined && { frequencyTier }),
+        };
+      });
+
+      return this.shuffleArray(wordsWithFrequencyInfo);
+    } catch (error) {
+      if (error instanceof Error && 'code' in error) {
+        throw error;
+      }
+      throw this.handleContentGenerationError(error, 'article vocabulary extraction');
+    }
+  }
+
+  /**
    * Generate vocabulary words for a given topic with frequency classification
    * If no topic is provided, uses frequency-ordered word lists
    */
@@ -173,8 +231,13 @@ export class ContentGenerator {
       }
 
       // If no topic is provided and we have a database, use frequency-based selection
-      // EXCEPT for B1 proficiency, which should use LLM-based generation
-      if (!topicText && database && proficiencyLevel?.toLowerCase() !== 'b1') {
+      // EXCEPT for B1 proficiency, which should use LLM-based generation.
+      // Requires a frequency word list for the language; languages without one
+      // (e.g. Japanese) fall through to LLM generation.
+      const hasWordList = this.frequencyWordManager
+        .getAvailableLanguages()
+        .includes(targetLanguage.toLowerCase());
+      if (!topicText && database && proficiencyLevel?.toLowerCase() !== 'b1' && hasWordList) {
         return await this.generateFrequencyBasedVocabulary(
           targetLanguage.toLowerCase(),
           wordCount,

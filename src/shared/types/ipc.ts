@@ -443,6 +443,7 @@ export const IPC_CHANNELS = {
   },
   LLM: {
     GENERATE_WORDS: 'llm:generateWords',
+    EXTRACT_ARTICLE_WORDS: 'llm:extractArticleWords',
     GENERATE_SENTENCES: 'llm:generateSentences',
     IS_AVAILABLE: 'llm:isAvailable',
     GET_AVAILABLE_MODELS: 'llm:getAvailableModels',
@@ -547,6 +548,7 @@ export const IPC_CHANNELS = {
     STITCH_AUDIO: 'flow:stitchAudio',
     STITCH_AUDIO_WITH_ENGLISH: 'flow:stitchAudioWithEnglish',
     GET_FILE_STATS: 'flow:getFileStats',
+    EXPORT_FLOW_MP3: 'flow:exportMp3',
   },
   SCORING: {
     GET_NEXT_MODE: 'scoring:getNextMode',

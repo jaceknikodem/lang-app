@@ -172,6 +172,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   llm: {
     generateWords: (topic: string | undefined, language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.LLM.GENERATE_WORDS, topic, language),
+    extractArticleWords: (url: string, language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.LLM.EXTRACT_ARTICLE_WORDS, url, language),
     generateSentences: (word: string, language: string, topic?: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.LLM.GENERATE_SENTENCES, word, language, topic),
     isAvailable: () => ipcRenderer.invoke(IPC_CHANNELS.LLM.IS_AVAILABLE),
@@ -457,6 +459,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.FLOW.STITCH_AUDIO_WITH_ENGLISH, audioPathPairs, language),
     getFileStats: (filePath: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.FLOW.GET_FILE_STATS, filePath),
+    exportFlowMp3: (language: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.FLOW.EXPORT_FLOW_MP3, language),
   },
 
   // Scoring operations
@@ -644,6 +648,7 @@ declare global {
       };
       llm: {
         generateWords: (topic: string | undefined, language: string) => Promise<any[]>;
+        extractArticleWords: (url: string, language: string) => Promise<any[]>;
         generateSentences: (word: string, language: string, topic?: string) => Promise<any[]>;
         isAvailable: () => Promise<boolean>;
         getAvailableModels: () => Promise<string[]>;
@@ -846,6 +851,9 @@ declare global {
           language: string
         ) => Promise<string>;
         getFileStats: (filePath: string) => Promise<{ mtime: Date } | null>;
+        exportFlowMp3: (
+          language: string
+        ) => Promise<{ canceled: boolean; filePath: string | null }>;
       };
       scoring: {
         getNextMode: (options: {
