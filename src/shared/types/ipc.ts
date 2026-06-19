@@ -362,6 +362,7 @@ export interface IPCBridge {
         beforeSentenceAudio?: string;
         afterSentenceAudio?: string;
         continuationAudios: string[];
+        variantSentenceAudios: string[];
       }>
     >;
     stitchAudio: (audioPaths: string[], language: string) => Promise<string>;

@@ -16,6 +16,7 @@ interface FlowSentence {
   beforeSentenceAudio?: string;
   afterSentenceAudio?: string;
   continuationAudios: string[];
+  variantSentenceAudios: string[];
 }
 
 @customElement('flow-mode')
@@ -218,6 +219,7 @@ export class FlowMode extends BaseComponent {
               audioPathPairs.push([item.englishAudioPath, item.audioPath]);
             }
           }
+          audioPaths.push(...item.variantSentenceAudios);
           if (item.afterSentenceAudio) {
             audioPaths.push(item.afterSentenceAudio);
           }

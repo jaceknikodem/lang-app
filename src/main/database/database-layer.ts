@@ -1088,6 +1088,18 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to update dialogue variant continuation`);
     }
   }
+  async updateDialogueVariantSentenceAudio(variantId: number, audioPath: string): Promise<void> {
+    const db = this.getDb();
+    try {
+      db.prepare(`UPDATE dialogue_variants SET variant_sentence_audio = ? WHERE id = ?`).run(
+        audioPath,
+        variantId
+      );
+    } catch (error) {
+      throw wrapError(error, `Failed to update dialogue variant sentence audio`);
+    }
+  }
+
   async getSentenceById(sentenceId: number): Promise<Sentence | null> {
     const db = this.getDb();
 
@@ -1270,6 +1282,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       beforeSentenceAudio?: string;
       afterSentenceAudio?: string;
       continuationAudios: string[];
+      variantSentenceAudios: string[];
     }>
   > {
     const db = this.getDb();
@@ -1316,18 +1329,25 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
         beforeSentenceAudio?: string;
         afterSentenceAudio?: string;
         continuationAudios: string[];
+        variantSentenceAudios: string[];
       }> = [];
 
       // For each sentence, get continuation audio paths and construct English audio path
       for (const row of sentenceRows) {
-        // Get dialogue variants and their continuation audio
+        // Get dialogue variants and their audio paths
         const variantsStmt = db.prepare(`
-          SELECT continuation_audio FROM dialogue_variants
-          WHERE sentence_id = ? AND continuation_audio IS NOT NULL AND TRIM(continuation_audio) != ''
+          SELECT continuation_audio, variant_sentence_audio FROM dialogue_variants
+          WHERE sentence_id = ?
         `);
-        const variantRows = variantsStmt.all(row.id) as Array<{ continuation_audio: string }>;
+        const variantRows = variantsStmt.all(row.id) as Array<{
+          continuation_audio: string | null;
+          variant_sentence_audio: string | null;
+        }>;
         const continuationAudios = variantRows
           .map((variantRow) => variantRow.continuation_audio)
+          .filter((audio): audio is string => !!audio && audio.trim() !== '');
+        const variantSentenceAudios = variantRows
+          .map((variantRow) => variantRow.variant_sentence_audio)
           .filter((audio): audio is string => !!audio && audio.trim() !== '');
 
         // Construct English audio path from sentence audio path
@@ -1351,6 +1371,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
           beforeSentenceAudio: row.before_sentence_audio_path || undefined,
           afterSentenceAudio: row.after_sentence_audio_path || undefined,
           continuationAudios,
+          variantSentenceAudios,
         });
       }
 
@@ -1372,8 +1393,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       for (const row of readAloudRows) {
         result.push({
           audioPath: row.audio_path,
-          // No englishAudioPath for read_aloud_cache entries
           continuationAudios: [],
+          variantSentenceAudios: [],
         });
       }
 
@@ -2378,6 +2399,7 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       continuationText: (row.continuation_text as string) || undefined,
       continuationTranslation: (row.continuation_translation as string) || undefined,
       continuationAudio: (row.continuation_audio as string) || undefined,
+      variantSentenceAudio: (row.variant_sentence_audio as string) || undefined,
     };
   }
 

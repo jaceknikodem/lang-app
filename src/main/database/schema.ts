@@ -154,6 +154,7 @@ export function initializeSchema(db: Database.Database): void {
   `);
 
   addColumnIfNotExists(db, 'dialogue_variants', 'variant_pronunciation', 'TEXT');
+  addColumnIfNotExists(db, 'dialogue_variants', 'variant_sentence_audio', 'TEXT');
   addColumnIfNotExists(db, 'words', 'zipf_frequency', 'REAL');
 
   db.exec(`

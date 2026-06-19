@@ -1436,6 +1436,7 @@ function setupDialogHandlers(
                 undefined,
                 variant.id
               );
+              await databaseLayer.updateDialogueVariantSentenceAudio(variant.id, audioPath);
               return { ...variant, variantSentenceAudio: audioPath };
             } catch (audioError) {
               getLogger().warn(
@@ -1761,12 +1762,20 @@ function setupFlowHandlers(databaseLayer: SQLiteDatabaseLayer, audioService: Aud
               }
             }
 
+            const existingVariantSentenceAudios: string[] = [];
+            for (const audioPath of item.variantSentenceAudios) {
+              if (await audioService.audioExists(audioPath)) {
+                existingVariantSentenceAudios.push(audioPath);
+              }
+            }
+
             return {
               audioPath: item.audioPath,
               englishAudioPath,
               beforeSentenceAudio,
               afterSentenceAudio,
               continuationAudios: existingContinuationAudios,
+              variantSentenceAudios: existingVariantSentenceAudios,
             };
           })
         );

@@ -251,11 +251,12 @@ declare global {
       flow: {
         getFlowSentences: (language: string) => Promise<
           Array<{
-            sentence: Sentence;
-            words: Word[];
+            audioPath: string;
+            englishAudioPath?: string;
             beforeSentenceAudio?: string;
             afterSentenceAudio?: string;
             continuationAudios: string[];
+            variantSentenceAudios: string[];
           }>
         >;
         stitchAudio: (audioPaths: string[], language: string) => Promise<string>;
