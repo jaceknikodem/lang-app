@@ -37,6 +37,12 @@ export class FlowMode extends BaseComponent {
   private stitchedAudioPath: string | null = null;
 
   @state()
+  private playbackCurrentTime: number = 0;
+
+  @state()
+  private playbackDuration: number = 0;
+
+  @state()
   private stitchedAudioPathWithEnglish: string | null = null;
 
   private directKeyHandler?: (event: KeyboardEvent) => void;
@@ -461,10 +467,8 @@ export class FlowMode extends BaseComponent {
       // Set up timeupdate handler to track playback duration
       this.audioElement.addEventListener('timeupdate', () => {
         if (this.audioElement && this.isPlaying) {
-          // Calculate current playback time for autopilot tracking
-          // currentTime is the absolute position in the audio file
-          // Use it directly for tracking (it already accounts for resume position)
           const currentPlaybackTime = this.audioElement.currentTime;
+          this.playbackCurrentTime = currentPlaybackTime;
 
           // Check if 2 minutes (120 seconds) have elapsed
           if (currentPlaybackTime >= 120 && this.playbackTimer === null) {
@@ -473,6 +477,12 @@ export class FlowMode extends BaseComponent {
             // Mark timer as triggered so we don't trigger multiple times
             this.playbackTimer = 1;
           }
+        }
+      });
+
+      this.audioElement.addEventListener('loadedmetadata', () => {
+        if (this.audioElement) {
+          this.playbackDuration = this.audioElement.duration;
         }
       });
 
@@ -555,6 +565,14 @@ export class FlowMode extends BaseComponent {
     this.pausedPosition = 0;
     this.pauseEndTimestamps = null;
     this.previousPauseTimestamp = null;
+    this.playbackCurrentTime = 0;
+    this.playbackDuration = 0;
+  }
+
+  private formatTime(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
   private handleDirectKeyDown(event: KeyboardEvent): void {
@@ -795,6 +813,20 @@ export class FlowMode extends BaseComponent {
         transform: translate(-50%, -50%) scale(1.3);
         font-size: 62px;
       }
+
+      .progress-display {
+        position: absolute;
+        bottom: 48px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: rgba(200, 200, 200, 0.7);
+        font-size: 13px;
+        letter-spacing: 0.04em;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        pointer-events: none;
+        user-select: none;
+      }
     `,
   ];
 
@@ -812,6 +844,15 @@ export class FlowMode extends BaseComponent {
   }
 
   render() {
+    const remaining =
+      this.playbackDuration > 0 ? this.playbackDuration - this.playbackCurrentTime : 0;
+    const progressLabel =
+      this.playbackDuration > 0
+        ? remaining >= 60
+          ? `~${Math.ceil(remaining / 60)} min left`
+          : `${this.formatTime(this.playbackCurrentTime)} / ${this.formatTime(this.playbackDuration)}`
+        : '';
+
     return html`
       <div class="overlay ${this.showOverlay ? 'visible' : ''}">
         ${this.showOverlay
@@ -820,6 +861,7 @@ export class FlowMode extends BaseComponent {
                 <canvas class="visualization-canvas"></canvas>
                 <div class="pause-icon">⏸</div>
               </div>
+              ${progressLabel ? html`<div class="progress-display">${progressLabel}</div>` : ''}
             `
           : ''}
       </div>
