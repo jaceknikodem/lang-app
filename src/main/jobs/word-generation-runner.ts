@@ -28,6 +28,17 @@ export interface WordGenerationRunnerOptions {
   }) => void;
 }
 
+type Word = NonNullable<Awaited<ReturnType<DatabaseLayer['getWordById']>>>;
+type GeneratedSentence = Awaited<ReturnType<ContentGenerator['generateWordSentences']>>[number];
+
+interface SentenceAudioMetadata {
+  audioPath: string;
+  sentenceModel?: string;
+  audioService?: string;
+  audioModel?: string;
+  audioVoiceId?: string;
+}
+
 export class WordGenerationRunner {
   private readonly database: DatabaseLayer;
   private readonly contentGenerator: ContentGenerator;
@@ -125,26 +136,9 @@ export class WordGenerationRunner {
 
   private async handleJob(job: WordGenerationJob): Promise<void> {
     const attemptNumber = job.attempts + 1;
-
     try {
-      await this.database.markWordGenerationJobProcessing(job.id);
-      await this.database.updateWordProcessingStatus(job.wordId, 'processing');
-      await this.emitWordUpdate(job.wordId);
-
-      const word = await this.database.getWordById(job.wordId);
-      if (!word) {
-        this.logger.warn(
-          {
-            jobId: job.id,
-            wordId: job.wordId,
-          },
-          '[WordGenerationRunner] Word not found for job'
-        );
-        await this.database.completeWordGenerationJob(job.id);
-        await this.database.updateWordProcessingStatus(job.wordId, 'ready');
-        await this.emitWordUpdate(job.wordId);
-        return;
-      }
+      const word = await this.startJobProcessing(job);
+      if (!word) return;
 
       const language = job.language || word.language;
       this.logger.info({
@@ -156,377 +150,14 @@ export class WordGenerationRunner {
       });
 
       await this.ensureSentenceAudio(word.id, language, word.word);
-
-      const desiredCount = job.desiredSentenceCount ?? 4;
-      const existingSentences = await this.database.getSentencesByWord(word.id);
-      const normalizedExisting = new Set(
-        existingSentences.map((sentence) => this.normalizeSentence(sentence.sentence))
-      );
-      let totalSentences = existingSentences.length;
-
-      this.logger.debug(
-        {
-          wordId: word.id,
-          existingSentences: totalSentences,
-          desiredCount,
-        },
-        '[WordGenerationRunner] Sentence status'
-      );
-
-      if (totalSentences < desiredCount) {
-        const needed = desiredCount - totalSentences;
-        this.logger.info(
-          {
-            word: word.word,
-            language,
-            needed,
-          },
-          '[WordGenerationRunner] Requesting additional sentences'
-        );
-
-        const proficiencyKey = `language_proficiency_${language.toLowerCase()}`;
-        const proficiencyLevel = (await this.database.getSetting(proficiencyKey)) || undefined;
-
-        // Fetch known words once per job for variant generation
-        const allWords = await this.database.getAllWords(language, false, false);
-        const knownWords = allWords
-          .filter((w) => w.known || (w.strength ?? 0) >= 40)
-          .slice(0, 50)
-          .map((w) => w.word);
-
-        const generatedSentences = await this.contentGenerator.generateWordSentences(
-          word.word,
-          language,
-          needed,
-          this.database,
-          job.topic,
-          word.translation
-        );
-
-        for (const sentence of generatedSentences) {
-          const normalizedSentence = this.normalizeSentence(sentence.sentence);
-          if (!normalizedSentence || normalizedExisting.has(normalizedSentence)) {
-            continue;
-          }
-
-          let audioPath: string = '';
-          let sentenceModel: string | undefined;
-          let audioService: string | undefined;
-          let audioModel: string | undefined;
-          let audioVoiceId: string | undefined;
-
-          const sentenceParts = splitSentenceIntoParts(sentence.sentence);
-          const sentenceId = await this.database.insertSentence(
-            word.id,
-            sentence.sentence,
-            sentence.translation,
-            '', // Audio path will be set after generation with proper IDs
-            sentence.contextBefore,
-            sentence.contextAfter,
-            sentence.contextBeforeTranslation,
-            sentence.contextAfterTranslation,
-            sentenceParts,
-            undefined, // Will be set after audio generation
-            undefined, // Will be set after audio generation
-            undefined, // Will be set after audio generation
-            undefined, // Will be set after audio generation
-            undefined, // tokenizedTokens
-            sentence.pronunciation,
-            sentence.contextBeforePronunciation,
-            sentence.contextAfterPronunciation,
-            proficiencyLevel
-          );
-
-          // Generate audio now that we have sentenceId
-          if (sentence.audioUrl) {
-            // Tatoeba sentence - download audio from external source
-            const isTatoebaAudio = sentence.audioUrl.includes('tatoeba.org');
-            this.logger.debug(
-              {
-                word: word.word,
-                language,
-                audioUrl: sentence.audioUrl,
-                isTatoeba: isTatoebaAudio,
-                sentenceId,
-              },
-              'Attempting to download external audio for sentence'
-            );
-            try {
-              audioPath = await this.audioService.downloadSentenceAudioFromUrl(
-                sentence.audioUrl,
-                sentence.sentence,
-                language,
-                word.word,
-                word.id,
-                sentenceId
-              );
-              // Mark as Tatoeba if URL is from Tatoeba
-              if (isTatoebaAudio) {
-                sentenceModel = 'tatoeba';
-                audioService = 'tatoeba';
-                audioModel = undefined;
-              } else {
-                sentenceModel = this.contentGenerator
-                  .getCurrentClient()
-                  .getSentenceGenerationModel();
-                audioService = 'external';
-                audioModel = undefined;
-              }
-            } catch (downloadError) {
-              this.logger.warn(
-                { error: downloadError, audioUrl: sentence.audioUrl, sentenceId },
-                'Failed to download external audio'
-              );
-              audioPath = '';
-              if (isTatoebaAudio) {
-                sentenceModel = 'tatoeba';
-                audioService = 'tatoeba';
-                audioModel = undefined;
-              } else {
-                sentenceModel = this.contentGenerator
-                  .getCurrentClient()
-                  .getSentenceGenerationModel();
-                audioService = 'external';
-                audioModel = undefined;
-              }
-            }
-          } else {
-            // LLM-generated sentence - generate audio with proper IDs
-            try {
-              const isJapanese = language === 'japanese' || language === 'ja';
-              const ttsText =
-                isJapanese && sentence.pronunciation ? sentence.pronunciation : sentence.sentence;
-              audioPath = await this.audioService.generateSentenceAudio(
-                ttsText,
-                language,
-                word.word,
-                word.id,
-                sentenceId
-              );
-              sentenceModel = this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
-              const audioInfo = this.audioService.getAudioGenerationInfo();
-              audioService = audioInfo.service;
-              audioModel = audioInfo.model;
-              audioVoiceId = audioInfo.voiceId;
-            } catch (error) {
-              this.logger.warn(
-                { err: error, sentenceId, wordId: word.id },
-                '[WordGenerationRunner] Failed to generate audio'
-              );
-              audioPath = '';
-              sentenceModel = this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
-              const audioInfo = this.audioService.getAudioGenerationInfo();
-              audioService = audioInfo.service;
-              audioModel = audioInfo.model;
-              audioVoiceId = audioInfo.voiceId;
-            }
-          }
-
-          // Generate English audio for main sentence translation
-          // Store in the same directory as the selected language audio
-          if (audioPath && sentence.translation) {
-            try {
-              await this.audioService.generateAudio(
-                sentence.translation,
-                language, // Use the same language directory as the selected language
-                'english_sentence',
-                word.id,
-                sentenceId
-              );
-            } catch (error) {
-              this.logger.warn(
-                { error, sentenceId },
-                '[WordGenerationRunner] Failed to generate English audio'
-              );
-              // Non-fatal - continue even if English audio generation fails
-            }
-          }
-
-          // Generate context before/after audio
-          const isJapanese = language === 'japanese' || language === 'ja';
-          if (sentence.contextBefore) {
-            try {
-              const contextBeforeText =
-                isJapanese && sentence.contextBeforePronunciation
-                  ? sentence.contextBeforePronunciation
-                  : sentence.contextBefore;
-              const beforeAudioPath = await this.audioService.generateAudio(
-                contextBeforeText,
-                language,
-                '_before_sentence',
-                word.id,
-                sentenceId
-              );
-              await this.database.updateBeforeSentenceAudioPath(sentenceId, beforeAudioPath);
-            } catch (error) {
-              this.logger.warn(
-                { err: error, sentenceId },
-                '[WordGenerationRunner] Failed to generate context before audio'
-              );
-            }
-          }
-
-          if (sentence.contextAfter) {
-            try {
-              const contextAfterText =
-                isJapanese && sentence.contextAfterPronunciation
-                  ? sentence.contextAfterPronunciation
-                  : sentence.contextAfter;
-              const afterAudioPath = await this.audioService.generateAudio(
-                contextAfterText,
-                language,
-                '_after_sentence',
-                word.id,
-                sentenceId
-              );
-              await this.database.updateAfterSentenceAudioPath(sentenceId, afterAudioPath);
-            } catch (error) {
-              this.logger.warn(
-                { err: error, sentenceId },
-                '[WordGenerationRunner] Failed to generate context after audio'
-              );
-            }
-          }
-
-          // Update sentence with audio path and metadata
-          if (audioPath) {
-            await this.database.updateSentenceAudioPath(sentenceId, audioPath, audioVoiceId);
-          }
-          // Update sentence metadata (model info) if available
-          if (
-            sentenceModel !== undefined ||
-            audioService !== undefined ||
-            audioModel !== undefined
-          ) {
-            const db = (this.database as any).getDb();
-            if (db) {
-              const updateStmt = db.prepare(`
-                UPDATE sentences 
-                SET sentence_generation_model = COALESCE(?, sentence_generation_model),
-                    audio_generation_service = COALESCE(?, audio_generation_service),
-                    audio_generation_model = COALESCE(?, audio_generation_model),
-                    audio_generation_voice_id = COALESCE(?, audio_generation_voice_id)
-                WHERE id = ?
-              `);
-              updateStmt.run(
-                sentenceModel || null,
-                audioService || null,
-                audioModel || null,
-                audioVoiceId || null,
-                sentenceId
-              );
-            }
-          }
-
-          // Precompute sentence tokens with dictionary lookups and lemmatization
-          try {
-            const allWords = await this.database.getAllWords(language, false, false);
-            const tokenizedTokens = await precomputeSentenceTokens({
-              sentence: sentence.sentence,
-              targetWord: word,
-              allWords,
-              lookupDictionary: (word: string, lang?: string) =>
-                this.database.lookupDictionary(word, lang || language),
-              language,
-              maxPhraseWords: 3,
-              lemmatizationService: this.lemmatizationService,
-            });
-
-            await this.database.updateSentenceTokens(sentenceId, tokenizedTokens);
-            this.logger.debug(
-              {
-                sentenceId,
-                tokenCount: tokenizedTokens.length,
-              },
-              '[WordGenerationRunner] Precomputed tokens for sentence'
-            );
-          } catch (tokenError) {
-            this.logger.warn(
-              {
-                sentenceId,
-                error: tokenError,
-              },
-              '[WordGenerationRunner] Failed to precompute tokens for sentence'
-            );
-            // Non-fatal - sentence will work without precomputed tokens
-          }
-
-          // Pre-generate dialogue variants for sentences eligible for dialog mode
-          // (contextBefore is required for dialog sentence selection)
-          if (sentence.contextBefore) {
-            this.dialogService
-              .generateDialogueVariants(
-                {
-                  id: sentenceId,
-                  wordId: word.id,
-                  sentence: sentence.sentence,
-                  translation: sentence.translation,
-                  audioPath: audioPath,
-                  createdAt: new Date(),
-                  playCount: 0,
-                  contextBefore: sentence.contextBefore,
-                  contextBeforeTranslation: sentence.contextBeforeTranslation,
-                  contextAfter: sentence.contextAfter,
-                  contextAfterTranslation: sentence.contextAfterTranslation,
-                  language,
-                  pronunciation: sentence.pronunciation,
-                },
-                [],
-                knownWords,
-                language
-              )
-              .catch((err) => {
-                this.logger.warn(
-                  { error: err, sentenceId },
-                  '[WordGenerationRunner] Failed to pre-generate dialogue variants'
-                );
-              });
-          }
-
-          normalizedExisting.add(normalizedSentence);
-          totalSentences += 1;
-          this.logger.debug(
-            {
-              wordId: word.id,
-              sentencePreview: sentence.sentence.slice(0, 80),
-              totalSentences,
-            },
-            '[WordGenerationRunner] Stored sentence for word'
-          );
-
-          if (totalSentences >= desiredCount) {
-            break;
-          }
-        }
-      }
-
-      const processingInfo = await this.database.getWordProcessingInfo(word.id);
-      if (!processingInfo || processingInfo.sentenceCount < desiredCount) {
-        const sentenceTotal = processingInfo?.sentenceCount ?? 0;
-        throw new Error(
-          `Sentence generation incomplete. Have ${sentenceTotal}, wanted ${desiredCount}.`
-        );
-      }
-
-      this.logger.info(
-        {
-          wordId: word.id,
-          sentenceCount: processingInfo.sentenceCount,
-        },
-        '[WordGenerationRunner] Sentence generation complete'
-      );
-
-      await this.database.updateWordProcessingStatus(word.id, 'ready');
-      await this.database.completeWordGenerationJob(job.id);
-      await this.emitWordUpdate(word.id);
-      this.logger.info({ jobId: job.id, wordId: word.id }, '[WordGenerationRunner] Job completed');
+      await this.generateSentences(word, job, language);
+      await this.verifyAndCompleteJob(job, word.id, job.desiredSentenceCount ?? 4);
     } catch (error) {
-      // Log raw error info for debugging
       this.logger.debug(
         {
           jobId: job.id,
           errorType: typeof error,
-          errorConstructor: error?.constructor?.name,
+          errorConstructor: (error as any)?.constructor?.name,
           isError: error instanceof Error,
           hasMessage: error && typeof error === 'object' && 'message' in error,
           errorKeys: error && typeof error === 'object' ? Object.keys(error) : [],
@@ -535,8 +166,6 @@ export class WordGenerationRunner {
       );
 
       const errorDetails = serializeErrorForLogging(error);
-
-      // Safety check: if serialization resulted in an empty or nearly empty object, log a warning
       const detailKeys = Object.keys(errorDetails);
       if (detailKeys.length === 0 || (detailKeys.length === 1 && detailKeys[0] === 'type')) {
         this.logger.warn(
@@ -551,19 +180,439 @@ export class WordGenerationRunner {
         );
       }
 
-      // Use both 'err' (pino's standard error key) and 'error' (our custom key) for maximum compatibility
-      // Spread errorDetails directly into the log object so pino can serialize it properly
       this.logger.error(
         {
           jobId: job.id,
           attemptNumber,
-          err: error instanceof Error ? error : undefined, // Pino's standard error key
-          ...errorDetails, // Spread error details directly
+          err: error instanceof Error ? error : undefined,
+          ...errorDetails,
         },
         `WordGenerationRunner failed for job`
       );
       await this.handleJobFailure(job, attemptNumber, error as Error);
     }
+  }
+
+  private async startJobProcessing(job: WordGenerationJob): Promise<Word | null> {
+    await this.database.markWordGenerationJobProcessing(job.id);
+    await this.database.updateWordProcessingStatus(job.wordId, 'processing');
+    await this.emitWordUpdate(job.wordId);
+
+    const word = await this.database.getWordById(job.wordId);
+    if (!word) {
+      this.logger.warn(
+        { jobId: job.id, wordId: job.wordId },
+        '[WordGenerationRunner] Word not found for job'
+      );
+      await this.database.completeWordGenerationJob(job.id);
+      await this.database.updateWordProcessingStatus(job.wordId, 'ready');
+      await this.emitWordUpdate(job.wordId);
+      return null;
+    }
+    return word;
+  }
+
+  private async generateSentences(
+    word: Word,
+    job: WordGenerationJob,
+    language: string
+  ): Promise<void> {
+    const desiredCount = job.desiredSentenceCount ?? 4;
+    const existingSentences = await this.database.getSentencesByWord(word.id);
+    const normalizedExisting = new Set(
+      existingSentences.map((s) => this.normalizeSentence(s.sentence))
+    );
+    let totalSentences = existingSentences.length;
+
+    this.logger.debug(
+      { wordId: word.id, existingSentences: totalSentences, desiredCount },
+      '[WordGenerationRunner] Sentence status'
+    );
+
+    if (totalSentences >= desiredCount) return;
+
+    const needed = desiredCount - totalSentences;
+    this.logger.info(
+      { word: word.word, language, needed },
+      '[WordGenerationRunner] Requesting additional sentences'
+    );
+
+    const proficiencyKey = `language_proficiency_${language.toLowerCase()}`;
+    const proficiencyLevel = (await this.database.getSetting(proficiencyKey)) || undefined;
+
+    const allWords = await this.database.getAllWords(language, false, false);
+    const knownWords = allWords
+      .filter((w) => w.known || (w.strength ?? 0) >= 40)
+      .slice(0, 50)
+      .map((w) => w.word);
+
+    const generatedSentences = await this.contentGenerator.generateWordSentences(
+      word.word,
+      language,
+      needed,
+      this.database,
+      job.topic,
+      word.translation
+    );
+
+    for (const sentence of generatedSentences) {
+      const added = await this.processSentence(
+        sentence,
+        word,
+        language,
+        proficiencyLevel,
+        knownWords,
+        normalizedExisting
+      );
+      if (added) {
+        totalSentences += 1;
+        this.logger.debug(
+          { wordId: word.id, sentencePreview: sentence.sentence.slice(0, 80), totalSentences },
+          '[WordGenerationRunner] Stored sentence for word'
+        );
+        if (totalSentences >= desiredCount) break;
+      }
+    }
+  }
+
+  private async processSentence(
+    sentence: GeneratedSentence,
+    word: Word,
+    language: string,
+    proficiencyLevel: string | undefined,
+    knownWords: string[],
+    normalizedExisting: Set<string>
+  ): Promise<boolean> {
+    const normalizedSentence = this.normalizeSentence(sentence.sentence);
+    if (!normalizedSentence || normalizedExisting.has(normalizedSentence)) return false;
+
+    const sentenceParts = splitSentenceIntoParts(sentence.sentence);
+    const sentenceId = await this.database.insertSentence(
+      word.id,
+      sentence.sentence,
+      sentence.translation,
+      '', // Audio path will be set after generation with proper IDs
+      sentence.contextBefore,
+      sentence.contextAfter,
+      sentence.contextBeforeTranslation,
+      sentence.contextAfterTranslation,
+      sentenceParts,
+      undefined, // Will be set after audio generation
+      undefined, // Will be set after audio generation
+      undefined, // Will be set after audio generation
+      undefined, // Will be set after audio generation
+      undefined, // tokenizedTokens
+      sentence.pronunciation,
+      sentence.contextBeforePronunciation,
+      sentence.contextAfterPronunciation,
+      proficiencyLevel
+    );
+
+    const audioMeta = await this.generateMainAudio(sentence, word, language, sentenceId);
+
+    await this.generateTranslationAudio(sentence, word, language, sentenceId, audioMeta.audioPath);
+    await this.generateContextAudio(sentence, word, language, sentenceId);
+
+    if (audioMeta.audioPath) {
+      await this.database.updateSentenceAudioPath(
+        sentenceId,
+        audioMeta.audioPath,
+        audioMeta.audioVoiceId
+      );
+    }
+    this.updateSentenceMetadata(sentenceId, audioMeta);
+
+    await this.precomputeTokens(sentence, word, language, sentenceId);
+    this.pregenerateDialogVariants(
+      sentence,
+      word,
+      language,
+      sentenceId,
+      audioMeta.audioPath,
+      knownWords
+    );
+
+    normalizedExisting.add(normalizedSentence);
+    return true;
+  }
+
+  private async generateMainAudio(
+    sentence: GeneratedSentence,
+    word: Word,
+    language: string,
+    sentenceId: number
+  ): Promise<SentenceAudioMetadata> {
+    if (sentence.audioUrl) {
+      return this.downloadExternalAudio(sentence, word, language, sentenceId);
+    }
+    return this.generateTTSAudio(sentence, word, language, sentenceId);
+  }
+
+  private async downloadExternalAudio(
+    sentence: GeneratedSentence,
+    word: Word,
+    language: string,
+    sentenceId: number
+  ): Promise<SentenceAudioMetadata> {
+    const isTatoeba = sentence.audioUrl!.includes('tatoeba.org');
+    this.logger.debug(
+      { word: word.word, language, audioUrl: sentence.audioUrl, isTatoeba, sentenceId },
+      'Attempting to download external audio for sentence'
+    );
+    const sentenceModel = isTatoeba
+      ? 'tatoeba'
+      : this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
+    const audioService = isTatoeba ? 'tatoeba' : 'external';
+    try {
+      const audioPath = await this.audioService.downloadSentenceAudioFromUrl(
+        sentence.audioUrl!,
+        sentence.sentence,
+        language,
+        word.word,
+        word.id,
+        sentenceId
+      );
+      return { audioPath, sentenceModel, audioService };
+    } catch (downloadError) {
+      this.logger.warn(
+        { error: downloadError, audioUrl: sentence.audioUrl, sentenceId },
+        'Failed to download external audio'
+      );
+      return { audioPath: '', sentenceModel, audioService };
+    }
+  }
+
+  private async generateTTSAudio(
+    sentence: GeneratedSentence,
+    word: Word,
+    language: string,
+    sentenceId: number
+  ): Promise<SentenceAudioMetadata> {
+    const isJapanese = language === 'japanese' || language === 'ja';
+    const ttsText =
+      isJapanese && sentence.pronunciation ? sentence.pronunciation : sentence.sentence;
+    const sentenceModel = this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
+    const audioInfo = this.audioService.getAudioGenerationInfo();
+    try {
+      const audioPath = await this.audioService.generateSentenceAudio(
+        ttsText,
+        language,
+        word.word,
+        word.id,
+        sentenceId
+      );
+      return {
+        audioPath,
+        sentenceModel,
+        audioService: audioInfo.service,
+        audioModel: audioInfo.model,
+        audioVoiceId: audioInfo.voiceId,
+      };
+    } catch (error) {
+      this.logger.warn(
+        { err: error, sentenceId, wordId: word.id },
+        '[WordGenerationRunner] Failed to generate audio'
+      );
+      return {
+        audioPath: '',
+        sentenceModel,
+        audioService: audioInfo.service,
+        audioModel: audioInfo.model,
+        audioVoiceId: audioInfo.voiceId,
+      };
+    }
+  }
+
+  private async generateTranslationAudio(
+    sentence: GeneratedSentence,
+    word: Word,
+    language: string,
+    sentenceId: number,
+    mainAudioPath: string
+  ): Promise<void> {
+    if (!mainAudioPath || !sentence.translation) return;
+    try {
+      await this.audioService.generateAudio(
+        sentence.translation,
+        language, // Use the same language directory as the selected language
+        'english_sentence',
+        word.id,
+        sentenceId
+      );
+    } catch (error) {
+      this.logger.warn(
+        { error, sentenceId },
+        '[WordGenerationRunner] Failed to generate English audio'
+      );
+    }
+  }
+
+  private async generateContextAudio(
+    sentence: GeneratedSentence,
+    word: Word,
+    language: string,
+    sentenceId: number
+  ): Promise<void> {
+    const isJapanese = language === 'japanese' || language === 'ja';
+
+    if (sentence.contextBefore) {
+      try {
+        const text =
+          isJapanese && sentence.contextBeforePronunciation
+            ? sentence.contextBeforePronunciation
+            : sentence.contextBefore;
+        const beforePath = await this.audioService.generateAudio(
+          text,
+          language,
+          '_before_sentence',
+          word.id,
+          sentenceId
+        );
+        await this.database.updateBeforeSentenceAudioPath(sentenceId, beforePath);
+      } catch (error) {
+        this.logger.warn(
+          { err: error, sentenceId },
+          '[WordGenerationRunner] Failed to generate context before audio'
+        );
+      }
+    }
+
+    if (sentence.contextAfter) {
+      try {
+        const text =
+          isJapanese && sentence.contextAfterPronunciation
+            ? sentence.contextAfterPronunciation
+            : sentence.contextAfter;
+        const afterPath = await this.audioService.generateAudio(
+          text,
+          language,
+          '_after_sentence',
+          word.id,
+          sentenceId
+        );
+        await this.database.updateAfterSentenceAudioPath(sentenceId, afterPath);
+      } catch (error) {
+        this.logger.warn(
+          { err: error, sentenceId },
+          '[WordGenerationRunner] Failed to generate context after audio'
+        );
+      }
+    }
+  }
+
+  private updateSentenceMetadata(sentenceId: number, meta: SentenceAudioMetadata): void {
+    const { sentenceModel, audioService, audioModel, audioVoiceId } = meta;
+    if (sentenceModel === undefined && audioService === undefined && audioModel === undefined)
+      return;
+    const db = (this.database as any).getDb();
+    if (!db) return;
+    db.prepare(
+      `
+      UPDATE sentences
+      SET sentence_generation_model = COALESCE(?, sentence_generation_model),
+          audio_generation_service = COALESCE(?, audio_generation_service),
+          audio_generation_model = COALESCE(?, audio_generation_model),
+          audio_generation_voice_id = COALESCE(?, audio_generation_voice_id)
+      WHERE id = ?
+    `
+    ).run(
+      sentenceModel || null,
+      audioService || null,
+      audioModel || null,
+      audioVoiceId || null,
+      sentenceId
+    );
+  }
+
+  private async precomputeTokens(
+    sentence: GeneratedSentence,
+    word: Word,
+    language: string,
+    sentenceId: number
+  ): Promise<void> {
+    try {
+      const allWords = await this.database.getAllWords(language, false, false);
+      const tokenizedTokens = await precomputeSentenceTokens({
+        sentence: sentence.sentence,
+        targetWord: word,
+        allWords,
+        lookupDictionary: (w: string, lang?: string) =>
+          this.database.lookupDictionary(w, lang || language),
+        language,
+        maxPhraseWords: 3,
+        lemmatizationService: this.lemmatizationService,
+      });
+      await this.database.updateSentenceTokens(sentenceId, tokenizedTokens);
+      this.logger.debug(
+        { sentenceId, tokenCount: tokenizedTokens.length },
+        '[WordGenerationRunner] Precomputed tokens for sentence'
+      );
+    } catch (tokenError) {
+      this.logger.warn(
+        { sentenceId, error: tokenError },
+        '[WordGenerationRunner] Failed to precompute tokens for sentence'
+      );
+    }
+  }
+
+  private pregenerateDialogVariants(
+    sentence: GeneratedSentence,
+    word: Word,
+    language: string,
+    sentenceId: number,
+    audioPath: string,
+    knownWords: string[]
+  ): void {
+    if (!sentence.contextBefore) return;
+    this.dialogService
+      .generateDialogueVariants(
+        {
+          id: sentenceId,
+          wordId: word.id,
+          sentence: sentence.sentence,
+          translation: sentence.translation,
+          audioPath,
+          createdAt: new Date(),
+          playCount: 0,
+          contextBefore: sentence.contextBefore,
+          contextBeforeTranslation: sentence.contextBeforeTranslation,
+          contextAfter: sentence.contextAfter,
+          contextAfterTranslation: sentence.contextAfterTranslation,
+          language,
+          pronunciation: sentence.pronunciation,
+        },
+        [],
+        knownWords,
+        language
+      )
+      .catch((err) => {
+        this.logger.warn(
+          { error: err, sentenceId },
+          '[WordGenerationRunner] Failed to pre-generate dialogue variants'
+        );
+      });
+  }
+
+  private async verifyAndCompleteJob(
+    job: WordGenerationJob,
+    wordId: number,
+    desiredCount: number
+  ): Promise<void> {
+    const processingInfo = await this.database.getWordProcessingInfo(wordId);
+    if (!processingInfo || processingInfo.sentenceCount < desiredCount) {
+      const sentenceTotal = processingInfo?.sentenceCount ?? 0;
+      throw new Error(
+        `Sentence generation incomplete. Have ${sentenceTotal}, wanted ${desiredCount}.`
+      );
+    }
+    this.logger.info(
+      { wordId, sentenceCount: processingInfo.sentenceCount },
+      '[WordGenerationRunner] Sentence generation complete'
+    );
+    await this.database.updateWordProcessingStatus(wordId, 'ready');
+    await this.database.completeWordGenerationJob(job.id);
+    await this.emitWordUpdate(wordId);
+    this.logger.info({ jobId: job.id, wordId }, '[WordGenerationRunner] Job completed');
   }
 
   private async handleJobFailure(
