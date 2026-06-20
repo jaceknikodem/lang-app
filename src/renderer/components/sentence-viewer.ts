@@ -655,18 +655,16 @@ export class SentenceViewer extends LitElement {
           </span>
         </div>
 
-        ${this.sentence.audioPath
-          ? html`
-              <button
-                class="audio-button"
-                @click=${() => this.audioCtrl.handlePlayAudio()}
-                ?disabled=${audioPlayer.getState().isPlaying || this.audioCtrl.isRegeneratingAudio}
-                title="Play audio (Space)"
-              >
-                <span aria-hidden="true">🔊</span>
-              </button>
-            `
-          : ''}
+        <button
+          class="audio-button"
+          @click=${() => this.audioCtrl.handlePlayAudio()}
+          ?disabled=${!this.sentence.audioPath ||
+          audioPlayer.getState().isPlaying ||
+          this.audioCtrl.isRegeneratingAudio}
+          title=${this.sentence.audioPath ? 'Play audio (Space)' : 'No audio available'}
+        >
+          <span aria-hidden="true">🔊</span>
+        </button>
       </div>
     `;
   }
