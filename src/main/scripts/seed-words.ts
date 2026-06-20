@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { existsSync } from 'fs';
 import { SQLiteDatabaseLayer } from '../database/database-layer.js';
 import { ContentGenerator } from '../llm/content-generator.js';
 import { AudioService } from '../audio/audio-service.js';
@@ -16,7 +17,6 @@ const DB_PATH = join(
   'KotobaAI',
   'language_learning.db'
 );
-const TOPICS_FILE = join(__dirname, '..', '..', '..', 'topics.txt');
 const WORDS_PER_TOPIC = 5;
 const TOPIC_COUNT = 20;
 const POLL_INTERVAL_MS = 1000;
@@ -67,13 +67,18 @@ async function main() {
 
   const audioService = new AudioService(undefined, db);
 
-  const allTopics = readFileSync(TOPICS_FILE, 'utf8')
+  const theme = (await db.getCurrentTheme()) || 'general';
+  const topicsFile = join(__dirname, '..', '..', '..', 'topics', `${theme}.txt`);
+  const fallbackFile = join(__dirname, '..', '..', '..', 'topics', 'general.txt');
+  const resolvedFile = existsSync(topicsFile) ? topicsFile : fallbackFile;
+
+  const allTopics = readFileSync(resolvedFile, 'utf8')
     .split('\n')
     .map((t) => t.trim())
     .filter(Boolean);
   const topics = shuffle(allTopics).slice(0, TOPIC_COUNT);
 
-  console.log(`Provider: ${provider} | Language: ${language}`);
+  console.log(`Provider: ${provider} | Language: ${language} | Theme: ${theme}`);
   console.log(`Seeding ${TOPIC_COUNT} topics × ${WORDS_PER_TOPIC} words...\n`);
 
   let seeded = 0;

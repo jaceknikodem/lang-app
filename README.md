@@ -12,7 +12,9 @@ A privacy-first desktop language learning application that operates entirely off
 - **Micro-Dialogues**: Choose your reply, speak it aloud, and hear the natural response — real conversation built from what you already know
 - **Flow Mode**: Hands-free listening sessions (10–60 min) that train your ear and rhythm without screens or clicks
 - **Autopilot Learning**: The app glides between modes — review, quiz, dialogue, flow — so you can just focus on language
-- **Anki Export**: Export your vocabulary as an `.apkg` deck with audio, sentences, and translations — re-import anytime to add new cards without overwriting Anki's review progress
+- **Anki Export**: Export your vocabulary as an `.apkg` deck with audio, sentences, and translations — re-import anytime to add new cards without overwriting Anki's review progress. Exports are scoped to the active theme (e.g. `Kotoba::Spanish::MTG`)
+- **Learning Themes**: Switch between focused topic sets — General, AI/ML, MTG, Leadership — so the vocabulary suggestions and sentence context stay relevant to what you actually care about. Add new themes by dropping a `.txt` file into the `topics/` folder
+- **Vocabulary Assessment**: A short adaptive test (2–3 rounds of 6 words) that calibrates your starting level — Newbie, A1, A2, or B1 — before frequency-based learning begins
 - **Learn from Articles**: Paste any URL and the app extracts vocabulary from the article so you can study words in their original context
 - **Multiple LLM Providers**: Use Gemini or local LLMs — your choice of engine and privacy
 - **Privacy-First Design**: No accounts. No cloud tracking. Your data never leaves your device
@@ -93,6 +95,18 @@ just format
 # List all available commands
 just --list
 ```
+
+### Seeding and adding words
+
+```bash
+# Seed 20 random topics from the active theme's topic file, generate words and audio
+just seed-words
+
+# Add specific words manually (topic is optional context for sentence generation)
+just add-words "schadenfreude,weltanschauung" "philosophy"
+```
+
+`seed-words` reads the current theme from the database (set via the in-app theme selector) and picks topics from the matching `topics/<theme>.txt` file. Switch themes in the app first, then run `just seed-words` to populate words relevant to that theme.
 
 ## Project Structure
 
