@@ -815,6 +815,29 @@ export class ContentGenerator {
   }
 
   /**
+   * Get random assessment words from a frequency position range.
+   * Used for adaptive proficiency assessment — the caller drives the zone.
+   */
+  async getAssessmentWords(
+    language: string,
+    minPos: number,
+    maxPos: number
+  ): Promise<{ word: string; translation: string }[]> {
+    const words = await this.frequencyWordManager.getSampleWordsInRange(
+      language,
+      minPos,
+      maxPos,
+      6
+    );
+    // Shuffle so position order isn't visible
+    for (let i = words.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [words[i], words[j]] = [words[j], words[i]];
+    }
+    return words.map(({ word, translation }) => ({ word, translation }));
+  }
+
+  /**
    * Validate generated words and filter out invalid entries
    */
   private validateGeneratedWords(words: GeneratedWord[]): GeneratedWord[] {

@@ -638,6 +638,13 @@ function setupLLMHandlers(
       handler: () => contentGenerator.getAvailableFrequencyLanguages(),
     },
     {
+      channel: IPC_CHANNELS.FREQUENCY.GET_ASSESSMENT_WORDS,
+      schema: [LanguageSchema, z.number().int().positive(), z.number().int().positive()],
+      description: 'get sample words for proficiency assessment',
+      handler: (language, minPos, maxPos) =>
+        contentGenerator.getAssessmentWords(language, minPos, maxPos),
+    },
+    {
       channel: IPC_CHANNELS.LLM.GET_CURRENT_PROVIDER,
       schema: undefined,
       description: 'get current provider',

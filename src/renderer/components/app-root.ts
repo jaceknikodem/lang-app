@@ -35,7 +35,7 @@ import {
   transformDialogSessionData,
   queueDialogSessions,
 } from '../utils/dialog-session-helpers.js';
-import type { ProficiencyLevel } from './language-proficiency-selector.js';
+import type { ProficiencyLevel } from './language-assessment.js';
 import type { LanguageDataState, UIState } from './app-root-state.js';
 import { createInitialLanguageDataState, createInitialUIState } from './app-root-state.js';
 import { AutopilotManager } from '../utils/autopilot-manager.js';
@@ -47,7 +47,7 @@ import './quiz-mode.js';
 import './dialog-mode.js';
 import './flow-mode.js';
 import './settings-panel.js';
-import './language-proficiency-selector.js';
+import './language-assessment.js';
 import './toggle-switch.js';
 
 @customElement('app-root')
@@ -929,12 +929,10 @@ export class AppRoot extends LitElement {
 
       ${this.languageDataState.showProficiencySelector
         ? html`
-            <language-proficiency-selector
+            <language-assessment
               .language=${this.languageDataState.currentLanguage}
-              .currentLevel=${this.languageDataState.currentProficiencyLevel}
               @proficiency-selected=${this.handleProficiencySelected}
-              @proficiency-cancelled=${this.handleProficiencyCancelled}
-            ></language-proficiency-selector>
+            ></language-assessment>
           `
         : ''}
     `;

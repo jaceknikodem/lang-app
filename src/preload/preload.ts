@@ -342,6 +342,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getProgress: (language: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.FREQUENCY.GET_PROGRESS, language),
     getAvailableLanguages: () => ipcRenderer.invoke(IPC_CHANNELS.FREQUENCY.GET_AVAILABLE_LANGUAGES),
+    getAssessmentWords: (language: string, minPos: number, maxPos: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.FREQUENCY.GET_ASSESSMENT_WORDS, language, minPos, maxPos),
   },
 
   jobs: {
@@ -766,6 +768,11 @@ declare global {
           percentComplete: number;
         }>;
         getAvailableLanguages: () => Promise<string[]>;
+        getAssessmentWords: (
+          language: string,
+          minPos: number,
+          maxPos: number
+        ) => Promise<{ word: string; translation: string }[]>;
       };
       jobs: {
         enqueueWordGeneration: (

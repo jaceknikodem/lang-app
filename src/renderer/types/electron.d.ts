@@ -420,6 +420,11 @@ declare global {
       frequency: {
         getProgress: (language: string) => Promise<any>;
         getAvailableLanguages: () => Promise<string[]>;
+        getAssessmentWords: (
+          language: string,
+          minPos: number,
+          maxPos: number
+        ) => Promise<{ word: string; translation: string }[]>;
       };
       japaneseTokenization: {
         tokenize: (sentence: string) => Promise<any[]>;

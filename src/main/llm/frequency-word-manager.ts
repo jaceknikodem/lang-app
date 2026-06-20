@@ -322,6 +322,37 @@ export class FrequencyWordManager {
   }
 
   /**
+   * Get count random words from a 1-based position range [minPos, maxPos].
+   * Positions that exceed the word list length are clamped.
+   */
+  async getSampleWordsInRange(
+    language: string,
+    minPos: number,
+    maxPos: number,
+    count: number = 6
+  ): Promise<WordEntry[]> {
+    if (!this.wordLists.has(language)) {
+      await this.loadWordList(language);
+    }
+
+    const wordList = this.wordLists.get(language);
+    if (!wordList) return [];
+
+    const lo = Math.max(1, minPos);
+    const hi = Math.min(wordList.length, maxPos);
+    if (lo > hi) return [];
+
+    const range = hi - lo + 1;
+    const actualCount = Math.min(count, range);
+    const picked = new Set<number>();
+    while (picked.size < actualCount) {
+      picked.add(Math.floor(Math.random() * range) + lo);
+    }
+
+    return Array.from(picked).map((pos) => wordList[pos - 1]);
+  }
+
+  /**
    * Get frequency tier description based on position
    */
   getFrequencyTier(position: number): string | undefined {

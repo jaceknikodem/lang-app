@@ -509,6 +509,7 @@ export const IPC_CHANNELS = {
   FREQUENCY: {
     GET_PROGRESS: 'frequency:getProgress',
     GET_AVAILABLE_LANGUAGES: 'frequency:getAvailableLanguages',
+    GET_ASSESSMENT_WORDS: 'frequency:getAssessmentWords',
   },
   SRS: {
     PROCESS_REVIEW: 'srs:processReview',
