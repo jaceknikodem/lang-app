@@ -987,10 +987,9 @@ export class AudioService {
         );
         newAbsPath = await generator.generateAudio(text.trim(), language.toLowerCase(), word, wordId, sentenceId, variantId);
       } else {
-        if (this.database) {
-          await this.checkAndSwitchToAudioBackend(this.database);
-        }
-        newAbsPath = await this.audioGenerator.generateAudio(text.trim(), language.toLowerCase(), word, wordId, sentenceId, variantId);
+        // Delegate to generateAudio so Kokoro (and other per-language routing) is handled correctly.
+        const relativePath = await this.generateAudio(text.trim(), language.toLowerCase(), word, wordId, sentenceId, variantId);
+        newAbsPath = AudioService.resolveAudioPath(relativePath);
       }
 
       if (!await this.audioExists(newAbsPath)) {

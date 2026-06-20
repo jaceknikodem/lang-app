@@ -186,8 +186,90 @@ export class SentenceAudioController implements ReactiveController {
     });
   };
 
-  async handleRecreateAudio(): Promise<void> {
-    if (this.isRegeneratingAudio || !this.host.sentence?.sentence) return;
+  async autoRegenerateMissingAudio(): Promise<void> {
+    const { sentence } = this.host;
+    if (!sentence) return;
+
+    const checks: Promise<void>[] = [];
+
+    if (!this.isRegeneratingAudio) {
+      const checkExists = sentence.audioPath
+        ? window.electronAPI.audio.audioExists(sentence.audioPath)
+        : Promise.resolve(false);
+      checks.push(
+        checkExists.then(async (exists) => {
+          if (!exists) {
+            logger.info({ sentenceId: sentence.id }, 'Main audio missing, regenerating');
+            const ok = await this.handleRecreateAudio({ silent: true, forceElevenLabs: false });
+            if (!ok) {
+              logger.info(
+                { sentenceId: sentence.id },
+                'Main audio: language-config backend failed, retrying with ElevenLabs'
+              );
+              await this.handleRecreateAudio({ silent: true, forceElevenLabs: true });
+            }
+          }
+        })
+      );
+    }
+
+    if (sentence.contextBefore && !this.isRegeneratingBeforeAudio) {
+      const checkExists = sentence.beforeSentenceAudioPath
+        ? window.electronAPI.audio.audioExists(sentence.beforeSentenceAudioPath)
+        : Promise.resolve(false);
+      checks.push(
+        checkExists.then(async (exists) => {
+          if (!exists) {
+            logger.info({ sentenceId: sentence.id }, 'Before-context audio missing, regenerating');
+            const ok = await this.handleRecreateBeforeAudio({
+              silent: true,
+              forceElevenLabs: false,
+            });
+            if (!ok) {
+              logger.info(
+                { sentenceId: sentence.id },
+                'Before-context: language-config backend failed, retrying with ElevenLabs'
+              );
+              await this.handleRecreateBeforeAudio({ silent: true, forceElevenLabs: true });
+            }
+          }
+        })
+      );
+    }
+
+    if (sentence.contextAfter && !this.isRegeneratingAfterAudio) {
+      const checkExists = sentence.afterSentenceAudioPath
+        ? window.electronAPI.audio.audioExists(sentence.afterSentenceAudioPath)
+        : Promise.resolve(false);
+      checks.push(
+        checkExists.then(async (exists) => {
+          if (!exists) {
+            logger.info({ sentenceId: sentence.id }, 'After-context audio missing, regenerating');
+            const ok = await this.handleRecreateAfterAudio({
+              silent: true,
+              forceElevenLabs: false,
+            });
+            if (!ok) {
+              logger.info(
+                { sentenceId: sentence.id },
+                'After-context: language-config backend failed, retrying with ElevenLabs'
+              );
+              await this.handleRecreateAfterAudio({ silent: true, forceElevenLabs: true });
+            }
+          }
+        })
+      );
+    }
+
+    await Promise.all(checks).catch((error) => {
+      logger.warn({ error }, 'Auto-regeneration check failed');
+    });
+  }
+
+  async handleRecreateAudio(
+    opts: { silent?: boolean; forceElevenLabs?: boolean } = {}
+  ): Promise<boolean> {
+    if (this.isRegeneratingAudio || !this.host.sentence?.sentence) return false;
     const { sentence, targetWord } = this.host;
     const language =
       targetWord?.language || (await window.electronAPI.database.getCurrentLanguage());
@@ -200,22 +282,27 @@ export class SentenceAudioController implements ReactiveController {
         'main',
         targetWord?.word,
         sentence.wordId || targetWord?.id,
-        sentence.audioPath || undefined
+        sentence.audioPath || undefined,
+        opts.forceElevenLabs ?? true
       );
       this.host.updateSentence({ ...sentence, audioPath: newPath });
       this.dispatchRegenerated(sentence.id, newPath, 'main');
-      this.playAfterRegen(newPath);
+      if (!opts.silent) this.playAfterRegen(newPath);
+      return true;
     } catch (error) {
       logger.error({ error }, 'Failed to regenerate audio');
-      window.alert(`Failed to recreate audio: ${getErrorMessage(error)}`);
+      if (!opts.silent) window.alert(`Failed to recreate audio: ${getErrorMessage(error)}`);
+      return false;
     } finally {
       this.isRegeneratingAudio = false;
       this.host.requestUpdate();
     }
   }
 
-  async handleRecreateBeforeAudio(): Promise<void> {
-    if (this.isRegeneratingBeforeAudio || !this.host.sentence?.contextBefore) return;
+  async handleRecreateBeforeAudio(
+    opts: { silent?: boolean; forceElevenLabs?: boolean } = {}
+  ): Promise<boolean> {
+    if (this.isRegeneratingBeforeAudio || !this.host.sentence?.contextBefore) return false;
     const { sentence, targetWord } = this.host;
     const language =
       targetWord?.language || (await window.electronAPI.database.getCurrentLanguage());
@@ -233,22 +320,27 @@ export class SentenceAudioController implements ReactiveController {
         'before',
         '_before_sentence',
         sentence.wordId || targetWord?.id,
-        sentence.beforeSentenceAudioPath || undefined
+        sentence.beforeSentenceAudioPath || undefined,
+        opts.forceElevenLabs ?? true
       );
       this.host.updateSentence({ ...sentence, beforeSentenceAudioPath: newPath });
       this.dispatchRegenerated(sentence.id, newPath, 'before');
-      this.playAfterRegen(newPath);
+      if (!opts.silent) this.playAfterRegen(newPath);
+      return true;
     } catch (error) {
       logger.error({ error }, 'Failed to regenerate before-context audio');
-      window.alert(`Failed to recreate audio: ${getErrorMessage(error)}`);
+      if (!opts.silent) window.alert(`Failed to recreate audio: ${getErrorMessage(error)}`);
+      return false;
     } finally {
       this.isRegeneratingBeforeAudio = false;
       this.host.requestUpdate();
     }
   }
 
-  async handleRecreateAfterAudio(): Promise<void> {
-    if (this.isRegeneratingAfterAudio || !this.host.sentence?.contextAfter) return;
+  async handleRecreateAfterAudio(
+    opts: { silent?: boolean; forceElevenLabs?: boolean } = {}
+  ): Promise<boolean> {
+    if (this.isRegeneratingAfterAudio || !this.host.sentence?.contextAfter) return false;
     const { sentence, targetWord } = this.host;
     const language =
       targetWord?.language || (await window.electronAPI.database.getCurrentLanguage());
@@ -266,14 +358,17 @@ export class SentenceAudioController implements ReactiveController {
         'after',
         '_after_sentence',
         sentence.wordId || targetWord?.id,
-        sentence.afterSentenceAudioPath || undefined
+        sentence.afterSentenceAudioPath || undefined,
+        opts.forceElevenLabs ?? true
       );
       this.host.updateSentence({ ...sentence, afterSentenceAudioPath: newPath });
       this.dispatchRegenerated(sentence.id, newPath, 'after');
-      this.playAfterRegen(newPath);
+      if (!opts.silent) this.playAfterRegen(newPath);
+      return true;
     } catch (error) {
       logger.error({ error }, 'Failed to regenerate after-context audio');
-      window.alert(`Failed to recreate audio: ${getErrorMessage(error)}`);
+      if (!opts.silent) window.alert(`Failed to recreate audio: ${getErrorMessage(error)}`);
+      return false;
     } finally {
       this.isRegeneratingAfterAudio = false;
       this.host.requestUpdate();
@@ -288,7 +383,8 @@ export class SentenceAudioController implements ReactiveController {
     audioType: 'before' | 'main' | 'after',
     word?: string,
     wordId?: number,
-    existingPath?: string
+    existingPath?: string,
+    forceElevenLabs = true
   ): Promise<string> {
     try {
       audioPlayer.stop();
@@ -304,7 +400,7 @@ export class SentenceAudioController implements ReactiveController {
       sentenceId: this.host.sentence.id,
       existingPath,
       audioType,
-      forceElevenLabs: true,
+      forceElevenLabs,
     });
     if (!result?.audioPath) throw new Error('Audio regeneration returned an empty path');
     return result.audioPath;

@@ -147,7 +147,10 @@ export class SentenceViewer extends LitElement {
       this.tokenizationCtrl.handleSentenceChange(sentenceChanged, allWordsChanged);
     }
 
-    if (sentenceChanged) this.handleAutoplayOnSentenceChange();
+    if (sentenceChanged) {
+      this.handleAutoplayOnSentenceChange();
+      void this.audioCtrl.autoRegenerateMissingAudio();
+    }
 
     if (changedProperties.has('targetWord') && this.targetWord) {
       void this.fetchWordReading();
@@ -697,7 +700,7 @@ export class SentenceViewer extends LitElement {
             e.stopPropagation();
             onRegenerate();
           }}
-          ?disabled=${isRegenerating || audioPlayer.getState().isPlaying}
+          ?disabled=${isRegenerating}
           title="Recreate audio"
         >
           <span aria-hidden="true">♻</span>
@@ -849,7 +852,7 @@ export class SentenceViewer extends LitElement {
             <button
               class="audio-button secondary"
               @click=${() => this.audioCtrl.handleRecreateAudio()}
-              ?disabled=${audioPlayer.getState().isPlaying || this.audioCtrl.isRegeneratingAudio}
+              ?disabled=${this.audioCtrl.isRegeneratingAudio}
               title="Recreate audio"
             >
               <span aria-hidden="true">♻</span>
