@@ -120,6 +120,40 @@ export async function getWordReadings(words: string[]): Promise<Record<string, s
   return result;
 }
 
+export interface AnnotatedToken {
+  surface: string;
+  basicForm: string;
+}
+
+/**
+ * Returns kuromoji tokens for a sentence with gap text filled in.
+ * Each token carries the surface form (as it appears in the sentence) and
+ * the dictionary base form so callers can match conjugated words.
+ */
+export async function getTokensWithBasicForm(sentence: string): Promise<AnnotatedToken[]> {
+  const tokenizer = await getJapaneseTokenizer();
+  const tokens = tokenizer.tokenize(sentence);
+  const result: AnnotatedToken[] = [];
+  let lastIndex = 0;
+
+  for (const token of tokens) {
+    const tokenStart = token.word_position - 1; // word_position is 1-based
+    if (tokenStart > lastIndex) {
+      result.push({ surface: sentence.substring(lastIndex, tokenStart), basicForm: '' });
+    }
+    const basic =
+      token.basic_form && token.basic_form !== '*' ? token.basic_form : token.surface_form;
+    result.push({ surface: token.surface_form, basicForm: basic });
+    lastIndex = tokenStart + token.surface_form.length;
+  }
+
+  if (lastIndex < sentence.length) {
+    result.push({ surface: sentence.substring(lastIndex), basicForm: '' });
+  }
+
+  return result;
+}
+
 /**
  * Tokenize Japanese text using kuromoji
  */

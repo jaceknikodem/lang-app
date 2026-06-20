@@ -9,6 +9,7 @@ import { SQLiteDatabaseLayer } from '../../database/database-layer.js';
 import { AudioService } from '../../audio/audio-service.js';
 import { getLogger } from '../../utils/logger.js';
 import { buildApkg, AnkiMedia, AnkiNote, ApkgModel } from './apkg-builder.js';
+import { getTokensWithBasicForm } from '../../lemmatization/japanese-tokenizer.js';
 
 export interface AnkiExportResult {
   data: Buffer;
@@ -41,11 +42,32 @@ function escapeHtml(text: string): string {
 }
 
 /**
- * Escape the sentence and wrap the key word in a highlight span wherever it
- * appears verbatim. If the word isn't present in that exact form (e.g. it's
- * conjugated), the sentence is returned unchanged.
+ * Escape the sentence and wrap the key word in a highlight span.
+ * For Japanese, uses kuromoji basic_form so conjugated verbs are matched.
+ * Falls back to exact string match for other languages.
  */
-function highlightWordInSentence(sentence: string, word: string): string {
+async function highlightWordInSentence(
+  sentence: string,
+  word: string,
+  language: string
+): Promise<string> {
+  if (language === 'japanese') {
+    try {
+      const tokens = await getTokensWithBasicForm(sentence);
+      return tokens
+        .map((t) => {
+          const escaped = escapeHtml(t.surface);
+          if (t.basicForm && (t.surface === word || t.basicForm === word)) {
+            return `<span class="kw">${escaped}</span>`;
+          }
+          return escaped;
+        })
+        .join('');
+    } catch {
+      // fall through to simple match below
+    }
+  }
+
   const escaped = escapeHtml(sentence);
   const escapedWord = escapeHtml(word);
   if (!escapedWord || !escaped.includes(escapedWord)) {
@@ -121,7 +143,7 @@ export async function exportLanguageToApkg(
     notes.push({
       guidSeed: `kotoba:${language}:sentence:${row.sentenceId}`,
       fields: [
-        highlightWordInSentence(row.sentence, row.word),
+        await highlightWordInSentence(row.sentence, row.word, language),
         escapeHtml(row.translation),
         escapeHtml(row.pronunciation ?? ''),
         audioField,
