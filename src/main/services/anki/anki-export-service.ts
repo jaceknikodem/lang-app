@@ -66,12 +66,16 @@ function stableId(seed: string): number {
 
 export async function exportLanguageToApkg(
   databaseLayer: SQLiteDatabaseLayer,
-  language: string
+  language: string,
+  theme = 'general'
 ): Promise<AnkiExportResult> {
   const logger = getLogger();
   const rows = await databaseLayer.getSentencesForExport(language);
 
-  const deckName = `Kotoba::${capitalize(language)}`;
+  const deckName =
+    theme && theme !== 'general'
+      ? `Kotoba::${capitalize(language)}::${capitalize(theme)}`
+      : `Kotoba::${capitalize(language)}`;
   const model: ApkgModel = {
     id: MODEL_ID,
     name: 'Kotoba Sentence',

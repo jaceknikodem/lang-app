@@ -96,7 +96,7 @@ export function setupIPCHandlers(
   setupDialogHandlers(databaseLayer, llmClient, audioService);
   setupFlowHandlers(databaseLayer, audioService);
   setupLogHandlers();
-  setupTopicsHandlers();
+  setupTopicsHandlers(databaseLayer);
   setupTrackingHandlers(databaseLayer);
   setupExportHandlers(databaseLayer);
 
@@ -2033,23 +2033,37 @@ function setupLogHandlers(): void {
   ]);
 }
 
-function setupTopicsHandlers(): void {
-  let cachedTopics: string[] | null = null;
+function setupTopicsHandlers(databaseLayer: SQLiteDatabaseLayer): void {
+  const topicsCache = new Map<string, string[]>();
 
-  async function loadTopicsFromFile(): Promise<string[]> {
-    if (cachedTopics !== null) return cachedTopics;
+  async function loadTopicsForTheme(theme: string): Promise<string[]> {
+    if (topicsCache.has(theme)) return topicsCache.get(theme)!;
     try {
-      const topicsPath = join(process.cwd(), 'topics.txt');
+      const topicsPath = join(process.cwd(), 'topics', `${theme}.txt`);
       const content = await fsPromises.readFile(topicsPath, 'utf-8');
-      cachedTopics = content
+      const topics = content
         .split('\n')
         .map((line) => line.trim())
         .filter((line) => line.length > 0);
-      return cachedTopics;
+      topicsCache.set(theme, topics);
+      return topics;
     } catch (error) {
-      getLogger().error({ error }, '[Topics] Error loading topics from file');
-      cachedTopics = [];
+      getLogger().error({ error, theme }, '[Topics] Error loading topics for theme');
       return [];
+    }
+  }
+
+  async function getAvailableThemes(): Promise<string[]> {
+    try {
+      const topicsDir = join(process.cwd(), 'topics');
+      const files = await fsPromises.readdir(topicsDir);
+      return files
+        .filter((f) => f.endsWith('.txt'))
+        .map((f) => f.replace(/\.txt$/, ''))
+        .sort();
+    } catch (error) {
+      getLogger().error({ error }, '[Topics] Error listing themes');
+      return ['general'];
     }
   }
 
@@ -2057,8 +2071,29 @@ function setupTopicsHandlers(): void {
     {
       channel: IPC_CHANNELS.TOPICS.GET_TOPICS,
       schema: [],
-      description: 'get topics',
-      handler: () => loadTopicsFromFile(),
+      description: 'get topics for current theme',
+      handler: async () => {
+        const theme = await databaseLayer.getCurrentTheme();
+        return loadTopicsForTheme(theme);
+      },
+    },
+    {
+      channel: IPC_CHANNELS.TOPICS.GET_THEMES,
+      schema: [],
+      description: 'get available themes',
+      handler: () => getAvailableThemes(),
+    },
+    {
+      channel: IPC_CHANNELS.TOPICS.GET_CURRENT_THEME,
+      schema: [],
+      description: 'get current theme',
+      handler: () => databaseLayer.getCurrentTheme(),
+    },
+    {
+      channel: IPC_CHANNELS.TOPICS.SET_CURRENT_THEME,
+      schema: z.string().min(1).max(50),
+      description: 'set current theme',
+      handler: (theme: string) => databaseLayer.setCurrentTheme(theme),
     },
   ]);
 }
@@ -2070,15 +2105,17 @@ function setupExportHandlers(databaseLayer: SQLiteDatabaseLayer): void {
       schema: z.string().min(2).max(20),
       description: 'export language to Anki',
       handler: async (language: string) => {
-        const result = await exportLanguageToApkg(databaseLayer, language);
+        const theme = await databaseLayer.getCurrentTheme();
+        const result = await exportLanguageToApkg(databaseLayer, language, theme);
 
         if (result.cardCount === 0) {
           return { canceled: false, filePath: null, cardCount: 0, mediaCount: 0 };
         }
 
+        const themeSuffix = theme !== 'general' ? `-${theme}` : '';
         const saveResult = await dialog.showSaveDialog({
           title: 'Export to Anki',
-          defaultPath: `kotoba-${language}.apkg`,
+          defaultPath: `kotoba-${language}${themeSuffix}.apkg`,
           filters: [{ name: 'Anki Deck', extensions: ['apkg'] }],
         });
 

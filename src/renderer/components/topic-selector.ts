@@ -32,6 +32,12 @@ export class TopicSelector extends BaseComponent {
   @state()
   private allTopicSuggestions: string[] = [];
 
+  @state()
+  private themes: string[] = [];
+
+  @state()
+  private currentTheme = 'general';
+
   private keyboardUnsubscribe?: () => void;
 
   static styles = [
@@ -210,6 +216,48 @@ export class TopicSelector extends BaseComponent {
         cursor: not-allowed;
       }
 
+      .theme-section {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+      }
+
+      .theme-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin: 0;
+      }
+
+      .theme-pills {
+        display: flex;
+        gap: var(--spacing-sm);
+        flex-wrap: wrap;
+      }
+
+      .theme-pill {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        background: var(--background-secondary);
+        color: var(--text-secondary);
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-transform: none;
+      }
+
+      .theme-pill:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+      }
+
+      .theme-pill.active {
+        background: var(--primary-color);
+        border-color: var(--primary-color);
+        color: white;
+        font-weight: 500;
+      }
+
       @media (max-width: 768px) {
         .input-row {
           flex-direction: column;
@@ -241,6 +289,7 @@ export class TopicSelector extends BaseComponent {
   async connectedCallback() {
     super.connectedCallback();
     await this.loadCurrentLanguage();
+    await this.loadThemes();
     await this.loadTopics();
     await this.selectRandomSuggestions();
     this.setupKeyboardBindings();
@@ -255,6 +304,45 @@ export class TopicSelector extends BaseComponent {
 
   private async loadCurrentLanguage() {
     this.currentLanguage = (await loadCurrentLanguage('spanish')) || null;
+  }
+
+  private async loadThemes() {
+    try {
+      this.themes = await window.electronAPI.topics.getThemes();
+      this.currentTheme = await window.electronAPI.topics.getCurrentTheme();
+    } catch (error) {
+      logger.error({ error }, '[TopicSelector] Error loading themes');
+      this.themes = ['general'];
+      this.currentTheme = 'general';
+    }
+  }
+
+  private formatThemeName(theme: string): string {
+    const overrides: Record<string, string> = {
+      'ai-ml': 'AI/ML',
+      mtg: 'MTG',
+      general: 'General',
+      leadership: 'Leadership',
+    };
+    return (
+      overrides[theme] ??
+      theme
+        .split('-')
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ')
+    );
+  }
+
+  private async handleThemeChange(theme: string) {
+    if (theme === this.currentTheme) return;
+    this.currentTheme = theme;
+    try {
+      await window.electronAPI.topics.setCurrentTheme(theme);
+    } catch (error) {
+      logger.error({ error, theme }, '[TopicSelector] Error setting theme');
+    }
+    await this.loadTopics();
+    await this.selectRandomSuggestions();
   }
 
   protected override handleExternalLanguageChange = async (event: Event): Promise<void> => {
@@ -437,6 +525,26 @@ export class TopicSelector extends BaseComponent {
   render() {
     return html`
       <div class="topic-container">
+        ${this.themes.length > 1
+          ? html`
+              <div class="theme-section">
+                <p class="theme-label">Theme:</p>
+                <div class="theme-pills">
+                  ${this.themes.map(
+                    (theme) => html`
+                      <button
+                        class="theme-pill ${theme === this.currentTheme ? 'active' : ''}"
+                        @click=${() => this.handleThemeChange(theme)}
+                        type="button"
+                      >
+                        ${this.formatThemeName(theme)}
+                      </button>
+                    `
+                  )}
+                </div>
+              </div>
+            `
+          : ''}
         <div class="topic-input-section">
           <div class="input-group">
             <label class="input-label" for="topic-input"> Topic/prompt (Optional) </label>

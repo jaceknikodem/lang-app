@@ -1,0 +1,50 @@
+discussing a newly released model on Hugging Face
+explaining why a model's benchmark scores are misleading
+debating the merits of open versus closed source models
+walking through the transformer architecture with a colleague
+explaining attention mechanisms to a non-technical stakeholder
+discussing the difference between pre-training and fine-tuning
+explaining what RLHF is and why it matters
+debating DPO versus PPO for alignment
+discussing why a model refuses certain prompts
+explaining the concept of hallucination to a client
+reviewing a model card before deploying to production
+discussing training data quality and its effect on outputs
+explaining tokenization and why token count matters
+asking about quantization trade-offs for edge deployment
+discussing INT4 versus FP16 inference on a local GPU
+setting up a Hugging Face inference pipeline
+debugging a pipeline that returns unexpected outputs
+explaining the difference between base and instruct models
+choosing between two similar models for a production task
+discussing embedding models for a RAG system
+explaining vector search to someone from a SQL background
+designing a retrieval-augmented generation architecture
+discussing chunking strategies for document indexing
+evaluating a new embedding model for semantic similarity
+debugging a RAG system that retrieves irrelevant chunks
+discussing context window limitations and workarounds
+explaining prompt engineering best practices to a new engineer
+critiquing a system prompt that produces inconsistent results
+discussing temperature and sampling parameters
+explaining why a low temperature setting causes repetition
+reviewing a paper on a new training objective
+discussing the implications of a new scaling law paper
+explaining what emergent capabilities are
+debating whether a model is truly reasoning or pattern matching
+discussing the replication crisis in ML benchmarks
+explaining what a leaderboard like MMLU actually measures
+discussing multi-modal models and their use cases
+explaining how diffusion models work at a high level
+debating the best open image generation model for a use case
+discussing the compute requirements of training a large model
+estimating inference cost for a production API
+explaining why GPU memory is the bottleneck
+discussing LoRA versus full fine-tuning for a specific task
+preparing a dataset for supervised fine-tuning
+discussing data deduplication before training
+explaining the risks of training on synthetic data
+discussing safety red-teaming for a new model
+explaining jailbreaks and why they are hard to patch
+discussing evaluation methodology for a new release
+presenting model evaluation results to a non-technical audience

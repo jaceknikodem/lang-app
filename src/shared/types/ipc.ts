@@ -397,6 +397,9 @@ export interface IPCBridge {
   // Topics operations
   topics: {
     getTopics: () => Promise<string[]>;
+    getThemes: () => Promise<string[]>;
+    getCurrentTheme: () => Promise<string>;
+    setCurrentTheme: (theme: string) => Promise<void>;
   };
 }
 
@@ -569,6 +572,9 @@ export const IPC_CHANNELS = {
   },
   TOPICS: {
     GET_TOPICS: 'topics:getTopics',
+    GET_THEMES: 'topics:getThemes',
+    GET_CURRENT_THEME: 'topics:getCurrentTheme',
+    SET_CURRENT_THEME: 'topics:setCurrentTheme',
   },
   EXPORT: {
     EXPORT_ANKI: 'export:exportAnki',

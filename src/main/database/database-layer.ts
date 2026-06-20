@@ -1587,6 +1587,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
   async setCurrentLanguage(language: string): Promise<void> {
     await this.setSetting('current_language', language);
   }
+  async getCurrentTheme(): Promise<string> {
+    const theme = await this.getSetting('current_theme');
+    return theme || 'general';
+  }
+  async setCurrentTheme(theme: string): Promise<void> {
+    await this.setSetting('current_theme', theme);
+  }
   // TODO: This needs some caching
   async getLanguageStats(): Promise<
     Array<{

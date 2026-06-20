@@ -490,6 +490,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Topics operations
   topics: {
     getTopics: () => ipcRenderer.invoke(IPC_CHANNELS.TOPICS.GET_TOPICS),
+    getThemes: () => ipcRenderer.invoke(IPC_CHANNELS.TOPICS.GET_THEMES),
+    getCurrentTheme: () => ipcRenderer.invoke(IPC_CHANNELS.TOPICS.GET_CURRENT_THEME),
+    setCurrentTheme: (theme: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TOPICS.SET_CURRENT_THEME, theme),
   },
 
   // Tracking operations

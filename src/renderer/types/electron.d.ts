@@ -416,6 +416,9 @@ declare global {
       };
       topics: {
         getTopics: () => Promise<string[]>;
+        getThemes: () => Promise<string[]>;
+        getCurrentTheme: () => Promise<string>;
+        setCurrentTheme: (theme: string) => Promise<void>;
       };
       frequency: {
         getProgress: (language: string) => Promise<any>;
