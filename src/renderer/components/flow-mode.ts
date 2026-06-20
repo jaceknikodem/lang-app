@@ -214,25 +214,27 @@ export class FlowMode extends BaseComponent {
         const audioPathPairs: Array<[string, string]> = [];
 
         for (const item of this.flowSentences) {
-          if (item.beforeSentenceAudio) {
-            audioPaths.push(item.beforeSentenceAudio);
-          }
-          if (item.audioPath) {
-            audioPaths.push(item.audioPath);
-
-            // For English stitching, use the provided English audio path if available
-            if (item.englishAudioPath) {
-              audioPathPairs.push([item.englishAudioPath, item.audioPath]);
+          if (audioPaths.length < 200) {
+            if (item.beforeSentenceAudio) {
+              audioPaths.push(item.beforeSentenceAudio);
             }
+            if (item.audioPath) {
+              audioPaths.push(item.audioPath);
+            }
+            audioPaths.push(...item.variantSentenceAudios);
+            if (item.afterSentenceAudio) {
+              audioPaths.push(item.afterSentenceAudio);
+            }
+            audioPaths.push(...item.continuationAudios);
           }
-          audioPaths.push(...item.variantSentenceAudios);
-          if (item.afterSentenceAudio) {
-            audioPaths.push(item.afterSentenceAudio);
-          }
-          audioPaths.push(...item.continuationAudios);
 
-          // Stop collecting at 200 files
-          if (audioPaths.length >= 200) {
+          // Collect English pairs independently — audioPathPairs grows 1 per sentence
+          // while audioPaths grows 5+ per sentence, so don't gate pairs on audioPaths count
+          if (item.audioPath && item.englishAudioPath && audioPathPairs.length < 200) {
+            audioPathPairs.push([item.englishAudioPath, item.audioPath]);
+          }
+
+          if (audioPaths.length >= 200 && audioPathPairs.length >= 200) {
             break;
           }
         }

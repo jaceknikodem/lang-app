@@ -107,7 +107,7 @@ async function main() {
           topic,
           addedVia: 'auto',
         });
-        await db.enqueueWordGeneration(wordId, language, topic, 3);
+        await db.enqueueWordGeneration(wordId, language, topic, 4);
         added++;
         seeded++;
       }

@@ -215,7 +215,6 @@ async function initializeServices(): Promise<void> {
       contentGenerator,
       audioService,
       lemmatizationService,
-      desiredSentenceCount: 3,
       onWordUpdated: (update) => {
         BrowserWindow.getAllWindows().forEach((window) => {
           window.webContents.send(IPC_CHANNELS.JOBS.WORD_UPDATED, update);

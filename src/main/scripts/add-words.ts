@@ -97,7 +97,7 @@ async function main() {
       topic,
       addedVia: 'manual',
     });
-    await db.enqueueWordGeneration(wordId, language, topic, 3);
+    await db.enqueueWordGeneration(wordId, language, topic, 4);
     console.log(`  added ${word.word} — ${word.translation}`);
     added++;
   }

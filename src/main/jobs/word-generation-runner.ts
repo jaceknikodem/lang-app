@@ -21,7 +21,6 @@ export interface WordGenerationRunnerOptions {
   pollIntervalMs?: number;
   maxAttempts?: number;
   retryBackoffMs?: number;
-  desiredSentenceCount?: number;
   onWordUpdated?: (payload: {
     wordId: number;
     processingStatus: WordProcessingStatus;
@@ -37,7 +36,6 @@ export class WordGenerationRunner {
   private readonly pollIntervalMs: number;
   private readonly maxAttempts: number;
   private readonly retryBackoffMs: number;
-  private readonly defaultSentenceCount: number;
   private readonly onWordUpdated?: WordGenerationRunnerOptions['onWordUpdated'];
   private readonly dialogService: DialogService;
   private readonly logger: Logger;
@@ -54,7 +52,6 @@ export class WordGenerationRunner {
     this.pollIntervalMs = options.pollIntervalMs ?? 3000;
     this.maxAttempts = options.maxAttempts ?? 3;
     this.retryBackoffMs = options.retryBackoffMs ?? 2000;
-    this.defaultSentenceCount = options.desiredSentenceCount ?? 3;
     this.onWordUpdated = options.onWordUpdated;
     this.dialogService = new DialogService(
       options.database,
@@ -102,7 +99,6 @@ export class WordGenerationRunner {
             jobId: job.id,
             wordId: job.wordId,
             attempts: job.attempts,
-            desiredSentenceCount: job.desiredSentenceCount,
           },
           '[WordGenerationRunner] Found job'
         );
@@ -161,7 +157,7 @@ export class WordGenerationRunner {
 
       await this.ensureSentenceAudio(word.id, language, word.word);
 
-      const desiredCount = job.desiredSentenceCount ?? this.defaultSentenceCount;
+      const desiredCount = job.desiredSentenceCount ?? 4;
       const existingSentences = await this.database.getSentencesByWord(word.id);
       const normalizedExisting = new Set(
         existingSentences.map((sentence) => this.normalizeSentence(sentence.sentence))

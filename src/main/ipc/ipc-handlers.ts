@@ -1175,7 +1175,6 @@ function setupJobHandlers(databaseLayer: SQLiteDatabaseLayer): void {
     .object({
       topic: TopicSchema.optional(),
       language: LanguageSchema.optional(),
-      desiredSentenceCount: z.number().int().min(1).max(10).optional(),
     })
     .optional();
 
@@ -1191,12 +1190,7 @@ function setupJobHandlers(databaseLayer: SQLiteDatabaseLayer): void {
           if (!word) throw new Error(`Word with ID ${wordId} not found`);
           language = word.language;
         }
-        await databaseLayer.enqueueWordGeneration(
-          wordId,
-          language,
-          options?.topic,
-          options?.desiredSentenceCount ?? 3
-        );
+        await databaseLayer.enqueueWordGeneration(wordId, language, options?.topic, 4);
       },
     },
     {

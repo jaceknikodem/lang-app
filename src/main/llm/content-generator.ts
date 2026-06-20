@@ -677,17 +677,39 @@ export class ContentGenerator {
       // Generate only the needed number of sentences
       // Retries are now handled at the HTTP level in the LLM clients
 
-      // Randomly drop topic 50% of the time to introduce variety
-      const effectiveTopic = topic && Math.random() < 0.5 ? undefined : topic;
-
-      const sentences = await this.llmClient.generateSentences(
-        word.trim(),
-        targetLanguage,
-        needed,
-        effectiveTopic,
-        proficiencyLevel,
-        translation
-      );
+      // When a topic is set, always generate 2 topic sentences + 2 generic sentences in parallel.
+      // This gives per-sentence-group variety without randomization.
+      let sentences: GeneratedSentence[];
+      if (topic) {
+        const [withTopic, withoutTopic] = await Promise.all([
+          this.llmClient.generateSentences(
+            word.trim(),
+            targetLanguage,
+            2,
+            topic,
+            proficiencyLevel,
+            translation
+          ),
+          this.llmClient.generateSentences(
+            word.trim(),
+            targetLanguage,
+            2,
+            undefined,
+            proficiencyLevel,
+            translation
+          ),
+        ]);
+        sentences = [...withTopic, ...withoutTopic];
+      } else {
+        sentences = await this.llmClient.generateSentences(
+          word.trim(),
+          targetLanguage,
+          4,
+          undefined,
+          proficiencyLevel,
+          translation
+        );
+      }
 
       // Validate and filter LLM results
       const generatedSentences = this.validateGeneratedSentences(sentences, word);
