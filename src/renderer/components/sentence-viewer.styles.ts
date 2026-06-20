@@ -229,7 +229,7 @@ const sentenceViewerOwnStyles = css`
   }
 
   .sentence-text {
-    font-size: 27px;
+    font-size: 22px;
     line-height: 1.5;
     color: var(--text-primary);
     flex: 1;
@@ -422,7 +422,7 @@ const sentenceViewerOwnStyles = css`
     }
 
     .sentence-text {
-      font-size: 22px;
+      font-size: 18px;
     }
 
     .word-actions {
