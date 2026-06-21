@@ -308,10 +308,20 @@ export class WordGenerationRunner {
       proficiencyLevel
     );
 
-    const audioMeta = await this.generateMainAudio(sentence, word, language, sentenceId);
-
-    await this.generateTranslationAudio(sentence, word, language, sentenceId, audioMeta.audioPath);
-    await this.generateContextAudio(sentence, word, language, sentenceId);
+    let audioMeta: SentenceAudioMetadata;
+    if (sentence.audioUrl) {
+      audioMeta = await this.downloadExternalAudio(sentence, word, language, sentenceId);
+      await this.generateTranslationAudio(
+        sentence,
+        word,
+        language,
+        sentenceId,
+        audioMeta.audioPath
+      );
+      await this.generateContextAudio(sentence, word, language, sentenceId);
+    } else {
+      audioMeta = await this.generateTTSAudioBatch(sentence, word, language, sentenceId);
+    }
 
     if (audioMeta.audioPath) {
       await this.database.updateSentenceAudioPath(
@@ -334,18 +344,6 @@ export class WordGenerationRunner {
 
     normalizedExisting.add(normalizedSentence);
     return true;
-  }
-
-  private async generateMainAudio(
-    sentence: GeneratedSentence,
-    word: Word,
-    language: string,
-    sentenceId: number
-  ): Promise<SentenceAudioMetadata> {
-    if (sentence.audioUrl) {
-      return this.downloadExternalAudio(sentence, word, language, sentenceId);
-    }
-    return this.generateTTSAudio(sentence, word, language, sentenceId);
   }
 
   private async downloadExternalAudio(
@@ -382,45 +380,124 @@ export class WordGenerationRunner {
     }
   }
 
-  private async generateTTSAudio(
+  private async generateTTSAudioBatch(
     sentence: GeneratedSentence,
     word: Word,
     language: string,
     sentenceId: number
   ): Promise<SentenceAudioMetadata> {
     const isJapanese = language === 'japanese' || language === 'ja';
-    const ttsText =
-      isJapanese && sentence.pronunciation ? sentence.pronunciation : sentence.sentence;
     const sentenceModel = this.contentGenerator.getCurrentClient().getSentenceGenerationModel();
     const audioInfo = this.audioService.getAudioGenerationInfo();
-    try {
-      const audioPath = await this.audioService.generateSentenceAudio(
-        ttsText,
+    const meta: SentenceAudioMetadata = {
+      audioPath: '',
+      sentenceModel,
+      audioService: audioInfo.service,
+      audioModel: audioInfo.model,
+      audioVoiceId: audioInfo.voiceId,
+    };
+
+    const batchParts: Array<{
+      text: string;
+      language: string;
+      wordLabel: string;
+      wordId: number;
+      sentenceId: number;
+    }> = [
+      {
+        text: isJapanese && sentence.pronunciation ? sentence.pronunciation : sentence.sentence,
         language,
-        word.word,
-        word.id,
-        sentenceId
-      );
-      return {
-        audioPath,
-        sentenceModel,
-        audioService: audioInfo.service,
-        audioModel: audioInfo.model,
-        audioVoiceId: audioInfo.voiceId,
-      };
+        wordLabel: word.word,
+        wordId: word.id,
+        sentenceId,
+      },
+    ];
+    if (sentence.translation) {
+      batchParts.push({
+        text: sentence.translation,
+        language,
+        wordLabel: 'english_sentence',
+        wordId: word.id,
+        sentenceId,
+      });
+    }
+    if (sentence.contextBefore) {
+      batchParts.push({
+        text:
+          isJapanese && sentence.contextBeforePronunciation
+            ? sentence.contextBeforePronunciation
+            : sentence.contextBefore,
+        language,
+        wordLabel: '_before_sentence',
+        wordId: word.id,
+        sentenceId,
+      });
+    }
+    if (sentence.contextAfter) {
+      batchParts.push({
+        text:
+          isJapanese && sentence.contextAfterPronunciation
+            ? sentence.contextAfterPronunciation
+            : sentence.contextAfter,
+        language,
+        wordLabel: '_after_sentence',
+        wordId: word.id,
+        sentenceId,
+      });
+    }
+
+    let partIdx = 0;
+    const sentencePartIdx = partIdx++;
+    const englishPartIdx = sentence.translation ? partIdx++ : -1;
+    const beforePartIdx = sentence.contextBefore ? partIdx++ : -1;
+    const afterPartIdx = sentence.contextAfter ? partIdx++ : -1;
+
+    try {
+      const results = await this.audioService.generateSentencePartsBatch(batchParts);
+
+      meta.audioPath = results[sentencePartIdx]?.audioPath ?? '';
+      if (!meta.audioPath) {
+        this.logger.warn(
+          { err: results[sentencePartIdx]?.error, sentenceId, wordId: word.id },
+          '[WordGenerationRunner] Failed to generate audio'
+        );
+      }
+      if (englishPartIdx >= 0 && results[englishPartIdx]?.error) {
+        this.logger.warn(
+          { error: results[englishPartIdx].error, sentenceId },
+          '[WordGenerationRunner] Failed to generate English audio'
+        );
+      }
+      if (beforePartIdx >= 0) {
+        const beforePath = results[beforePartIdx]?.audioPath;
+        if (beforePath) {
+          await this.database.updateBeforeSentenceAudioPath(sentenceId, beforePath);
+        } else {
+          this.logger.warn(
+            { err: results[beforePartIdx]?.error, sentenceId },
+            '[WordGenerationRunner] Failed to generate context before audio'
+          );
+        }
+      }
+      if (afterPartIdx >= 0) {
+        const afterPath = results[afterPartIdx]?.audioPath;
+        if (afterPath) {
+          await this.database.updateAfterSentenceAudioPath(sentenceId, afterPath);
+        } else {
+          this.logger.warn(
+            { err: results[afterPartIdx]?.error, sentenceId },
+            '[WordGenerationRunner] Failed to generate context after audio'
+          );
+        }
+      }
     } catch (error) {
       this.logger.warn(
         { err: error, sentenceId, wordId: word.id },
-        '[WordGenerationRunner] Failed to generate audio'
+        '[WordGenerationRunner] Failed to generate audio batch'
       );
-      return {
-        audioPath: '',
-        sentenceModel,
-        audioService: audioInfo.service,
-        audioModel: audioInfo.model,
-        audioVoiceId: audioInfo.voiceId,
-      };
     }
+
+    return meta;
   }
 
   private async generateTranslationAudio(

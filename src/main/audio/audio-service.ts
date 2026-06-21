@@ -1028,6 +1028,82 @@ export class AudioService {
   }
 
   /**
+   * Batch-generate all audio parts for one sentence in a single Kokoro /tts-batch request.
+   * For non-Kokoro backends, falls back to parallel individual calls.
+   *
+   * wordLabel is the 'word' discriminator used by KokoroAudioGenerator.getAudioPath:
+   *   - actual word text  → sentence audio
+   *   - 'english_sentence' → English translation audio (TTS runs as English even if stored in target-lang dir)
+   *   - '_before_sentence' → context-before audio
+   *   - '_after_sentence'  → context-after audio
+   */
+  async generateSentencePartsBatch(
+    items: Array<{
+      text: string;
+      language: string;
+      wordLabel: string;
+      wordId: number;
+      sentenceId: number;
+      voiceId?: string;
+    }>
+  ): Promise<Array<{ audioPath: string; error?: string }>> {
+    if (items.length === 0) return [];
+
+    if (this.database) {
+      await this.checkAndSwitchToAudioBackend(this.database);
+    }
+
+    const lang = items[0].language.toLowerCase();
+    const isKokoro = this.getTTSBackendForLanguage(lang) === 'kokoro';
+
+    if (isKokoro) {
+      if (!this.kokoroGenerator) {
+        this.kokoroGenerator = new KokoroAudioGenerator();
+      }
+      const batchItems = items.map((item) => {
+        // english_sentence must be phonemized/voiced as English, but the output path
+        // lives under the selected language's directory — so path uses item.language,
+        // while the TTS request uses 'english'.
+        const ttsLanguage = item.wordLabel === 'english_sentence' ? 'english' : item.language;
+        const outputPath = this.kokoroGenerator!.getAudioPath(
+          item.text,
+          item.language,
+          item.wordLabel,
+          item.wordId,
+          item.sentenceId
+        );
+        return { text: item.text, language: ttsLanguage, outputPath, voiceId: item.voiceId };
+      });
+
+      const results = await this.kokoroGenerator.generateAudioBatch(batchItems);
+      return results.map((r) => ({
+        audioPath: r.success ? AudioService.getRelativeAudioPath(r.outputPath) : '',
+        error: r.error,
+      }));
+    }
+
+    // Non-Kokoro: run in parallel
+    return Promise.all(
+      items.map(async (item) => {
+        try {
+          const path = await this.generateAudio(
+            item.text,
+            item.language,
+            item.wordLabel,
+            item.wordId,
+            item.sentenceId,
+            undefined,
+            item.voiceId
+          );
+          return { audioPath: path };
+        } catch (err) {
+          return { audioPath: '', error: err instanceof Error ? err.message : String(err) };
+        }
+      })
+    );
+  }
+
+  /**
    * Download external audio (e.g., from Tatoeba) and store it alongside generated audio.
    * Returns the local file path to the downloaded audio.
    */

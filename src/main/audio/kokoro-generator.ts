@@ -212,7 +212,7 @@ export class KokoroAudioGenerator extends BaseAudioGenerator {
     return DEFAULT_VOICE;
   }
 
-  private getAudioPath(
+  public getAudioPath(
     text: string,
     language: string,
     word?: string,
