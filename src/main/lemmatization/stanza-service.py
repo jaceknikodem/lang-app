@@ -388,7 +388,10 @@ def _run_inference(text: str, language: str, voice: str):
         ipa = _get_ja_g2p()(text)
         return kokoro.create(ipa, voice=voice, is_phonemes=True)
     else:
-        return kokoro.create(text, voice=voice, lang=LANG_TO_ESPEAK.get(lang, 'en-us'))
+        # ¿ and ¡ are never pronounced; espeak-ng phonemizer mismatches line
+        # counts when they appear, crashing with "number of lines must be equal"
+        clean = text.replace('¿', '').replace('¡', '')
+        return kokoro.create(clean, voice=voice, lang=LANG_TO_ESPEAK.get(lang, 'en-us'))
 
 def _generate_one(item: TTSBatchItem) -> TTSBatchResultItem:
     import io, base64
