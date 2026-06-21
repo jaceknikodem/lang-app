@@ -137,7 +137,6 @@ export class WordGenerationRunner {
 
   private async handleJob(job: WordGenerationJob): Promise<void> {
     const attemptNumber = job.attempts + 1;
-    const jobStart = performance.now();
     try {
       const word = await this.startJobProcessing(job);
       if (!word) return;
@@ -153,15 +152,6 @@ export class WordGenerationRunner {
 
       await this.generateSentences(word, job, language);
       await this.verifyAndCompleteJob(job, word.id, job.desiredSentenceCount ?? 4);
-      this.logger.info(
-        {
-          jobId: job.id,
-          wordId: word.id,
-          word: word.word,
-          durationMs: Math.round(performance.now() - jobStart),
-        },
-        '[Timing] Job completed'
-      );
     } catch (error) {
       this.logger.error(
         {
@@ -229,7 +219,6 @@ export class WordGenerationRunner {
       .slice(0, 50)
       .map((w) => w.word);
 
-    const llmStart = performance.now();
     const generatedSentences = await this.contentGenerator.generateWordSentences(
       word.word,
       language,
@@ -237,14 +226,6 @@ export class WordGenerationRunner {
       this.database,
       job.topic,
       word.translation
-    );
-    this.logger.info(
-      {
-        word: word.word,
-        count: generatedSentences.length,
-        durationMs: Math.round(performance.now() - llmStart),
-      },
-      '[Timing] LLM sentence generation'
     );
 
     const uniqueSentences = generatedSentences.filter((s) => {
@@ -254,7 +235,6 @@ export class WordGenerationRunner {
       return true;
     });
 
-    const parallelStart = performance.now();
     await Promise.all(
       uniqueSentences.map((sentence) =>
         this.processSentence(
@@ -271,14 +251,6 @@ export class WordGenerationRunner {
           );
         })
       )
-    );
-    this.logger.info(
-      {
-        word: word.word,
-        sentenceCount: uniqueSentences.length,
-        durationMs: Math.round(performance.now() - parallelStart),
-      },
-      '[Timing] Parallel sentence processing'
     );
   }
 
@@ -312,7 +284,6 @@ export class WordGenerationRunner {
       proficiencyLevel
     );
 
-    const audioStart = performance.now();
     let audioMeta: SentenceAudioMetadata;
     if (sentence.audioUrl) {
       audioMeta = await this.downloadExternalAudio(sentence, word, language, sentenceId);
@@ -323,15 +294,6 @@ export class WordGenerationRunner {
     } else {
       audioMeta = await this.generateTTSAudioBatch(sentence, word, language, sentenceId);
     }
-    this.logger.info(
-      {
-        sentenceId,
-        wordId: word.id,
-        source: sentence.audioUrl ? 'external' : 'tts',
-        durationMs: Math.round(performance.now() - audioStart),
-      },
-      '[Timing] Sentence audio'
-    );
 
     if (audioMeta.audioPath) {
       await this.database.updateSentenceAudioPath(
@@ -342,12 +304,7 @@ export class WordGenerationRunner {
     }
     this.updateSentenceMetadata(sentenceId, audioMeta);
 
-    const tokensStart = performance.now();
     await this.precomputeTokens(sentence, word, language, sentenceId, allWords);
-    this.logger.info(
-      { sentenceId, wordId: word.id, durationMs: Math.round(performance.now() - tokensStart) },
-      '[Timing] Token precomputation'
-    );
     this.pregenerateDialogVariants(
       sentence,
       word,
