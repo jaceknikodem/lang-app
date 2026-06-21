@@ -1,5 +1,6 @@
 import {
   DatabaseLayer,
+  SentenceAudioBackfillItem,
   WordGenerationJob,
   WordProcessingStatus,
 } from '../../shared/types/database.js';
@@ -149,7 +150,6 @@ export class WordGenerationRunner {
         attemptNumber,
       });
 
-      await this.ensureSentenceAudio(word.id, language, word.word);
       await this.generateSentences(word, job, language);
       await this.verifyAndCompleteJob(job, word.id, job.desiredSentenceCount ?? 4);
     } catch (error) {
@@ -711,45 +711,38 @@ export class WordGenerationRunner {
     await this.emitWordUpdate(job.wordId);
   }
 
-  private async ensureSentenceAudio(
-    wordId: number,
-    language: string,
-    wordText: string
-  ): Promise<void> {
-    const sentences = await this.database.getSentencesByWord(wordId);
+  async backfillMissingAudio(): Promise<void> {
+    const missing = await this.database.getSentencesWithoutAudio();
 
-    for (const sentence of sentences) {
-      if (sentence.audioPath) {
-        continue;
-      }
+    if (missing.length === 0) return;
 
-      this.logger.debug(
-        {
-          sentenceId: sentence.id,
-          wordId,
-          language,
-        },
-        '[WordGenerationRunner] Backfilling audio for existing sentence'
+    this.logger.info(
+      { count: missing.length },
+      '[WordGenerationRunner] Backfilling audio for sentences missing audio'
+    );
+
+    await Promise.allSettled(
+      missing.map((item: SentenceAudioBackfillItem) => this.backfillSentenceAudio(item))
+    );
+  }
+
+  private async backfillSentenceAudio(item: SentenceAudioBackfillItem): Promise<void> {
+    try {
+      const isJapanese = item.language === 'japanese' || item.language === 'ja';
+      const ttsText = isJapanese && item.pronunciation ? item.pronunciation : item.sentence;
+      const audioPath = await this.audioService.generateSentenceAudio(
+        ttsText,
+        item.language,
+        item.wordText,
+        item.wordId,
+        item.sentenceId
       );
-
-      try {
-        const isJapanese = language === 'japanese' || language === 'ja';
-        const ttsText =
-          isJapanese && sentence.pronunciation ? sentence.pronunciation : sentence.sentence;
-        const audioPath = await this.audioService.generateSentenceAudio(
-          ttsText,
-          language,
-          wordText,
-          wordId,
-          sentence.id
-        );
-        await this.database.updateSentenceAudioPath(sentence.id, audioPath);
-      } catch (error) {
-        this.logger.warn(
-          { error, sentenceId: sentence.id, wordId },
-          'Failed to generate audio for existing sentence'
-        );
-      }
+      await this.database.updateSentenceAudioPath(item.sentenceId, audioPath);
+    } catch (error) {
+      this.logger.warn(
+        { error, sentenceId: item.sentenceId, wordId: item.wordId },
+        'Failed to backfill audio for sentence'
+      );
     }
   }
 

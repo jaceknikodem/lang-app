@@ -6,6 +6,7 @@ import {
   DatabaseLayer,
   DatabaseConfig,
   JobWordInfo,
+  SentenceAudioBackfillItem,
   WordGenerationJob,
   WordGenerationJobStatus,
   WordProcessingStatus,
@@ -724,6 +725,39 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       return rows.map(this.mapRowToSentence);
     } catch (error) {
       throw wrapError(error, `Failed to get sentences by word`);
+    }
+  }
+
+  async getSentencesWithoutAudio(): Promise<SentenceAudioBackfillItem[]> {
+    const db = this.getDb();
+    try {
+      const rows = db
+        .prepare(
+          `SELECT s.id AS sentenceId, s.sentence, s.pronunciation, s.language,
+                  w.id AS wordId, w.word AS wordText
+           FROM sentences s
+           JOIN words w ON w.id = s.word_id
+           WHERE (s.audio_path IS NULL OR TRIM(s.audio_path) = '')
+             AND (s.ignored IS NULL OR s.ignored = FALSE)`
+        )
+        .all() as Array<{
+        sentenceId: number;
+        sentence: string;
+        pronunciation: string | null;
+        language: string;
+        wordId: number;
+        wordText: string;
+      }>;
+      return rows.map((r) => ({
+        sentenceId: r.sentenceId,
+        sentence: r.sentence,
+        pronunciation: r.pronunciation ?? undefined,
+        language: r.language,
+        wordId: r.wordId,
+        wordText: r.wordText,
+      }));
+    } catch (error) {
+      throw wrapError(error, 'Failed to get sentences without audio');
     }
   }
 

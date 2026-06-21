@@ -408,6 +408,15 @@ app.whenReady().then(async () => {
 
     wordGenerationRunner?.start();
 
+    // Backfill audio for any sentences that are missing it (runs once at startup, low priority)
+    setImmediate(async () => {
+      try {
+        await wordGenerationRunner?.backfillMissingAudio();
+      } catch (error) {
+        logger!.warn({ error }, 'Audio backfill failed (non-critical)');
+      }
+    });
+
     // Initialize scoring service (used on-demand via IPC handlers)
     if (scoringService) {
       scoringService.start();

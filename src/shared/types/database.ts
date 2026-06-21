@@ -12,6 +12,15 @@ import {
   PrecomputedToken,
 } from './core.js';
 
+export interface SentenceAudioBackfillItem {
+  sentenceId: number;
+  sentence: string;
+  pronunciation: string | undefined;
+  language: string;
+  wordId: number;
+  wordText: string;
+}
+
 export type WordProcessingStatus = 'queued' | 'processing' | 'ready' | 'failed';
 export type WordGenerationJobStatus = 'queued' | 'processing' | 'completed' | 'failed';
 
@@ -103,6 +112,9 @@ export interface DatabaseLayer {
     averageInterval: number;
     averageEaseFactor: number;
   }>;
+
+  // Audio backfill
+  getSentencesWithoutAudio(): Promise<SentenceAudioBackfillItem[]>;
 
   // Sentence management
   insertSentence(
