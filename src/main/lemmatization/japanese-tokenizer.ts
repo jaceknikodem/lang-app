@@ -158,6 +158,28 @@ export async function getTokensWithBasicForm(sentence: string): Promise<Annotate
   return result;
 }
 
+function mergeDigitTokens<T extends TokenizedToken>(tokens: T[]): T[] {
+  const result: T[] = [];
+  let i = 0;
+  while (i < tokens.length) {
+    const token = tokens[i];
+    if (token.type === 'word' && /^\d$/.test(token.text)) {
+      let combined = token.text;
+      let j = i + 1;
+      while (j < tokens.length && tokens[j].type === 'word' && /^\d$/.test(tokens[j].text)) {
+        combined += tokens[j].text;
+        j++;
+      }
+      result.push({ ...token, text: combined });
+      i = j;
+    } else {
+      result.push(token);
+      i++;
+    }
+  }
+  return result;
+}
+
 /**
  * Tokenize Japanese text using kuromoji
  */
@@ -204,7 +226,7 @@ export async function tokenizeJapanese(sentence: string): Promise<TokenizedToken
       }
     }
 
-    return result;
+    return mergeDigitTokens(result);
   } catch (error) {
     const logger = getLogger();
     logger.error({ error }, 'Failed to tokenize Japanese with kuromoji');
@@ -260,7 +282,7 @@ export async function tokenizeWithReadings(sentence: string): Promise<TokenizedT
       }
     }
 
-    return result;
+    return mergeDigitTokens(result);
   } catch (error) {
     const logger = getLogger();
     logger.error({ error }, 'Failed to tokenize Japanese with readings');
