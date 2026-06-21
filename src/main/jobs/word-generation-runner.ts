@@ -222,7 +222,7 @@ export class WordGenerationRunner {
     const normalizedExisting = new Set(
       existingSentences.map((s) => this.normalizeSentence(s.sentence))
     );
-    let totalSentences = existingSentences.length;
+    const totalSentences = existingSentences.length;
 
     this.logger.debug(
       { wordId: word.id, existingSentences: totalSentences, desiredCount },
@@ -255,25 +255,30 @@ export class WordGenerationRunner {
       word.translation
     );
 
-    for (const sentence of generatedSentences) {
-      const added = await this.processSentence(
-        sentence,
-        word,
-        language,
-        proficiencyLevel,
-        knownWords,
-        normalizedExisting,
-        allWords
-      );
-      if (added) {
-        totalSentences += 1;
-        this.logger.debug(
-          { wordId: word.id, sentencePreview: sentence.sentence.slice(0, 80), totalSentences },
-          '[WordGenerationRunner] Stored sentence for word'
-        );
-        if (totalSentences >= desiredCount) break;
-      }
-    }
+    const uniqueSentences = generatedSentences.filter((s) => {
+      const normalized = this.normalizeSentence(s.sentence);
+      if (!normalized || normalizedExisting.has(normalized)) return false;
+      normalizedExisting.add(normalized);
+      return true;
+    });
+
+    await Promise.all(
+      uniqueSentences.map((sentence) =>
+        this.processSentence(
+          sentence,
+          word,
+          language,
+          proficiencyLevel,
+          knownWords,
+          allWords
+        ).catch((err) => {
+          this.logger.warn(
+            { err, word: word.word },
+            '[WordGenerationRunner] Failed to process sentence'
+          );
+        })
+      )
+    );
   }
 
   private async processSentence(
@@ -282,12 +287,8 @@ export class WordGenerationRunner {
     language: string,
     proficiencyLevel: string | undefined,
     knownWords: string[],
-    normalizedExisting: Set<string>,
     allWords: Awaited<ReturnType<DatabaseLayer['getAllWords']>>
-  ): Promise<boolean> {
-    const normalizedSentence = this.normalizeSentence(sentence.sentence);
-    if (!normalizedSentence || normalizedExisting.has(normalizedSentence)) return false;
-
+  ): Promise<void> {
     const sentenceParts = splitSentenceIntoParts(sentence.sentence);
     const sentenceId = await this.database.insertSentence(
       word.id,
@@ -343,9 +344,6 @@ export class WordGenerationRunner {
       audioMeta.audioPath,
       knownWords
     );
-
-    normalizedExisting.add(normalizedSentence);
-    return true;
   }
 
   private async downloadExternalAudio(
