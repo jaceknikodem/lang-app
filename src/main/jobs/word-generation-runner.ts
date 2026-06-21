@@ -314,14 +314,10 @@ export class WordGenerationRunner {
     let audioMeta: SentenceAudioMetadata;
     if (sentence.audioUrl) {
       audioMeta = await this.downloadExternalAudio(sentence, word, language, sentenceId);
-      await this.generateTranslationAudio(
-        sentence,
-        word,
-        language,
-        sentenceId,
-        audioMeta.audioPath
-      );
-      await this.generateContextAudio(sentence, word, language, sentenceId);
+      await Promise.all([
+        this.generateTranslationAudio(sentence, word, language, sentenceId, audioMeta.audioPath),
+        this.generateContextAudio(sentence, word, language, sentenceId),
+      ]);
     } else {
       audioMeta = await this.generateTTSAudioBatch(sentence, word, language, sentenceId);
     }
@@ -532,49 +528,54 @@ export class WordGenerationRunner {
   ): Promise<void> {
     const isJapanese = language === 'japanese' || language === 'ja';
 
-    if (sentence.contextBefore) {
-      try {
-        const text =
-          isJapanese && sentence.contextBeforePronunciation
-            ? sentence.contextBeforePronunciation
-            : sentence.contextBefore;
-        const beforePath = await this.audioService.generateAudio(
-          text,
-          language,
-          '_before_sentence',
-          word.id,
-          sentenceId
-        );
-        await this.database.updateBeforeSentenceAudioPath(sentenceId, beforePath);
-      } catch (error) {
-        this.logger.warn(
-          { err: error, sentenceId },
-          '[WordGenerationRunner] Failed to generate context before audio'
-        );
-      }
-    }
-
-    if (sentence.contextAfter) {
-      try {
-        const text =
-          isJapanese && sentence.contextAfterPronunciation
-            ? sentence.contextAfterPronunciation
-            : sentence.contextAfter;
-        const afterPath = await this.audioService.generateAudio(
-          text,
-          language,
-          '_after_sentence',
-          word.id,
-          sentenceId
-        );
-        await this.database.updateAfterSentenceAudioPath(sentenceId, afterPath);
-      } catch (error) {
-        this.logger.warn(
-          { err: error, sentenceId },
-          '[WordGenerationRunner] Failed to generate context after audio'
-        );
-      }
-    }
+    await Promise.allSettled([
+      sentence.contextBefore
+        ? (async () => {
+            const text =
+              isJapanese && sentence.contextBeforePronunciation
+                ? sentence.contextBeforePronunciation
+                : sentence.contextBefore!;
+            try {
+              const beforePath = await this.audioService.generateAudio(
+                text,
+                language,
+                '_before_sentence',
+                word.id,
+                sentenceId
+              );
+              await this.database.updateBeforeSentenceAudioPath(sentenceId, beforePath);
+            } catch (error) {
+              this.logger.warn(
+                { err: error, sentenceId },
+                '[WordGenerationRunner] Failed to generate context before audio'
+              );
+            }
+          })()
+        : Promise.resolve(),
+      sentence.contextAfter
+        ? (async () => {
+            const text =
+              isJapanese && sentence.contextAfterPronunciation
+                ? sentence.contextAfterPronunciation
+                : sentence.contextAfter!;
+            try {
+              const afterPath = await this.audioService.generateAudio(
+                text,
+                language,
+                '_after_sentence',
+                word.id,
+                sentenceId
+              );
+              await this.database.updateAfterSentenceAudioPath(sentenceId, afterPath);
+            } catch (error) {
+              this.logger.warn(
+                { err: error, sentenceId },
+                '[WordGenerationRunner] Failed to generate context after audio'
+              );
+            }
+          })()
+        : Promise.resolve(),
+    ]);
   }
 
   private updateSentenceMetadata(sentenceId: number, meta: SentenceAudioMetadata): void {
