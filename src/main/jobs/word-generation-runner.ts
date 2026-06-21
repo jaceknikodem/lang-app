@@ -262,7 +262,8 @@ export class WordGenerationRunner {
         language,
         proficiencyLevel,
         knownWords,
-        normalizedExisting
+        normalizedExisting,
+        allWords
       );
       if (added) {
         totalSentences += 1;
@@ -281,7 +282,8 @@ export class WordGenerationRunner {
     language: string,
     proficiencyLevel: string | undefined,
     knownWords: string[],
-    normalizedExisting: Set<string>
+    normalizedExisting: Set<string>,
+    allWords: Awaited<ReturnType<DatabaseLayer['getAllWords']>>
   ): Promise<boolean> {
     const normalizedSentence = this.normalizeSentence(sentence.sentence);
     if (!normalizedSentence || normalizedExisting.has(normalizedSentence)) return false;
@@ -332,7 +334,7 @@ export class WordGenerationRunner {
     }
     this.updateSentenceMetadata(sentenceId, audioMeta);
 
-    await this.precomputeTokens(sentence, word, language, sentenceId);
+    await this.precomputeTokens(sentence, word, language, sentenceId, allWords);
     this.pregenerateDialogVariants(
       sentence,
       word,
@@ -605,10 +607,10 @@ export class WordGenerationRunner {
     sentence: GeneratedSentence,
     word: Word,
     language: string,
-    sentenceId: number
+    sentenceId: number,
+    allWords: Awaited<ReturnType<DatabaseLayer['getAllWords']>>
   ): Promise<void> {
     try {
-      const allWords = await this.database.getAllWords(language, false, false);
       const tokenizedTokens = await precomputeSentenceTokens({
         sentence: sentence.sentence,
         targetWord: word,
