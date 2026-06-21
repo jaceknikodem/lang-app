@@ -677,16 +677,27 @@ export class WordGenerationRunner {
     desiredCount: number
   ): Promise<void> {
     const processingInfo = await this.database.getWordProcessingInfo(wordId);
-    if (!processingInfo || processingInfo.sentenceCount < desiredCount) {
-      const sentenceTotal = processingInfo?.sentenceCount ?? 0;
+    const sentenceTotal = processingInfo?.sentenceCount ?? 0;
+    const minimumAcceptable = Math.max(1, Math.ceil(desiredCount / 2));
+
+    if (sentenceTotal < minimumAcceptable) {
       throw new Error(
-        `Sentence generation incomplete. Have ${sentenceTotal}, wanted ${desiredCount}.`
+        `Sentence generation critically incomplete. Have ${sentenceTotal}, minimum ${minimumAcceptable}, wanted ${desiredCount}.`
       );
     }
-    this.logger.info(
-      { wordId, sentenceCount: processingInfo.sentenceCount },
-      '[WordGenerationRunner] Sentence generation complete'
-    );
+
+    if (sentenceTotal < desiredCount) {
+      this.logger.warn(
+        { wordId, sentenceTotal, desiredCount },
+        '[WordGenerationRunner] Completed with fewer sentences than desired'
+      );
+    } else {
+      this.logger.info(
+        { wordId, sentenceCount: sentenceTotal },
+        '[WordGenerationRunner] Sentence generation complete'
+      );
+    }
+
     await this.database.updateWordProcessingStatus(wordId, 'ready');
     await this.database.completeWordGenerationJob(job.id);
     await this.emitWordUpdate(wordId);
