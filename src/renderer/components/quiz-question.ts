@@ -7,8 +7,8 @@ import {
 } from '../../shared/utils/similarity-threshold.js';
 import { recordingStyles } from './recording.styles.js';
 import { pronunciationStyles } from '../styles/pronunciation.styles.js';
-import { renderPronunciation } from '../utils/pronunciation-render.js';
 import './recording-status.js';
+import './japanese-furigana-text.js';
 
 export interface QuizTranscriptionResult {
   text: string;
@@ -86,8 +86,32 @@ export class QuizQuestionCard extends LitElement {
         font-size: 18px;
         font-weight: 500;
         color: var(--text-primary);
-        line-height: 1.4;
+        line-height: 2.2;
         text-align: center;
+      }
+
+      .question-text ruby {
+        ruby-align: center;
+      }
+
+      .question-text rt {
+        font-size: 0.45em;
+        color: var(--text-secondary);
+        letter-spacing: 0.05em;
+      }
+
+      .sentence-text ruby {
+        ruby-align: center;
+      }
+
+      .sentence-text rt {
+        font-size: 0.45em;
+        color: var(--text-secondary);
+        letter-spacing: 0.05em;
+      }
+
+      .sentence-text {
+        line-height: 2.2;
       }
 
       .question-translation {
@@ -503,6 +527,23 @@ export class QuizQuestionCard extends LitElement {
    * Render a sentence with the key word highlighted wherever it appears in that
    * exact form. Splitting via Lit templates keeps the text safely escaped.
    */
+  private renderSentenceWithFurigana(
+    text: string,
+    language: string,
+    keyword: string,
+    pronunciation = ''
+  ) {
+    const isJapanese = language?.toLowerCase() === 'japanese' || language?.toLowerCase() === 'ja';
+    if (isJapanese) {
+      return html`<japanese-furigana-text
+        .text=${text}
+        .keyword=${keyword}
+        .pronunciation=${pronunciation}
+      ></japanese-furigana-text>`;
+    }
+    return this.renderHighlightedSentence(text, keyword);
+  }
+
   private renderHighlightedSentence(text: string, keyword: string) {
     if (!keyword || !text.includes(keyword)) {
       return html`${text}`;
@@ -528,10 +569,12 @@ export class QuizQuestionCard extends LitElement {
                 <div class="sentence-pair">
                   <span class="sentence-label">Sentence:</span>
                   <div class="sentence-text">
-                    ${this.renderHighlightedSentence(sentence.sentence, word.word)}
-                  </div>
-                  <div class="sentence-pronunciation-line">
-                    ${renderPronunciation(sentence.pronunciation)}
+                    ${this.renderSentenceWithFurigana(
+                      sentence.sentence,
+                      sentence.language,
+                      word.word,
+                      sentence.pronunciation ?? ''
+                    )}
                   </div>
                   <div class="sentence-translation">${sentence.translation}</div>
                 </div>
@@ -659,9 +702,13 @@ export class QuizQuestionCard extends LitElement {
               <div class="question-text-container">
                 <div class="question-text-block">
                   <div class="question-text">
-                    ${this.renderHighlightedSentence(displayText, this.question.word.word)}
+                    ${this.renderSentenceWithFurigana(
+                      displayText,
+                      this.question.sentence.language,
+                      this.question.word.word,
+                      this.question.sentence.pronunciation ?? ''
+                    )}
                   </div>
-                  ${renderPronunciation(this.question.sentence.pronunciation)}
                 </div>
                 <div class="question-actions">
                   <button

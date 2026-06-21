@@ -19,6 +19,7 @@ import { GeneratedWord, Word } from '../../shared/types/core.js';
 import { logger } from '../utils/logger.js';
 import { APP_CONFIG } from '../../shared/constants/index.js';
 import { hiraganaToRomaji } from '../utils/hiragana-romaji.js';
+import { containsKanji } from './sentence-viewer-helpers.js';
 
 interface SelectableWord extends GeneratedWord {
   selected: boolean;
@@ -674,10 +675,11 @@ export class WordSelector extends LitElement {
                 </div>
                 <div class="word-content">
                   <h4 class="word-foreign">
-                    ${word.word}
+                    ${this.wordReadings[word.word] && containsKanji(word.word)
+                      ? html`<ruby>${word.word}<rt>${this.wordReadings[word.word]}</rt></ruby>`
+                      : word.word}
                     ${this.wordReadings[word.word]
                       ? html`<div class="word-reading-tooltip">
-                          <span class="tooltip-hiragana">${this.wordReadings[word.word]}</span>
                           <span class="tooltip-romaji"
                             >${hiraganaToRomaji(this.wordReadings[word.word])}</span
                           >

@@ -423,6 +423,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.JAPANESE_TOKENIZATION.TOKENIZE, sentence),
     getWordReadings: (words: string[]) =>
       ipcRenderer.invoke(IPC_CHANNELS.JAPANESE_TOKENIZATION.GET_WORD_READINGS, words),
+    tokenizeWithReadings: (sentence: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.JAPANESE_TOKENIZATION.TOKENIZE_WITH_READINGS, sentence),
   },
 
   // Dialog operations

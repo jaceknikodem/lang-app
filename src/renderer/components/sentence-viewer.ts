@@ -4,7 +4,8 @@ import { sharedStyles } from '../styles/shared.js';
 import { sentenceViewerStyles } from './sentence-viewer.styles.js';
 import './grammar-explanation.js';
 import './word-popup.js';
-import { truncate, formatTimeAgo, getWordClass } from './sentence-viewer-helpers.js';
+import './japanese-furigana-text.js';
+import { truncate, formatTimeAgo, getWordClass, containsKanji } from './sentence-viewer-helpers.js';
 import { SentenceTokenizationController } from './sentence-tokenization-controller.js';
 import { SentenceAudioController } from './sentence-audio-controller.js';
 import type { Word, Sentence } from '../../shared/types/core.js';
@@ -70,7 +71,11 @@ export class SentenceViewer extends LitElement {
   @state()
   private wordReading = ''; // hiragana reading of targetWord (Japanese only)
 
+  @state()
+  private sentenceWordReadings: Record<string, string> = {};
+
   private lastGrammarSentenceId?: number;
+  private lastFetchedReadingsSentenceId: number | undefined;
   private keyboardUnsubscribe?: () => void;
 
   // Controllers own their respective state and call host.requestUpdate() when it changes.
@@ -141,6 +146,23 @@ export class SentenceViewer extends LitElement {
       changedProperties.has('targetWord') ||
       changedProperties.has('displayLastSeen');
 
+    // Fetch per-word Japanese readings for furigana whenever parsedWords are available.
+    // This runs before the early return so it fires on controller-triggered requestUpdate() too.
+    const lang = this.targetWord?.language?.toLowerCase();
+    const isJapanese = lang === 'japanese' || lang === 'ja';
+    if (isJapanese) {
+      if (sentenceChanged) {
+        this.sentenceWordReadings = {};
+        this.lastFetchedReadingsSentenceId = undefined;
+      }
+      if (
+        this.sentence?.id !== this.lastFetchedReadingsSentenceId &&
+        this.tokenizationCtrl.parsedWords.length > 0
+      ) {
+        void this.fetchSentenceWordReadings();
+      }
+    }
+
     if (!relevantPropertyChanged) return;
 
     if (sentenceChanged || allWordsChanged) {
@@ -170,6 +192,30 @@ export class SentenceViewer extends LitElement {
       this.wordReading = readings[this.targetWord.word] ?? '';
     } catch {
       this.wordReading = '';
+    }
+  }
+
+  private async fetchSentenceWordReadings(): Promise<void> {
+    const sentenceId = this.sentence?.id;
+    this.lastFetchedReadingsSentenceId = sentenceId;
+
+    const words = [
+      ...new Set(
+        this.tokenizationCtrl.parsedWords
+          .map((w) => w.text.trim())
+          .filter((t) => t && containsKanji(t))
+      ),
+    ];
+
+    if (!words.length) return;
+
+    try {
+      const readings = await window.electronAPI.japaneseTokenization.getWordReadings(words);
+      if (this.sentence?.id === sentenceId) {
+        this.sentenceWordReadings = readings;
+      }
+    } catch {
+      // words render without furigana on failure
     }
   }
 
@@ -631,10 +677,13 @@ export class SentenceViewer extends LitElement {
       <div class="sentence-header">
         <div class="target-word-info">
           <span class="target-word">
-            ${this.targetWord.word}
+            ${this.wordReading && containsKanji(this.targetWord.word)
+              ? html`<ruby
+                  >${this.targetWord.word}<rt class="target-word-rt">${this.wordReading}</rt></ruby
+                >`
+              : this.targetWord.word}
             ${this.wordReading
               ? html`<div class="word-reading-tooltip">
-                  <span class="tooltip-hiragana">${this.wordReading}</span>
                   <span class="tooltip-romaji">${hiraganaToRomaji(this.wordReading)}</span>
                 </div>`
               : nothing}
@@ -684,12 +733,21 @@ export class SentenceViewer extends LitElement {
     if (!text) return html``;
 
     const isPlaying = this.audioCtrl.localPlayingAudio === audioType;
+    const lang = this.targetWord?.language?.toLowerCase();
+    const isJapanese = lang === 'japanese' || lang === 'ja';
 
     return html`
       <div class="context-section ${isPlaying ? 'playing' : ''}">
         <div class="context-section-body" @click=${onClick}>
-          <div class="context-text">${text}</div>
-          ${renderPronunciation(pronunciation, 'context-pronunciation')}
+          <div class="context-text">
+            ${isJapanese
+              ? html`<japanese-furigana-text
+                  .text=${text}
+                  .pronunciation=${pronunciation ?? ''}
+                ></japanese-furigana-text>`
+              : text}
+          </div>
+          ${isJapanese ? nothing : renderPronunciation(pronunciation, 'context-pronunciation')}
           <div class="context-translation ${this.audioOnlyMode ? 'hidden' : ''}">
             ${translation}
           </div>
@@ -720,6 +778,14 @@ export class SentenceViewer extends LitElement {
       this.wordPopup.wordInfo.text.trim() === wordInfo.text.trim() &&
       this.wordPopup.wordInfo.dictionaryForm === wordInfo.dictionaryForm;
 
+    const lang = this.targetWord?.language?.toLowerCase();
+    const isJapanese = lang === 'japanese' || lang === 'ja';
+    const reading = isJapanese ? this.sentenceWordReadings[wordInfo.text.trim()] : undefined;
+    const wordContent =
+      reading && containsKanji(wordInfo.text)
+        ? html`<ruby>${wordInfo.text}<rt>${reading}</rt></ruby>`
+        : wordInfo.text;
+
     return html`
       <span
         class="word-in-sentence ${getWordClass(wordInfo)}"
@@ -734,7 +800,7 @@ export class SentenceViewer extends LitElement {
         @mouseleave=${() => this.tokenizationCtrl.handleWordHoverEnd(wordInfo)}
         aria-label=${tooltipText || nothing}
       >
-        ${wordInfo.text}
+        ${wordContent}
         ${tooltipText && !isPopupOpen ? html`<div class="tooltip">${tooltipText}</div>` : nothing}
       </span>
     `;
@@ -746,8 +812,15 @@ export class SentenceViewer extends LitElement {
 
     return html`
       <div class="sentence-text" @click=${this.audioCtrl.handleSentenceTextClick}>
-        <div class="${isJapanese ? 'japanese-words' : ''}">
-          ${this.tokenizationCtrl.parsedWords.map((wordInfo) => this.renderWord(wordInfo))}
+        <div class="${isJapanese ? 'japanese-words-wrap' : ''}">
+          <div class="${isJapanese ? 'japanese-words' : ''}">
+            ${this.tokenizationCtrl.parsedWords.map((wordInfo) => this.renderWord(wordInfo))}
+          </div>
+          ${isJapanese && this.sentence.pronunciation
+            ? html`<div class="sentence-romaji-tooltip">
+                ${hiraganaToRomaji(this.sentence.pronunciation)}
+              </div>`
+            : nothing}
         </div>
         <word-popup
           .wordInfo=${this.wordPopup?.wordInfo ?? null}
@@ -760,7 +833,7 @@ export class SentenceViewer extends LitElement {
           @add-to-set=${this.handleAddToLearningSet}
           @explain-grammar=${this.handleExplainGrammar}
         ></word-popup>
-        ${renderPronunciation(this.sentence.pronunciation)}
+        ${isJapanese ? nothing : renderPronunciation(this.sentence.pronunciation)}
         <div class="sentence-translation ${this.audioOnlyMode ? 'hidden' : ''}">
           ${this.sentence.translation}
         </div>

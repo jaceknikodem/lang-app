@@ -12,6 +12,10 @@ export interface TokenizedToken {
   type: 'word' | 'whitespace' | 'punctuation';
 }
 
+export interface TokenizedTokenWithReading extends TokenizedToken {
+  reading?: string; // hiragana reading, present on word tokens that contain kanji
+}
+
 let japaneseTokenizer: kuromoji.Tokenizer<kuromoji.IpadicFeatures> | null = null;
 let japaneseTokenizerInitializing: Promise<kuromoji.Tokenizer<kuromoji.IpadicFeatures>> | null =
   null;
@@ -204,6 +208,62 @@ export async function tokenizeJapanese(sentence: string): Promise<TokenizedToken
   } catch (error) {
     const logger = getLogger();
     logger.error({ error }, 'Failed to tokenize Japanese with kuromoji');
+    return tokenizeJapaneseSimple(sentence);
+  }
+}
+
+/**
+ * Tokenize Japanese text and include hiragana readings in a single kuromoji pass.
+ * Avoids the two-call roundtrip (tokenize → getWordReadings) used by the renderer.
+ */
+export async function tokenizeWithReadings(sentence: string): Promise<TokenizedTokenWithReading[]> {
+  try {
+    const tokenizer = await getJapaneseTokenizer();
+    const tokens = tokenizer.tokenize(sentence);
+
+    const result: TokenizedTokenWithReading[] = [];
+    let lastIndex = 0;
+
+    for (const token of tokens) {
+      const tokenStart = token.word_position - 1;
+
+      if (tokenStart > lastIndex) {
+        const before = sentence.substring(lastIndex, tokenStart);
+        if (/^\s+$/.test(before)) {
+          result.push({ text: before, type: 'whitespace' });
+        } else if (before.trim()) {
+          result.push({ text: before, type: 'punctuation' });
+        }
+      }
+
+      const text = token.surface_form;
+      if (/^\s+$/.test(text)) {
+        result.push({ text, type: 'whitespace' });
+      } else if (/^[。、！？：；・…]+$/.test(text) || token.pos === '記号') {
+        result.push({ text, type: 'punctuation' });
+      } else {
+        const hasKanji = /[一-龯㐀-䶿]/.test(text);
+        const r = token.reading;
+        const reading = hasKanji && r && r !== '*' ? katakanaToHiragana(r) : undefined;
+        result.push({ text, type: 'word', reading });
+      }
+
+      lastIndex = tokenStart + text.length;
+    }
+
+    if (lastIndex < sentence.length) {
+      const remaining = sentence.substring(lastIndex);
+      if (/^\s+$/.test(remaining)) {
+        result.push({ text: remaining, type: 'whitespace' });
+      } else if (remaining.trim()) {
+        result.push({ text: remaining, type: 'punctuation' });
+      }
+    }
+
+    return result;
+  } catch (error) {
+    const logger = getLogger();
+    logger.error({ error }, 'Failed to tokenize Japanese with readings');
     return tokenizeJapaneseSimple(sentence);
   }
 }

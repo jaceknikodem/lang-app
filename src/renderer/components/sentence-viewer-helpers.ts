@@ -90,6 +90,11 @@ export function getWordClass(wordInfo: WordInSentence): string {
   return `word-strength-${strengthLevel}`;
 }
 
+/** Returns true if the string contains any CJK kanji characters. */
+export function containsKanji(text: string): boolean {
+  return /[一-龯㐀-䶿]/.test(text);
+}
+
 /**
  * Determine whether a freshly-parsed word list differs meaningfully from the
  * previous one (text, target flag, word id, or status). Used to avoid needless re-renders.

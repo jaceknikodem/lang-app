@@ -539,6 +539,7 @@ export const IPC_CHANNELS = {
   JAPANESE_TOKENIZATION: {
     TOKENIZE: 'japanese-tokenization:tokenize',
     GET_WORD_READINGS: 'japanese-tokenization:getWordReadings',
+    TOKENIZE_WITH_READINGS: 'japanese-tokenization:tokenizeWithReadings',
   },
   DIALOG: {
     SELECT_SENTENCE: 'dialog:selectSentence',

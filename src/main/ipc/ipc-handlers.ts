@@ -12,7 +12,11 @@ import { LifecycleManager, UpdateManager } from '../lifecycle/index.js';
 import { SRSService } from '../srs/srs-service.js';
 import { WordGenerationRunner } from '../jobs/word-generation-runner.js';
 import { LemmatizationService } from '../lemmatization/index.js';
-import { tokenizeJapanese, getWordReadings } from '../lemmatization/japanese-tokenizer.js';
+import {
+  tokenizeJapanese,
+  getWordReadings,
+  tokenizeWithReadings,
+} from '../lemmatization/japanese-tokenizer.js';
 import { DialogService } from '../dialog/index.js';
 import { exportLanguageToApkg } from '../services/anki/anki-export-service.js';
 import { promises as fsPromises } from 'fs';
@@ -1368,6 +1372,12 @@ function setupJapaneseTokenizationHandlers(): void {
       schema: z.array(z.string()),
       description: 'get Japanese word readings',
       handler: (words) => getWordReadings(words),
+    },
+    {
+      channel: IPC_CHANNELS.JAPANESE_TOKENIZATION.TOKENIZE_WITH_READINGS,
+      schema: TextSchema,
+      description: 'tokenize Japanese sentence with readings in one pass',
+      handler: (sentence) => tokenizeWithReadings(sentence),
     },
   ]);
 }

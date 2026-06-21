@@ -187,6 +187,18 @@ export const wordSelectorStyles = css`
     margin: 0;
     position: relative;
     display: inline-block;
+    line-height: 2;
+  }
+
+  .word-foreign ruby {
+    ruby-align: center;
+  }
+
+  .word-foreign rt {
+    font-size: 0.5em;
+    color: var(--text-secondary);
+    letter-spacing: 0.05em;
+    font-weight: 400;
   }
 
   .word-reading-tooltip {
@@ -220,12 +232,6 @@ export const wordSelectorStyles = css`
 
   .word-foreign:hover .word-reading-tooltip {
     display: flex;
-  }
-
-  .tooltip-hiragana {
-    font-size: 15px;
-    color: #e8e8f0;
-    letter-spacing: 0.05em;
   }
 
   .tooltip-romaji {

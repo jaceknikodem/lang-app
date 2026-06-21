@@ -8,6 +8,7 @@ import {
 } from '../../shared/utils/similarity-threshold.js';
 import { pronunciationStyles } from '../styles/pronunciation.styles.js';
 import { renderPronunciation } from '../utils/pronunciation-render.js';
+import './japanese-furigana-text.js';
 
 export interface TranscriptionResult {
   text: string;
@@ -94,7 +95,7 @@ export class DialogBubbles extends LitElement {
       .bubble-text {
         font-size: 16px;
         margin: 0;
-        line-height: 1.5;
+        line-height: 2.2;
         flex: 1;
       }
 
@@ -415,6 +416,10 @@ export class DialogBubbles extends LitElement {
   }
 
   render() {
+    const isJapanese =
+      this.sentence?.language?.toLowerCase() === 'japanese' ||
+      this.sentence?.language?.toLowerCase() === 'ja';
+
     return html`
       ${this.sentence?.contextBefore
         ? html`
@@ -434,11 +439,20 @@ export class DialogBubbles extends LitElement {
               title=${this.beforeSentenceAudio ? 'Click to hear pronunciation' : ''}
             >
               <div class="bubble-content">
-                <p class="bubble-text">${this.sentence.contextBefore}</p>
-                ${renderPronunciation(
-                  this.sentence.contextBeforePronunciation,
-                  'context-pronunciation'
-                )}
+                <p class="bubble-text">
+                  ${isJapanese
+                    ? html`<japanese-furigana-text
+                        .text=${this.sentence.contextBefore}
+                        .pronunciation=${this.sentence.contextBeforePronunciation ?? ''}
+                      ></japanese-furigana-text>`
+                    : this.sentence.contextBefore}
+                </p>
+                ${isJapanese
+                  ? nothing
+                  : renderPronunciation(
+                      this.sentence.contextBeforePronunciation,
+                      'context-pronunciation'
+                    )}
                 ${this.showTranslations && this.sentence.contextBeforeTranslation
                   ? html`<p class="bubble-translation">
                       ${this.sentence.contextBeforeTranslation}
@@ -503,8 +517,20 @@ export class DialogBubbles extends LitElement {
                         }}
                         title=${option.variantSentenceAudio ? 'Click to hear pronunciation' : ''}
                       >
-                        <p class="sentence">${option.variantSentence}</p>
-                        ${renderPronunciation(option.variantPronunciation, 'context-pronunciation')}
+                        <p class="sentence">
+                          ${isJapanese
+                            ? html`<japanese-furigana-text
+                                .text=${option.variantSentence}
+                                .pronunciation=${option.variantPronunciation ?? ''}
+                              ></japanese-furigana-text>`
+                            : option.variantSentence}
+                        </p>
+                        ${isJapanese
+                          ? nothing
+                          : renderPronunciation(
+                              option.variantPronunciation,
+                              'context-pronunciation'
+                            )}
                         ${this.showTranslations
                           ? html`<p class="translation">${option.variantTranslation}</p>`
                           : nothing}
@@ -545,8 +571,17 @@ export class DialogBubbles extends LitElement {
               title=${this.followUpAudio ? 'Click to hear pronunciation' : ''}
             >
               <div class="bubble-content">
-                <p class="bubble-text">${this.followUpText}</p>
-                ${renderPronunciation(this.followUpPronunciation, 'context-pronunciation')}
+                <p class="bubble-text">
+                  ${isJapanese
+                    ? html`<japanese-furigana-text
+                        .text=${this.followUpText}
+                        .pronunciation=${this.followUpPronunciation ?? ''}
+                      ></japanese-furigana-text>`
+                    : this.followUpText}
+                </p>
+                ${isJapanese
+                  ? nothing
+                  : renderPronunciation(this.followUpPronunciation, 'context-pronunciation')}
                 ${this.showTranslations && this.followUpTranslation
                   ? html`<p class="bubble-translation">${this.followUpTranslation}</p>`
                   : nothing}

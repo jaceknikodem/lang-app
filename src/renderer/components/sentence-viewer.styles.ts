@@ -49,6 +49,7 @@ const sentenceViewerOwnStyles = css`
     color: var(--primary-color);
     position: relative;
     display: inline-block;
+    line-height: 2;
   }
 
   .target-word:hover .word-reading-tooltip {
@@ -268,11 +269,60 @@ const sentenceViewerOwnStyles = css`
     box-sizing: border-box;
   }
 
+  .japanese-words-wrap {
+    position: relative;
+    display: inline-block;
+  }
+
+  .japanese-words-wrap .sentence-romaji-tooltip {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    background: #1a1a2e;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: #9090b0;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    z-index: 100;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  }
+
+  .japanese-words-wrap:hover .sentence-romaji-tooltip {
+    display: block;
+  }
+
   .japanese-words {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
     align-items: baseline;
+    line-height: 2.2;
+  }
+
+  ruby {
+    ruby-align: center;
+  }
+
+  rt {
+    font-size: 0.45em;
+    color: var(--text-secondary);
+    letter-spacing: 0.05em;
+  }
+
+  .target-word ruby {
+    ruby-align: center;
+  }
+
+  .target-word rt.target-word-rt {
+    font-size: 0.6em;
+    color: var(--primary-color);
+    opacity: 0.8;
+    letter-spacing: 0.05em;
   }
 
   .word-in-sentence:hover {

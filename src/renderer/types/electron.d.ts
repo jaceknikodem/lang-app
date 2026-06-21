@@ -432,6 +432,9 @@ declare global {
       japaneseTokenization: {
         tokenize: (sentence: string) => Promise<any[]>;
         getWordReadings: (words: string[]) => Promise<Record<string, string>>;
+        tokenizeWithReadings: (
+          sentence: string
+        ) => Promise<{ text: string; type: string; reading?: string }[]>;
       };
     };
   }
