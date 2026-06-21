@@ -153,39 +153,12 @@ export class WordGenerationRunner {
       await this.generateSentences(word, job, language);
       await this.verifyAndCompleteJob(job, word.id, job.desiredSentenceCount ?? 4);
     } catch (error) {
-      this.logger.debug(
-        {
-          jobId: job.id,
-          errorType: typeof error,
-          errorConstructor: (error as any)?.constructor?.name,
-          isError: error instanceof Error,
-          hasMessage: error && typeof error === 'object' && 'message' in error,
-          errorKeys: error && typeof error === 'object' ? Object.keys(error) : [],
-        },
-        '[WordGenerationRunner] Raw error info before serialization'
-      );
-
-      const errorDetails = serializeErrorForLogging(error);
-      const detailKeys = Object.keys(errorDetails);
-      if (detailKeys.length === 0 || (detailKeys.length === 1 && detailKeys[0] === 'type')) {
-        this.logger.warn(
-          {
-            jobId: job.id,
-            serializedError: errorDetails,
-            detailKeys,
-            errorString: String(error),
-            errorJson: JSON.stringify(error),
-          },
-          '[WordGenerationRunner] Error serialization resulted in empty/minimal object'
-        );
-      }
-
       this.logger.error(
         {
           jobId: job.id,
           attemptNumber,
           err: error instanceof Error ? error : undefined,
-          ...errorDetails,
+          ...serializeErrorForLogging(error),
         },
         `WordGenerationRunner failed for job`
       );
@@ -527,55 +500,45 @@ export class WordGenerationRunner {
     sentenceId: number
   ): Promise<void> {
     const isJapanese = language === 'japanese' || language === 'ja';
+    const tasks: Promise<void>[] = [];
 
-    await Promise.allSettled([
-      sentence.contextBefore
-        ? (async () => {
-            const text =
-              isJapanese && sentence.contextBeforePronunciation
-                ? sentence.contextBeforePronunciation
-                : sentence.contextBefore!;
-            try {
-              const beforePath = await this.audioService.generateAudio(
-                text,
-                language,
-                '_before_sentence',
-                word.id,
-                sentenceId
-              );
-              await this.database.updateBeforeSentenceAudioPath(sentenceId, beforePath);
-            } catch (error) {
-              this.logger.warn(
-                { err: error, sentenceId },
-                '[WordGenerationRunner] Failed to generate context before audio'
-              );
-            }
-          })()
-        : Promise.resolve(),
-      sentence.contextAfter
-        ? (async () => {
-            const text =
-              isJapanese && sentence.contextAfterPronunciation
-                ? sentence.contextAfterPronunciation
-                : sentence.contextAfter!;
-            try {
-              const afterPath = await this.audioService.generateAudio(
-                text,
-                language,
-                '_after_sentence',
-                word.id,
-                sentenceId
-              );
-              await this.database.updateAfterSentenceAudioPath(sentenceId, afterPath);
-            } catch (error) {
-              this.logger.warn(
-                { err: error, sentenceId },
-                '[WordGenerationRunner] Failed to generate context after audio'
-              );
-            }
-          })()
-        : Promise.resolve(),
-    ]);
+    if (sentence.contextBefore) {
+      const text =
+        isJapanese && sentence.contextBeforePronunciation
+          ? sentence.contextBeforePronunciation
+          : sentence.contextBefore;
+      tasks.push(
+        this.audioService
+          .generateAudio(text, language, '_before_sentence', word.id, sentenceId)
+          .then((p) => this.database.updateBeforeSentenceAudioPath(sentenceId, p))
+          .catch((err) =>
+            this.logger.warn(
+              { err, sentenceId },
+              '[WordGenerationRunner] Failed to generate context before audio'
+            )
+          )
+      );
+    }
+
+    if (sentence.contextAfter) {
+      const text =
+        isJapanese && sentence.contextAfterPronunciation
+          ? sentence.contextAfterPronunciation
+          : sentence.contextAfter;
+      tasks.push(
+        this.audioService
+          .generateAudio(text, language, '_after_sentence', word.id, sentenceId)
+          .then((p) => this.database.updateAfterSentenceAudioPath(sentenceId, p))
+          .catch((err) =>
+            this.logger.warn(
+              { err, sentenceId },
+              '[WordGenerationRunner] Failed to generate context after audio'
+            )
+          )
+      );
+    }
+
+    await Promise.allSettled(tasks);
   }
 
   private updateSentenceMetadata(sentenceId: number, meta: SentenceAudioMetadata): void {
