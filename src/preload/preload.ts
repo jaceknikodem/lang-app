@@ -904,10 +904,16 @@ declare global {
       };
       topics: {
         getTopics: () => Promise<string[]>;
+        getThemes: () => Promise<string[]>;
+        getCurrentTheme: () => Promise<string>;
+        setCurrentTheme: (theme: string) => Promise<void>;
       };
       japaneseTokenization: {
         tokenize: (sentence: string) => Promise<any[]>;
         getWordReadings: (words: string[]) => Promise<Record<string, string>>;
+        tokenizeWithReadings: (
+          sentence: string
+        ) => Promise<{ text: string; type: string; reading?: string }[]>;
       };
       tracking: {
         createSession: (
