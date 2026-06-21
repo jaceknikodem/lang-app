@@ -723,29 +723,33 @@ export class ContentGenerator {
         throw new Error(`No valid sentences were generated for word: ${word}. Please try again.`);
       }
 
-      // Convert to pronunciation for Japanese sentences
+      // Convert to pronunciation for Japanese sentences not already annotated
       const isJapanese =
         targetLanguage.toLowerCase() === 'japanese' || targetLanguage.toLowerCase() === 'ja';
       if (isJapanese) {
         try {
-          // Collect all sentences that need pronunciation
+          // Build a batch of only the texts that are still missing pronunciation
           const allSentencesToConvert: string[] = [];
           const sentenceIndices: number[] = [];
           const contextBeforeIndices: number[] = [];
           const contextAfterIndices: number[] = [];
 
           combinedSentences.forEach((sentence) => {
-            sentenceIndices.push(allSentencesToConvert.length);
-            allSentencesToConvert.push(sentence.sentence);
+            if (!sentence.pronunciation) {
+              sentenceIndices.push(allSentencesToConvert.length);
+              allSentencesToConvert.push(sentence.sentence);
+            } else {
+              sentenceIndices.push(-1);
+            }
 
-            if (sentence.contextBefore) {
+            if (sentence.contextBefore && !sentence.contextBeforePronunciation) {
               contextBeforeIndices.push(allSentencesToConvert.length);
               allSentencesToConvert.push(sentence.contextBefore);
             } else {
               contextBeforeIndices.push(-1);
             }
 
-            if (sentence.contextAfter) {
+            if (sentence.contextAfter && !sentence.contextAfterPronunciation) {
               contextAfterIndices.push(allSentencesToConvert.length);
               allSentencesToConvert.push(sentence.contextAfter);
             } else {
@@ -753,33 +757,31 @@ export class ContentGenerator {
             }
           });
 
-          // Batch convert all pronunciations
+          // Fast path: all sentences already have pronunciation (single-call LLM path)
+          if (allSentencesToConvert.length === 0) {
+            return combinedSentences;
+          }
+
           const pronunciations = await this.llmClient.convertToPronunciation(
             allSentencesToConvert,
             targetLanguage
           );
 
-          // Map pronunciations back to sentences
-          const sentencesWithPronunciation = combinedSentences.map((sentence, index) => {
-            const mainPron = pronunciations[sentenceIndices[index]] || undefined;
-            const beforePron =
+          return combinedSentences.map((sentence, index) => ({
+            ...sentence,
+            pronunciation:
+              sentenceIndices[index] >= 0
+                ? pronunciations[sentenceIndices[index]] || undefined
+                : sentence.pronunciation,
+            contextBeforePronunciation:
               contextBeforeIndices[index] >= 0
                 ? pronunciations[contextBeforeIndices[index]] || undefined
-                : undefined;
-            const afterPron =
+                : sentence.contextBeforePronunciation,
+            contextAfterPronunciation:
               contextAfterIndices[index] >= 0
                 ? pronunciations[contextAfterIndices[index]] || undefined
-                : undefined;
-
-            return {
-              ...sentence,
-              pronunciation: mainPron,
-              contextBeforePronunciation: beforePron,
-              contextAfterPronunciation: afterPron,
-            };
-          });
-
-          return sentencesWithPronunciation;
+                : sentence.contextAfterPronunciation,
+          }));
         } catch (error) {
           this.logger.warn({ error }, 'Failed to batch convert to pronunciation');
           // Continue without pronunciation (graceful degradation)

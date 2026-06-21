@@ -59,6 +59,18 @@ export const GeneratedSentenceSchema = z.object({
     .string()
     .optional()
     .transform((s) => (s ? cleanSpecialTokens(s) : undefined)),
+  pronunciation: z
+    .string()
+    .optional()
+    .transform((s) => (s ? cleanSpecialTokens(s) : undefined)),
+  contextBeforePronunciation: z
+    .string()
+    .optional()
+    .transform((s) => (s ? cleanSpecialTokens(s) : undefined)),
+  contextAfterPronunciation: z
+    .string()
+    .optional()
+    .transform((s) => (s ? cleanSpecialTokens(s) : undefined)),
 });
 
 // Flexible response schemas that can handle various formats
@@ -123,6 +135,15 @@ export const SentenceGenerationResponseSchema = z.union([
           : undefined,
         contextAfterTranslation: item.contextAfterTranslation
           ? cleanSpecialTokens(String(item.contextAfterTranslation))
+          : undefined,
+        pronunciation: item.pronunciation
+          ? cleanSpecialTokens(String(item.pronunciation))
+          : undefined,
+        contextBeforePronunciation: item.contextBeforePronunciation
+          ? cleanSpecialTokens(String(item.contextBeforePronunciation))
+          : undefined,
+        contextAfterPronunciation: item.contextAfterPronunciation
+          ? cleanSpecialTokens(String(item.contextAfterPronunciation))
           : undefined,
       }));
   }),

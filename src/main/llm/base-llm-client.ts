@@ -654,7 +654,20 @@ ${text}
     proficiencyLevel?: string,
     translation?: string
   ): string {
-    const example = `  {
+    const isJapanese = language.toLowerCase() === 'japanese' || language.toLowerCase() === 'ja';
+    const example = isJapanese
+      ? `  {
+    "sentence": "japanese_sentence1_with_${word}",
+    "translation": "english_translation1",
+    "contextBefore": "japanese_context_before1",
+    "contextAfter": "japanese_context_after1",
+    "contextBeforeTranslation": "english_context_before1",
+    "contextAfterTranslation": "english_context_after1",
+    "pronunciation": "hiragana reading of sentence (kanji converted, words space-separated)",
+    "contextBeforePronunciation": "hiragana reading of contextBefore",
+    "contextAfterPronunciation": "hiragana reading of contextAfter"
+  }`
+      : `  {
     "sentence": "${language.toLowerCase()}_sentence1_with_${word}",
     "translation": "english_translation1",
     "contextBefore": "${language.toLowerCase()}_context_before1",
@@ -683,6 +696,14 @@ ${text}
       ? `\nCRITICAL: The generated sentences MUST use this word with the meaning of "${translation}". Do NOT use any other meaning of the word.`
       : '';
 
+    const pronunciationRules = isJapanese
+      ? `
+15. For each sentence and context sentence, include a "pronunciation" / "contextBeforePronunciation" / "contextAfterPronunciation" field with the hiragana reading
+16. Convert all kanji to hiragana based on context; leave hiragana as-is; convert katakana to hiragana (e.g. コーヒー → こーひー)
+17. Preserve punctuation (。、！？) as-is; separate words/morphemes with a single space
+18. Use the natural spoken reading (e.g. 何 before です is なん not なに)`
+      : '';
+
     return `CRITICAL: You must return exactly ${count} sentences in a JSON array. No more, no less.
 CRITICAL: Return ONLY the JSON array, no explanations or extra text.
 
@@ -708,7 +729,7 @@ Rules:
 11. The context sentences should form a natural dialog between two people
 12. Provide English translations for all context sentences
 13. Context sentences should be short (3-10 words each)
-14. The main sentence should make sense when read with its context`;
+14. The main sentence should make sense when read with its context${pronunciationRules}`;
   }
 
   /**
