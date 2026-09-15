@@ -31,7 +31,8 @@ const MODEL_CSS = `
 }
 .sentence { font-size: 26px; margin: 12px 0; }
 .sentence .kw { color: #2563eb; font-weight: 700; }
-.reading { color: #6b6b6b; font-size: 18px; margin-top: 8px; }
+.sentence ruby { ruby-align: center; }
+.sentence rt { font-size: 0.5em; color: #6b6b6b; }
 .romaji { color: #6b6b6b; font-size: 16px; margin-top: 4px; font-style: italic; }
 .translation { margin-top: 8px; }
 .word { color: #888; font-size: 16px; margin-top: 12px; }
@@ -45,7 +46,8 @@ function escapeHtml(text: string): string {
 
 /**
  * Escape the sentence and wrap the key word in a highlight span.
- * For Japanese, uses kuromoji basic_form so conjugated verbs are matched.
+ * For Japanese, uses kuromoji basic_form so conjugated verbs are matched,
+ * and renders inline <ruby> furigana over kanji tokens.
  * Falls back to exact string match for other languages.
  */
 async function highlightWordInSentence(
@@ -59,10 +61,13 @@ async function highlightWordInSentence(
       return tokens
         .map((t) => {
           const escaped = escapeHtml(t.surface);
+          const core = t.reading
+            ? `<ruby>${escaped}<rt>${escapeHtml(t.reading)}</rt></ruby>`
+            : escaped;
           if (t.basicForm && (t.surface === word || t.basicForm === word)) {
-            return `<span class="kw">${escaped}</span>`;
+            return `<span class="kw">${core}</span>`;
           }
-          return escaped;
+          return core;
         })
         .join('');
     } catch {
@@ -105,9 +110,7 @@ export async function exportLanguageToApkg(
     name: 'Kotoba Sentence',
     fields: ['Sentence', 'Translation', 'Reading', 'Audio', 'Word', 'Romaji'],
     css: MODEL_CSS,
-    qfmt:
-      '{{Audio}}<div class="sentence">{{Sentence}}</div>' +
-      '{{#Reading}}<div class="reading">{{Reading}}</div>{{/Reading}}',
+    qfmt: '{{Audio}}<div class="sentence">{{Sentence}}</div>',
     afmt:
       '{{FrontSide}}\n<hr id=answer>\n<div class="translation">{{Translation}}</div>' +
       '{{#Romaji}}<div class="romaji">{{Romaji}}</div>{{/Romaji}}' +

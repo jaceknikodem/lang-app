@@ -127,12 +127,14 @@ export async function getWordReadings(words: string[]): Promise<Record<string, s
 export interface AnnotatedToken {
   surface: string;
   basicForm: string;
+  reading?: string; // hiragana reading, present on tokens that contain kanji
 }
 
 /**
  * Returns kuromoji tokens for a sentence with gap text filled in.
- * Each token carries the surface form (as it appears in the sentence) and
- * the dictionary base form so callers can match conjugated words.
+ * Each token carries the surface form (as it appears in the sentence), the
+ * dictionary base form so callers can match conjugated words, and (for
+ * tokens containing kanji) a hiragana reading for furigana rendering.
  */
 export async function getTokensWithBasicForm(sentence: string): Promise<AnnotatedToken[]> {
   const tokenizer = await getJapaneseTokenizer();
@@ -147,7 +149,10 @@ export async function getTokensWithBasicForm(sentence: string): Promise<Annotate
     }
     const basic =
       token.basic_form && token.basic_form !== '*' ? token.basic_form : token.surface_form;
-    result.push({ surface: token.surface_form, basicForm: basic });
+    const hasKanji = /[一-龯㐀-䶿]/.test(token.surface_form);
+    const r = token.reading;
+    const reading = hasKanji && r && r !== '*' ? katakanaToHiragana(r) : undefined;
+    result.push({ surface: token.surface_form, basicForm: basic, reading });
     lastIndex = tokenStart + token.surface_form.length;
   }
 
