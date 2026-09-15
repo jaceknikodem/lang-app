@@ -1,5 +1,5 @@
 import { html, nothing, type TemplateResult } from 'lit';
-import { hiraganaToRomaji } from './hiragana-romaji.js';
+import { hiraganaToRomaji } from '../../shared/utils/hiragana-romaji.js';
 
 /**
  * Render a pronunciation line (hiragana) with a hover tooltip showing romaji.

@@ -1,6 +1,6 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { hiraganaToRomaji } from '../utils/hiragana-romaji.js';
+import { hiraganaToRomaji } from '../../shared/utils/hiragana-romaji.js';
 
 interface FuriganaToken {
   text: string;

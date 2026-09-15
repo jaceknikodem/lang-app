@@ -18,7 +18,7 @@ import { getErrorMessage } from '../../shared/utils/error.js';
 import { GeneratedWord, Word } from '../../shared/types/core.js';
 import { logger } from '../utils/logger.js';
 import { APP_CONFIG } from '../../shared/constants/index.js';
-import { hiraganaToRomaji } from '../utils/hiragana-romaji.js';
+import { hiraganaToRomaji } from '../../shared/utils/hiragana-romaji.js';
 import { containsKanji } from './sentence-viewer-helpers.js';
 
 interface SelectableWord extends GeneratedWord {

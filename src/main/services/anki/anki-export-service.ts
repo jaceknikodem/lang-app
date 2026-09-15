@@ -10,6 +10,7 @@ import { AudioService } from '../../audio/audio-service.js';
 import { getLogger } from '../../utils/logger.js';
 import { buildApkg, AnkiMedia, AnkiNote, ApkgModel } from './apkg-builder.js';
 import { getTokensWithBasicForm } from '../../lemmatization/japanese-tokenizer.js';
+import { hiraganaToRomaji } from '../../../shared/utils/hiragana-romaji.js';
 
 export interface AnkiExportResult {
   data: Buffer;
@@ -31,6 +32,7 @@ const MODEL_CSS = `
 .sentence { font-size: 26px; margin: 12px 0; }
 .sentence .kw { color: #2563eb; font-weight: 700; }
 .reading { color: #6b6b6b; font-size: 18px; margin-top: 8px; }
+.romaji { color: #6b6b6b; font-size: 16px; margin-top: 4px; font-style: italic; }
 .translation { margin-top: 8px; }
 .word { color: #888; font-size: 16px; margin-top: 12px; }
 hr#answer { margin: 18px 0; }
@@ -101,13 +103,14 @@ export async function exportLanguageToApkg(
   const model: ApkgModel = {
     id: MODEL_ID,
     name: 'Kotoba Sentence',
-    fields: ['Sentence', 'Translation', 'Reading', 'Audio', 'Word'],
+    fields: ['Sentence', 'Translation', 'Reading', 'Audio', 'Word', 'Romaji'],
     css: MODEL_CSS,
     qfmt:
       '{{Audio}}<div class="sentence">{{Sentence}}</div>' +
       '{{#Reading}}<div class="reading">{{Reading}}</div>{{/Reading}}',
     afmt:
       '{{FrontSide}}\n<hr id=answer>\n<div class="translation">{{Translation}}</div>' +
+      '{{#Romaji}}<div class="romaji">{{Romaji}}</div>{{/Romaji}}' +
       '{{#Word}}<div class="word">{{Word}}</div>{{/Word}}',
     requiredFieldOrds: [0],
   };
@@ -148,6 +151,7 @@ export async function exportLanguageToApkg(
         escapeHtml(row.pronunciation ?? ''),
         audioField,
         escapeHtml(`${row.word} — ${row.wordTranslation}`),
+        row.pronunciation ? escapeHtml(hiraganaToRomaji(row.pronunciation)) : '',
       ],
     });
   }

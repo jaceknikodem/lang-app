@@ -15,7 +15,7 @@ import type { TokenizedWord as WordInSentence } from '../utils/sentence-tokenize
 import { logger } from '../utils/logger.js';
 import { audioPlayer } from '../utils/audio-player-service.js';
 import { checkProficiencyLevel } from '../utils/app-initializer.js';
-import { hiraganaToRomaji } from '../utils/hiragana-romaji.js';
+import { hiraganaToRomaji } from '../../shared/utils/hiragana-romaji.js';
 import { renderPronunciation } from '../utils/pronunciation-render.js';
 
 @customElement('sentence-viewer')
