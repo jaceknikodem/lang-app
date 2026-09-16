@@ -1710,8 +1710,8 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
       const reviewCountStmt = db.prepare(`
         SELECT COUNT(*) as reviewCount
-        FROM words
-        WHERE language = ? AND last_review IS NOT NULL
+        FROM audio_playback_events
+        WHERE language = ? AND mode = 'learning'
       `);
       const reviewCountRow = reviewCountStmt.get(language) as { reviewCount: number };
 
