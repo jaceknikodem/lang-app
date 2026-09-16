@@ -234,6 +234,10 @@ export interface DatabaseLayer {
       pronunciationAttemptCount: number;
     }>
   >;
+  getStartupStats(language: string): Promise<{
+    timesPlayed: number;
+    reviewCount: number;
+  }>;
   lookupDictionary(word: string, language: string): Promise<DictionaryEntry[]>;
   updateWordProcessingStatus(wordId: number, status: WordProcessingStatus): Promise<void>;
   getWordProcessingInfo(

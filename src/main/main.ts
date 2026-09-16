@@ -56,6 +56,19 @@ async function initializeServices(): Promise<void> {
     await databaseLayer.initialize();
     logger.info('Database initialized successfully');
 
+    // Log active-language stats for debugging (non-blocking)
+    setImmediate(async () => {
+      try {
+        const currentLanguage = await databaseLayer!.getCurrentLanguage();
+        const { timesPlayed, reviewCount } = await databaseLayer!.getStartupStats(currentLanguage);
+        logger!.info(
+          `[stats] ${currentLanguage}: ${timesPlayed} sentence plays, ${reviewCount} reviews`
+        );
+      } catch (error) {
+        logger!.warn({ error }, 'Failed to log startup stats (non-critical)');
+      }
+    });
+
     // Initialize and start ServiceManager (manages external services like whisper-server and stanza-service)
     // This must be done before LemmatizationService initialization, as it sets environment variables
     serviceManager = new ServiceManager({

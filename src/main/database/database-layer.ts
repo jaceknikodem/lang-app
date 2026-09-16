@@ -1694,6 +1694,35 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
       throw wrapError(error, `Failed to get language stats`);
     }
   }
+  async getStartupStats(language: string): Promise<{
+    timesPlayed: number;
+    reviewCount: number;
+  }> {
+    const db = this.getDb();
+
+    try {
+      const playCountStmt = db.prepare(`
+        SELECT SUM(play_count) as timesPlayed
+        FROM sentences
+        WHERE language = ?
+      `);
+      const playCountRow = playCountStmt.get(language) as { timesPlayed: number | null };
+
+      const reviewCountStmt = db.prepare(`
+        SELECT COUNT(*) as reviewCount
+        FROM words
+        WHERE language = ? AND last_review IS NOT NULL
+      `);
+      const reviewCountRow = reviewCountStmt.get(language) as { reviewCount: number };
+
+      return {
+        timesPlayed: playCountRow.timesPlayed ?? 0,
+        reviewCount: reviewCountRow.reviewCount ?? 0,
+      };
+    } catch (error) {
+      throw wrapError(error, `Failed to get startup stats`);
+    }
+  }
   async getTopicWordCounts(language: string): Promise<Array<{ topic: string; count: number }>> {
     const db = this.getDb();
 
