@@ -963,14 +963,12 @@ Preferred JSON format:
   async analyzeTranscription(
     transcription: string,
     language: string,
-    assistantSentence: string,
-    topic?: string
+    assistantSentence: string
   ): Promise<TranscriptionAnalysis> {
     const prompt = this.createTranscriptionAnalysisPrompt(
       transcription,
       language,
-      assistantSentence,
-      topic
+      assistantSentence
     );
 
     try {
@@ -1015,24 +1013,21 @@ Preferred JSON format:
   protected createTranscriptionAnalysisPrompt(
     transcription: string,
     language: string,
-    assistantSentence: string,
-    topic?: string
+    assistantSentence: string
   ): string {
     const languageName = language.charAt(0).toUpperCase() + language.slice(1);
-
-    let topicContext = '';
-    if (topic) {
-      topicContext = `\nTopic: The conversation is about "${topic}". Use this context to provide more relevant feedback.\n`;
-    }
 
     return `Analyze this ${languageName} transcription from a language learner. The learner reads English, so the "grammarExplanation" MUST ALWAYS be written in English, never in ${languageName}:
 
 "${transcription}"
 
 Context: The learner was responding to this ${languageName} sentence from the assistant:
-"${assistantSentence}"${topicContext}
+"${assistantSentence}"
+
+The learner is speaking freely, so judge ONLY the ${languageName} (grammar, word choice, naturalness), not the content of what they chose to say. Keep the learner's intended meaning in any correction; never change what they said (e.g. do not swap their places, objects or events).
+
 Provide:
-1. A correction suggestion if there are better ways to express this (just the corrected/better sentence, no explanation)
+1. A correction suggestion only if the ${languageName} is wrong or clearly unnatural (just the corrected sentence keeping the learner's meaning, no explanation). Omit it if the sentence is already correct.
 2. A grammar explanation if there are grammar mistakes detected. The explanation must be in English (quote ${languageName} words or phrases only as examples).
 3. Whether there are grammar mistakes (true/false)
 

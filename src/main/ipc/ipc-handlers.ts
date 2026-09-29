@@ -1462,10 +1462,10 @@ function setupDialogHandlers(
     },
     {
       channel: IPC_CHANNELS.DIALOG.ANALYZE_TRANSCRIPTION,
-      schema: [TextSchema, LanguageSchema, TextSchema, z.string().optional()],
+      schema: [TextSchema, LanguageSchema, TextSchema],
       description: 'analyze transcription for corrections and grammar',
-      handler: (transcription, language, assistantSentence, topic) =>
-        llmClient.analyzeTranscription(transcription, language, assistantSentence, topic),
+      handler: (transcription, language, assistantSentence) =>
+        llmClient.analyzeTranscription(transcription, language, assistantSentence),
     },
     {
       channel: IPC_CHANNELS.DIALOG.GENERATE_FOLLOW_UP,

@@ -437,18 +437,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_VARIANTS, sentenceId),
     generateFollowUp: (variantId: number, conversationHistory?: string[]) =>
       ipcRenderer.invoke(IPC_CHANNELS.DIALOG.GENERATE_FOLLOW_UP, variantId, conversationHistory),
-    analyzeTranscription: (
-      transcription: string,
-      language: string,
-      assistantSentence: string,
-      topic?: string
-    ) =>
+    analyzeTranscription: (transcription: string, language: string, assistantSentence: string) =>
       ipcRenderer.invoke(
         IPC_CHANNELS.DIALOG.ANALYZE_TRANSCRIPTION,
         transcription,
         language,
-        assistantSentence,
-        topic
+        assistantSentence
       ),
     pregenerateSession: () => ipcRenderer.invoke(IPC_CHANNELS.DIALOG.PREGENERATE_SESSION),
     pregenerateSessions: (count: number) =>
@@ -861,8 +855,7 @@ declare global {
         analyzeTranscription: (
           transcription: string,
           language: string,
-          assistantSentence: string,
-          topic?: string
+          assistantSentence: string
         ) => Promise<any>;
         pregenerateSession: () => Promise<any | null>;
         pregenerateSessions: (count: number) => Promise<any[]>;

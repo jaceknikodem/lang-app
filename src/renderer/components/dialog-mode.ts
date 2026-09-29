@@ -676,17 +676,6 @@ export class DialogMode extends BaseComponent {
         const assistantSentence = this.currentSentence?.sentence;
         const currentSentenceId = this.currentSentence?.id || null;
 
-        // Get the word's topic if available
-        let topic: string | undefined;
-        if (this.currentSentence?.wordId) {
-          try {
-            const word = await window.electronAPI.database.getWordById(this.currentSentence.wordId);
-            topic = word?.topic;
-          } catch (error) {
-            logger.warn({ error }, 'Failed to get word topic for transcription analysis');
-          }
-        }
-
         // Track which sentence this analysis is for
         this.transcriptionAnalysisSentenceId = currentSentenceId;
         this.isAnalyzingTranscription = true;
@@ -698,8 +687,7 @@ export class DialogMode extends BaseComponent {
             ? window.electronAPI.dialog.analyzeTranscription(
                 transcription.text,
                 currentLanguage,
-                assistantSentence,
-                topic
+                assistantSentence
               )
             : Promise.resolve(null),
           // Follow-up generation

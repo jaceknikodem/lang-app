@@ -338,8 +338,7 @@ export interface IPCBridge {
     analyzeTranscription: (
       transcription: string,
       language: string,
-      assistantSentence: string,
-      topic?: string
+      assistantSentence: string
     ) => Promise<TranscriptionAnalysis>;
     explainGrammar: (
       word: string,
