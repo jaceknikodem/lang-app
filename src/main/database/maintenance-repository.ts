@@ -75,4 +75,31 @@ export class MaintenanceRepository extends BaseRepository {
       this.logger.info({ language }, `Successfully reset progress for language: ${language}`);
     });
   }
+  /**
+   * Delete every row belonging to a language, in FK-safe order.
+   * Tables referencing learning_sessions without CASCADE must go before it.
+   */
+  async deleteLanguageData(language: string): Promise<{ deletedWords: number }> {
+    return this.query(`Failed to delete language data`, (db) => {
+      const run = db.transaction(() => {
+        const deletedWords = db
+          .prepare('DELETE FROM words WHERE language = ?')
+          .run(language).changes;
+        for (const table of [
+          'word_generation_queue',
+          'audio_playback_events',
+          'srs_adjustments',
+          'dialog_corrections',
+          'neglected_words',
+          'dictionary_hover_events',
+          'read_aloud_cache',
+          'learning_sessions',
+        ]) {
+          db.prepare(`DELETE FROM ${table} WHERE language = ?`).run(language);
+        }
+        return { deletedWords };
+      });
+      return run();
+    });
+  }
 }

@@ -295,24 +295,8 @@ export class LifecycleManager {
       this.logger.info('Starting complete data reset...');
 
       // Backup all settings before deleting database
-      const settingsBackup: Record<string, string> = {};
-      try {
-        // Access the database connection through the database layer
-        // We use a type assertion to access the private getDb method
-        // This is safe here since we're in the lifecycle manager which is tightly coupled
-        const db = (this.config.databaseLayer as any).getDb();
-        const stmt = db.prepare('SELECT key, value FROM settings');
-        const rows = stmt.all() as Array<{ key: string; value: string }>;
-        for (const row of rows) {
-          settingsBackup[row.key] = row.value;
-        }
-        this.logger.info(
-          { settingCount: Object.keys(settingsBackup).length },
-          'Backed up settings'
-        );
-      } catch {
-        this.logger.debug('No settings to backup (this is normal for first run)');
-      }
+      const settingsBackup = await this.config.databaseLayer.getAllSettings();
+      this.logger.info({ settingCount: Object.keys(settingsBackup).length }, 'Backed up settings');
 
       // Close database connection first
       if (this.config.databaseLayer) {
@@ -376,57 +360,8 @@ export class LifecycleManager {
     try {
       this.logger.info({ language }, 'Starting language-specific data reset...');
 
-      // Access the database connection through the database layer
-      const db = (this.config.databaseLayer as any).getDb();
-
-      // Delete all words for this language (this will cascade delete sentences and related data)
-      const deleteWordsStmt = db.prepare('DELETE FROM words WHERE language = ?');
-      const wordsResult = deleteWordsStmt.run(language);
-      this.logger.info(
-        { language, deletedWords: wordsResult.changes },
-        'Deleted words for language'
-      );
-
-      // Delete language-specific entries from other tables.
-      // Tables that reference learning_sessions without CASCADE must be deleted before
-      // learning_sessions itself, otherwise the FK constraint fires.
-      const deleteQueueStmt = db.prepare('DELETE FROM word_generation_queue WHERE language = ?');
-      deleteQueueStmt.run(language);
-
-      const deleteAudioEventsStmt = db.prepare(
-        'DELETE FROM audio_playback_events WHERE language = ?'
-      );
-      deleteAudioEventsStmt.run(language);
-
-      const deleteSrsAdjustmentsStmt = db.prepare('DELETE FROM srs_adjustments WHERE language = ?');
-      deleteSrsAdjustmentsStmt.run(language);
-
-      // dialog_corrections will be deleted via CASCADE when sentences are deleted,
-      // but we'll also delete any orphaned entries just in case
-      const deleteDialogCorrectionsStmt = db.prepare(
-        'DELETE FROM dialog_corrections WHERE language = ?'
-      );
-      deleteDialogCorrectionsStmt.run(language);
-
-      const deleteNeglectedWordsStmt = db.prepare('DELETE FROM neglected_words WHERE language = ?');
-      deleteNeglectedWordsStmt.run(language);
-
-      const deleteDictionaryHoverStmt = db.prepare(
-        'DELETE FROM dictionary_hover_events WHERE language = ?'
-      );
-      deleteDictionaryHoverStmt.run(language);
-
-      const deleteReadAloudCacheStmt = db.prepare(
-        'DELETE FROM read_aloud_cache WHERE language = ?'
-      );
-      deleteReadAloudCacheStmt.run(language);
-
-      // Delete sessions last — audio_playback_events, srs_adjustments, dialog_corrections,
-      // neglected_words, and dictionary_hover_events all have non-cascading FKs to this table.
-      const deleteSessionsStmt = db.prepare('DELETE FROM learning_sessions WHERE language = ?');
-      deleteSessionsStmt.run(language);
-
-      this.logger.info({ language }, 'Deleted language-specific database entries');
+      const { deletedWords } = await this.config.databaseLayer.deleteLanguageData(language);
+      this.logger.info({ language, deletedWords }, 'Deleted language-specific database entries');
 
       // Remove audio files for this language
       // Audio files are stored in lowercase language directories

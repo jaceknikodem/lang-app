@@ -149,6 +149,15 @@ export interface DatabaseLayer {
   ): Promise<void>;
   updateBeforeSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void>;
   updateAfterSentenceAudioPath(sentenceId: number, audioPath: string): Promise<void>;
+  updateSentenceGenerationMetadata(
+    sentenceId: number,
+    meta: {
+      sentenceModel?: string;
+      audioService?: string;
+      audioModel?: string;
+      audioVoiceId?: string;
+    }
+  ): Promise<void>;
   updateSentenceTokens(sentenceId: number, tokens: PrecomputedToken[]): Promise<void>;
   incrementSentencePlayCount(sentenceId: number): Promise<void>;
   incrementGrammarExplanationCount(wordId: number): Promise<void>;
@@ -222,6 +231,13 @@ export interface DatabaseLayer {
 
   // Settings management
   getSetting(key: string): Promise<string | null>;
+  getAllSettings(): Promise<Record<string, string>>;
+  deleteLanguageData(language: string): Promise<{ deletedWords: number }>;
+  getPlaybackEventsForSentences(
+    sentenceIds: number[],
+    since?: Date
+  ): Promise<Array<{ playbackSpeed: number; createdAt: string }>>;
+  getNeglectedWordFrequencyPosition(word: string, language: string): Promise<number | null>;
   setSetting(key: string, value: string): Promise<void>;
   getCurrentLanguage(): Promise<string>;
   setCurrentLanguage(language: string): Promise<void>;

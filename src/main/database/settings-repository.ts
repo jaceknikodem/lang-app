@@ -13,6 +13,15 @@ export class SettingsRepository extends BaseRepository {
       return row ? row.value : null;
     });
   }
+  async getAllSettings(): Promise<Record<string, string>> {
+    return this.query(`Failed to get all settings`, (db) => {
+      const rows = db.prepare('SELECT key, value FROM settings').all() as Array<{
+        key: string;
+        value: string;
+      }>;
+      return Object.fromEntries(rows.map((row) => [row.key, row.value]));
+    });
+  }
   async setSetting(key: string, value: string): Promise<void> {
     this.query(`Failed to set setting`, (db) => {
       const stmt = db.prepare(`

@@ -302,7 +302,7 @@ export class WordGenerationRunner {
         audioMeta.audioVoiceId
       );
     }
-    this.updateSentenceMetadata(sentenceId, audioMeta);
+    await this.updateSentenceMetadata(sentenceId, audioMeta);
 
     await this.precomputeTokens(sentence, word, language, sentenceId, allWords);
     this.pregenerateDialogVariants(
@@ -541,28 +541,14 @@ export class WordGenerationRunner {
     await Promise.allSettled(tasks);
   }
 
-  private updateSentenceMetadata(sentenceId: number, meta: SentenceAudioMetadata): void {
-    const { sentenceModel, audioService, audioModel, audioVoiceId } = meta;
+  private async updateSentenceMetadata(
+    sentenceId: number,
+    meta: SentenceAudioMetadata
+  ): Promise<void> {
+    const { sentenceModel, audioService, audioModel } = meta;
     if (sentenceModel === undefined && audioService === undefined && audioModel === undefined)
       return;
-    const db = (this.database as any).getDb();
-    if (!db) return;
-    db.prepare(
-      `
-      UPDATE sentences
-      SET sentence_generation_model = COALESCE(?, sentence_generation_model),
-          audio_generation_service = COALESCE(?, audio_generation_service),
-          audio_generation_model = COALESCE(?, audio_generation_model),
-          audio_generation_voice_id = COALESCE(?, audio_generation_voice_id)
-      WHERE id = ?
-    `
-    ).run(
-      sentenceModel || null,
-      audioService || null,
-      audioModel || null,
-      audioVoiceId || null,
-      sentenceId
-    );
+    await this.database.updateSentenceGenerationMetadata(sentenceId, meta);
   }
 
   private async precomputeTokens(

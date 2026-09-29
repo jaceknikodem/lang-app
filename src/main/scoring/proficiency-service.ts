@@ -190,34 +190,17 @@ export class ProficiencyService {
       const sentences = await this.database.getSentencesByWord(wordId);
       if (sentences.length === 0) return [];
 
-      // Access database through type assertion (getDb is private but we need it)
-      const db = (this.database as any).getDb?.();
-      if (!db) return [];
+      const cutoff = timeWindowDays
+        ? new Date(Date.now() - timeWindowDays * 24 * 60 * 60 * 1000)
+        : undefined;
+      const events = await this.database.getPlaybackEventsForSentences(
+        sentences.map((s) => s.id),
+        cutoff
+      );
 
-      const sentenceIds = sentences.map((s) => s.id);
-      if (sentenceIds.length === 0) return [];
-
-      const placeholders = sentenceIds.map(() => '?').join(',');
-
-      const cutoffTime = timeWindowDays
-        ? new Date(Date.now() - timeWindowDays * 24 * 60 * 60 * 1000).toISOString()
-        : null;
-
-      const query = cutoffTime
-        ? `SELECT playback_speed, created_at 
-           FROM audio_playback_events 
-           WHERE sentence_id IN (${placeholders}) 
-           AND created_at >= ?`
-        : `SELECT playback_speed, created_at 
-           FROM audio_playback_events 
-           WHERE sentence_id IN (${placeholders})`;
-
-      const stmt = db.prepare(query);
-      const rows = cutoffTime ? stmt.all(...sentenceIds, cutoffTime) : stmt.all(...sentenceIds);
-
-      return rows.map((row: Record<string, unknown>) => ({
-        playbackSpeed: row.playback_speed ?? 1.0,
-        timestamp: new Date(row.created_at as string | number | Date).getTime(),
+      return events.map((event) => ({
+        playbackSpeed: event.playbackSpeed,
+        timestamp: new Date(event.createdAt).getTime(),
       }));
     } catch (error) {
       this.logger.error({ error, wordId }, 'Error getting word playback data');
@@ -246,20 +229,7 @@ export class ProficiencyService {
       const word = await this.database.getWordById(wordId);
       if (!word) return null;
 
-      // Access database through type assertion (getDb is private but we need it)
-      const db = (this.database as any).getDb?.();
-      if (!db) return null;
-
-      const stmt = db.prepare(`
-        SELECT frequency_position 
-        FROM neglected_words 
-        WHERE word = ? AND language = ?
-        ORDER BY ignored_at DESC
-        LIMIT 1
-      `);
-
-      const row = stmt.get(word.word, language) as any;
-      return row?.frequency_position ?? null;
+      return await this.database.getNeglectedWordFrequencyPosition(word.word, language);
     } catch {
       // If word doesn't have frequency position, that's okay
       return null;

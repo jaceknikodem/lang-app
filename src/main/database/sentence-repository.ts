@@ -276,6 +276,35 @@ export class SentenceRepository extends BaseRepository {
       }
     });
   }
+  async updateSentenceGenerationMetadata(
+    sentenceId: number,
+    meta: {
+      sentenceModel?: string;
+      audioService?: string;
+      audioModel?: string;
+      audioVoiceId?: string;
+    }
+  ): Promise<void> {
+    this.query(`Failed to update sentence generation metadata`, (db) => {
+      const result = db
+        .prepare(
+          `UPDATE sentences
+           SET sentence_generation_model = COALESCE(?, sentence_generation_model),
+               audio_generation_service = COALESCE(?, audio_generation_service),
+               audio_generation_model = COALESCE(?, audio_generation_model),
+               audio_generation_voice_id = COALESCE(?, audio_generation_voice_id)
+           WHERE id = ?`
+        )
+        .run(
+          meta.sentenceModel || null,
+          meta.audioService || null,
+          meta.audioModel || null,
+          meta.audioVoiceId || null,
+          sentenceId
+        );
+      this.requireChange(result, 'Sentence', sentenceId);
+    });
+  }
   async incrementSentencePlayCount(sentenceId: number): Promise<void> {
     this.query(`Failed to increment sentence play count`, (db) => {
       const result = db

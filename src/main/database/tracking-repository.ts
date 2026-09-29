@@ -222,4 +222,37 @@ export class TrackingRepository extends BaseRepository {
       throw wrapError(error, `Failed to record neglected words`);
     }
   }
+  async getPlaybackEventsForSentences(
+    sentenceIds: number[],
+    since?: Date
+  ): Promise<Array<{ playbackSpeed: number; createdAt: string }>> {
+    if (sentenceIds.length === 0) return [];
+    return this.query(`Failed to get playback events`, (db) => {
+      const placeholders = sentenceIds.map(() => '?').join(',');
+      const sql = `SELECT playback_speed, created_at
+        FROM audio_playback_events
+        WHERE sentence_id IN (${placeholders})${since ? ' AND created_at >= ?' : ''}`;
+      const params = since ? [...sentenceIds, since.toISOString()] : sentenceIds;
+      const rows = db.prepare(sql).all(...params) as Array<{
+        playback_speed: number | null;
+        created_at: string;
+      }>;
+      return rows.map((row) => ({
+        playbackSpeed: row.playback_speed ?? 1.0,
+        createdAt: row.created_at,
+      }));
+    });
+  }
+  async getNeglectedWordFrequencyPosition(word: string, language: string): Promise<number | null> {
+    return this.query(`Failed to get neglected word frequency position`, (db) => {
+      const row = db
+        .prepare(
+          `SELECT frequency_position FROM neglected_words
+           WHERE word = ? AND language = ?
+           ORDER BY ignored_at DESC LIMIT 1`
+        )
+        .get(word, language) as { frequency_position: number | null } | undefined;
+      return row?.frequency_position ?? null;
+    });
+  }
 }

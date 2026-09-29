@@ -280,6 +280,13 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
     return this.audio.updateAfterSentenceAudioPath(sentenceId, audioPath);
   }
 
+  async updateSentenceGenerationMetadata(
+    sentenceId: number,
+    meta: Parameters<SentenceRepository['updateSentenceGenerationMetadata']>[1]
+  ): Promise<void> {
+    return this.sentence.updateSentenceGenerationMetadata(sentenceId, meta);
+  }
+
   async updateSentenceTokens(sentenceId: number, tokens: PrecomputedToken[]): Promise<void> {
     return this.sentence.updateSentenceTokens(sentenceId, tokens);
   }
@@ -476,6 +483,25 @@ export class SQLiteDatabaseLayer implements DatabaseLayer {
 
   async updateSentenceRelatedWords(sentenceId: number, relatedWords: string[]): Promise<void> {
     return this.sentence.updateSentenceRelatedWords(sentenceId, relatedWords);
+  }
+
+  async getAllSettings(): Promise<Record<string, string>> {
+    return this.settings.getAllSettings();
+  }
+
+  async deleteLanguageData(language: string): Promise<{ deletedWords: number }> {
+    return this.maintenance.deleteLanguageData(language);
+  }
+
+  async getPlaybackEventsForSentences(
+    sentenceIds: number[],
+    since?: Date
+  ): Promise<Array<{ playbackSpeed: number; createdAt: string }>> {
+    return this.tracking.getPlaybackEventsForSentences(sentenceIds, since);
+  }
+
+  async getNeglectedWordFrequencyPosition(word: string, language: string): Promise<number | null> {
+    return this.tracking.getNeglectedWordFrequencyPosition(word, language);
   }
 
   async getSetting(key: string): Promise<string | null> {
