@@ -335,10 +335,11 @@ export class ServiceManager {
         '[ServiceManager] Using Whisper model, starting whisper-server'
       );
 
-      // Spawn whisper-server
+      // --no-context: without it the server carries previous transcripts over as decoding
+      // context, so unrelated recordings degrade into truncated or hallucinated output.
       const whisperProcess = spawn(
         'whisper-server',
-        ['--model', modelPath, '--threads', '8', '--port', actualPort.toString()],
+        ['--model', modelPath, '--threads', '8', '--port', actualPort.toString(), '--no-context'],
         {
           stdio: ['ignore', 'pipe', 'pipe'],
           env: process.env,

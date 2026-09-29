@@ -1025,7 +1025,7 @@ Preferred JSON format:
       topicContext = `\nTopic: The conversation is about "${topic}". Use this context to provide more relevant feedback.\n`;
     }
 
-    return `Analyze this ${languageName} transcription from a language learner:
+    return `Analyze this ${languageName} transcription from a language learner. The learner reads English, so the "grammarExplanation" MUST ALWAYS be written in English, never in ${languageName}:
 
 "${transcription}"
 
@@ -1033,17 +1033,18 @@ Context: The learner was responding to this ${languageName} sentence from the as
 "${assistantSentence}"${topicContext}
 Provide:
 1. A correction suggestion if there are better ways to express this (just the corrected/better sentence, no explanation)
-2. A grammar explanation if there are grammar mistakes detected
+2. A grammar explanation if there are grammar mistakes detected. The explanation must be in English (quote ${languageName} words or phrases only as examples).
 3. Whether there are grammar mistakes (true/false)
 
 IMPORTANT: You must return JSON format:
 {
   "correction": "optional correction suggestion",
-  "grammarExplanation": "optional grammar explanation if mistakes detected",
+  "grammarExplanation": "optional grammar explanation in English if mistakes detected",
   "hasGrammarMistakes": true or false
 }
 
 If there are no mistakes, you can omit correction and grammarExplanation, but always include hasGrammarMistakes.
+Remember: grammarExplanation is always in English.
 `;
   }
 
