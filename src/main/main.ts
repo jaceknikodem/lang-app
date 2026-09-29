@@ -459,12 +459,9 @@ app.whenReady().then(async () => {
 });
 
 // Quit when all windows are closed, except on macOS
-app.on('window-all-closed', async () => {
-  // Handle graceful shutdown
-  if (lifecycleManager) {
-    await lifecycleManager.handleShutdown();
-  }
-
+app.on('window-all-closed', () => {
+  // Don't shut down here: on macOS the app stays alive after the last window closes and the
+  // 'activate' handler reopens a window that needs the database. Full cleanup runs in before-quit.
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -473,8 +470,7 @@ app.on('window-all-closed', async () => {
 // Handle app termination
 app.on('before-quit', async (event) => {
   // Always stop managed services to prevent data handlers from writing to a dead pino thread.
-  // This must happen regardless of whether lifecycle shutdown already ran (e.g. macOS "x" button
-  // fires window-all-closed → lifecycleManager.handleShutdown before before-quit runs).
+  // This must happen regardless of whether lifecycle shutdown already ran.
   if (serviceManager && !(serviceManager as any)['isShuttingDown']) {
     serviceManager.stop().catch(() => {});
   }
